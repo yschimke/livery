@@ -219,7 +219,8 @@ public actor TemplateRepository {
   public func ensure(_ ref: TemplateRef, _ query: TemplateQuery) async -> LoadedTemplate? {
     let m = await usable()
     if let sha = ref.sha256 {
-      guard let m, let e = m.templates.first(where: { $0.sha256 == sha }), TemplateSelector.eligible(m, e, query),
+      // The same bytes may be listed for several targets or designs: any matching, eligible entry will do.
+      guard let m, let e = m.templates.first(where: { $0.sha256 == sha && (ref.designId == nil || $0.designId == ref.designId) && TemplateSelector.eligible(m, $0, query) }),
         let bytes = await obtain(m, e)
       else { return nil }
       return loaded(m, e, bytes, origin(m))

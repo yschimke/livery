@@ -210,7 +210,11 @@ class TemplateRepository(
     // A catalog too stale for resolve() is too stale here: same deadline for every slot.
     val m = usable()
     ref.sha256?.let { sha ->
-      val e = m?.templates?.firstOrNull { it.sha256 == sha }?.takeIf { TemplateSelector.eligible(m, it, query) } ?: return null
+      // The same bytes may be listed for several targets or designs: any entry that matches the
+      // reference (and its design, if it names one) and passes the gate will do.
+      val e = m?.templates?.firstOrNull {
+        it.sha256 == sha && (ref.designId == null || it.designId == ref.designId) && TemplateSelector.eligible(m, it, query)
+      } ?: return null
       val bytes = obtain(m, e) ?: return null
       return loaded(m, e, bytes, originOf(m))
     }

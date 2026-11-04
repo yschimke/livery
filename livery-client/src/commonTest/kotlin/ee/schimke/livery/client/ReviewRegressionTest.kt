@@ -2,6 +2,8 @@ package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Decision
 import ee.schimke.livery.protocol.Manifest
+import ee.schimke.livery.protocol.Target
+import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.TemplateRef
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -154,5 +156,32 @@ class ThirdReviewRegressionTest {
     val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 8))
     assertEquals("tile-default", repo.resolve(q)?.entry?.designId)
     assertEquals("tile-retro", repo.resolve(q.copy(designId = "tile-retro"))?.entry?.designId, "an explicit choice still plays")
+  }
+}
+
+/** Regressions from the last review of the first PR. */
+class FourthReviewRegressionTest {
+  @Test fun aPinnedBlobListedForSeveralTargetsResolvesForTheRightOne() = runTest {
+    val base = Fx.manifest()
+    val shared = Fx.blob("shared")
+    val sha = FakeCrypto.sha(shared)
+    val web = Target(ee.schimke.livery.protocol.Surfaces.WEB, 7, listOf("core"))
+    val m = base.copy(templates = base.templates + listOf(
+      TemplateEntry(sha, shared.size.toLong(), "tile-retro", "live/status-tile@1", web),
+      TemplateEntry(sha, shared.size.toLong(), "tile-default", "live/status-tile@1", Fx.inAppV7),
+    ))
+    val host = Fetcher { url, _ ->
+      when {
+        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), m).encodeToByteArray(), null)
+        url.endsWith("$sha.rc") -> FetchResult.Ok(shared, null)
+        else -> FetchResult.Failed(404, "no")
+      }
+    }
+    val repo = TemplateRepository(StaticSource("https://cdn.example/c"), host, FakeCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, emptyList())
+    repo.refresh()
+    val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 7))
+    assertEquals("tile-default", repo.ensure(TemplateRef(sha256 = sha), q)?.entry?.designId, "the in-app entry, not the first (web) one")
+    assertEquals("tile-default", repo.ensure(TemplateRef(designId = "tile-default", sha256 = sha), q)?.entry?.designId)
+    assertNull(repo.ensure(TemplateRef(designId = "tile-retro", sha256 = sha), q), "that design lists those bytes only for the web")
   }
 }

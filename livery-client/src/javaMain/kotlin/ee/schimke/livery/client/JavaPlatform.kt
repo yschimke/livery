@@ -3,6 +3,9 @@ package ee.schimke.livery.client
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.net.URI
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -69,8 +72,21 @@ class FileKeyValueStore(private val dir: File) : KeyValueStore {
   override suspend fun remove(key: String) { withContext(Dispatchers.IO) { f(key).delete() } }
 }
 
+/**
+ * Writes through a temporary file of its own, then moves it over [target] atomically, so concurrent
+ * writers (a download and a prefetch of the same blob) never share a temporary file, and a failure
+ * only ever removes its own temporary file, never another writer's result.
+ */
 internal fun atomicWrite(target: File, bytes: ByteArray) {
-  val tmp = File(target.parentFile, ".${target.name}.tmp")
-  tmp.writeBytes(bytes)
-  if (!tmp.renameTo(target)) { target.delete(); check(tmp.renameTo(target)) { "rename failed: $target" } }
+  val tmp = File.createTempFile(".${target.name}.", ".tmp", target.parentFile)
+  try {
+    tmp.writeBytes(bytes)
+    try {
+      Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } catch (_: AtomicMoveNotSupportedException) {
+      Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+  } finally {
+    tmp.delete()
+  }
 }
