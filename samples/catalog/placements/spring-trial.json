@@ -1,0 +1,9 @@
+{
+  "id": "spring-trial", "placement": "home.top", "priority": 10,
+  "template": { "designId": "banner-classic" },
+  "data": { "headline": "Spring sale: 50% off", "body": "Premium for half price until Sunday.", "cta": "Upgrade" },
+  "startEpochMs": 1790000000000, "endEpochMs": 1800000000000,
+  "conditions": { "platforms": ["android", "ios"], "excludeSegments": ["subscriber"] },
+  "rollout": { "experiment": "spring-2027", "arm": "banner", "toBasisPoints": 5000 },
+  "frequency": { "maxImpressions": 3, "perSeconds": 86400 }
+}

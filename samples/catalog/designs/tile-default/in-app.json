@@ -1,0 +1,1 @@
+{ "target": { "surface": "in-app", "rcApiLevel": 7, "profiles": ["androidx"] }, "reads": ["name","state","is_on","level","available","theme.primary"], "emits": ["toggle","details"] }

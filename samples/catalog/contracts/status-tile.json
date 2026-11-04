@@ -1,0 +1,20 @@
+{
+  "id": "live/status-tile", "major": 1, "title": "Live status tile", "dataSource": "App",
+  "inputs": {
+    "name": { "type": "string", "required": true, "maxLength": 40 },
+    "state": { "type": "string", "required": true, "description": "formatted for display" },
+    "is_on": { "type": "bool", "default": false },
+    "level": { "type": "float", "min": 0, "max": 1 },
+    "available": { "type": "bool", "default": true },
+    "theme.primary": { "type": "color", "role": "primary" }
+  },
+  "actions": {
+    "toggle": { "kind": "app:toggle" },
+    "details": { "kind": "navigate", "args": { "route": { "type": "string", "required": true } } }
+  },
+  "examples": {
+    "on": { "name": "Kitchen", "state": "On · 80%", "is_on": true, "level": 0.8 },
+    "off": { "name": "Kitchen", "state": "Off", "is_on": false, "level": 0 },
+    "unavailable": { "name": "Kitchen", "state": "Unavailable", "available": false }
+  }
+}

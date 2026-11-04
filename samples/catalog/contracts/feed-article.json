@@ -1,0 +1,20 @@
+{
+  "id": "feed/article", "major": 1, "title": "Feed article", "dataSource": "Feed",
+  "inputs": {
+    "title": { "type": "string", "required": true, "maxLength": 90 },
+    "source": { "type": "string", "maxLength": 30 },
+    "published": { "type": "long", "description": "epoch seconds; the document formats it relative to the player clock" },
+    "thumbnail": { "type": "image" },
+    "saved": { "type": "bool", "default": false }
+  },
+  "lists": {
+    "tags": { "item": { "label": { "type": "string", "required": true, "maxLength": 16 } }, "max": 3 }
+  },
+  "actions": {
+    "open": { "kind": "navigate", "args": { "route": { "type": "string", "required": true } } },
+    "save": { "kind": "app:toggle-save" }
+  },
+  "examples": {
+    "default": { "title": "Remote Compose templates in production", "source": "Engineering", "published": 1793000000, "tags": [{ "label": "android" }, { "label": "sdui" }] }
+  }
+}

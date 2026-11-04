@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A pull request cancels its own superseded runs; a push to `main` never cancels anything (each
+# push run is a group of one), so every commit on `main` gets a completed run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Build, test, and build the sample catalog
+        run: |
+          ./gradlew --no-configuration-cache build :livery-publish:installDist
+          livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+
+  # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
+  # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
+  gradle:
+    needs: [build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every gated job succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'skipped') || contains(needs.*.result, 'cancelled') }}
+        env:
+          NEEDS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "::error::A gated job did not succeed: ${NEEDS}"
+          exit 1
