@@ -2,6 +2,10 @@ import Foundation
 import Livery
 import SwiftUI
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 /// A value as a Remote Compose player takes it. Images are not named values: a document draws a
 /// data-bound image from the URL `livery:value/<input>` (PROTOCOL.md §6.1).
 public enum PlayerValue: Equatable, Sendable {
@@ -49,7 +53,9 @@ public struct LiveryTemplateView<Player: View>: View {
   let player: (PlayerInput) -> Player
   @State private var impressed = false
   @State private var viewed = false
-  @State private var visible = false
+  @State private var appeared = false
+  @State private var fraction: CGFloat = 0
+  private var visible: Bool { appeared && fraction >= 0.5 }
 
   public init(plan: RenderPlan, actions: ActionRouter, events: @escaping EventSink, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }, @ViewBuilder player: @escaping (PlayerInput) -> Player) {
     self.plan = plan; self.actions = actions; self.events = events; self.clock = clock; self.player = player
@@ -61,13 +67,15 @@ public struct LiveryTemplateView<Player: View>: View {
       let plan = plan, actions = actions
       Task { await actions.dispatch(plan, name, args) }
     })
+    .background(GeometryReader { g in Color.clear.preference(key: VisibleFractionKey.self, value: visibleFraction(g)) })
+    .onPreferenceChange(VisibleFractionKey.self) { fraction = $0 }
     .onAppear {
-      visible = true
+      appeared = true
       if !impressed { impressed = true; events(event(.impression)) }
     }
-    .onDisappear { visible = false }
-    // Viewable (PROTOCOL.md §8): on screen for a whole second. The task restarts on every
-    // appearance and is cancelled on disappearance, so a glimpse while scrolling never counts.
+    .onDisappear { appeared = false }
+    // Viewable (PROTOCOL.md §8): at least half on screen for an unbroken second. The task restarts
+    // each time that becomes true and is cancelled when it stops, so a glimpse never counts.
     .task(id: visible) {
       guard visible, !viewed else { return }
       try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -81,6 +89,26 @@ public struct LiveryTemplateView<Player: View>: View {
     TemplateEvent(type: type, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decision?.decisionId,
       feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256)
   }
+}
+
+/// The share of a view inside the screen. A clip by an enclosing scroll view that stays on screen
+/// isn't seen; on platforms without a screen size it reads fully visible once it appears.
+@MainActor
+private func visibleFraction(_ g: GeometryProxy) -> CGFloat {
+  let frame = g.frame(in: .global)
+  let area = frame.width * frame.height
+  guard area > 0 else { return 0 }
+  #if canImport(UIKit) && !os(watchOS)
+    let visible = frame.intersection(UIScreen.main.bounds)
+    return visible.isNull ? 0 : (visible.width * visible.height) / area
+  #else
+    return 1
+  #endif
+}
+
+private struct VisibleFractionKey: PreferenceKey {
+  static let defaultValue: CGFloat = 0
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// A slot whose content Livery decides: `plan` runs again when `key` changes; `fallback` draws

@@ -5,6 +5,15 @@ fun interface Fetcher {
   suspend fun get(url: String, etag: String?): FetchResult
 }
 
+/**
+ * A [Fetcher] that follows redirects itself and asks before each hop, so a caller can keep a
+ * request on hosts it trusts. [ImageResolver] needs one: checking only the first URL would let an
+ * allowed host redirect the device anywhere.
+ */
+interface RedirectingFetcher : Fetcher {
+  suspend fun get(url: String, etag: String?, allowRedirect: (to: String) -> Boolean): FetchResult
+}
+
 sealed interface FetchResult {
   data class Ok(val bytes: ByteArray, val etag: String?, val retryAfterSeconds: Long? = null) : FetchResult
   data object NotModified : FetchResult

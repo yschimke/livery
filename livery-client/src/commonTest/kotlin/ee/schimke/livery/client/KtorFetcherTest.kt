@@ -39,3 +39,39 @@ class KtorFetcherTest {
     assertEquals("asset://catalog/manifest.json", assertIs<FetchResult.Ok>(fetcher.get("asset://catalog/manifest.json", null)).bytes.decodeToString())
   }
 }
+
+class KtorRedirectTest {
+  private val contacted = mutableListOf<String>()
+  private val engine = MockEngine { req ->
+    val url = req.url.toString()
+    contacted += url
+    when {
+      url.startsWith("https://trusted.example/hop") -> respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "/final"))
+      url.startsWith("https://trusted.example/away") -> respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "https://attacker.example/x.png"))
+      url.startsWith("https://github.com/") -> respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "https://objects.githubusercontent.com/blob"))
+      else -> respond("ok", HttpStatusCode.OK)
+    }
+  }
+  private val fetcher = KtorFetcher(HttpClient(engine) { liveryDefaults() })
+
+  @Test fun followsAllowedRedirectsItself() = runTest {
+    assertEquals("ok", assertIs<FetchResult.Ok>(fetcher.get("https://trusted.example/hop", null) { true }).bytes.decodeToString())
+    assertEquals(listOf("https://trusted.example/hop", "https://trusted.example/final"), contacted)
+  }
+
+  @Test fun aRefusedRedirectIsNeverContacted() = runTest {
+    val allowed = { to: String -> ImageResolver.redirectAllowed(null, setOf("trusted.example"), "https://trusted.example/away", to) }
+    assertIs<FetchResult.Failed>(fetcher.get("https://trusted.example/away", null, allowed))
+    assertEquals(listOf("https://trusted.example/away"), contacted)
+  }
+
+  @Test fun catalogFetchesFollowHttpsRedirects() = runTest {
+    assertIs<FetchResult.Ok>(fetcher.get("https://github.com/o/r/releases/latest/download/manifest.json", null))
+  }
+
+  @Test fun proxiedRedirectsStayOnTheProxy() {
+    val proxy = ee.schimke.livery.protocol.ImageProxy("https://img.example/{width}?u={url}")
+    assertEquals(true, ImageResolver.redirectAllowed(proxy, emptySet(), "https://img.example/10?u=x", "https://img.example/cache/1"))
+    assertEquals(false, ImageResolver.redirectAllowed(proxy, emptySet(), "https://img.example/10?u=x", "https://cdn.example/1"))
+  }
+}

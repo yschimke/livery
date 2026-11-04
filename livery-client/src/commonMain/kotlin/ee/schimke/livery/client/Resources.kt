@@ -18,7 +18,8 @@ import ee.schimke.livery.protocol.ImageRef
  */
 class ImageResolver(
   private val repository: TemplateRepository,
-  private val fetcher: Fetcher,
+  /** Must check redirects ([RedirectingFetcher]): a redirect is held to the same rule as the URL. */
+  private val fetcher: RedirectingFetcher,
   private val crypto: Crypto,
   private val directHosts: Set<String> = emptySet(),
   private val app: (suspend (key: String, widthPx: Int, heightPx: Int) -> ByteArray?)? = null,
@@ -34,16 +35,27 @@ class ImageResolver(
     }
 
   private suspend fun remote(url: String, widthPx: Int, heightPx: Int): ByteArray? {
-    val target = remoteUrl(repository.manifest()?.imageProxy, directHosts, url, widthPx, heightPx) ?: return null
+    val proxy = repository.manifest()?.imageProxy
+    val target = remoteUrl(proxy, directHosts, url, widthPx, heightPx) ?: return null
     val key = crypto.sha256Hex(target.encodeToByteArray())
     cache.get(key)?.let { return it }
-    val r = fetcher.get(target, null) as? FetchResult.Ok ?: return null
+    val r = fetcher.get(target, null) { to -> redirectAllowed(proxy, directHosts, target, to) } as? FetchResult.Ok ?: return null
     if (r.bytes.size > maxBytes) return null
     cache.put(key, r.bytes)
     return r.bytes
   }
 
   companion object {
+    /**
+     * Whether a remote image fetch of [from] may follow a redirect to [to] (PROTOCOL.md §6.2): a
+     * proxied fetch only within the proxy's own host, a direct fetch only to an allowlisted host.
+     */
+    fun redirectAllowed(proxy: ImageProxy?, directHosts: Set<String>, from: String, to: String): Boolean {
+      val toHost = remoteHost(to) ?: return false
+      if (proxy != null) return toHost == remoteHost(from)
+      return directHosts.any { toHost == it || toHost.endsWith(".$it") }
+    }
+
     /** The URL to fetch for [url] at a size, or null when no proxy or allowlist permits it. */
     fun remoteUrl(proxy: ImageProxy?, directHosts: Set<String>, url: String, widthPx: Int, heightPx: Int): String? {
       val host = remoteHost(url) ?: return null

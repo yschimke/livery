@@ -223,6 +223,11 @@ The host is the URL's real authority host: the authority runs from after `https:
 which uses a backslash there is refused outright; the port is dropped, the host is compared in
 lowercase, and an IPv6 literal keeps its brackets.
 
+Redirects are held to the same rule, before they are followed: a proxied fetch may only be
+redirected within the proxy's own host, and a direct fetch only to an allowlisted host. A client
+must never contact a refused destination, so it follows redirects itself and checks each hop;
+checking the final URL is too late.
+
 The proxy is the one image host the device trusts: it resizes for the slot, normalises the format
 and strips cookies and tracking.
 

@@ -39,8 +39,14 @@ public struct LiveryRcNativePlayer: UIViewRepresentable {
   }
 
   private func handle(_ event: RemoteComposeNativePlayerEvent) {
-    if case .namedAction(let name, let value) = event {
-      if case .text(let text) = value { input.onAction(name, text) } else { input.onAction(name, nil) }
+    // PROTOCOL.md §7: nothing, a text value (JSON arguments or one value), or a number (as `value`).
+    guard case .namedAction(let name, let value) = event else { return }
+    switch value {
+    case .none: input.onAction(name, nil)
+    case .text(let text): input.onAction(name, text)
+    case .integer(let i): input.onAction(name, String(i))
+    case .float(let f): input.onAction(name, String(f))
+    case .floatList: return // not an action payload Livery defines
     }
   }
 
