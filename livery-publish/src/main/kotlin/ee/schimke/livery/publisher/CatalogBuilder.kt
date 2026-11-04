@@ -121,7 +121,7 @@ class CatalogBuilder(
         val bytes = rc.readBytes()
         inspect(bytes, spec).forEach { problems += "${design.id}/${rc.name}: $it" }
         contract(design.contract)?.let { c ->
-          val undeclared = spec.reads.filterNot { r -> r in c.inputs || c.lists.keys.any { r == "$it.count" || r.startsWith("$it.") } || r.startsWith("theme.") }
+          val undeclared = spec.reads.filterNot { r -> r in c.inputs || readsListValue(c, r) || r.startsWith("theme.") }
           if (undeclared.isNotEmpty()) problems += "${design.id}/${rc.name}: reads values outside ${c.ref}: $undeclared"
           val actions = spec.emits.filterNot { it in c.actions }
           if (actions.isNotEmpty()) problems += "${design.id}/${rc.name}: emits undeclared actions $actions"
@@ -164,6 +164,20 @@ class CatalogBuilder(
     )
     val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
     return Output(manifest, bytes, files)
+  }
+
+  /**
+   * Whether [read] is a value [ContractBinder] can produce for one of the contract's lists:
+   * `<list>.count`, or `<list>.<index>.<field>` with the index below the list's `max` and the field
+   * one of its item's fields. Anything else (a typo, `-1`, an index past `max`) is never bound.
+   */
+  private fun readsListValue(c: Contract, read: String): Boolean = c.lists.any { (name, list) ->
+    if (read == "$name.count") return@any true
+    if (!read.startsWith("$name.")) return@any false
+    val rest = read.removePrefix("$name.")
+    val index = rest.substringBefore('.').toIntOrNull() ?: return@any false
+    val field = rest.substringAfter('.', "")
+    rest.substringBefore('.') == index.toString() && index in 0 until list.max && field in list.item
   }
 
   private fun jsonFiles(dir: File) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }

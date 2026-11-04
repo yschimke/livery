@@ -65,7 +65,8 @@ class FileBlobStore(private val dir: File) : BlobStore {
 
 class FileKeyValueStore(private val dir: File) : KeyValueStore {
   init { dir.mkdirs() }
-  private fun f(key: String) = File(dir, key.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+  /** A collision-free file name: the SHA-256 of the whole key (keys hold URLs and arbitrary ids). */
+  private fun f(key: String) = File(dir, JvmCrypto.sha256Hex(key.encodeToByteArray()))
   override suspend fun get(key: String): String? = withContext(Dispatchers.IO) { f(key).takeIf { it.isFile }?.readText() }
   override suspend fun put(key: String, value: String) = withContext(Dispatchers.IO) { atomicWrite(f(key), value.encodeToByteArray()) }
   override suspend fun remove(key: String) { withContext(Dispatchers.IO) { f(key).delete() } }

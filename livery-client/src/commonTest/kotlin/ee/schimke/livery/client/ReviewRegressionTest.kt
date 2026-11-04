@@ -140,3 +140,19 @@ class SecondReviewRegressionTest {
     assertNull(r.ensure(TemplateRef(designId = "tile-default"), q))
   }
 }
+
+/** Regressions from the third review. */
+class ThirdReviewRegressionTest {
+  @Test fun bundledSelectionNeverPicksAnUninstalledSkin() = runTest {
+    // The bundled skin is the only API 8 template, so selection without the policy would pick it.
+    val m = Fx.manifest().let { m -> m.copy(templates = m.templates.filterNot { it.designId == "tile-default" && it.target.rcApiLevel == 8 } + Fx.entry("tile-retro", "retro-v8", Fx.inAppV8)) }
+    val names = listOf("default-v7", "retro-v8")
+    val repo = TemplateRepository(
+      StaticSource("https://cdn.example/c"), { _, _ -> FetchResult.Failed(503, "down") }, FakeCrypto, TrustPolicy.AllowUnsigned,
+      MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, listOf(Fx.inApp), TemplateRepository.Bundled(m) { sha -> names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha } },
+    )
+    val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 8))
+    assertEquals("tile-default", repo.resolve(q)?.entry?.designId)
+    assertEquals("tile-retro", repo.resolve(q.copy(designId = "tile-retro"))?.entry?.designId, "an explicit choice still plays")
+  }
+}

@@ -76,9 +76,13 @@ class PublishEndToEndTest {
     sample.copyRecursively(src)
     File(src, "placements/spring-trial.json").writeText(File(src, "placements/spring-trial.json").readText().replace("\"Upgrade\"", "\"This CTA is far longer than eighteen\""))
     File(src, "designs/banner-bold/in-app.json").writeText("""{ "target": { "surface": "in-app", "rcApiLevel": 7 }, "reads": ["price"] }""")
+    File(src, "designs/article-card/web.json").writeText("""{ "target": { "surface": "web", "rcApiLevel": 7 }, "reads": ["tags.count", "tags.0.label", "tags.0.typo", "tags.3.label", "tags.-1.label", "tags.01.label"] }""")
     val e = assertFailsWith<CatalogProblems> { CatalogBuilder().build(src, Layout.Static) }
     assertTrue(e.problems.any { "spring-trial" in it && "cta" in it }, e.message)
     assertTrue(e.problems.any { "price" in it }, e.message)
+    val listProblem = e.problems.single { "article-card/web.rc" in it }
+    listOf("tags.0.typo", "tags.3.label", "tags.-1.label", "tags.01.label").forEach { assertTrue(it in listProblem, listProblem) }
+    assertTrue("tags.0.label," !in listProblem && "tags.count" !in listProblem, listProblem)
   }
 
   @Test fun githubLayoutIsFlatAndAbsolute() {

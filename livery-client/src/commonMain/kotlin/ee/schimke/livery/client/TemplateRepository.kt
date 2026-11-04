@@ -168,11 +168,13 @@ class TemplateRepository(
    * native fallback. Never touches the network; [ensure] does for on-demand designs.
    */
   suspend fun resolve(query: TemplateQuery): LoadedTemplate? {
+    val installed = installedIds()
+    // Never draw a skin nobody installed, from the downloaded catalog or the bundled one; a design
+    // the query names explicitly is still allowed.
+    val automatic = { d: Design -> d.install == InstallPolicy.Always || d.id in installed }
     val m = usable()
     if (m != null) {
       val origin = if (clock.nowEpochMs() < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
-      val installed = installedIds()
-      val automatic = { d: Design -> d.install == InstallPolicy.Always || d.id in installed }
       // Choose among what is on disk, so a preferred template that failed to download never hides
       // a playable cached one. The chosen design first, else the automatic one: never nothing.
       val have = blobs.keys()
@@ -183,7 +185,9 @@ class TemplateRepository(
       }
     }
     val b = bundled ?: return null
-    val e = TemplateSelector.select(b.manifest, query) ?: TemplateSelector.select(b.manifest, query.copy(designId = null)) ?: return null
+    val e = TemplateSelector.select(b.manifest, query, automatic = automatic)
+      ?: TemplateSelector.select(b.manifest, query.copy(designId = null), automatic = automatic)
+      ?: return null
     return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
