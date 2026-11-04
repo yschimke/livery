@@ -33,10 +33,7 @@ public enum ResourceURLs {
 
   /// docs/PROTOCOL.md §6.2: the URL to fetch, or nil when neither the proxy nor the allowlist permits it.
   public static func remote(proxy: ImageProxy?, directHosts: Set<String>, url: String, widthPx: Int, heightPx: Int) -> String? {
-    guard url.hasPrefix("https://") else { return nil }
-    var host = String(url.dropFirst(8))
-    for sep in ["/", "?", ":"] { host = host.components(separatedBy: sep).first ?? host }
-    host = host.lowercased()
+    guard let host = remoteHost(url) else { return nil }
     func matches(_ h: String) -> Bool { host == h || host.hasSuffix("." + h) }
     if let proxy {
       if !proxy.sourceHosts.isEmpty && !proxy.sourceHosts.contains(where: matches) { return nil }
@@ -47,6 +44,25 @@ public enum ResourceURLs {
         .replacingOccurrences(of: "{format}", with: proxy.formats.first ?? "webp")
     }
     return directHosts.contains(where: matches) ? url : nil
+  }
+
+  /// The host an `https` URL really reaches (PROTOCOL.md §6.2): the authority runs to the first
+  /// `/`, `?`, `#` or `\`; user information or a backslash refuses the URL; IPv6 keeps its brackets.
+  public static func remoteHost(_ url: String) -> String? {
+    guard url.hasPrefix("https://") else { return nil }
+    let rest = Array(url.dropFirst(8))
+    let end = rest.firstIndex { $0 == "/" || $0 == "?" || $0 == "#" || $0 == "\\" }
+    let authority = String(end.map { rest[..<$0] } ?? rest[...])
+    if authority.contains("@") { return nil }
+    if let end, rest[end] == "\\" { return nil }
+    let host: String
+    if authority.hasPrefix("[") {
+      guard let close = authority.firstIndex(of: "]") else { return nil }
+      host = String(authority[...close])
+    } else {
+      host = String(authority.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+    }
+    return host.isEmpty ? nil : host.lowercased()
   }
 
   /// RFC 3986: everything but `A–Z a–z 0–9 - . _ ~`, as uppercase `%XX` of the UTF-8 bytes.

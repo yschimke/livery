@@ -118,3 +118,16 @@ class AssetPublishingTest {
     assertTrue(e.problems.any { "Nope Sans" in it }, e.message)
   }
 }
+
+class ProtocolLevelTest {
+  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+
+  @Test fun catalogsWithAssetsRequireTheResourcesLevel() {
+    assertEquals(RESOURCES_LEVEL, CatalogBuilder().build(sample, Layout.Static).manifest.minClient)
+    val src = Files.createTempDirectory("noassets").toFile()
+    sample.copyRecursively(src)
+    File(src, "designs/banner-bold/assets").deleteRecursively()
+    File(src, "designs/banner-bold/in-app.json").writeText(File(src, "designs/banner-bold/in-app.json").readText().replace("\"Placeholder Sans\"", "\"system:sans-serif\""))
+    assertEquals(0, CatalogBuilder().build(src, Layout.Static).manifest.minClient, "no assets, no new requirement")
+  }
+}

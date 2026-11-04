@@ -77,6 +77,9 @@ sealed interface Layout {
   }
 }
 
+/** The protocol level that added resources (PROTOCOL.md §2.1). */
+const val RESOURCES_LEVEL: Int = 2
+
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
 /**
@@ -211,7 +214,8 @@ class CatalogBuilder(
       generatedAtEpochMs = t,
       expiresAtEpochMs = t + config.expiresInDays * 86_400_000,
       ttlSeconds = config.ttlSeconds,
-      minClient = config.minClient,
+      // A template that needs assets must not reach a client that would play it without them.
+      minClient = maxOf(config.minClient, if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",
       contracts = contracts,

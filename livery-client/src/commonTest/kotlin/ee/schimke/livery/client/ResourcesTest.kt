@@ -59,3 +59,18 @@ class ResourcesTest {
     assertEquals(font.toList(), repo.asset(fontSha)?.toList())
   }
 }
+
+class RemoteHostTest {
+  @Test fun theAllowlistChecksTheRealHost() {
+    val allow = setOf("trusted.example")
+    listOf(
+      "https://trusted.example:443@attacker.example/image.png",
+      "https://trusted.example@attacker.example/image.png",
+      "https://attacker.example\\@trusted.example/image.png",
+      "https://attacker.example#@trusted.example/image.png",
+      "https://trusted.example.attacker.example/image.png",
+    ).forEach { assertNull(ImageResolver.remoteUrl(null, allow, it, 10, 10), it) }
+    assertEquals("https://TRUSTED.example:443/a.png", ImageResolver.remoteUrl(null, allow, "https://TRUSTED.example:443/a.png", 10, 10))
+    assertEquals("[::1]", ImageResolver.remoteHost("https://[::1]:8443/a"))
+  }
+}

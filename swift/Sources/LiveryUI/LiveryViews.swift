@@ -47,7 +47,9 @@ public struct LiveryTemplateView<Player: View>: View {
   let events: EventSink
   let clock: @Sendable () -> Int64
   let player: (PlayerInput) -> Player
-  @State private var reported = false
+  @State private var impressed = false
+  @State private var viewed = false
+  @State private var visible = false
 
   public init(plan: RenderPlan, actions: ActionRouter, events: @escaping EventSink, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }, @ViewBuilder player: @escaping (PlayerInput) -> Player) {
     self.plan = plan; self.actions = actions; self.events = events; self.clock = clock; self.player = player
@@ -60,11 +62,18 @@ public struct LiveryTemplateView<Player: View>: View {
       Task { await actions.dispatch(plan, name, args) }
     })
     .onAppear {
-      guard !reported else { return }
-      reported = true
-      events(event(.impression))
-      // Viewable: still on screen a second later (SwiftUI has no cheap visible-fraction signal).
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [plan] in _ = plan; events(event(.viewable)) }
+      visible = true
+      if !impressed { impressed = true; events(event(.impression)) }
+    }
+    .onDisappear { visible = false }
+    // Viewable (PROTOCOL.md §8): on screen for a whole second. The task restarts on every
+    // appearance and is cancelled on disappearance, so a glimpse while scrolling never counts.
+    .task(id: visible) {
+      guard visible, !viewed else { return }
+      try? await Task.sleep(nanoseconds: 1_000_000_000)
+      guard !Task.isCancelled, visible, !viewed else { return }
+      viewed = true
+      events(event(.viewable))
     }
   }
 

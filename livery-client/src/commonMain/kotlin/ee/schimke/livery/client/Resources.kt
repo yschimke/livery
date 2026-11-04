@@ -46,8 +46,7 @@ class ImageResolver(
   companion object {
     /** The URL to fetch for [url] at a size, or null when no proxy or allowlist permits it. */
     fun remoteUrl(proxy: ImageProxy?, directHosts: Set<String>, url: String, widthPx: Int, heightPx: Int): String? {
-      if (!url.startsWith("https://")) return null
-      val host = url.removePrefix("https://").substringBefore('/').substringBefore('?').substringBefore(':').lowercase()
+      val host = remoteHost(url) ?: return null
       if (proxy != null) {
         if (proxy.sourceHosts.isNotEmpty() && proxy.sourceHosts.none { host == it || host.endsWith(".$it") }) return null
         return proxy.urlTemplate
@@ -57,6 +56,23 @@ class ImageResolver(
           .replace("{format}", proxy.formats.firstOrNull() ?: "webp")
       }
       return url.takeIf { directHosts.any { host == it || host.endsWith(".$it") } }
+    }
+
+    /**
+     * The host an `https` URL really reaches, or null when it can't be trusted to say: the authority
+     * runs to the first `/`, `?`, `#` or `\`; one with user information (`a@b`, where the host is
+     * `b`) or a backslash is refused outright, since no image needs either and parsers disagree on
+     * them; an IPv6 literal keeps its brackets; the port is dropped.
+     */
+    fun remoteHost(url: String): String? {
+      if (!url.startsWith("https://")) return null
+      val rest = url.removePrefix("https://")
+      val end = rest.indexOfFirst { it == '/' || it == '?' || it == '#' || it == '\\' }
+      val authority = if (end < 0) rest else rest.substring(0, end)
+      if ('@' in authority || (end >= 0 && rest[end] == '\\')) return null
+      val host = if (authority.startsWith("[")) authority.substringBefore(']', "") .let { if (it.isEmpty()) return null else "$it]" }
+        else authority.substringBefore(':')
+      return host.lowercase().takeIf { it.isNotEmpty() }
     }
 
     /** RFC 3986 percent-encoding of everything but unreserved characters. */

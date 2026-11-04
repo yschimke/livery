@@ -174,6 +174,13 @@ class ConformanceTest {
       Triple("https://sub.cdn.example/a.png", 4000, 4000),
       Triple("https://cdn.example.evil/a.png", 10, 10),
       Triple("https://other.example/a.png", 10, 10),
+      // The authority's real host, not what precedes "@" or follows a backslash.
+      Triple("https://cdn.example:443@attacker.example/a.png", 10, 10),
+      Triple("https://cdn.example@attacker.example/a.png", 10, 10),
+      Triple("https://attacker.example\\@cdn.example/a.png", 10, 10),
+      Triple("https://attacker.example#@cdn.example/a.png", 10, 10),
+      Triple("https://CDN.Example:8443/a.png", 10, 10),
+      Triple("https://[::1]/a.png", 10, 10),
     )
     val urls = listOf(
       "https://h.example/c/main/manifest.json" to "blobs/x.rc",
@@ -210,7 +217,8 @@ class ConformanceTest {
    */
   @Test fun signing() = runBlocking {
     val file = File(dir, "signing.json")
-    val existing = file.takeIf { it.isFile && !update }?.let { Json.parseToJsonElement(it.readText()).jsonObject }
+    // The test key is kept across updates, so regenerating never churns the signing cases.
+    val existing = file.takeIf { it.isFile }?.let { Json.parseToJsonElement(it.readText()).jsonObject }
     fun str(key: String) = (existing?.get(key) as? kotlinx.serialization.json.JsonPrimitive)?.content
     val (privateKey, publicKey) = str("testPrivateKeyPkcs8")?.let { it to str("testPublicKey")!! } ?: KeyPairGenerator.getInstance("Ed25519").generateKeyPair().let { kp ->
       Base64.getEncoder().encodeToString(kp.private.encoded) to Base64.getEncoder().encodeToString(kp.public.encoded.takeLast(32).toByteArray())

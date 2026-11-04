@@ -1,4 +1,4 @@
-# Livery protocol, version 1
+# Livery protocol, level 2
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 1 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 2 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -52,6 +52,12 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `placements` | PlacementRule[] | `[]` | local decision rules (§8) |
 | `imageProxy` | ImageProxy? | `null` | §6.2 |
 | `provenance` | map<string,string> | `{}` | informational; clients never decide on it |
+
+**Levels.** Level 1 is this document without §6 and the `assets`, `assetBase`, `imageProxy` and
+`TemplateEntry.assets` / `fonts` fields. Level 2 added them. A level-1 client would ignore them and
+hand out templates without their resources, so a publisher must set `minClient` to at least 2 for
+a catalog in which any template lists `assets`. A client must reject a manifest whose `minClient`
+is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
 
@@ -211,6 +217,11 @@ A document never fetches anything itself. A client fetches a remote image:
   `{format}` by the first of `formats`. When `sourceHosts` is not empty, the source host must equal
   one or be a subdomain of one, or the image is not fetched;
 - otherwise, directly, only when its host equals or is a subdomain of a host the app allowlists.
+
+The host is the URL's real authority host: the authority runs from after `https://` to the first
+`/`, `?`, `#` or `\`; a URL whose authority holds user information (`a@b`, which reaches `b`) or
+which uses a backslash there is refused outright; the port is dropped, the host is compared in
+lowercase, and an IPv6 literal keeps its brackets.
 
 The proxy is the one image host the device trusts: it resizes for the slot, normalises the format
 and strips cookies and tracking.

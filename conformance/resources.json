@@ -69,6 +69,42 @@
       "widthPx": 10,
       "heightPx": 10,
       "expect": null
+    },
+    {
+      "url": "https://cdn.example:443@attacker.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example@attacker.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example\\@cdn.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example#@cdn.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://CDN.Example:8443/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": "https://img.example/10x10/webp?u=https%3A%2F%2FCDN.Example%3A8443%2Fa.png"
+    },
+    {
+      "url": "https://[::1]/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
     }
   ],
   "direct": [
@@ -89,6 +125,36 @@
     },
     {
       "url": "https://other.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example:443@attacker.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example@attacker.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example\\@cdn.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example#@cdn.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://CDN.Example:8443/a.png",
+      "allow": "cdn.example",
+      "expect": "https://CDN.Example:8443/a.png"
+    },
+    {
+      "url": "https://[::1]/a.png",
       "allow": "cdn.example",
       "expect": null
     }
