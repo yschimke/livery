@@ -9,7 +9,8 @@ kotlin {
   jvm()
   android {
     namespace = "ee.schimke.livery.client"
-    compileSdk = 37
+    // Compose Multiplatform's AndroidX artifacts need 37.1; OkHttp 5 needs 37.
+    compileSdk { version = release(37) { minorApiLevel = 1 } }
     minSdk = 26
   }
   // Compiled for the browser; its tests are the common ones, run on the JVM (no headless browser in CI).

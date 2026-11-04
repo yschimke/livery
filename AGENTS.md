@@ -30,8 +30,8 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
 
 ## Checks
 
-Android targets compile against `compileSdk` 37 (OkHttp 5 requires it): set `ANDROID_HOME` and
-install `platforms;android-37.0`. The Swift package needs Xcode; CI runs it on macOS.
+Android targets compile against `compileSdk` 37.1 (Compose Multiplatform and OkHttp 5 require it): set `ANDROID_HOME` and
+install `platforms;android-37.1`. The Swift package needs Xcode; CI runs it on macOS.
 
 ```sh
 ./gradlew build                 # compile every target + every test

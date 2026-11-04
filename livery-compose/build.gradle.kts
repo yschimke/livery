@@ -11,7 +11,8 @@ kotlin {
   jvmToolchain(17)
   android {
     namespace = "ee.schimke.livery.compose"
-    compileSdk = 37
+    // Compose Multiplatform's AndroidX artifacts need 37.1; OkHttp 5 needs 37.
+    compileSdk { version = release(37) { minorApiLevel = 1 } }
     minSdk = 26
   }
   jvm()
@@ -39,3 +40,7 @@ kotlin {
     commonTest.dependencies { implementation(kotlin("test")) }
   }
 }
+
+// The Wasm browser test task is off (see wasmJs above), so there is no Compose UI test bundle for
+// this configuration check to guard; `binaries.executable()` would turn a library into an app.
+tasks.matching { it.name == "checkComposeUiTestConfigurationForWasmJs" }.configureEach { enabled = false }
