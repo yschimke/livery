@@ -39,16 +39,7 @@ object TemplateSelector {
     val (_, major) = ContractRef.parse(query.contract)
     if (supportedMajor != null && supportedMajor != major) return null
     val liveDesigns = manifest.designs.filter { !it.revoked && it.contract == query.contract }.associateBy { it.id }
-
-    val candidates = manifest.templates.filter { t ->
-      !t.revoked &&
-        t.contract == query.contract &&
-        t.designId in liveDesigns &&
-        t.bytes <= query.caps.maxBytes &&
-        t.target.themeFits(query.caps, query.theme) &&
-        t.target.fits(query.caps, query.widthDp, query.heightDp) &&
-        query.tags.all { (k, v) -> t.tags[k] == v || liveDesigns.getValue(t.designId).tags[k] == v }
-    }
+    val candidates = manifest.templates.filter { eligible(manifest, it, query, liveDesigns) }
     if (candidates.isEmpty()) return null
 
     fun best(of: List<TemplateEntry>): TemplateEntry? =
@@ -65,6 +56,26 @@ object TemplateSelector {
     query.variant?.let { v -> best(byVariant(v))?.let { return it } }
     best(byVariant(Design.DEFAULT_VARIANT))?.let { return it }
     return best(auto)
+  }
+
+  /**
+   * Whether [t] may play for [query]: right contract, a live design, not revoked, within the
+   * player's byte budget, level, profiles, container, size and theme, and matching its tags. Exact
+   * references (a decision's or feed item's `sha256`) pass through this same check.
+   */
+  fun eligible(
+    manifest: Manifest,
+    t: TemplateEntry,
+    query: TemplateQuery,
+    liveDesigns: Map<String, Design> = manifest.designs.filter { !it.revoked && it.contract == query.contract }.associateBy { it.id },
+  ): Boolean {
+    val design = liveDesigns[t.designId] ?: return false
+    return !t.revoked &&
+      t.contract == query.contract &&
+      t.bytes <= query.caps.maxBytes &&
+      t.target.themeFits(query.caps, query.theme) &&
+      t.target.fits(query.caps, query.widthDp, query.heightDp) &&
+      query.tags.all { (k, v) -> t.tags[k] == v || design.tags[k] == v }
   }
 
   private fun ee.schimke.livery.protocol.SizeRange.span(): Long {

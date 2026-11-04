@@ -46,9 +46,10 @@ class SlotPlanner(
 
   suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY): PlanResult {
     val t = repository.ensure(decision.template, query) ?: return fallback(query, "no template for ${decision.template}", decision)
-    if (decision.template.designId != null && t.entry.designId != decision.template.designId) {
-      // An ad must draw as decided or not at all; never in another design.
-      return fallback(query, "decided design ${decision.template.designId} unavailable", decision)
+    val ref = decision.template
+    if ((ref.sha256 != null && t.entry.sha256 != ref.sha256) || (ref.designId != null && t.entry.designId != ref.designId)) {
+      // A decision draws as decided or not at all: its data and tracking belong to that creative.
+      return fallback(query, "decided template $ref unavailable", decision)
     }
     return plan(t, decision.data, extra, decision, null)
   }
@@ -60,8 +61,7 @@ class SlotPlanner(
   }
 
   private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?): PlanResult {
-    val m = repository.manifest()
-    val contract = m?.contract(t.entry.contract) ?: return PlanResult.Fallback("contract ${t.entry.contract} unknown")
+    val contract = t.contract ?: return PlanResult.Fallback("contract ${t.entry.contract} unknown")
     return when (val b = ContractBinder.bind(contract, data)) {
       is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f))
       is BindResult.Invalid -> {

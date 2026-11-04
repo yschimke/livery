@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.InstallPolicy
 import ee.schimke.livery.protocol.Manifest
@@ -22,6 +23,8 @@ data class LoadedTemplate(
   val design: Design?,
   val bytes: ByteArray,
   val origin: Origin,
+  /** The contract from the same catalog the template came from (the bundled one, offline). */
+  val contract: Contract?,
 ) {
   enum class Origin { Fresh, Stale, Bundled }
 }
@@ -69,7 +72,10 @@ class TemplateRepository(
   class Bundled(val manifest: Manifest, val read: suspend (sha256: String) -> ByteArray?)
 
   private val verifier = ManifestVerifier(crypto, trust)
-  private val lock = Mutex()
+  /** Guards [current] and its disk copy only; never held across network calls. */
+  private val stateLock = Mutex()
+  /** Serialises refreshes. Held across the network; nothing on the render path takes it. */
+  private val refreshLock = Mutex()
   private var current: Manifest? = null
 
   @Serializable
@@ -83,7 +89,7 @@ class TemplateRepository(
 
   private fun k(name: String) = "livery/${source.id}/$name"
 
-  suspend fun manifest(): Manifest? = lock.withLock { loadCachedLocked() }
+  suspend fun manifest(): Manifest? = stateLock.withLock { loadCachedLocked() }
 
   private suspend fun loadCachedLocked(): Manifest? {
     current?.let { return it }
@@ -98,29 +104,32 @@ class TemplateRepository(
   /**
    * Revalidates the manifest (ETag), verifies it, refuses rollbacks, then downloads every blob the
    * install policy asks for. [force] ignores the TTL and backoff (a user pressed refresh).
+   *
+   * Refreshes run one at a time ([refreshLock]), but the network work holds no lock that reading
+   * the manifest needs: [resolve] keeps drawing from what is on disk while a refresh is in flight.
    */
-  suspend fun refresh(force: Boolean = false): RefreshResult = lock.withLock {
+  suspend fun refresh(force: Boolean = false): RefreshResult = refreshLock.withLock {
     val now = clock.nowEpochMs()
     val m = meta()
-    val cached = loadCachedLocked()
+    val cached = manifest()
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
       if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
-        prefetchLocked(cached)
+        prefetch(cached)
         return RefreshResult.Skipped("fresh")
       }
     }
-    fun fail(reason: String, retryAfter: Long? = null): RefreshResult.Failed {
+    suspend fun fail(reason: String, retryAfter: Long? = null): RefreshResult.Failed {
       val failures = m.failures + 1
       val backoff = retryAfter?.times(1000) ?: BACKOFF_MS[minOf(failures - 1, BACKOFF_MS.lastIndex)]
-      return RefreshResult.Failed(reason).also { r -> pendingMeta = m.copy(failures = failures, nextAttemptEpochMs = now + backoff) }
+      putMeta(m.copy(failures = failures, nextAttemptEpochMs = now + backoff))
+      return RefreshResult.Failed(reason)
     }
-    pendingMeta = null
-    val result = when (val r = fetcher.get(source.manifestUrl, if (cached != null) m.etag else null)) {
+    when (val r = fetcher.get(source.manifestUrl, if (cached != null) m.etag else null)) {
       is FetchResult.Failed -> fail("manifest: ${r.status} ${r.message}", r.retryAfterSeconds)
       FetchResult.NotModified -> {
         putMeta(m.copy(fetchedAtEpochMs = now, failures = 0, nextAttemptEpochMs = 0))
-        cached?.let { prefetchLocked(it) }
+        cached?.let { prefetch(it) }
         RefreshResult.Unchanged
       }
       is FetchResult.Ok -> {
@@ -136,10 +145,12 @@ class TemplateRepository(
               next.serial < m.acceptedSerial -> fail("rollback: serial ${next.serial} < ${m.acceptedSerial}")
               next.minClient > PROTOCOL_LEVEL -> fail("needs client level ${next.minClient}")
               else -> {
-                kv.put(k("manifest"), r.bytes.decodeToString())
-                current = next
+                stateLock.withLock {
+                  kv.put(k("manifest"), r.bytes.decodeToString())
+                  current = next
+                }
                 putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
-                prefetchLocked(next)
+                prefetch(next)
                 RefreshResult.Updated(next.serial)
               }
             }
@@ -147,11 +158,7 @@ class TemplateRepository(
         }
       }
     }
-    pendingMeta?.let { putMeta(it) }
-    result
   }
-
-  private var pendingMeta: Meta? = null
 
   // --- selection ------------------------------------------------------------------------------
 
@@ -171,23 +178,42 @@ class TemplateRepository(
       // to what is, never to nothing.
       for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
         val e = TemplateSelector.select(m, q, automatic = automatic) ?: continue
-        blobs.get(e.sha256)?.let { return LoadedTemplate(e, m.design(e.designId), it, origin) }
+        blobs.get(e.sha256)?.let { return loaded(m, e, it, origin) }
       }
     }
     val b = bundled ?: return null
     val e = TemplateSelector.select(b.manifest, query) ?: TemplateSelector.select(b.manifest, query.copy(designId = null)) ?: return null
-    return b.read(e.sha256)?.let { LoadedTemplate(e, b.manifest.design(e.designId), it, LoadedTemplate.Origin.Bundled) }
+    return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
-  /** Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand). */
+  /**
+   * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand).
+   *
+   * An exact reference ([TemplateRef.sha256]) is played exactly or not at all: it must be in the
+   * manifest, live, and pass the same eligibility checks as selection ([TemplateSelector.eligible]),
+   * and nothing is substituted when it isn't, or when its download fails. A design reference picks
+   * that design's template for the player; only a reference that names neither falls back to
+   * [resolve].
+   */
   suspend fun ensure(ref: TemplateRef, query: TemplateQuery): LoadedTemplate? {
-    val m = manifest() ?: return resolve(query)
-    val entry = ref.sha256?.let { sha -> m.templates.firstOrNull { it.sha256 == sha && !it.revoked } }
-      ?: TemplateSelector.select(m, query.copy(designId = ref.designId ?: query.designId)) { it.install != InstallPolicy.OnRequest || ref.designId == it.id }
-      ?: return resolve(query)
-    val bytes = blobs.get(entry.sha256) ?: download(m, entry) ?: return resolve(query)
-    return LoadedTemplate(entry, m.design(entry.designId), bytes, LoadedTemplate.Origin.Fresh)
+    val m = manifest()
+    ref.sha256?.let { sha ->
+      val e = m?.templates?.firstOrNull { it.sha256 == sha }?.takeIf { TemplateSelector.eligible(m, it, query) } ?: return null
+      val bytes = blobs.get(e.sha256) ?: download(m, e) ?: return null
+      return loaded(m, e, bytes, LoadedTemplate.Origin.Fresh)
+    }
+    val designId = ref.designId ?: return resolve(query)
+    if (m != null) {
+      TemplateSelector.select(m, query.copy(designId = designId)) { false }?.let { e ->
+        (blobs.get(e.sha256) ?: download(m, e))?.let { return loaded(m, e, it, LoadedTemplate.Origin.Fresh) }
+      }
+    }
+    // Offline or not downloadable: the bundled copy of that same design, if the app ships one.
+    return resolve(query.copy(designId = designId))?.takeIf { it.entry.designId == designId }
   }
+
+  private fun loaded(m: Manifest, e: TemplateEntry, bytes: ByteArray, origin: LoadedTemplate.Origin) =
+    LoadedTemplate(e, m.design(e.designId), bytes, origin, m.contract(e.contract))
 
   // --- install / list / preview ---------------------------------------------------------------
 
@@ -248,7 +274,7 @@ class TemplateRepository(
 
   // --- internals ------------------------------------------------------------------------------
 
-  private suspend fun prefetchLocked(m: Manifest) {
+  private suspend fun prefetch(m: Manifest) {
     val installed = installedIds()
     m.designs.filter { !it.revoked && (it.install == InstallPolicy.Always || it.id in installed) }
       .flatMap { entriesForTargets(m, it.id) }
