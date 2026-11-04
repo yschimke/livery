@@ -61,12 +61,20 @@ class KtorRedirectTest {
 
   @Test fun aRefusedRedirectIsNeverContacted() = runTest {
     val allowed = { to: String -> ImageResolver.redirectAllowed(null, setOf("trusted.example"), "https://trusted.example/away", to) }
-    assertIs<FetchResult.Failed>(fetcher.get("https://trusted.example/away", null, allowed))
+    assertIs<FetchResult.Failed>(fetcher.get("https://trusted.example/away", null, allowRedirect = allowed))
     assertEquals(listOf("https://trusted.example/away"), contacted)
   }
 
   @Test fun catalogFetchesFollowHttpsRedirects() = runTest {
     assertIs<FetchResult.Ok>(fetcher.get("https://github.com/o/r/releases/latest/download/manifest.json", null))
+  }
+
+  @Test fun bodiesOverTheLimitAreRefused() = runTest {
+    val big = HttpClient(MockEngine { respond(ByteArray(10_000), HttpStatusCode.OK) }) { liveryDefaults() }
+    assertIs<FetchResult.Failed>(KtorFetcher(big).get("https://cdn.example/big.png", null, 1_000) { true })
+    assertIs<FetchResult.Ok>(KtorFetcher(big).get("https://cdn.example/big.png", null, 10_000) { true })
+    val declared = HttpClient(MockEngine { respond(ByteArray(10), HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "50000000")) }) { liveryDefaults() }
+    assertIs<FetchResult.Failed>(KtorFetcher(declared).get("https://cdn.example/huge.png", null, 1_000) { true }, "a declared length over the limit is refused before reading")
   }
 
   @Test fun proxiedRedirectsStayOnTheProxy() {

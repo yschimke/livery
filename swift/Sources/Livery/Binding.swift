@@ -71,10 +71,10 @@ public enum ContractBinder {
       }
       return .string(s)
     case .int:
-      guard case .int(let i) = raw, i >= Int64(Int32.min), i <= Int64(Int32.max) else { return bad() }
+      guard let i = integral(raw), i >= Int64(Int32.min), i <= Int64(Int32.max) else { return bad() }
       return ranged(Double(i)) ? .int(Int32(i)) : nil
     case .long:
-      guard case .int(let i) = raw else { return bad() }
+      guard let i = integral(raw) else { return bad() }
       return ranged(Double(i)) ? .long(i) : nil
     case .float:
       guard let d = raw.number else { return bad() }
@@ -90,6 +90,16 @@ public enum ContractBinder {
         problems.append(BindingProblem(name: name, message: "expected an image: asset:<sha256>, https://… or app:<key>")); return nil
       }
       return .image(ref: s)
+    }
+  }
+
+  /// A JSON number with a whole-number value, `3`, `3.0` and `3e0` alike (PROTOCOL.md §4.1),
+  /// whichever way the decoder classified the token; beyond 2^53 only an exact integer.
+  static func integral(_ raw: JSONValue) -> Int64? {
+    switch raw {
+    case .int(let i): return i
+    case .double(let d): return d == d.rounded(.towardZero) && abs(d) <= 9_007_199_254_740_992 ? Int64(d) : nil
+    default: return nil
     }
   }
 

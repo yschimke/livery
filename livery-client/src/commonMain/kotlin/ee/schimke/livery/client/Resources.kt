@@ -39,8 +39,7 @@ class ImageResolver(
     val target = remoteUrl(proxy, directHosts, url, widthPx, heightPx) ?: return null
     val key = crypto.sha256Hex(target.encodeToByteArray())
     cache.get(key)?.let { return it }
-    val r = fetcher.get(target, null) { to -> redirectAllowed(proxy, directHosts, target, to) } as? FetchResult.Ok ?: return null
-    if (r.bytes.size > maxBytes) return null
+    val r = fetcher.get(target, null, maxBytes.toLong()) { to -> redirectAllowed(proxy, directHosts, target, to) } as? FetchResult.Ok ?: return null
     cache.put(key, r.bytes)
     return r.bytes
   }

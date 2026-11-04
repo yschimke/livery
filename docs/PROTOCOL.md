@@ -140,7 +140,8 @@ problems; it must refuse rather than drop:
 - a key that is neither an input nor a list is a problem;
 - for each input: a missing or `null` value takes `default`; still missing and `required` is a
   problem; otherwise the value must have the input's type, where `int`, `long`, `float` and
-  `bool` reject JSON strings, `int` must fit 32 bits, `string` must respect `maxLength`, numbers
+  `bool` reject JSON strings, `int` and `long` take any JSON number with a whole-number value
+  (`3`, `3.0` and `3e0` alike; beyond 2^53 only an integer literal), `int` must fit 32 bits, `string` must respect `maxLength`, numbers
   must respect `min` and `max`, `color` is `#RRGGBB` (opaque) or `#AARRGGBB`, and `image` is an
   image reference (§6.1);
 - a list must be a JSON array of objects, at most `max` long; it binds `<list>.count` (int, the

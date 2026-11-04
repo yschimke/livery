@@ -11,7 +11,11 @@ fun interface Fetcher {
  * allowed host redirect the device anywhere.
  */
 interface RedirectingFetcher : Fetcher {
-  suspend fun get(url: String, etag: String?, allowRedirect: (to: String) -> Boolean): FetchResult
+  /**
+   * @param maxBytes a body longer than this fails without being read past the limit: a declared
+   *   `Content-Length` over it is refused before reading, and a stream stops one byte past it.
+   */
+  suspend fun get(url: String, etag: String?, maxBytes: Long = Long.MAX_VALUE, allowRedirect: (to: String) -> Boolean): FetchResult
 }
 
 sealed interface FetchResult {

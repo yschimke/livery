@@ -146,6 +146,9 @@ class ConformanceTest {
       "list too long" to """{"title":"Hi","tags":[{"label":"a"},{"label":"b"},{"label":"c"}]}""",
       "list item problems" to """{"title":"Hi","tags":[{"typo":"a"}]}""",
       "null uses default" to """{"title":"Hi","on":null}""",
+      // A whole-number value is an int however it is spelled; a fraction is not.
+      "integral spellings" to """{"title":"Hi","count":3.0,"at":1e3}""",
+      "fractional int" to """{"title":"Hi","count":2.5}""",
     )
     val cases = datasets.map { (name, data) ->
       val result = when (val r = ContractBinder.bind(c, Json.parseToJsonElement(data).jsonObject)) {
