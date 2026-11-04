@@ -1,0 +1,1 @@
+{ "target": { "surface": "in-app", "rcApiLevel": 7, "profiles": ["androidx"] }, "reads": ["title","source","published","thumbnail","saved","tags.count","tags.0.label","tags.1.label","tags.2.label"], "emits": ["open","save"] }

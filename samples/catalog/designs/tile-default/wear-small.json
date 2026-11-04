@@ -1,0 +1,1 @@
+{ "target": { "surface": "wear-widget", "rcApiLevel": 7, "profiles": ["glance-wear"], "container": "wear:small", "theme": "baked:dark" }, "reads": ["name","state","is_on"], "emits": ["toggle"] }

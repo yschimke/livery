@@ -1,0 +1,1 @@
+{ "id": "tile-retro", "contract": "live/status-tile@1", "title": "Retro LCD", "variant": "retro", "author": "github:someone", "install": "OnRequest", "tags": { "style": "lcd" } }

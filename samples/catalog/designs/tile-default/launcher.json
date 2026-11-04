@@ -1,0 +1,1 @@
+{ "target": { "surface": "launcher-widget", "rcApiLevel": 7, "profiles": ["widgets"], "size": { "minWidthDp": 110, "maxWidthDp": 400, "minHeightDp": 40, "maxHeightDp": 400 } }, "reads": ["name","state","is_on","available"], "emits": ["toggle"] }

@@ -1,0 +1,21 @@
+{
+  "id": "promo/banner", "major": 1, "minor": 0, "title": "Promotion banner", "dataSource": "Decision",
+  "inputs": {
+    "headline": { "type": "string", "required": true, "maxLength": 40 },
+    "body": { "type": "string", "maxLength": 120 },
+    "cta": { "type": "string", "required": true, "maxLength": 18 },
+    "hero": { "type": "image" },
+    "accent": { "type": "color", "default": "#FF6750A4" },
+    "theme.primary": { "type": "color", "role": "primary" },
+    "theme.surface": { "type": "color", "role": "surface" },
+    "theme.onSurface": { "type": "color", "role": "onSurface" }
+  },
+  "actions": {
+    "cta": { "kind": "navigate", "args": { "route": { "type": "string", "required": true } } },
+    "dismiss": { "kind": "dismiss" }
+  },
+  "examples": {
+    "default": { "headline": "Try Premium free", "body": "Offline downloads and no ads for 30 days.", "cta": "Start trial" },
+    "long": { "headline": "A headline that uses all forty character", "body": "Body copy at its limit to check wrapping on the smallest supported width.", "cta": "Eighteen chars cta" }
+  }
+}

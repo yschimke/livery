@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>yschimke/renovate-config",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "description": "Extends the shared preset at yschimke/renovate-config. Automerge follows the preset (minor/patch/digest/pin; majors stay manual); `platformAutomerge` (the preset default) hands the merge to GitHub's native auto-merge, which waits for the `gradle` check the `Protect Main` ruleset requires (repo-policy/policy.json). Remote Compose (`androidx.compose.remote`) is an alpha line whose document format and APIs move per release: kept out of the BOM-aligned androidx-compose group and off automerge, so each bump is reviewed against the protocol's rcApiLevel and profiles.",
+  "packageRules": [
+    {
+      "description": "Remote Compose alphas change the document format and creation APIs; review every bump.",
+      "matchPackageNames": ["androidx.compose.remote:**"],
+      "groupName": "androidx-compose-remote",
+      "automerge": false
+    }
+  ]
+}

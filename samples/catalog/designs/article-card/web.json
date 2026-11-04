@@ -1,0 +1,1 @@
+{ "target": { "surface": "web", "rcApiLevel": 7, "profiles": ["core"] }, "reads": ["title","source","published","thumbnail","tags.count","tags.0.label"], "emits": ["open"] }
