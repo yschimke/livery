@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
@@ -30,6 +31,8 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.protocol.TemplateEvent
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /** What [LiveryTemplate] needs besides the plan: where actions, events, images and fonts go. */
@@ -91,18 +94,24 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     withFrameNanos { }
     host.events.emit(event(TemplateEvent.Type.Impression, plan, host))
   }
+  // Viewable needs one unbroken second at or above the threshold: each time the template drops
+  // below it the timer is cancelled, and it starts again from zero when it comes back.
   LaunchedEffect(tracker) {
-    while (true) {
-      if (tracker.fraction >= VIEWABLE_FRACTION) {
-        delay(VIEWABLE_MILLIS)
-        if (tracker.fraction >= VIEWABLE_FRACTION) { host.events.emit(event(TemplateEvent.Type.Viewable, plan, host)); break }
-      } else delay(POLL_MILLIS)
-    }
+    snapshotFlow { tracker.fraction >= VIEWABLE_FRACTION }
+      .distinctUntilChanged()
+      .collectLatest { visible ->
+        if (visible && !tracker.viewed) {
+          delay(VIEWABLE_MILLIS)
+          tracker.viewed = true
+          host.events.emit(event(TemplateEvent.Type.Viewable, plan, host))
+        }
+      }
   }
 }
 
 internal class VisibilityTracker {
   var fraction by mutableStateOf(0f)
+  var viewed = false
 }
 
 private fun event(type: TemplateEvent.Type, plan: RenderPlan, host: LiveryHost) = TemplateEvent(
@@ -117,4 +126,3 @@ private fun event(type: TemplateEvent.Type, plan: RenderPlan, host: LiveryHost) 
 
 private const val VIEWABLE_FRACTION = 0.5f
 private const val VIEWABLE_MILLIS = 1_000L
-private const val POLL_MILLIS = 250L
