@@ -1,0 +1,112 @@
+{
+  "note": "TEST KEY ONLY. Ed25519 over the exact manifest bytes; signature is standard padded base64.",
+  "testPrivateKeyPkcs8": "MC4CAQAwBQYDK2VwBCIEIM8EKwH/8NMeJmWkpBjW9SGs7zEi/V3Xx+VbkU1ajDVM",
+  "testPublicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4=",
+  "cases": [
+    {
+      "name": "valid",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "keyId": "k1",
+        "signature": "1QeYQVRx3edSyZB1MZDOeoo4tHS5f0wJxFV2ZTV6Z09BbxcR1MkYDXRQOJ9Qzgm+KQqr/ucPl3/nwW0wsUrSBQ=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "accepted"
+    },
+    {
+      "name": "tampered body",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjgsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "keyId": "k1",
+        "signature": "1QeYQVRx3edSyZB1MZDOeoo4tHS5f0wJxFV2ZTV6Z09BbxcR1MkYDXRQOJ9Qzgm+KQqr/ucPl3/nwW0wsUrSBQ=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected"
+    },
+    {
+      "name": "unknown key id",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "keyId": "k2",
+        "signature": "1QeYQVRx3edSyZB1MZDOeoo4tHS5f0wJxFV2ZTV6Z09BbxcR1MkYDXRQOJ9Qzgm+KQqr/ucPl3/nwW0wsUrSBQ=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected"
+    },
+    {
+      "name": "wrong algorithm",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "alg": "RS256",
+        "keyId": "k1",
+        "signature": "1QeYQVRx3edSyZB1MZDOeoo4tHS5f0wJxFV2ZTV6Z09BbxcR1MkYDXRQOJ9Qzgm+KQqr/ucPl3/nwW0wsUrSBQ=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected"
+    },
+    {
+      "name": "not base64",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "keyId": "k1",
+        "signature": "%%%"
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected"
+    },
+    {
+      "name": "unsigned",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected"
+    },
+    {
+      "name": "key outside its contract scope",
+      "manifestBase64": "eyJjYXRhbG9nIjoiY29uZm9ybWFuY2UiLCJzZXJpYWwiOjcsImdlbmVyYXRlZEF0RXBvY2hNcyI6MCwiZXhwaXJlc0F0RXBvY2hNcyI6MSwiZGVzaWducyI6W3siaWQiOiJkIiwiY29udHJhY3QiOiJhZHMvYmFubmVyQDEiLCJ0aXRsZSI6IkQifV19",
+      "signature": {
+        "keyId": "k1",
+        "signature": "1QeYQVRx3edSyZB1MZDOeoo4tHS5f0wJxFV2ZTV6Z09BbxcR1MkYDXRQOJ9Qzgm+KQqr/ucPl3/nwW0wsUrSBQ=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4=",
+          "contractPrefixes": [
+            "promo/"
+          ]
+        }
+      ],
+      "expect": "rejected"
+    }
+  ]
+}

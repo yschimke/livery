@@ -1,6 +1,7 @@
 package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.ImageRef
 import ee.schimke.livery.protocol.InputSpec
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.ValueType
@@ -88,19 +89,34 @@ object ContractBinder {
           problems += BindingProblem(name, "${s.length} chars, at most ${spec.maxLength}"); null
         } else NamedValue.Str(s)
       }
-      ValueType.Int -> p.longOrNull?.takeIf { !p.isString && it in Int.MIN_VALUE..Int.MAX_VALUE }?.let { if (ranged(it.toDouble())) NamedValue.I(it.toInt()) else null } ?: bad()
-      ValueType.Long -> p.longOrNull?.takeIf { !p.isString }?.let { if (ranged(it.toDouble())) NamedValue.L(it) else null } ?: bad()
+      ValueType.Int -> integral(p)?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.let { if (ranged(it.toDouble())) NamedValue.I(it.toInt()) else null } ?: bad()
+      ValueType.Long -> integral(p)?.let { if (ranged(it.toDouble())) NamedValue.L(it) else null } ?: bad()
       ValueType.Float -> p.doubleOrNull?.takeIf { !p.isString }?.let { if (ranged(it)) NamedValue.F(it.toFloat()) else null } ?: bad()
       ValueType.Bool -> p.booleanOrNull?.takeIf { !p.isString }?.let { NamedValue.B(it) } ?: bad()
       ValueType.Color -> parseColor(p.content)?.takeIf { p.isString }?.let { NamedValue.Color(it) } ?: bad()
-      ValueType.Image -> if (p.isString) NamedValue.Image(p.content) else bad()
+      ValueType.Image ->
+        if (p.isString && ImageRef.parse(p.content) != null) NamedValue.Image(p.content)
+        else { problems += BindingProblem(name, "expected an image: asset:<sha256>, https://… or app:<key>, got $p"); null }
     }
+  }
+
+  /**
+   * A JSON number with a whole-number value: `3`, `3.0` and `3e0` alike (PROTOCOL.md §4.1), since
+   * not every platform's JSON parser keeps the token's spelling. Beyond 2^53 only an integer
+   * literal is exact, so a fractional or exponent spelling there is refused.
+   */
+  private fun integral(p: JsonPrimitive): Long? {
+    if (p.isString) return null
+    p.longOrNull?.let { return it }
+    val d = p.doubleOrNull ?: return null
+    return if (d == kotlin.math.floor(d) && kotlin.math.abs(d) <= 9.007199254740992E15) d.toLong() else null
   }
 
   /** `#RRGGBB` or `#AARRGGBB` → ARGB. */
   fun parseColor(s: String): Long? {
     if (!s.startsWith('#')) return null
     val hex = s.substring(1)
+    if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
     val v = hex.toLongOrNull(16) ?: return null
     return when (hex.length) {
       6 -> 0xFF000000L or v

@@ -31,11 +31,17 @@ data class Manifest(
   val minClient: Int = 0,
   val blobBase: String = "blobs/",
   val previewBase: String = "previews/",
+  /** Where images and fonts ([assets]) live; `assets/` by default. */
+  val assetBase: String = "assets/",
   val contracts: List<Contract> = emptyList(),
   val designs: List<Design> = emptyList(),
   val templates: List<TemplateEntry> = emptyList(),
   val themes: List<ThemePack> = emptyList(),
   val placements: List<PlacementRule> = emptyList(),
+  /** Images and fonts that templates need, content addressed. */
+  val assets: List<AssetEntry> = emptyList(),
+  /** How remote images in datasets are fetched; null means only hosts the app allowlists. */
+  val imageProxy: ImageProxy? = null,
   /** Free-form provenance: commit, PR, author tool. Never read by clients for decisions. */
   val provenance: Map<String, String> = emptyMap(),
 ) {
@@ -47,6 +53,11 @@ data class Manifest(
   fun design(id: String): Design? = designs.firstOrNull { it.id == id }
 
   fun templatesFor(designId: String): List<TemplateEntry> = templates.filter { it.designId == designId }
+
+  fun asset(sha256: String): AssetEntry? = assets.firstOrNull { it.sha256 == sha256 }
+
+  /** The assets [template] needs, as listed; unknown hashes are skipped (the publisher refuses them). */
+  fun assetsFor(template: TemplateEntry): List<AssetEntry> = template.assets.mapNotNull(::asset)
 
   companion object {
     const val SCHEMA: Int = 1
@@ -123,6 +134,10 @@ data class TemplateEntry(
   val reads: List<String> = emptyList(),
   /** Host actions the document can emit. */
   val emits: List<String> = emptyList(),
+  /** Hashes of the [AssetEntry]s (images, fonts) it needs, downloaded with it. */
+  val assets: List<String> = emptyList(),
+  /** Font families the document names; each is a catalog font asset, `google:<family>`, or a system family. */
+  val fonts: List<String> = emptyList(),
 )
 
 /** An image of a design or template, content addressed under [Manifest.previewBase]. */

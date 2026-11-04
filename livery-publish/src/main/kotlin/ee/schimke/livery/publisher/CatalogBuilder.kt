@@ -2,8 +2,11 @@ package ee.schimke.livery.publisher
 
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
-import ee.schimke.livery.client.JvmCrypto
+import ee.schimke.livery.client.JavaCrypto
+import ee.schimke.livery.protocol.AssetEntry
+import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.FontFace
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlacementRule
@@ -13,6 +16,7 @@ import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.ThemePack
 import java.io.File
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
@@ -25,6 +29,8 @@ import kotlinx.serialization.json.Json
  * designs/<designId>/<name>.rc      a values-free document, from any authoring tool
  * designs/<designId>/<name>.json    TemplateSpec: its target and tags
  * designs/<designId>/previews/<theme>[~<example>].png|webp
+ * designs/<designId>/assets/<name>.png|webp|svg   images its templates need, named <name>
+ * fonts/fonts.json                  FontFile list: the catalog's typefaces and their licences
  * placements/<any>.json             PlacementRule (local growth rules)
  * themes/<any>.json                 ThemePack
  * ```
@@ -46,6 +52,19 @@ data class TemplateSpec(
   /** Named values the document reads, if the authoring tool reported them. */
   val reads: List<String> = emptyList(),
   val emits: List<String> = emptyList(),
+  /** Font families it names: a family in `fonts/fonts.json`, `google:<family>` or `system:<family>`. */
+  val fonts: List<String> = emptyList(),
+)
+
+/** One entry of `fonts/fonts.json`: a font file beside it and the face it provides. */
+@Serializable
+data class FontFile(
+  val file: String,
+  val family: String,
+  val weight: Int = 400,
+  val italic: Boolean = false,
+  /** SPDX id, required: a catalog redistributes its fonts to every client. */
+  val license: String,
 )
 
 /** Where the output is hosted, which decides how blobs are laid out and addressed. */
@@ -57,6 +76,9 @@ sealed interface Layout {
     val downloadBase get() = "https://github.com/$owner/$repo/releases/download/$tag/"
   }
 }
+
+/** The protocol level that added resources (PROTOCOL.md §2.1). */
+const val RESOURCES_LEVEL: Int = 2
 
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
@@ -84,6 +106,26 @@ class CatalogBuilder(
       Layout.Static -> "blobs/" to "previews/"
       is Layout.GitHubRelease -> "" to ""
     }
+    val assetDir = if (layout is Layout.GitHubRelease) "" else "assets/"
+    val assets = linkedMapOf<String, AssetEntry>()
+    fun addAsset(bytes: ByteArray, entry: (sha: String) -> AssetEntry): AssetEntry {
+      val a = entry(JavaCrypto.sha256HexBlocking(bytes))
+      files[assetDir + a.fileName] = bytes
+      return assets.getOrPut(a.sha256) { a }
+    }
+    val fontsDir = File(src, "fonts")
+    val fonts = File(fontsDir, "fonts.json").takeIf { it.isFile }
+      ?.let { json.decodeFromString(ListSerializer(FontFile.serializer()), it.readText()) }.orEmpty()
+      .mapNotNull { f ->
+        val file = File(fontsDir, f.file)
+        val mime = when (file.extension.lowercase()) { "ttf" -> "font/ttf"; "otf" -> "font/otf"; "woff2" -> "font/woff2"; else -> null }
+        when {
+          !file.isFile -> { problems += "fonts/${f.file}: missing"; null }
+          mime == null -> { problems += "fonts/${f.file}: not a ttf, otf or woff2"; null }
+          f.license.isBlank() -> { problems += "fonts/${f.file}: no license"; null }
+          else -> addAsset(file.readBytes()) { sha -> AssetEntry(sha, file.length(), mime, AssetKind.Font, font = FontFace(f.family, f.weight, f.italic), license = f.license) }
+        }
+      }
 
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
     for (c in contracts) for ((name, example) in c.examples) {
@@ -102,7 +144,7 @@ class CatalogBuilder(
 
       val previews = File(dir, "previews").listFiles().orEmpty().filter { it.extension in setOf("png", "webp") }.sortedBy { it.name }.map { f ->
         val bytes = f.readBytes()
-        val sha = JvmCrypto.sha256Hex(bytes)
+        val sha = JavaCrypto.sha256HexBlocking(bytes)
         val (w, h) = imageSize(bytes) ?: (0 to 0)
         val theme = f.nameWithoutExtension.substringBefore('~')
         val example = f.nameWithoutExtension.substringAfter('~', "").ifEmpty { null }
@@ -111,6 +153,12 @@ class CatalogBuilder(
         p
       }
       designs += design.copy(previews = design.previews + previews)
+
+      val images = File(dir, "assets").listFiles().orEmpty().filter { it.isFile }.sortedBy { it.name }.mapNotNull { f ->
+        val mime = when (f.extension.lowercase()) { "png" -> "image/png"; "webp" -> "image/webp"; "svg" -> "image/svg+xml"; "jpg", "jpeg" -> "image/jpeg"; else -> null }
+        if (mime == null) { problems += "${design.id}/assets/${f.name}: not an image"; null }
+        else addAsset(f.readBytes()) { sha -> AssetEntry(sha, f.length(), mime, AssetKind.Image, name = f.nameWithoutExtension) }
+      }
 
       val rcs = dir.listFiles().orEmpty().filter { it.extension == "rc" }.sortedBy { it.name }
       if (rcs.isEmpty()) problems += "${design.id}: no .rc templates"
@@ -126,9 +174,22 @@ class CatalogBuilder(
           val actions = spec.emits.filterNot { it in c.actions }
           if (actions.isNotEmpty()) problems += "${design.id}/${rc.name}: emits undeclared actions $actions"
         }
-        val sha = JvmCrypto.sha256Hex(bytes)
+        val sha = JavaCrypto.sha256HexBlocking(bytes)
         files["$blobDir$sha.rc"] = bytes
-        templates += TemplateEntry(sha, bytes.size.toLong(), design.id, design.contract, spec.target, spec.tags, reads = spec.reads, emits = spec.emits)
+        val fontAssets = spec.fonts.flatMap { family ->
+          when {
+            family.startsWith("google:") || family.startsWith("system:") -> emptyList()
+            else -> fonts.filter { it.font?.family == family }.ifEmpty {
+              problems += "${design.id}/${rc.name}: font '$family' is not in fonts/fonts.json (or use google:/system:)"
+              emptyList()
+            }
+          }
+        }
+        templates += TemplateEntry(
+          sha, bytes.size.toLong(), design.id, design.contract, spec.target, spec.tags,
+          reads = spec.reads, emits = spec.emits,
+          assets = (images + fontAssets).map { it.sha256 }.distinct(), fonts = spec.fonts,
+        )
       }
     }
     designs.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate design ${it.key}" }
@@ -153,7 +214,8 @@ class CatalogBuilder(
       generatedAtEpochMs = t,
       expiresAtEpochMs = t + config.expiresInDays * 86_400_000,
       ttlSeconds = config.ttlSeconds,
-      minClient = config.minClient,
+      // A template that needs assets must not reach a client that would play it without them.
+      minClient = maxOf(config.minClient, if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",
       contracts = contracts,
@@ -161,6 +223,8 @@ class CatalogBuilder(
       templates = templates,
       themes = themes,
       placements = placements,
+      assetBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "assets/",
+      assets = assets.values.toList(),
     )
     val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
     return Output(manifest, bytes, files)

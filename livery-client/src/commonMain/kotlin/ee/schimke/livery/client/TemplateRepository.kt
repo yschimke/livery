@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.InstallPolicy
@@ -25,6 +26,8 @@ data class LoadedTemplate(
   val origin: Origin,
   /** The contract from the same catalog the template came from (the bundled one, offline). */
   val contract: Contract?,
+  /** The images and fonts it needs, all on disk (or bundled) when it is handed out. */
+  val assets: List<AssetEntry> = emptyList(),
 ) {
   enum class Origin { Fresh, Stale, Bundled }
 }
@@ -178,7 +181,7 @@ class TemplateRepository(
       // Choose among what is on disk, so a preferred template that failed to download never hides
       // a playable cached one. The chosen design first, else the automatic one: never nothing.
       val have = blobs.keys()
-      val cached = m.copy(templates = m.templates.filter { it.sha256 in have })
+      val cached = m.copy(templates = m.templates.filter { t -> t.sha256 in have && t.assets.all { it in have } })
       for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
         val e = TemplateSelector.select(cached, q, automatic = automatic) ?: continue
         blobs.get(e.sha256)?.let { return loaded(m, e, it, origin) }
@@ -207,14 +210,18 @@ class TemplateRepository(
     // A catalog too stale for resolve() is too stale here: same deadline for every slot.
     val m = usable()
     ref.sha256?.let { sha ->
-      val e = m?.templates?.firstOrNull { it.sha256 == sha }?.takeIf { TemplateSelector.eligible(m, it, query) } ?: return null
-      val bytes = blobs.get(e.sha256) ?: download(m, e) ?: return null
+      // The same bytes may be listed for several targets or designs: any entry that matches the
+      // reference (and its design, if it names one) and passes the gate will do.
+      val e = m?.templates?.firstOrNull {
+        it.sha256 == sha && (ref.designId == null || it.designId == ref.designId) && TemplateSelector.eligible(m, it, query)
+      } ?: return null
+      val bytes = obtain(m, e) ?: return null
       return loaded(m, e, bytes, originOf(m))
     }
     val designId = ref.designId ?: return resolve(query)
     if (m != null) {
       TemplateSelector.select(m, query.copy(designId = designId)) { false }?.let { e ->
-        (blobs.get(e.sha256) ?: download(m, e))?.let { return loaded(m, e, it, originOf(m)) }
+        obtain(m, e)?.let { return loaded(m, e, it, originOf(m)) }
       }
     }
     // Offline or not downloadable: the bundled copy of that same design, if the app ships one.
@@ -225,7 +232,7 @@ class TemplateRepository(
     if (clock.nowEpochMs() < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
 
   private fun loaded(m: Manifest, e: TemplateEntry, bytes: ByteArray, origin: LoadedTemplate.Origin) =
-    LoadedTemplate(e, m.design(e.designId), bytes, origin, m.contract(e.contract))
+    LoadedTemplate(e, m.design(e.designId), bytes, origin, m.contract(e.contract), m.assetsFor(e))
 
   // --- install / list / preview ---------------------------------------------------------------
 
@@ -241,7 +248,8 @@ class TemplateRepository(
         previews = (d.previews + needed.flatMap { it.previews }).distinctBy { it.sha256 }
           .map { PreviewRef(it, resolveUrl(source.manifestUrl, m.previewBase + it.fileName)) },
         installed = d.install == InstallPolicy.Always || d.id in installed,
-        downloadBytes = needed.filter { it.sha256 !in have }.sumOf { it.bytes },
+        downloadBytes = needed.filter { it.sha256 !in have }.sumOf { it.bytes } +
+          needed.flatMap { m.assetsFor(it) }.distinctBy { it.sha256 }.filter { it.sha256 !in have }.sumOf { it.bytes },
         playable = needed.isNotEmpty(),
       )
     }
@@ -252,7 +260,7 @@ class TemplateRepository(
     val m = manifest() ?: return false
     val needed = entriesForTargets(m, designId)
     if (needed.isEmpty()) return false
-    for (e in needed) if (blobs.get(e.sha256) == null && download(m, e) == null) return false
+    for (e in needed) if (obtain(m, e) == null) return false
     kv.put(k("installed"), json.encodeToString(SetSerializer, installedIds() + designId))
     return true
   }
@@ -282,13 +290,19 @@ class TemplateRepository(
    */
   suspend fun prune(keep: Set<String> = emptySet()) = prune(listOf(this), keep)
 
-  /** Hashes this repository needs on disk: `Always` and installed designs, for every target. */
+  /** Hashes this repository needs on disk: `Always` and installed designs, for every target, with their assets. */
   suspend fun retained(): Set<String> {
     val m = manifest() ?: return emptySet()
     val installed = installedIds()
-    return m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }
-      .flatMap { entriesForTargets(m, it.id) }.map { it.sha256 }.toSet()
+    val entries = m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }.flatMap { entriesForTargets(m, it.id) }
+    return (entries.map { it.sha256 } + entries.flatMap { it.assets }).toSet()
   }
+
+  /**
+   * An asset's bytes from the cache (or the bundled catalog), e.g. for a player's font or image
+   * loader. Only assets of templates this repository handed out are on disk.
+   */
+  suspend fun asset(sha256: String): ByteArray? = blobs.get(sha256) ?: bundled?.read?.invoke(sha256)
 
   private suspend fun owned(): Set<String> =
     kv.get(k("owned"))?.let { runCatching { json.decodeFromString(SetSerializer, it) }.getOrNull() } ?: emptySet()
@@ -301,24 +315,43 @@ class TemplateRepository(
     val installed = installedIds()
     m.designs.filter { !it.revoked && (it.install == InstallPolicy.Always || it.id in installed) }
       .flatMap { entriesForTargets(m, it.id) }
-      .filter { blobs.get(it.sha256) == null }
-      .forEach { download(m, it) }
+      .forEach { obtain(m, it) }
   }
+
 
   private fun entriesForTargets(m: Manifest, designId: String): List<TemplateEntry> =
     m.templatesFor(designId).filter { e -> !e.revoked && targets.any { e.target.fits(it) && e.bytes <= it.maxBytes } }
 
-  private suspend fun download(m: Manifest, e: TemplateEntry): ByteArray? {
-    val r = fetcher.get(resolveUrl(source.manifestUrl, m.blobBase + e.sha256 + ".rc"), null) as? FetchResult.Ok ?: return null
-    if (r.bytes.size.toLong() != e.bytes || crypto.sha256Hex(r.bytes) != e.sha256) return null
-    blobs.put(e.sha256, r.bytes)
-    setOwned(owned() + e.sha256)
+  /**
+   * The template's bytes once it and every asset it needs are on disk, downloading what is missing
+   * (each verified by size and hash). Null if anything can't be had: a template is never handed
+   * out without its fonts and images.
+   */
+  private suspend fun obtain(m: Manifest, e: TemplateEntry): ByteArray? {
+    for (sha in e.assets) {
+      if (blobs.get(sha) != null) continue
+      val a = m.asset(sha) ?: return null
+      fetchVerified(resolveUrl(source.manifestUrl, m.assetBase + a.fileName), a.sha256, a.bytes) ?: return null
+    }
+    return blobs.get(e.sha256) ?: fetchVerified(resolveUrl(source.manifestUrl, m.blobBase + e.sha256 + ".rc"), e.sha256, e.bytes)
+  }
+
+  private suspend fun fetchVerified(url: String, sha256: String, size: Long): ByteArray? {
+    val r = fetcher.get(url, null) as? FetchResult.Ok ?: return null
+    if (r.bytes.size.toLong() != size || crypto.sha256Hex(r.bytes) != sha256) return null
+    blobs.put(sha256, r.bytes)
+    setOwned(owned() + sha256)
     return r.bytes
   }
 
+
   companion object {
-    /** The protocol level this client implements; manifests set `minClient` against it. */
-    const val PROTOCOL_LEVEL: Int = 1
+    /**
+     * The protocol level this client implements; manifests set `minClient` against it. Level 2
+     * added resources (assets, fonts, the image proxy): a level-1 client would hand out templates
+     * without them, so catalogs that use them require level 2.
+     */
+    const val PROTOCOL_LEVEL: Int = 2
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

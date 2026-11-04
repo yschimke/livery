@@ -28,7 +28,7 @@ sealed interface Verification {
 }
 
 class ManifestVerifier(private val crypto: Crypto, private val policy: TrustPolicy) {
-  fun verify(manifestBytes: ByteArray, signature: ManifestSignature?, parse: (ByteArray) -> Manifest): Verification {
+  suspend fun verify(manifestBytes: ByteArray, signature: ManifestSignature?, parse: (ByteArray) -> Manifest): Verification {
     val key: TrustedKey? = when (policy) {
       TrustPolicy.AllowUnsigned -> null
       is TrustPolicy.Signed -> {

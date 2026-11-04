@@ -14,12 +14,14 @@ import ee.schimke.livery.protocol.ValueType
 
 /** Hashing for tests without a platform: content-addressed by a fake but stable digest. */
 object FakeCrypto : Crypto {
-  override fun sha256Hex(bytes: ByteArray): String {
+  override suspend fun sha256Hex(bytes: ByteArray): String = sha(bytes)
+
+  fun sha(bytes: ByteArray): String {
     var h = 1469598103934665603L
     for (b in bytes) { h = h xor (b.toLong() and 0xFF); h *= 1099511628211L }
     return h.toULong().toString(16).padStart(16, '0').repeat(4)
   }
-  override fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray) =
+  override suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray) =
     signature.contentEquals(publicKey + message.size.toString().encodeToByteArray())
 }
 
@@ -41,7 +43,7 @@ object Fx {
 
   fun entry(design: String, name: String, target: Target, revoked: Boolean = false): TemplateEntry {
     val b = blob(name)
-    return TemplateEntry(FakeCrypto.sha256Hex(b), b.size.toLong(), design, "live/status-tile@1", target, revoked = revoked)
+    return TemplateEntry(FakeCrypto.sha(b), b.size.toLong(), design, "live/status-tile@1", target, revoked = revoked)
   }
 
   val inAppV7 = Target(Surfaces.IN_APP, 7, listOf("androidx"))

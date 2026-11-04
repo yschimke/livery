@@ -30,9 +30,12 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Build, test, and build the sample catalog
+      # compileSdk 37.1 (Compose Multiplatform 1.13, OkHttp 5); the runner image may not carry it yet.
+      - name: Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Build and test every target, then build the sample catalog
         run: |
-          ./gradlew --no-configuration-cache build :livery-publish:installDist
+          ./gradlew build :livery-publish:installDist
           livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
       - name: Upload test reports
         if: failure()
@@ -41,10 +44,24 @@ jobs:
           name: test-reports
           path: '**/build/reports/tests/'
 
+  # The Swift package: native URLSession and CryptoKit, run against the same conformance fixtures.
+  swift:
+    name: Swift package
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: swift test (macOS)
+        run: swift test
+      - name: Build for iOS
+        run: xcodebuild -scheme Livery-Package -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build -quiet
+
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
   # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
   gradle:
-    needs: [build]
+    needs: [build, swift]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

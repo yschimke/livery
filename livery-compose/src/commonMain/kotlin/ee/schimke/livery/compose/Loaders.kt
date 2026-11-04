@@ -1,0 +1,80 @@
+package ee.schimke.livery.compose
+
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import ee.schimke.composeai.rcplayer.compose.RcFontVariations
+import ee.schimke.composeai.rcplayer.compose.RcImageLoader
+import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
+import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
+import ee.schimke.livery.client.Bindings
+import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.client.LoadedTemplate
+import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.protocol.AssetKind
+import ee.schimke.livery.protocol.NamedValue
+
+/**
+ * Images a template draws by URL:
+ * - `asset:<sha256>`, `https://…`, `app:<key>`: through [ImageResolver] (catalog assets, the image
+ *   proxy or allowlist, the app's own loader);
+ * - `livery:value/<input>`: the slot's current value for that image input, then as above.
+ * Anything else, and every inline bitmap, is left to [fallback] (the player's default).
+ */
+class LiveryImageLoader(
+  private val resolver: ImageResolver,
+  private val bindings: () -> Bindings,
+  private val fallback: RcImageLoader = RcImageLoader.Default,
+) : RcImageLoader {
+  override suspend fun load(bitmap: RcBitmapData): ImageBitmap? {
+    if (bitmap.encoding != RcBitmapData.ENCODING_URL) return fallback.load(bitmap)
+    val url = bitmap.data.decodeToString()
+    val ref = if (url.startsWith(VALUE_PREFIX)) {
+      (bindings().values[url.removePrefix(VALUE_PREFIX)] as? NamedValue.Image)?.ref ?: return null
+    } else url
+    if (!ref.startsWith("asset:") && !ref.startsWith("https://") && !ref.startsWith("app:")) return fallback.load(bitmap)
+    val bytes = resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) ?: return null
+    return runCatching { decodeImage(bytes) }.getOrNull()
+  }
+
+  companion object {
+    const val VALUE_PREFIX: String = "livery:value/"
+  }
+}
+
+/**
+ * Typefaces from the template's own font assets (verified, downloaded with it). Families the
+ * template doesn't ship go to [fallback]: the system font, or a downloadable-font loader the app
+ * opted into for `google:` families.
+ */
+class LiveryTypefaceLoader(
+  private val faces: Map<String, FontFamily>,
+  private val fallback: RcTypefaceLoader = RcTypefaceLoader.Default,
+) : RcTypefaceLoader {
+  override val families: Set<String> get() = faces.keys + fallback.families
+
+  override fun typeface(family: String, variations: RcFontVariations?): FontFamily? =
+    faces[family] ?: faces.entries.firstOrNull { it.key.equals(family, ignoreCase = true) }?.value ?: fallback.typeface(family, variations)
+
+  companion object {
+    /** Builds the families of [template]'s font assets, reading their bytes from [repository]. */
+    suspend fun forTemplate(template: LoadedTemplate, repository: TemplateRepository, fallback: RcTypefaceLoader = RcTypefaceLoader.Default): LiveryTypefaceLoader {
+      val byFamily = template.assets.filter { it.kind == AssetKind.Font && it.font != null }.groupBy { it.font!!.family }
+      val families = byFamily.mapValues { (_, faces) ->
+        FontFamily(faces.mapNotNull { a ->
+          val bytes = repository.asset(a.sha256) ?: return@mapNotNull null
+          fontFrom(a.sha256, bytes, FontWeight(a.font!!.weight), if (a.font!!.italic) FontStyle.Italic else FontStyle.Normal)
+        })
+      }.filterValues { it != FontFamily.Default }
+      return LiveryTypefaceLoader(families, fallback)
+    }
+  }
+}
+
+/** Decodes PNG, WebP or JPEG bytes. */
+internal expect fun decodeImage(bytes: ByteArray): ImageBitmap
+
+/** A font from verified bytes, identified by their hash. */
+internal expect fun fontFrom(sha256: String, bytes: ByteArray, weight: FontWeight, style: FontStyle): Font

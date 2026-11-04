@@ -1,6 +1,6 @@
 package ee.schimke.livery.publisher
 
-import ee.schimke.livery.client.JvmCrypto
+import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.client.ManifestVerifier
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.client.TrustedKey
@@ -10,6 +10,7 @@ import ee.schimke.livery.protocol.ManifestSignature
 import java.io.File
 import java.util.Base64
 import kotlin.system.exitProcess
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
 private const val USAGE = """livery — build, sign and check a template catalog
@@ -57,8 +58,8 @@ fun main(args: Array<String>) {
         val pub = Base64.getDecoder().decode(File(opt("--pub") ?: usage()).readText().trim())
         val sig = Json.decodeFromString(ManifestSignature.serializer(), File(out, Manifest.SIGNATURE_FILE).readText())
         val bytes = File(out, Manifest.FILE).readBytes()
-        val v = ManifestVerifier(JvmCrypto, TrustPolicy.Signed(listOf(TrustedKey(opt("--key-id") ?: usage(), pub))))
-          .verify(bytes, sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.decodeToString()) }
+        val v = runBlocking { ManifestVerifier(JavaCrypto, TrustPolicy.Signed(listOf(TrustedKey(opt("--key-id") ?: usage(), pub))))
+          .verify(bytes, sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.decodeToString()) } }
         when (v) {
           is Verification.Accepted -> println("ok: ${v.manifest.catalog}/${v.manifest.channel} serial ${v.manifest.serial}")
           is Verification.Rejected -> { System.err.println("rejected: ${v.reason}"); exitProcess(1) }

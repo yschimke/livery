@@ -1,0 +1,189 @@
+{
+  "imageRefs": [
+    {
+      "value": "asset:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "kind": "asset"
+    },
+    {
+      "value": "asset:abc",
+      "kind": "invalid"
+    },
+    {
+      "value": "https://cdn.example/a.png",
+      "kind": "remote"
+    },
+    {
+      "value": "https://",
+      "kind": "invalid"
+    },
+    {
+      "value": "http://cdn.example/a.png",
+      "kind": "invalid"
+    },
+    {
+      "value": "app:avatar",
+      "kind": "app"
+    },
+    {
+      "value": "app:",
+      "kind": "invalid"
+    },
+    {
+      "value": "data:image/png;base64,AA",
+      "kind": "invalid"
+    },
+    {
+      "value": "file:///x",
+      "kind": "invalid"
+    }
+  ],
+  "proxy": {
+    "urlTemplate": "https://img.example/{width}x{height}/{format}?u={url}",
+    "sourceHosts": [
+      "cdn.example"
+    ],
+    "maxWidthPx": 1000,
+    "maxHeightPx": 1000
+  },
+  "proxied": [
+    {
+      "url": "https://cdn.example/a b.png?x=1&y=ü",
+      "widthPx": 400,
+      "heightPx": 300,
+      "expect": "https://img.example/400x300/webp?u=https%3A%2F%2Fcdn.example%2Fa%20b.png%3Fx%3D1%26y%3D%C3%BC"
+    },
+    {
+      "url": "https://sub.cdn.example/a.png",
+      "widthPx": 4000,
+      "heightPx": 4000,
+      "expect": "https://img.example/1000x1000/webp?u=https%3A%2F%2Fsub.cdn.example%2Fa.png"
+    },
+    {
+      "url": "https://cdn.example.evil/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://other.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example:443@attacker.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example@attacker.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example\\@cdn.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example#@cdn.example/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    },
+    {
+      "url": "https://CDN.Example:8443/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": "https://img.example/10x10/webp?u=https%3A%2F%2FCDN.Example%3A8443%2Fa.png"
+    },
+    {
+      "url": "https://[::1]/a.png",
+      "widthPx": 10,
+      "heightPx": 10,
+      "expect": null
+    }
+  ],
+  "direct": [
+    {
+      "url": "https://cdn.example/a b.png?x=1&y=ü",
+      "allow": "cdn.example",
+      "expect": "https://cdn.example/a b.png?x=1&y=ü"
+    },
+    {
+      "url": "https://sub.cdn.example/a.png",
+      "allow": "cdn.example",
+      "expect": "https://sub.cdn.example/a.png"
+    },
+    {
+      "url": "https://cdn.example.evil/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://other.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example:443@attacker.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://cdn.example@attacker.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example\\@cdn.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://attacker.example#@cdn.example/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    },
+    {
+      "url": "https://CDN.Example:8443/a.png",
+      "allow": "cdn.example",
+      "expect": "https://CDN.Example:8443/a.png"
+    },
+    {
+      "url": "https://[::1]/a.png",
+      "allow": "cdn.example",
+      "expect": null
+    }
+  ],
+  "urls": [
+    {
+      "base": "https://h.example/c/main/manifest.json",
+      "ref": "blobs/x.rc",
+      "expect": "https://h.example/c/main/blobs/x.rc"
+    },
+    {
+      "base": "https://h.example/c/main/manifest.json",
+      "ref": "/root.rc",
+      "expect": "https://h.example/root.rc"
+    },
+    {
+      "base": "https://h.example/c/main/manifest.json",
+      "ref": "https://other.example/y.rc",
+      "expect": "https://other.example/y.rc"
+    },
+    {
+      "base": "https://github.com/o/r/releases/latest/download/manifest.json",
+      "ref": "https://github.com/o/r/releases/download/t/z.rc",
+      "expect": "https://github.com/o/r/releases/download/t/z.rc"
+    },
+    {
+      "base": "file:/tmp/cat/manifest.json",
+      "ref": "assets/f.ttf",
+      "expect": "file:/tmp/cat/assets/f.ttf"
+    }
+  ]
+}

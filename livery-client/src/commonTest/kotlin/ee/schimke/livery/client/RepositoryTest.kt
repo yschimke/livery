@@ -32,7 +32,7 @@ class RepositoryTest {
         else -> {
           val sha = url.substringAfterLast('/').removeSuffix(".rc")
           val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
-          names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
+          names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
         }
       }
     }
@@ -104,7 +104,7 @@ class RepositoryTest {
   @Test fun fallsBackToBundledWhenNothingIsCached() = runTest {
     val bundledManifest = Fx.manifest()
     val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled(bundledManifest) { sha ->
-      listOf("default-v8").map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha }
+      listOf("default-v8").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
     })
     r.refresh()
     assertEquals(LoadedTemplate.Origin.Bundled, r.resolve(q)?.origin)

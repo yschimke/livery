@@ -5,18 +5,35 @@ fun interface Fetcher {
   suspend fun get(url: String, etag: String?): FetchResult
 }
 
+/**
+ * A [Fetcher] that follows redirects itself and asks before each hop, so a caller can keep a
+ * request on hosts it trusts. [ImageResolver] needs one: checking only the first URL would let an
+ * allowed host redirect the device anywhere.
+ */
+interface RedirectingFetcher : Fetcher {
+  /**
+   * @param maxBytes a body longer than this fails without being read past the limit: a declared
+   *   `Content-Length` over it is refused before reading, and a stream stops one byte past it.
+   */
+  suspend fun get(url: String, etag: String?, maxBytes: Long = Long.MAX_VALUE, allowRedirect: (to: String) -> Boolean): FetchResult
+}
+
 sealed interface FetchResult {
   data class Ok(val bytes: ByteArray, val etag: String?, val retryAfterSeconds: Long? = null) : FetchResult
   data object NotModified : FetchResult
   data class Failed(val status: Int?, val message: String, val retryAfterSeconds: Long? = null) : FetchResult
 }
 
-/** Hashes and signature checks; JVM/Android use the JDK, iOS/web bring their own. */
+/**
+ * Hashes and signature checks. Suspending, because the browser's WebCrypto is asynchronous. The JVM
+ * and Android use [JavaCrypto]; iOS and the web pass their own (CryptoKit, WebCrypto) until Livery
+ * ships them.
+ */
 interface Crypto {
-  fun sha256Hex(bytes: ByteArray): String
+  suspend fun sha256Hex(bytes: ByteArray): String
 
   /** Verify an Ed25519 [signature] over [message] with the raw 32-byte [publicKey]. */
-  fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean
+  suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean
 }
 
 /** Content-addressed bytes: blobs and previews. Keys are sha256 hex. */
