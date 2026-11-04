@@ -168,16 +168,17 @@ class TemplateRepository(
    * native fallback. Never touches the network; [ensure] does for on-demand designs.
    */
   suspend fun resolve(query: TemplateQuery): LoadedTemplate? {
-    val now = clock.nowEpochMs()
-    val m = manifest()
-    if (m != null && now < m.expiresAtEpochMs + STALE_GRACE_MS) {
-      val origin = if (now < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
+    val m = usable()
+    if (m != null) {
+      val origin = if (clock.nowEpochMs() < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
       val installed = installedIds()
       val automatic = { d: Design -> d.install == InstallPolicy.Always || d.id in installed }
-      // The chosen design, else the automatic one; a chosen design not downloaded yet falls back
-      // to what is, never to nothing.
+      // Choose among what is on disk, so a preferred template that failed to download never hides
+      // a playable cached one. The chosen design first, else the automatic one: never nothing.
+      val have = blobs.keys()
+      val cached = m.copy(templates = m.templates.filter { it.sha256 in have })
       for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
-        val e = TemplateSelector.select(m, q, automatic = automatic) ?: continue
+        val e = TemplateSelector.select(cached, q, automatic = automatic) ?: continue
         blobs.get(e.sha256)?.let { return loaded(m, e, it, origin) }
       }
     }
@@ -185,6 +186,9 @@ class TemplateRepository(
     val e = TemplateSelector.select(b.manifest, query) ?: TemplateSelector.select(b.manifest, query.copy(designId = null)) ?: return null
     return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
   }
+
+  /** The cached manifest while it may still be played: until [STALE_GRACE_MS] past its expiry. */
+  private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 
   /**
    * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand).
@@ -196,21 +200,25 @@ class TemplateRepository(
    * [resolve].
    */
   suspend fun ensure(ref: TemplateRef, query: TemplateQuery): LoadedTemplate? {
-    val m = manifest()
+    // A catalog too stale for resolve() is too stale here: same deadline for every slot.
+    val m = usable()
     ref.sha256?.let { sha ->
       val e = m?.templates?.firstOrNull { it.sha256 == sha }?.takeIf { TemplateSelector.eligible(m, it, query) } ?: return null
       val bytes = blobs.get(e.sha256) ?: download(m, e) ?: return null
-      return loaded(m, e, bytes, LoadedTemplate.Origin.Fresh)
+      return loaded(m, e, bytes, originOf(m))
     }
     val designId = ref.designId ?: return resolve(query)
     if (m != null) {
       TemplateSelector.select(m, query.copy(designId = designId)) { false }?.let { e ->
-        (blobs.get(e.sha256) ?: download(m, e))?.let { return loaded(m, e, it, LoadedTemplate.Origin.Fresh) }
+        (blobs.get(e.sha256) ?: download(m, e))?.let { return loaded(m, e, it, originOf(m)) }
       }
     }
     // Offline or not downloadable: the bundled copy of that same design, if the app ships one.
     return resolve(query.copy(designId = designId))?.takeIf { it.entry.designId == designId }
   }
+
+  private fun originOf(m: Manifest) =
+    if (clock.nowEpochMs() < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
 
   private fun loaded(m: Manifest, e: TemplateEntry, bytes: ByteArray, origin: LoadedTemplate.Origin) =
     LoadedTemplate(e, m.design(e.designId), bytes, origin, m.contract(e.contract))
@@ -263,14 +271,25 @@ class TemplateRepository(
   /**
    * Drops cached blobs nothing needs: not installed, not `Always`, not in [keep] (e.g. what visible
    * feed items use). Previewed and on-demand blobs go first; installed ones never.
+   *
+   * Only blobs this repository downloaded are candidates, so a blob store shared with another
+   * catalog keeps that catalog's blobs. When repositories share a store, prune them together with
+   * [TemplateRepository.prune] on the companion, so a blob either of them needs survives.
    */
-  suspend fun prune(keep: Set<String> = emptySet()) {
-    val m = manifest() ?: return
+  suspend fun prune(keep: Set<String> = emptySet()) = prune(listOf(this), keep)
+
+  /** Hashes this repository needs on disk: `Always` and installed designs, for every target. */
+  suspend fun retained(): Set<String> {
+    val m = manifest() ?: return emptySet()
     val installed = installedIds()
-    val needed = m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }
+    return m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }
       .flatMap { entriesForTargets(m, it.id) }.map { it.sha256 }.toSet()
-    blobs.keys().filterNot { it in needed || it in keep }.forEach { blobs.delete(it) }
   }
+
+  private suspend fun owned(): Set<String> =
+    kv.get(k("owned"))?.let { runCatching { json.decodeFromString(SetSerializer, it) }.getOrNull() } ?: emptySet()
+
+  private suspend fun setOwned(owned: Set<String>) = kv.put(k("owned"), json.encodeToString(SetSerializer, owned))
 
   // --- internals ------------------------------------------------------------------------------
 
@@ -289,6 +308,7 @@ class TemplateRepository(
     val r = fetcher.get(resolveUrl(source.manifestUrl, m.blobBase + e.sha256 + ".rc"), null) as? FetchResult.Ok ?: return null
     if (r.bytes.size.toLong() != e.bytes || crypto.sha256Hex(r.bytes) != e.sha256) return null
     blobs.put(e.sha256, r.bytes)
+    setOwned(owned() + e.sha256)
     return r.bytes
   }
 
@@ -297,6 +317,20 @@ class TemplateRepository(
     const val PROTOCOL_LEVEL: Int = 1
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
+    /**
+     * Prunes [repositories] that share one blob store: a blob goes only when one of them downloaded
+     * it and none of them retains it.
+     */
+    suspend fun prune(repositories: List<TemplateRepository>, keep: Set<String> = emptySet()) {
+      val retained = repositories.flatMap { it.retained() }.toSet() + keep
+      for (r in repositories) {
+        val owned = r.owned()
+        val drop = owned - retained
+        drop.forEach { r.blobs.delete(it) }
+        r.setOwned(owned - drop)
+      }
+    }
+
     val DefaultJson = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     private val SetSerializer = SetSerializer(String.serializer())
   }

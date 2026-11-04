@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
@@ -86,5 +87,56 @@ class ReviewRegressionTest {
     assertNotNull(r.resolve(q), "resolve completed while the refresh held the network")
     host.gate!!.complete(Unit)
     assertIs<RefreshResult.Updated>(refresh.await())
+  }
+}
+
+/** Regressions from the second review: cached fallbacks, shared stores, stale deadlines. */
+class SecondReviewRegressionTest {
+  private val m = Fx.manifest()
+  private val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
+  private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha }
+  private val inApp8 = Fx.inApp.copy(maxRcApiLevel = 8)
+  private val q = TemplateQuery("live/status-tile@1", inApp8)
+  private var now = 1_000L
+
+  private class Host(val manifest: Manifest, val blob: (String) -> ByteArray?) : Fetcher {
+    override suspend fun get(url: String, etag: String?): FetchResult = when {
+      url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray(), null)
+      url.endsWith(".sig.json") -> FetchResult.Failed(404, "unsigned")
+      else -> blob(url.substringAfterLast('/').removeSuffix(".rc"))?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
+    }
+  }
+
+  private fun repo(host: Fetcher, blobs: BlobStore = MemoryBlobStore(), source: String = "https://cdn.example/c", m: Manifest = this.m) = TemplateRepository(
+    StaticSource(source), host, FakeCrypto, TrustPolicy.AllowUnsigned, blobs, MemoryKeyValueStore(), { now }, listOf(inApp8), null,
+  )
+
+  @Test fun aMissingPreferredBlobDoesNotHideACachedOne() = runTest {
+    val v8 = m.templates[1].sha256
+    val r = repo(Host(m) { if (it == v8) null else blobFor(it) }) // the API 8 download fails
+    r.refresh()
+    assertEquals(m.templates[0].sha256, r.resolve(q)?.entry?.sha256, "the cached API 7 template plays")
+  }
+
+  @Test fun pruningOneCatalogKeepsAnotherCatalogsBlobs() = runTest {
+    val shared = MemoryBlobStore()
+    val a = repo(Host(m, ::blobFor), shared, "https://a.example/c").also { it.refresh() }
+    val onlyRetro = m.copy(designs = m.designs.map { if (it.id == "tile-retro") it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always) else it.copy(revoked = true) })
+    val b = repo(Host(onlyRetro, ::blobFor), shared, "https://b.example/c").also { it.refresh() }
+    val bNeeds = b.retained()
+    a.prune()
+    assertTrue(shared.keys().containsAll(bNeeds), "a's prune left b's blobs")
+    TemplateRepository.prune(listOf(a, b))
+    assertTrue(shared.keys().containsAll(a.retained() + bNeeds))
+  }
+
+  @Test fun explicitReferencesHonourTheStaleDeadline() = runTest {
+    val r = repo(Host(m, ::blobFor)).also { it.refresh() }
+    now = m.expiresAtEpochMs + 1
+    assertEquals(LoadedTemplate.Origin.Stale, r.ensure(TemplateRef(sha256 = m.templates[1].sha256), q)?.origin)
+    now = m.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+    assertNull(r.resolve(q))
+    assertNull(r.ensure(TemplateRef(sha256 = m.templates[1].sha256), q))
+    assertNull(r.ensure(TemplateRef(designId = "tile-default"), q))
   }
 }
