@@ -1,0 +1,417 @@
+{
+  "manifest": {
+    "catalog": "conformance",
+    "serial": 1,
+    "generatedAtEpochMs": 0,
+    "expiresAtEpochMs": 1,
+    "contracts": [
+      {
+        "id": "c/tile",
+        "major": 1
+      }
+    ],
+    "designs": [
+      {
+        "id": "builtin",
+        "contract": "c/tile@1",
+        "title": "Built-in",
+        "install": "Always"
+      },
+      {
+        "id": "compact",
+        "contract": "c/tile@1",
+        "title": "Compact",
+        "variant": "compact",
+        "tags": {
+          "style": "flat"
+        },
+        "install": "Always"
+      },
+      {
+        "id": "skin",
+        "contract": "c/tile@1",
+        "title": "Skin",
+        "install": "OnRequest"
+      },
+      {
+        "id": "gone",
+        "contract": "c/tile@1",
+        "title": "Gone",
+        "revoked": true
+      }
+    ],
+    "templates": [
+      {
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 7,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "launcher-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "size": {
+            "minWidthDp": 110,
+            "maxWidthDp": 400,
+            "minHeightDp": 40,
+            "maxHeightDp": 400
+          }
+        }
+      },
+      {
+        "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "launcher-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "size": {
+            "minWidthDp": 110,
+            "maxWidthDp": 200,
+            "minHeightDp": 40,
+            "maxHeightDp": 200
+          }
+        }
+      },
+      {
+        "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+        "bytes": 100,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "wear-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "glance-wear"
+          ],
+          "theme": "baked:dark",
+          "container": "wear:small"
+        }
+      },
+      {
+        "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+        "bytes": 100,
+        "designId": "compact",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 7,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+        "bytes": 100,
+        "designId": "skin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+        "bytes": 100,
+        "designId": "gone",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "bytes": 900000,
+        "designId": "builtin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "highest level the player draws",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "chosen design",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "compact"
+      },
+      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "name": "preferred variant",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "compact"
+      },
+      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "name": "uninstalled skin is never automatic",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      "expect": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "name": "installed skin is eligible; the built-in still wins a tie (choosing applies it)",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      "installed": [
+        "skin"
+      ],
+      "expect": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "name": "skin chosen explicitly",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "skin"
+      },
+      "expect": "8888888888888888888888888888888888888888888888888888888888888888"
+    },
+    {
+      "name": "revoked design falls back",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "gone"
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "tightest launcher fit",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "launcher-widget",
+          "maxRcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "livePush": false,
+          "maxBytes": 50000
+        },
+        "widthDp": 150,
+        "heightDp": 100
+      },
+      "expect": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "name": "launcher size not covered",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "launcher-widget",
+          "maxRcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "livePush": false,
+          "maxBytes": 50000
+        },
+        "widthDp": 500,
+        "heightDp": 100
+      },
+      "expect": null
+    },
+    {
+      "name": "wear container and baked theme",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "wear-widget",
+          "maxRcApiLevel": 7,
+          "profiles": [
+            "glance-wear"
+          ],
+          "livePush": false,
+          "themes": [
+            "baked:dark"
+          ],
+          "container": "wear:small"
+        }
+      },
+      "expect": "6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    {
+      "name": "wrong wear container",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "wear-widget",
+          "maxRcApiLevel": 7,
+          "profiles": [
+            "glance-wear"
+          ],
+          "livePush": false,
+          "themes": [
+            "baked:dark"
+          ],
+          "container": "wear:large"
+        }
+      },
+      "expect": null
+    },
+    {
+      "name": "byte budget",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ],
+          "maxBytes": 150
+        }
+      },
+      "expect": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "name": "tags",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "tags": {
+          "style": "flat"
+        }
+      },
+      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "name": "other contract major",
+      "query": {
+        "contract": "c/tile@2",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      "expect": null
+    }
+  ]
+}

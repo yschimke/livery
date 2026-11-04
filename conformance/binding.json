@@ -1,0 +1,273 @@
+{
+  "contract": {
+    "id": "c/card",
+    "major": 1,
+    "inputs": {
+      "title": {
+        "type": "string",
+        "required": true,
+        "maxLength": 10
+      },
+      "count": {
+        "type": "int",
+        "min": 0.0,
+        "max": 99.0
+      },
+      "at": {
+        "type": "long"
+      },
+      "level": {
+        "type": "float",
+        "min": 0.0,
+        "max": 1.0
+      },
+      "on": {
+        "type": "bool",
+        "default": false
+      },
+      "accent": {
+        "type": "color",
+        "default": "#6750A4"
+      },
+      "hero": {
+        "type": "image"
+      }
+    },
+    "lists": {
+      "tags": {
+        "item": {
+          "label": {
+            "type": "string",
+            "required": true
+          }
+        },
+        "max": 2
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "minimal",
+      "data": {
+        "title": "Hi"
+      },
+      "expect": {
+        "ok": {
+          "accent": {
+            "type": "color",
+            "argb": 4284960932
+          },
+          "on": {
+            "type": "bool",
+            "value": false
+          },
+          "title": {
+            "type": "string",
+            "value": "Hi"
+          }
+        }
+      }
+    },
+    {
+      "name": "everything",
+      "data": {
+        "title": "Hi",
+        "count": 3,
+        "at": 1793000000,
+        "level": 0.25,
+        "on": true,
+        "accent": "#80112233",
+        "hero": "asset:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tags": [
+          {
+            "label": "a"
+          },
+          {
+            "label": "b"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "accent": {
+            "type": "color",
+            "argb": 2148606515
+          },
+          "at": {
+            "type": "long",
+            "value": 1793000000
+          },
+          "count": {
+            "type": "int",
+            "value": 3
+          },
+          "hero": {
+            "type": "image",
+            "ref": "asset:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "level": {
+            "type": "float",
+            "value": 0.25
+          },
+          "on": {
+            "type": "bool",
+            "value": true
+          },
+          "tags.0.label": {
+            "type": "string",
+            "value": "a"
+          },
+          "tags.1.label": {
+            "type": "string",
+            "value": "b"
+          },
+          "tags.count": {
+            "type": "int",
+            "value": 2
+          },
+          "title": {
+            "type": "string",
+            "value": "Hi"
+          }
+        }
+      }
+    },
+    {
+      "name": "missing required",
+      "data": {},
+      "expect": {
+        "problems": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "unknown key",
+      "data": {
+        "title": "Hi",
+        "typo": 1
+      },
+      "expect": {
+        "problems": [
+          "typo"
+        ]
+      }
+    },
+    {
+      "name": "too long",
+      "data": {
+        "title": "Far too long a title"
+      },
+      "expect": {
+        "problems": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "out of range",
+      "data": {
+        "title": "Hi",
+        "count": 100,
+        "level": -0.1
+      },
+      "expect": {
+        "problems": [
+          "count",
+          "level"
+        ]
+      }
+    },
+    {
+      "name": "wrong types",
+      "data": {
+        "title": 5,
+        "count": "3",
+        "on": "yes",
+        "accent": "red"
+      },
+      "expect": {
+        "problems": [
+          "accent",
+          "count",
+          "on",
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "bad image",
+      "data": {
+        "title": "Hi",
+        "hero": "http://insecure.example/x.png"
+      },
+      "expect": {
+        "problems": [
+          "hero"
+        ]
+      }
+    },
+    {
+      "name": "list too long",
+      "data": {
+        "title": "Hi",
+        "tags": [
+          {
+            "label": "a"
+          },
+          {
+            "label": "b"
+          },
+          {
+            "label": "c"
+          }
+        ]
+      },
+      "expect": {
+        "problems": [
+          "tags"
+        ]
+      }
+    },
+    {
+      "name": "list item problems",
+      "data": {
+        "title": "Hi",
+        "tags": [
+          {
+            "typo": "a"
+          }
+        ]
+      },
+      "expect": {
+        "problems": [
+          "tags.0.label",
+          "tags.0.typo"
+        ]
+      }
+    },
+    {
+      "name": "null uses default",
+      "data": {
+        "title": "Hi",
+        "on": null
+      },
+      "expect": {
+        "ok": {
+          "accent": {
+            "type": "color",
+            "argb": 4284960932
+          },
+          "on": {
+            "type": "bool",
+            "value": false
+          },
+          "title": {
+            "type": "string",
+            "value": "Hi"
+          }
+        }
+      }
+    }
+  ]
+}

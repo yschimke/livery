@@ -178,13 +178,13 @@ and schedulers are per platform:
 
 | Module | Platform | Does |
 | --- | --- | --- |
-| `livery-protocol` | KMP (JVM, Android, iOS, JS, Wasm) | the wire types |
-| `livery-client` | KMP | sources, trust, cache, selection, install, preview, decisions, feeds, actions, events |
-| `livery-compose` *(planned)* | **Compose Multiplatform** (Android, desktop, iOS, Wasm) | `LiveryTemplate(slot)` composables over rc-players' Compose player: live push, native fallback, impression and viewability events, design pickers |
+| `livery-protocol` | KMP (JVM, Android, iOS, Wasm) | the wire types ([PROTOCOL.md](PROTOCOL.md)) |
+| `livery-client` | KMP | sources, trust, cache, selection, install, preview, resources, decisions, feeds, actions, events; HTTP through **Ktor** (OkHttp on the JVM and Android, Darwin on iOS, `fetch` in the browser) |
+| `livery-compose` | **Compose Multiplatform** (Android, desktop, iOS, Wasm) | `LiveryTemplate` / `LiverySlot` over rc-players' Compose player: values seeded before the first frame and pushed live, actions through the router, impression and viewability events, catalog fonts and images through the player's loaders, `rememberDesigns` / `DesignPicker` |
 | `livery-android` *(planned)* | Android | the AndroidX View/Compose player, WorkManager refresh, file stores, image loading |
 | `livery-launcher-widgets` *(planned)* | Android 16+ | a `LiveryWidgetProvider` base: per resize or data change, resolve the `launcher-widget` template for the cell, instantiate it with the app's data, hand it to `RemoteViews` draw instructions, map host actions to `PendingIntent`s; a `RemoteViews` fallback for older launchers |
 | `livery-wear-widgets` *(planned)* | Wear OS | Glance Wear: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding and corner radius as named values, instantiated per widget; blobs synced from the phone over the Data Layer as content-addressed assets, or fetched by an LTE watch; bundled fallbacks on the watch |
-| **`Livery` Swift package** *(planned)* | iOS, macOS | a **native SwiftPM package**, not a Kotlin export: Codable protocol types, the client, `URLSession`, `CryptoKit` Ed25519, BGTaskScheduler, and a SwiftUI `LiveryTemplate` view over rc-players' pure Swift `RcNativePlayerUIKit`, so an iOS app pulls no Compose runtime |
+| **`Livery` / `LiveryUI` Swift package** | iOS, macOS, watchOS, tvOS | a **native SwiftPM package** at the repository root, not a Kotlin export: Codable protocol types, the client on **`URLSession`** and **CryptoKit** Ed25519, file stores, decisions, and SwiftUI `LiveryTemplateView` / `LiverySlotView` over any player. The adapter for rc-players' pure Swift `RcNativePlayerUIKit` (`swift/Integrations/RcNativePlayer`) is a file an app adds beside its own player dependency, so depending on Livery never pulls in a player or the Compose XCFramework |
 | `@livery/web` *(planned)* | browsers | TypeScript client (fetch, `crypto.subtle`, Cache API / IndexedDB) and a `<livery-template>` element over rc-players' TypeScript player |
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
@@ -192,9 +192,32 @@ and schedulers are per platform:
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance
-fixtures** (planned, `conformance/`): manifests, queries, datasets, and the expected selection, bindings
+fixtures** in [`conformance/`](../conformance) ([PROTOCOL.md, Conformance](PROTOCOL.md#conformance)): manifests, queries, datasets, and the expected selection, bindings
 and refusals. Every implementation runs them in CI; a change to the Kotlin behaviour regenerates
 the fixtures, and a port that disagrees fails.
+
+## Resources: images and fonts
+
+A document never fetches anything; every byte it draws comes through the client
+([PROTOCOL.md §6](PROTOCOL.md#6-resources)).
+
+- **Catalog assets.** Images and fonts a design needs are content-addressed `assets` in the
+  manifest, downloaded and verified with the template that lists them; a template is not handed
+  out until all of them are on disk, so a widget or an offline screen never draws a fallback font
+  or a missing picture. Fonts carry family, weight, style and an SPDX licence; a template's `fonts`
+  names catalog families, `google:` families (a downloadable-font resolver the app opts into) or
+  `system:` ones.
+- **Images in data.** A dataset's image is `asset:<sha256>`, `https://…` or `app:<key>`; anything
+  else is refused by the contract gate. A document draws a data-bound image from
+  `livery:value/<input>`, and the client resolves it.
+- **Image proxy.** Remote images go through the catalog's `imageProxy` (a URL template with the
+  source, size and format, and the source hosts it serves): one host to trust, sized for the slot,
+  formats normalised, cookies and tracking stripped. Without a proxy, only hosts the app allowlists
+  are fetched. This is what lets an ad or a feed item carry a picture without the device talking to
+  the advertiser.
+- **Players.** On Compose, `LiveryImageLoader` and `LiveryTypefaceLoader` plug into the player's
+  image and typeface loaders; on iOS the same goes through the native player's resource and font
+  resolvers.
 
 ## Authoring and hosting are plugins
 
@@ -260,13 +283,16 @@ one producer among others.
 
 ## Roadmap
 
-1. **Core** (this commit): protocol, KMP client, publisher, sample catalog, tests.
-2. **Conformance fixtures** and the TypeScript port, so a browser can play the sample catalog.
-3. **`livery-compose`, `livery-android`**: in-app players, live push, events, pickers.
-4. **Widgets**: launcher instantiation and the Wear widget host, built on `rc-player-edit`.
-5. **Swift package** with `RcNativePlayerUIKit`.
-6. **Home Assistant migration** ([plan](migrating-homeassistant-remotecompose.md)).
-7. **`livery-server`** and **`livery-mcp`**.
+1. **Core**: protocol, KMP client, publisher, sample catalog, tests. *Done.*
+2. **Protocol spec and conformance fixtures**, including signing and resources. *Done.*
+3. **`livery-compose`** and the **Swift package**. *First cut done*: the Swift player adapter is
+   compiled only in an app that adds it; the native player's image and font resolvers are not
+   wired yet.
+4. **TypeScript port** over the same fixtures, so a browser can play the sample catalog.
+5. **`livery-android`**: the AndroidX View player, WorkManager refresh.
+6. **Widgets**: launcher instantiation and the Wear widget host, built on `rc-player-edit`.
+7. **Home Assistant migration** ([plan](migrating-homeassistant-remotecompose.md)).
+8. **`livery-server`** (with an image proxy) and **`livery-mcp`**.
 
 ## Open questions
 

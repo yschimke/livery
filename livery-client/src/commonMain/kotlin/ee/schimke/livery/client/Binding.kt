@@ -1,6 +1,7 @@
 package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.ImageRef
 import ee.schimke.livery.protocol.InputSpec
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.ValueType
@@ -93,7 +94,9 @@ object ContractBinder {
       ValueType.Float -> p.doubleOrNull?.takeIf { !p.isString }?.let { if (ranged(it)) NamedValue.F(it.toFloat()) else null } ?: bad()
       ValueType.Bool -> p.booleanOrNull?.takeIf { !p.isString }?.let { NamedValue.B(it) } ?: bad()
       ValueType.Color -> parseColor(p.content)?.takeIf { p.isString }?.let { NamedValue.Color(it) } ?: bad()
-      ValueType.Image -> if (p.isString) NamedValue.Image(p.content) else bad()
+      ValueType.Image ->
+        if (p.isString && ImageRef.parse(p.content) != null) NamedValue.Image(p.content)
+        else { problems += BindingProblem(name, "expected an image: asset:<sha256>, https://… or app:<key>, got $p"); null }
     }
   }
 
@@ -101,6 +104,7 @@ object ContractBinder {
   fun parseColor(s: String): Long? {
     if (!s.startsWith('#')) return null
     val hex = s.substring(1)
+    if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
     val v = hex.toLongOrNull(16) ?: return null
     return when (hex.length) {
       6 -> 0xFF000000L or v

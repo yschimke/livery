@@ -2,8 +2,9 @@ package ee.schimke.livery.publisher
 
 import ee.schimke.livery.client.FileBlobStore
 import ee.schimke.livery.client.FileKeyValueStore
-import ee.schimke.livery.client.JvmCrypto
-import ee.schimke.livery.client.JvmFetcher
+import ee.schimke.livery.client.JavaCrypto
+import ee.schimke.livery.client.KtorFetcher
+import ee.schimke.livery.client.LocalFetcher
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RefreshResult
 import ee.schimke.livery.client.SlotPlanner
@@ -46,7 +47,7 @@ class PublishEndToEndTest {
     val inApp = PlayerCapabilities(Surfaces.IN_APP, 7, setOf("androidx"))
     val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf("widgets"), livePush = false)
     val repo = TemplateRepository(
-      StaticSource(out.toURI().toString().trimEnd('/')), JvmFetcher(), JvmCrypto,
+      StaticSource(out.toURI().toString().trimEnd('/')), KtorFetcher(local = LocalFetcher()), JavaCrypto,
       TrustPolicy.Signed(listOf(TrustedKey("sample-1", Base64.getDecoder().decode(keys.publicRawBase64)))),
       FileBlobStore(File(cache, "blobs")), FileKeyValueStore(File(cache, "kv")), { 1_795_000_000_000 }, listOf(inApp, launcher),
     )
@@ -93,3 +94,27 @@ class PublishEndToEndTest {
 }
 
 private fun kotlinx.serialization.json.JsonElement.jsonObject() = this as kotlinx.serialization.json.JsonObject
+
+class AssetPublishingTest {
+  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+
+  @Test fun imagesAndFontsAreContentAddressedAndAttached() {
+    val m = CatalogBuilder().build(sample, Layout.Static).let { built ->
+      assertTrue(built.manifest.assets.all { "assets/${it.fileName}" in built.files.keys })
+      built.manifest
+    }
+    val bold = m.templates.single { it.designId == "banner-bold" }
+    val kinds = bold.assets.map { sha -> m.asset(sha)!!.kind }.toSet()
+    assertEquals(setOf(ee.schimke.livery.protocol.AssetKind.Image, ee.schimke.livery.protocol.AssetKind.Font), kinds)
+    assertEquals("hero", m.assetsFor(bold).single { it.kind == ee.schimke.livery.protocol.AssetKind.Image }.name)
+    assertEquals(emptyList(), m.templates.single { it.designId == "banner-classic" }.assets, "system fonts need no asset")
+  }
+
+  @Test fun unknownFontFamiliesAreRefused() {
+    val src = Files.createTempDirectory("fonts").toFile()
+    sample.copyRecursively(src)
+    File(src, "designs/banner-bold/in-app.json").writeText(File(src, "designs/banner-bold/in-app.json").readText().replace("Placeholder Sans", "Nope Sans"))
+    val e = assertFailsWith<CatalogProblems> { CatalogBuilder().build(src, Layout.Static) }
+    assertTrue(e.problems.any { "Nope Sans" in it }, e.message)
+  }
+}

@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 include(":livery-protocol")
 include(":livery-client")
 include(":livery-publish")
+include(":livery-compose")

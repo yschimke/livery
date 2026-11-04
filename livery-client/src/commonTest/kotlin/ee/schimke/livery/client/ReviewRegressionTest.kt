@@ -21,7 +21,7 @@ class ReviewRegressionTest {
   private val m = Fx.manifest()
   private fun sha(i: Int) = m.templates[i].sha256
   private val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
-  private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha }
+  private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
 
   /** Serves [manifest] unsigned; [gate], when set, holds the manifest request until completed. */
   private class Host(val manifest: Manifest, val blob: (String) -> ByteArray?) : Fetcher {
@@ -94,7 +94,7 @@ class ReviewRegressionTest {
 class SecondReviewRegressionTest {
   private val m = Fx.manifest()
   private val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
-  private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha }
+  private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
   private val inApp8 = Fx.inApp.copy(maxRcApiLevel = 8)
   private val q = TemplateQuery("live/status-tile@1", inApp8)
   private var now = 1_000L
@@ -149,7 +149,7 @@ class ThirdReviewRegressionTest {
     val names = listOf("default-v7", "retro-v8")
     val repo = TemplateRepository(
       StaticSource("https://cdn.example/c"), { _, _ -> FetchResult.Failed(503, "down") }, FakeCrypto, TrustPolicy.AllowUnsigned,
-      MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, listOf(Fx.inApp), TemplateRepository.Bundled(m) { sha -> names.map(Fx::blob).firstOrNull { FakeCrypto.sha256Hex(it) == sha } },
+      MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, listOf(Fx.inApp), TemplateRepository.Bundled(m) { sha -> names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha } },
     )
     val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 8))
     assertEquals("tile-default", repo.resolve(q)?.entry?.designId)

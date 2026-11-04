@@ -11,12 +11,16 @@ sealed interface FetchResult {
   data class Failed(val status: Int?, val message: String, val retryAfterSeconds: Long? = null) : FetchResult
 }
 
-/** Hashes and signature checks; JVM/Android use the JDK, iOS/web bring their own. */
+/**
+ * Hashes and signature checks. Suspending, because the browser's WebCrypto is asynchronous. The JVM
+ * and Android use [JavaCrypto]; iOS and the web pass their own (CryptoKit, WebCrypto) until Livery
+ * ships them.
+ */
 interface Crypto {
-  fun sha256Hex(bytes: ByteArray): String
+  suspend fun sha256Hex(bytes: ByteArray): String
 
   /** Verify an Ed25519 [signature] over [message] with the raw 32-byte [publicKey]. */
-  fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean
+  suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean
 }
 
 /** Content-addressed bytes: blobs and previews. Keys are sha256 hex. */

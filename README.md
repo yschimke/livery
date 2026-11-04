@@ -30,13 +30,16 @@ Early. In this repository today:
 
 | Module | |
 | --- | --- |
-| `livery-protocol` | Kotlin Multiplatform wire types: manifest, contracts, designs, templates, targets, themes, placements, decisions, feeds, events |
-| `livery-client` | Kotlin Multiplatform client: sources, trust, cache, selection, install, preview, decisions, feeds, actions, events; JVM fetcher, crypto and file stores |
+| `livery-protocol` | Kotlin Multiplatform wire types: manifest, contracts, designs, templates, targets, resources, themes, placements, decisions, feeds, events. Normative spec: [docs/PROTOCOL.md](docs/PROTOCOL.md) |
+| `livery-client` | Kotlin Multiplatform client (JVM, Android, iOS, Wasm): sources, signing and trust, cache, selection, install, preview, images and fonts, decisions, feeds, actions, events; HTTP on Ktor (OkHttp, Darwin, `fetch`) |
+| `livery-compose` | Compose Multiplatform: `LiveryTemplate`, `LiverySlot`, design pickers, over rc-players' Compose player |
+| `Livery`, `LiveryUI` (Swift) | native SwiftPM package (`Package.swift` at the root): `URLSession`, CryptoKit, SwiftUI views over any player; an adapter for rc-players' native Swift player |
 | `livery-publish` | `livery` CLI: validate a source tree, write a static or GitHub-release catalog, sign, verify |
-| `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets (placeholder `.rc` bytes) |
+| `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
+| `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font (placeholder `.rc` and font bytes) |
 
-Planned: Compose Multiplatform and Android players, launcher and Wear widget hosts, a native Swift
-package, a web client, an optional server and agent (MCP) tools. See the
+Planned: the Android View player, launcher and Wear widget hosts, a web client, an optional server
+(with an image proxy) and agent (MCP) tools. See the
 [roadmap](docs/DESIGN.md#roadmap).
 
 ## Try it
@@ -59,7 +62,7 @@ In an app:
 ```kotlin
 val repo = TemplateRepository(
   source = GitHubReleaseSource("acme", "app-templates"),
-  fetcher = JvmFetcher(), crypto = JvmCrypto,
+  fetcher = KtorFetcher(), crypto = JavaCrypto,             // Ktor: OkHttp on JVM/Android, Darwin on iOS
   trust = TrustPolicy.Signed(listOf(TrustedKey("acme-1", publicKeyBytes))),
   blobs = FileBlobStore(cacheDir.resolve("livery/blobs")),
   kv = FileKeyValueStore(filesDir.resolve("livery")),
@@ -71,6 +74,18 @@ val plan = SlotPlanner(repo, analytics, clock).forDecision(
   TemplateQuery("promo/banner@1", inAppPlayer, widthDp = 360),
   decider.decide("home.top", context) ?: return,
 )
+```
+
+On iOS:
+
+```swift
+// Package.swift: .package(url: "https://github.com/yschimke/livery", branch: "main")
+let repo = TemplateRepository(
+  source: GitHubReleaseSource(owner: "acme", repo: "app-templates"),   // URLSession
+  trust: .signed([TrustedKey(keyId: "acme-1", publicKey: publicKey)]),  // CryptoKit Ed25519
+  blobs: FileBlobStore(directory: caches.appendingPathComponent("livery")),
+  kv: FileKeyValueStore(directory: support.appendingPathComponent("livery")),
+  targets: [PlayerCapabilities(surface: Surfaces.inApp, maxRcApiLevel: 7, profiles: ["core"])])
 ```
 
 ## License
