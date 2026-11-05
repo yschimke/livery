@@ -34,11 +34,25 @@ class ImageResolver(
       is ImageRef.Remote -> remote(ref.url, widthPx, heightPx)
     }
 
-  private suspend fun remote(url: String, widthPx: Int, heightPx: Int): ByteArray? {
+  /**
+   * [resolve] without the network: a remote image only when it is already cached at this size.
+   * For hosts that render on a deadline (widgets): on a miss, draw the fallback, [resolve] the
+   * image in the background, and render again.
+   */
+  suspend fun cached(value: String, widthPx: Int, heightPx: Int): ByteArray? =
+    when (val ref = ImageRef.parse(value)) {
+      null -> null
+      is ImageRef.Asset -> repository.asset(ref.sha256)
+      is ImageRef.App -> app?.invoke(ref.key, widthPx, heightPx)
+      is ImageRef.Remote -> remote(ref.url, widthPx, heightPx, network = false)
+    }
+
+  private suspend fun remote(url: String, widthPx: Int, heightPx: Int, network: Boolean = true): ByteArray? {
     val proxy = repository.manifest()?.imageProxy
     val target = remoteUrl(proxy, directHosts, url, widthPx, heightPx) ?: return null
     val key = crypto.sha256Hex(target.encodeToByteArray())
     cache.get(key)?.let { return it }
+    if (!network) return null
     val r = fetcher.get(target, null, maxBytes.toLong()) { to -> redirectAllowed(proxy, directHosts, target, to) } as? FetchResult.Ok ?: return null
     cache.put(key, r.bytes)
     return r.bytes

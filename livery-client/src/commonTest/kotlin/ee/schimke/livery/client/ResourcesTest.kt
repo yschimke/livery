@@ -8,6 +8,7 @@ import ee.schimke.livery.protocol.ImageRef
 import ee.schimke.livery.protocol.Manifest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -72,5 +73,32 @@ class RemoteHostTest {
     ).forEach { assertNull(ImageResolver.remoteUrl(null, allow, it, 10, 10), it) }
     assertEquals("https://TRUSTED.example:443/a.png", ImageResolver.remoteUrl(null, allow, "https://TRUSTED.example:443/a.png", 10, 10))
     assertEquals("[::1]", ImageResolver.remoteHost("https://[::1]:8443/a"))
+  }
+}
+
+/** A widget renders from [ImageResolver.cached]; only [ImageResolver.resolve] goes to the network. */
+class CachedImageTest {
+  private class Images : RedirectingFetcher {
+    val requests = mutableListOf<String>()
+    override suspend fun get(url: String, etag: String?): FetchResult = get(url, etag) { false }
+    override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (to: String) -> Boolean): FetchResult {
+      requests += url
+      return FetchResult.Ok("png:$url".encodeToByteArray(), null)
+    }
+  }
+
+  @Test fun cachedNeverFetchesAndSeesWhatResolveFetched() = kotlinx.coroutines.test.runTest {
+    val net = Images()
+    val repo = TemplateRepository(
+      StaticSource("https://cdn.example/c"), { _, _ -> FetchResult.Failed(503, "off") }, FakeCrypto,
+      TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), { 0L }, listOf(Fx.launcher),
+    )
+    val images = ImageResolver(repo, net, FakeCrypto, directHosts = setOf("cdn.example"))
+    val url = "https://cdn.example/hero.png"
+    assertNull(images.cached(url, 100, 50))
+    assertEquals(emptyList(), net.requests, "a cache-only lookup never fetches")
+    assertNotNull(images.resolve(url, 100, 50))
+    assertNotNull(images.cached(url, 100, 50), "what resolve fetched is cached at that size")
+    assertEquals(1, net.requests.size)
   }
 }

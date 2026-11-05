@@ -13,6 +13,11 @@ import ee.schimke.livery.protocol.TemplateRef
 import ee.schimke.livery.protocol.fits
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
@@ -92,6 +97,14 @@ class TemplateRepository(
 
   private fun k(name: String) = "livery/${source.id}/$name"
 
+  private val _revision = MutableStateFlow(0L)
+
+  /**
+   * Bumped whenever what [resolve] can answer changes: a newly accepted catalog, an install or an
+   * uninstall. A slot that plans from this repository replans when it changes (`LiverySlot` does).
+   */
+  val revision: StateFlow<Long> = _revision.asStateFlow()
+
   suspend fun manifest(): Manifest? = stateLock.withLock { loadCachedLocked() }
 
   private suspend fun loadCachedLocked(): Manifest? {
@@ -118,7 +131,8 @@ class TemplateRepository(
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
       if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
-        prefetch(cached)
+        // A retry of downloads an earlier refresh couldn't finish: new bytes can change an answer.
+        if (prefetch(cached)) _revision.update { it + 1 }
         return RefreshResult.Skipped("fresh")
       }
     }
@@ -132,7 +146,7 @@ class TemplateRepository(
       is FetchResult.Failed -> fail("manifest: ${r.status} ${r.message}", r.retryAfterSeconds)
       FetchResult.NotModified -> {
         putMeta(m.copy(fetchedAtEpochMs = now, failures = 0, nextAttemptEpochMs = 0))
-        cached?.let { prefetch(it) }
+        if (cached != null && prefetch(cached)) _revision.update { it + 1 }
         RefreshResult.Unchanged
       }
       is FetchResult.Ok -> {
@@ -154,6 +168,7 @@ class TemplateRepository(
                 }
                 putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
                 prefetch(next)
+                _revision.update { it + 1 }
                 RefreshResult.Updated(next.serial)
               }
             }
@@ -198,7 +213,8 @@ class TemplateRepository(
   private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 
   /**
-   * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand).
+   * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand;
+   * never inside [CacheOnly], where a missing blob is recorded and the answer is null).
    *
    * An exact reference ([TemplateRef.sha256]) is played exactly or not at all: it must be in the
    * manifest, live, and pass the same eligibility checks as selection ([TemplateSelector.eligible]),
@@ -262,11 +278,13 @@ class TemplateRepository(
     if (needed.isEmpty()) return false
     for (e in needed) if (obtain(m, e) == null) return false
     kv.put(k("installed"), json.encodeToString(SetSerializer, installedIds() + designId))
+    _revision.update { it + 1 }
     return true
   }
 
   suspend fun uninstall(designId: String) {
     kv.put(k("installed"), json.encodeToString(SetSerializer, installedIds() - designId))
+    _revision.update { it + 1 }
   }
 
   suspend fun installedIds(): Set<String> =
@@ -311,11 +329,17 @@ class TemplateRepository(
 
   // --- internals ------------------------------------------------------------------------------
 
-  private suspend fun prefetch(m: Manifest) {
+  /** Downloads what the install policy asks for; true when a template became available. */
+  private suspend fun prefetch(m: Manifest): Boolean {
     val installed = installedIds()
+    var added = false
     m.designs.filter { !it.revoked && (it.install == InstallPolicy.Always || it.id in installed) }
       .flatMap { entriesForTargets(m, it.id) }
-      .forEach { obtain(m, it) }
+      .forEach { e ->
+        val had = blobs.get(e.sha256) != null && e.assets.all { blobs.get(it) != null }
+        if (!had && obtain(m, e) != null) added = true
+      }
+    return added
   }
 
 
@@ -328,6 +352,12 @@ class TemplateRepository(
    * out without its fonts and images.
    */
   private suspend fun obtain(m: Manifest, e: TemplateEntry): ByteArray? {
+    // A render on a deadline: download nothing, and tell the host what to fetch afterwards.
+    currentCoroutineContext()[CacheOnly]?.let { cacheOnly ->
+      val complete = blobs.get(e.sha256)?.takeIf { e.assets.all { blobs.get(it) != null } }
+      if (complete == null) cacheOnly.miss { obtain(m, e) != null }
+      return complete
+    }
     for (sha in e.assets) {
       if (blobs.get(sha) != null) continue
       val a = m.asset(sha) ?: return null

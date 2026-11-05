@@ -1,0 +1,52 @@
+:root {
+  --bg: #fbfaf8; --fg: #1d1b19; --muted: #6b655e; --line: #e6e1da; --accent: #6d4fd1;
+  --code-bg: #f2efe9; --side-bg: #f5f2ed; --note-bg: #efeafc;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141312; --fg: #ebe7e2; --muted: #a39d95; --line: #2c2926; --accent: #a993ff;
+    --code-bg: #1f1d1b; --side-bg: #1a1817; --note-bg: #231f33; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.top { display: flex; align-items: baseline; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; font-size: 20px; color: var(--fg); }
+.tagline { color: var(--muted); font-size: 14px; flex: 1; }
+.layout { display: flex; max-width: 1180px; margin: 0 auto; }
+.side { width: 240px; flex: none; padding: 20px 16px; background: var(--side-bg); border-right: 1px solid var(--line);
+  position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
+.side ul { list-style: none; margin: 0 0 12px; padding: 0; }
+.side li a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); font-size: 14.5px; }
+.side li a.current { background: var(--note-bg); color: var(--accent); font-weight: 600; }
+.nav-section { margin: 14px 8px 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.content { flex: 1; min-width: 0; padding: 28px 40px 60px; max-width: 860px; }
+h1 { font-size: 34px; line-height: 1.2; margin: 6px 0 12px; }
+h2 { margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 23px; }
+h3 { margin-top: 26px; font-size: 18px; }
+.headerlink { margin-left: 6px; opacity: 0; font-weight: 400; }
+h2:hover .headerlink, h3:hover .headerlink { opacity: .6; }
+p code, li code, td code { overflow-wrap: anywhere; }
+code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg);
+  padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14.5px; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; }
+blockquote { margin: 16px 0; padding: 10px 16px; background: var(--note-bg); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0; }
+blockquote p { margin: 4px 0; }
+li.task { list-style: none; position: relative; }
+li.task::before { content: ""; position: absolute; left: -22px; top: 6px; width: 12px; height: 12px;
+  border: 1.5px solid var(--muted); border-radius: 3px; }
+.lede { font-size: 18px; color: var(--muted); }
+.edit { margin-top: 48px; font-size: 13px; }
+@media (max-width: 760px) {
+  .layout { flex-direction: column; }
+  .side { width: auto; align-self: stretch; position: static; max-height: none; border-right: 0;
+    border-top: 1px solid var(--line); order: 2; }
+  .content { padding: 20px 16px 48px; }
+  .tagline { display: none; }
+}

@@ -251,6 +251,18 @@ drop, and report, an action its contract doesn't declare, one whose kind has no 
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
 `track`, `refresh`; anything else is the app's (`app:<kind>`).
 
+A host that dispatches only numeric host actions (a launcher widget's `RemoteViews` player) gets
+the template's named actions rewritten when it is instantiated: each becomes the numeric action
+whose id rc-players' `RcWidgetActionIds.register` gives the action's name, with the action's text
+value, if any, as its metadata. The player evaluates that metadata when tapped and delivers it with
+the tap, so the arguments arrive as above. Numeric values are dropped on such a host.
+
+A host that runs only `SendPendingIntent` (a Glance Wear widget) gets each distinct tap (action and
+constant arguments) rewritten to send its own `PendingIntent` index, in order of first appearance;
+the host app supplies the `PendingIntent` for each. A `PendingIntent` is fixed when the widget is
+published, so a tap whose value is not a constant text (or nothing) can't be carried there: it is
+left unrewritten, which the host ignores.
+
 ## 8. Decisions, feeds and events
 
 - A **decision** names a template (`designId` or `sha256`), carries the data, a TTL, tracking URLs
@@ -264,7 +276,8 @@ drop, and report, an action its contract doesn't declare, one whose kind has no 
   `next` and `ttlSeconds`.
 - **Events** are `Impression` (first frame drawn), `Viewable` (at least half on screen for one
   second), `Action`, `Dismiss`, `Fallback` and `Error`, with the placement, decision, feed item,
-  design and blob they concern.
+  design and blob they concern. A host that is only handed a document and never reports drawing it
+  (a launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
 
 ## Conformance
 

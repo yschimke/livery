@@ -2,6 +2,7 @@ package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.ManifestSignature
+import ee.schimke.livery.protocol.TemplateRef
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,9 +22,11 @@ class RepositoryTest {
   private inner class Host(var manifest: Manifest, var signed: Boolean = true) : Fetcher {
     val requests = mutableListOf<String>()
     var down = false
+    var blobsDown = false
     override suspend fun get(url: String, etag: String?): FetchResult {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
+      if (blobsDown && !url.endsWith(".json")) return FetchResult.Failed(503, "blobs down")
       val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
       return when {
         url.endsWith("manifest.json") -> if (etag == "e${manifest.serial}") FetchResult.NotModified else FetchResult.Ok(bytes, "e${manifest.serial}")
@@ -99,6 +102,48 @@ class RepositoryTest {
     assertTrue(r.designs("live/status-tile@1").single { it.design.id == "tile-retro" }.installed)
     r.uninstall("tile-retro"); r.prune()
     assertNull(blobs.get(Fx.manifest().templates[5].sha256))
+  }
+
+  @Test fun revisionMovesWhenWhatResolveCanAnswerChanges() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    assertEquals(0, r.revision.value)
+    r.refresh()
+    assertEquals(1, r.revision.value, "a newly accepted catalog")
+    r.refresh(force = true)
+    assertEquals(1, r.revision.value, "not modified: nothing new to answer")
+    assertTrue(r.install("tile-retro"))
+    assertEquals(2, r.revision.value)
+    r.uninstall("tile-retro")
+    assertEquals(3, r.revision.value)
+  }
+
+  @Test fun cacheOnlyEnsureDownloadsNothingAndRecordsTheMiss() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    val retro = Fx.manifest().templates.first { it.designId == "tile-retro" && it.target == Fx.inAppV7 }
+    val ref = TemplateRef(sha256 = retro.sha256)
+    val before = host.requests.size
+    val cacheOnly = CacheOnly()
+    assertNull(kotlinx.coroutines.withContext(cacheOnly) { r.ensure(ref, q) }, "not on the device: unavailable now")
+    assertEquals(before, host.requests.size, "and nothing was fetched")
+    assertEquals(1, cacheOnly.misses)
+    assertTrue(cacheOnly.fetchMissed(), "fetched off the render path")
+    assertNotNull(kotlinx.coroutines.withContext(CacheOnly()) { r.ensure(ref, q) }, "the next render plays it")
+  }
+
+  @Test fun revisionMovesWhenARetryDownloadsWhatAnEarlierRefreshMissed() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    host.blobsDown = true
+    r.refresh()
+    assertEquals(1, r.revision.value, "catalog accepted, templates missing")
+    host.blobsDown = false
+    r.refresh() // fresh: only the downloads retry
+    assertEquals(2, r.revision.value, "the missing templates arrived")
+    r.refresh()
+    assertEquals(2, r.revision.value, "nothing new")
   }
 
   @Test fun fallsBackToBundledWhenNothingIsCached() = runTest {

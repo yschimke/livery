@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
@@ -14,7 +15,9 @@ import ee.schimke.livery.client.TemplateRepository
 
 /**
  * A slot whose content Livery decides: [plan] is one of `SlotPlanner.forAppData`, `forDecision`
- * or `forFeedItem`, re-run whenever [key] changes (new data, a new decision, another item). While
+ * or `forFeedItem`, re-run whenever [key] changes (new data, a new decision, another item, a
+ * chosen design: everything [plan] reads from the app) and whenever the repository's
+ * [TemplateRepository.revision] does (a refreshed catalog, an install). While
  * it runs, and when it falls back, the slot draws [fallback]: the app's native version, or nothing.
  */
 @Composable
@@ -25,7 +28,9 @@ fun LiverySlot(
   fallback: @Composable (reason: String?) -> Unit = {},
   plan: suspend () -> PlanResult,
 ) {
-  val result by produceState<PlanResult?>(null, key, host) { value = plan() }
+  // A refreshed catalog or an install can change the answer, so the slot replans on either.
+  val revision by host.repository.revision.collectAsState()
+  val result by produceState<PlanResult?>(null, key, host, revision) { value = plan() }
   when (val r = result) {
     null -> fallback(null)
     is PlanResult.Fallback -> fallback(r.reason)
@@ -33,10 +38,14 @@ fun LiverySlot(
   }
 }
 
-/** The designs a picker offers for [contract], refreshed when [key] changes (after an install). */
+/**
+ * The designs a picker offers for [contract], refreshed with the catalog and after an install or
+ * uninstall ([TemplateRepository.revision]), or when [key] changes.
+ */
 @Composable
 fun rememberDesigns(repository: TemplateRepository, contract: String, key: Any? = null): List<DesignSummary> {
-  val designs by produceState(emptyList<DesignSummary>(), repository, contract, key) { value = repository.designs(contract) }
+  val revision by repository.revision.collectAsState()
+  val designs by produceState(emptyList<DesignSummary>(), repository, contract, key, revision) { value = repository.designs(contract) }
   return designs
 }
 
