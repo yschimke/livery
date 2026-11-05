@@ -10,7 +10,8 @@ private const val USAGE = """livery-mcp — Livery's agent tools over a catalog 
 
   livery-mcp <src> [--write] [--preview-out <dir>]
       --write              accept submit_draft: write templates into <src> after checking them
-      --preview-out <dir>  accept build_preview: unsigned catalogs for preview channels in <dir>
+      --preview-out <dir>  accept build_preview and publish_preview: unsigned catalogs in <dir>
+      --ui-builder <url>   add ui_builder_export (livery-uibuilder), with UI_BUILDER_TOKEN set
 """
 
 /** Newline-delimited JSON-RPC on stdin and stdout, as MCP's stdio transport specifies. */
@@ -18,7 +19,7 @@ fun main(args: Array<String>) {
   val a = args.toList()
   val src = a.firstOrNull()?.let(::File)?.takeIf { File(it, "catalog.json").isFile } ?: run { System.err.println(USAGE); exitProcess(64) }
   val out = a.indexOf("--preview-out").takeIf { it >= 0 }?.let { a.getOrNull(it + 1) }?.let(::File)
-  val mcp = LiveryMcp(SourceTree(src), writable = "--write" in a, previewOut = out)
+  val mcp = LiveryMcp(SourceTree(src), writable = "--write" in a, previewOut = out, extensions = McpExtension.load(a, System.getenv()))
   val json = Json { ignoreUnknownKeys = true }
   val stdout = System.out.bufferedWriter()
   for (line in System.`in`.bufferedReader().lineSequence()) {

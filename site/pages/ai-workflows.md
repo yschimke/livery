@@ -46,8 +46,36 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-
 | `render_preview` | a PNG of a template with an example or the agent's data, at a size and density, light or dark |
 | `submit_draft` (`--write`) | writes a template into the tree only if the document matches its sidecar and the whole catalog still builds |
 | `build_preview` (`--preview-out`) | an unsigned catalog for a preview channel; the catalog's own channel is refused |
+| `publish_preview` (`--preview-out`) | one document on its own, as an unsigned catalog of one design, checked against its contract |
+| `list_history` | a design's templates' versions from the catalog's git log; `render_preview` with `revision` draws one |
+| `ui_builder_export` (`--ui-builder`) | a Compose UI Builder design at a revision, as a document with its `source` |
 
 The server never signs anything. A failed draft is never left in the tree.
+
+## Just a preview
+
+Not every document has to join the catalog to be looked at. `publish_preview` (or
+`livery preview <doc.rc> <out> --src <catalog> --contract <id@major>`) writes one document as a
+catalog of its own, on a channel named after its hash (`preview-<hash>`). Point a debug build's
+repository at it, or serve the directory. It is checked against the contract like any template,
+and it expires in a week.
+
+## Versions
+
+Every template entry can say where it came from: its sidecar's `source` (`tool`, `design`,
+`revision`, `commit`) is copied into the manifest. In the repository workflow, git is the history.
+`list_history` shows the commits that changed each template, and `render_preview` with
+`revision=<commit>` draws it as it was then, so an agent or reviewer can compare versions before
+changing one.
+
+## Compose UI Builder
+
+Start the server with `--ui-builder https://<ui builder host>` and `UI_BUILDER_TOKEN` set
+(module `livery-uibuilder`). `ui_builder_export` returns a design's document at a revision, or its
+latest, with `source: {tool: ui-builder, design, revision}`. From there it is a document like any
+other: `validate_template`, `render_preview`, then `submit_draft` with that `source` in the
+sidecar, or `publish_preview`. To move a template to a newer UI Builder revision, export that
+revision and submit it again; `list_history` shows each step.
 
 ## 2. Repository + CI (start here)
 
@@ -80,3 +108,5 @@ result on every template of the design.
   `await_feedback`, `send_message` and `set_status`, so a person and an agent edit together with
   the person's real data on screen.
 - `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly.
+- Retired versions in the manifest, so a decision or feed item pinned to an older template's hash
+  keeps playing after the design moves on.

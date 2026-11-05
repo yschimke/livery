@@ -11,6 +11,7 @@ import ee.schimke.livery.publisher.CatalogBuilder
 import ee.schimke.livery.publisher.CatalogConfig
 import ee.schimke.livery.publisher.CatalogProblems
 import ee.schimke.livery.publisher.Layout
+import ee.schimke.livery.publisher.PreviewCatalog
 import ee.schimke.livery.publisher.TemplateSpec
 import ee.schimke.livery.render.RenderSpec
 import ee.schimke.livery.render.TemplateRenderer
@@ -46,8 +47,10 @@ class LiveryMcp(
   private val tree: SourceTree,
   private val writable: Boolean = false,
   private val previewOut: File? = null,
+  private val extensions: List<McpExtension> = emptyList(),
 ) {
   private val json = Json { prettyPrint = true; encodeDefaults = false }
+  private val history = GitHistory(tree.root)
 
   fun handle(message: JsonObject): JsonObject? {
     val id = message["id"] ?: return null
@@ -65,7 +68,9 @@ class LiveryMcp(
         put("instructions", INSTRUCTIONS)
       })
       "ping" -> result(JsonObject(emptyMap()))
-      "tools/list" -> result(buildJsonObject { put("tools", Tools.list(writable, previewOut != null)) })
+      "tools/list" -> result(buildJsonObject {
+        put("tools", kotlinx.serialization.json.JsonArray(Tools.list(writable, previewOut != null) + extensions.flatMap { it.tools }))
+      })
       "tools/call" -> {
         val params = message["params"] as? JsonObject ?: return error(-32602, "Missing parameters")
         val name = (params["name"] as? JsonPrimitive)?.contentOrNull ?: return error(-32602, "Missing tool name")
@@ -88,7 +93,10 @@ class LiveryMcp(
       "render_preview" -> renderPreview(args)
       "submit_draft" -> if (writable) text(submitDraft(args)) else failed("this server is read-only: start it with --write to accept drafts")
       "build_preview" -> previewOut?.let { text(buildPreview(it, args.str("channel"))) } ?: failed("no preview output: start the server with --preview-out <dir>")
-      else -> failed("unknown tool $name")
+      "publish_preview" -> previewOut?.let { text(publishPreview(it, args)) } ?: failed("no preview output: start the server with --preview-out <dir>")
+      "list_history" -> text(listHistory(args))
+      else -> extensions.firstOrNull { e -> e.tools.any { (it["name"] as? JsonPrimitive)?.content == name } }
+        ?.call(name, args, this) ?: failed("unknown tool $name")
     }
   } catch (e: ToolError) {
     failed(e.message!!)
@@ -168,7 +176,13 @@ class LiveryMcp(
         val d = tree.design(args.str("design")) ?: throw ToolError("unknown design ${args.str("design")}")
         val t = d.templates.firstOrNull { it.name == args.str("template") }
           ?: throw ToolError("design ${d.design.id} has no template ${args.str("template")}: ${d.templates.map { it.name }}")
-        t.rc.readBytes() to contract(d.design.contract)
+        // An earlier version, from the catalog's git history.
+        val bytes = args.strOrNull("revision")?.let { rev ->
+          if (!history.available) throw ToolError("the catalog isn't a git checkout: no history to render from")
+          runCatching { history.show(t.rc, rev) }.getOrElse { throw ToolError(it.message ?: "bad revision") }
+            ?: throw ToolError("${d.design.id}/${t.name}.rc didn't exist at $rev")
+        } ?: t.rc.readBytes()
+        bytes to contract(d.design.contract)
       }
     }
     val data = args["data"] as? JsonObject ?: args.strOrNull("example")?.let { name ->
@@ -263,6 +277,41 @@ class LiveryMcp(
       put("ok", true); put("path", dir.path); put("channel", channel); put("serial", manifest.serial)
       put("signed", false)
       put("note", "unsigned: only a client that allows unsigned catalogs (a debug build) will play it")
+    }
+  }
+
+  /** One document as its own unsigned catalog ([PreviewCatalog]), checked against its contract. */
+  private fun publishPreview(out: File, args: JsonObject): JsonObject {
+    val c = contract(args.str("contract"))
+    val target = (args["target"] as? JsonObject)?.let { json.decodeFromJsonElement(ee.schimke.livery.protocol.Target.serializer(), it) }
+    val source = (args["source"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }.orEmpty()
+    val bytes = args.bytes("rc_base64")
+    val result = if (target != null) PreviewCatalog.build(c, bytes, target, args.strOrNull("title"), source)
+      else PreviewCatalog.build(c, bytes, title = args.strOrNull("title"), source = source)
+    val dir = PreviewCatalog.write(result, out)
+    return buildJsonObject {
+      put("ok", true); put("channel", result.channel); put("path", dir.path); put("signed", false)
+      put("design", result.output.manifest.designs.single().id)
+      put("note", "a catalog of this one document: point a debug build's repository at ${dir.path} (or wherever you serve it)")
+    }
+  }
+
+  /** The commits that changed a design's templates, newest first, from git. */
+  private fun listHistory(args: JsonObject): JsonElement {
+    if (!history.available) throw ToolError("the catalog isn't a git checkout: no history")
+    val d = tree.design(args.str("design")) ?: throw ToolError("unknown design ${args.str("design")}")
+    val only = args.strOrNull("template")
+    val limit = args.intOrNull("limit") ?: 20
+    return buildJsonArray {
+      for (t in d.templates.filter { only == null || it.name == only }) add(buildJsonObject {
+        put("template", t.name)
+        t.spec.source.takeIf { it.isNotEmpty() }?.let { s -> putJsonObject("source") { s.forEach { (k, v) -> put(k, v) } } }
+        putJsonArray("changes") {
+          for (ch in history.log(t.rc, limit)) add(buildJsonObject {
+            put("revision", ch.commit); put("date", ch.dateEpochSeconds); put("author", ch.author); put("subject", ch.subject)
+          })
+        }
+      })
     }
   }
 

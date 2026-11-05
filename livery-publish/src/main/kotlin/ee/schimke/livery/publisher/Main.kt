@@ -24,6 +24,9 @@ private const val USAGE = """livery — build, sign and check a template catalog
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
                                            upload with: gh release upload <tag> <out>/*
   livery verify <out> --pub <file> --key-id <id>
+  livery preview <doc.rc> <out> --src <catalog> --contract <id@major> [--target <json>] [--title <t>]
+                                       one document as an unsigned catalog in <out>/preview-<hash>/,
+                                       checked against the contract, for a debug build to play
 """
 
 fun main(args: Array<String>) {
@@ -67,6 +70,20 @@ fun main(args: Array<String>) {
           is Verification.Accepted -> println("ok: ${v.manifest.catalog}/${v.manifest.channel} serial ${v.manifest.serial}")
           is Verification.Rejected -> { System.err.println("rejected: ${v.reason}"); exitProcess(1) }
         }
+      }
+      "preview" -> {
+        val doc = File(a.getOrNull(1) ?: usage())
+        val out = File(a.getOrNull(2) ?: usage())
+        val ref = opt("--contract") ?: usage()
+        val json = Json { ignoreUnknownKeys = false }
+        val contract = File(opt("--src") ?: usage(), "contracts").listFiles().orEmpty().filter { it.extension == "json" }
+          .map { json.decodeFromString(ee.schimke.livery.protocol.Contract.serializer(), it.readText()) }
+          .filter { it.ref == ref }.maxByOrNull { it.minor } ?: error("no contract $ref in ${opt("--src")}/contracts")
+        val target = opt("--target")?.let { json.decodeFromString(ee.schimke.livery.protocol.Target.serializer(), it) }
+        val result = if (target != null) PreviewCatalog.build(contract, doc.readBytes(), target, opt("--title"))
+          else PreviewCatalog.build(contract, doc.readBytes(), title = opt("--title"))
+        val dir = PreviewCatalog.write(result, out)
+        println("${result.channel}: unsigned preview of ${doc.name} for $ref -> $dir")
       }
       else -> usage()
     }

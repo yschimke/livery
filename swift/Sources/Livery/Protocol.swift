@@ -146,8 +146,10 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
   public var emits: [String]
   public var assets: [String]
   public var fonts: [String]
+  /// Where the document came from (tool, design, revision, commit); never read for decisions.
+  public var source: [String: String]
 
-  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, emits, assets, fonts }
+  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, emits, assets, fonts, source }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     sha256 = try c.decode(String.self, forKey: .sha256)
@@ -162,6 +164,7 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
     emits = try c.value(.emits, [])
     assets = try c.value(.assets, [])
     fonts = try c.value(.fonts, [])
+    source = try c.value(.source, [:])
   }
 }
 

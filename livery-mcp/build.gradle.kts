@@ -25,3 +25,7 @@ application {
 // jars, for one): keep the first rather than fail the install.
 tasks.withType<Sync>().configureEach { duplicatesStrategy = DuplicatesStrategy.EXCLUDE }
 tasks.withType<AbstractArchiveTask>().configureEach { duplicatesStrategy = DuplicatesStrategy.EXCLUDE }
+
+// Optional authoring-tool extensions, found at run time (McpExtension); the server's own code never
+// depends on them.
+dependencies { runtimeOnly(project(":livery-uibuilder")) }

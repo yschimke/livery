@@ -190,7 +190,8 @@ and schedulers are per platform:
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
-| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview`, and with flags `submit_draft` and `build_preview`. Sessions are *planned*, with `livery-server` |
+| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
+| `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `ui_builder_export` (a design at a revision, with its `source`), loaded into `livery-mcp` as an extension |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance
@@ -279,8 +280,17 @@ Rules that hold in every workflow:
 `get_contract`, `list_designs`, `validate_data`, `validate_template` (reads the document's own
 named values and actions, never trusting its sidecar), `render_preview` (template + example or
 data → PNG, through `livery-render`), and, when started with `--write` and `--preview-out`,
-`submit_draft` (written only if it passes the gate) and `build_preview(channel)` (unsigned, never
-the catalog's own channel). *Planned* with `livery-server`: `compile_rc_json`, `await_feedback`,
+`submit_draft` (written only if it passes the gate), `build_preview(channel)` (unsigned, never
+the catalog's own channel) and `publish_preview` (one document as a catalog of its own, for a look
+before it joins). Versions: each template entry's `source` says where it came from (tool, design,
+revision, commit), and in a git checkout `list_history` and `render_preview(revision)` show and
+draw earlier versions. Authoring tools plug in as optional modules (`McpExtension`):
+`livery-uibuilder` exports a UI Builder design at a revision.
+
+*Next*: retired versions in the manifest. When a design's template changes, the publisher keeps
+the previous entries (and their blobs) as retired, so an exact reference (a decision or feed item
+pinned to a hash) still plays while automatic selection only sees the current one. That changes
+selection, so it lands with the Swift port and the conformance fixtures. *Planned* with `livery-server`: `compile_rc_json`, `await_feedback`,
 `send_message`, `set_status`. Sessions follow the relay Home Assistant built: both sides
 connect out, long-polls of at most 25 s, no inbound connection to the app or its backend, and a
 session capability per scope. An authoring tool's own MCP server (UI Builder's `ui_builder_*`) is

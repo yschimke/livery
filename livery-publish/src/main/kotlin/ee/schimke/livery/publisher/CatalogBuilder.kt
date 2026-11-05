@@ -59,6 +59,8 @@ data class TemplateSpec(
   val emits: List<String> = emptyList(),
   /** Font families it names: a family in `fonts/fonts.json`, `google:<family>` or `system:<family>`. */
   val fonts: List<String> = emptyList(),
+  /** Where the document came from (tool, design, revision, commit): copied to the manifest entry. */
+  val source: Map<String, String> = emptyMap(),
 )
 
 /** One entry of `fonts/fonts.json`: a font file beside it and the face it provides. */
@@ -194,6 +196,7 @@ class CatalogBuilder(
           sha, bytes.size.toLong(), design.id, design.contract, spec.target, spec.tags,
           reads = spec.reads, emits = spec.emits,
           assets = (images + fontAssets).map { it.sha256 }.distinct(), fonts = spec.fonts,
+          source = spec.source,
         )
       }
     }

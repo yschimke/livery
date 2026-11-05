@@ -122,4 +122,31 @@ class LiveryMcpTest {
     assertTrue("\"channel\": \"pr-12\"" in manifest)
     assertFalse(File(out, "pr-12/manifest.sig.json").exists())
   }
+
+  @Test fun publishesOneDocumentAsAPreview() {
+    val r = call("publish_preview", "contract" to "live/status-tile@1", "rc_base64" to tileB64, "source" to args("tool" to "agent")).body().jsonObject
+    assertEquals("true", r["ok"]!!.jsonPrimitive.content, r.toString())
+    val channel = r["channel"]!!.jsonPrimitive.content
+    val manifest = File(out, "$channel/manifest.json").readText()
+    assertTrue("\"channel\": \"$channel\"" in manifest && "\"tool\": \"agent\"" in manifest, manifest)
+    assertTrue(call("publish_preview", "contract" to "promo/banner@1", "rc_base64" to tileB64).isError(), "checked against its contract")
+  }
+
+  @Test fun historyFromGit() {
+    fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
+      .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
+    git("init", "-q"); git("add", "."); git("commit", "-qm", "first tile")
+    val first = git("rev-parse", "HEAD").trim()
+    File(src, "designs/tile-default/in-app.rc").writeBytes(tile + byteArrayOf()) // same bytes: no change
+    File(src, "designs/tile-default/in-app.json").appendText("\n"); git("commit", "-qam", "touch sidecar")
+    File(src, "designs/tile-default/in-app.rc").writeBytes(byteArrayOf(1, 2, 3)); git("commit", "-qam", "break the tile")
+
+    val h = call("list_history", "design" to "tile-default", "template" to "in-app").body().jsonArray.single().jsonObject
+    val subjects = h["changes"]!!.jsonArray.map { it.jsonObject["subject"]!!.jsonPrimitive.content }
+    assertEquals(listOf("break the tile", "first tile"), subjects, "the commits that changed the document")
+    assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app").isError(), "today's bytes don't render")
+    val old = call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to first, "example" to "on")
+    assertFalse(old.isError(), old.toString())
+    assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to "--output=/tmp/x").isError())
+  }
 }

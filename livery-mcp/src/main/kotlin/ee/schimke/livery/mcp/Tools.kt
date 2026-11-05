@@ -43,7 +43,11 @@ internal object Tools {
       Arg("rc_base64", "string", "A document not in the catalog yet, base64"), Arg("contract", "string", "With rc_base64: the contract to bind data to"),
       Arg("example", "string", "One of the contract's examples"), Arg("data", "object", "Data to render with, instead of an example"),
       Arg("width_dp", "integer", "Width in dp (default 360)"), Arg("height_dp", "integer", "Height in dp (default 200)"),
-      Arg("density", "integer", "Pixels per dp (default 2)"), Arg("dark", "boolean", "Dark theme")),
+      Arg("density", "integer", "Pixels per dp (default 2)"), Arg("dark", "boolean", "Dark theme"),
+      Arg("revision", "string", "With design and template: render the template as it was at this git commit (from list_history)")),
+    tool("list_history", "A design's version history from the catalog's git log: for each template, the commits that changed it and where it came from (its sidecar's source). Render one with render_preview's revision.",
+      Arg("design", "string", "A design id in the catalog", required = true), Arg("template", "string", "Only this template"),
+      Arg("limit", "integer", "At most this many commits per template (default 20)")),
   )
 
   private val write = tool("submit_draft",
@@ -58,9 +62,15 @@ internal object Tools {
     "Builds the catalog, unsigned, for a preview channel (never the catalog's own), for a reviewer's debug build to play.",
     Arg("channel", "string", "A preview channel name, e.g. pr-12 or draft-banner", required = true))
 
+  private val publishPreview = tool("publish_preview",
+    "Publishes one document on its own, unsigned, as a catalog of one design for a debug build to play: a quick look before it joins the catalog. It is checked against the contract first.",
+    contract, Arg("rc_base64", "string", "The .rc document, base64", required = true),
+    Arg("target", "object", "The host it is for (default: in-app, rcApiLevel 7)"), Arg("title", "string", "A title for the preview design"),
+    Arg("source", "object", "Where it came from: tool, design, revision"))
+
   fun list(writable: Boolean, preview: Boolean): JsonArray = buildJsonArray {
     read.forEach { add(it) }
     if (writable) add(write)
-    if (preview) add(this@Tools.preview)
+    if (preview) { add(this@Tools.preview); add(publishPreview) }
   }
 }

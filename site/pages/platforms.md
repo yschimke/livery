@@ -15,6 +15,7 @@ order: 24
 | `@livery/web` | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
+| `livery-uibuilder` | JVM | Available (optional `livery-mcp` extension) |
 | `livery-server` | JVM | Planned |
 
 ## Kotlin

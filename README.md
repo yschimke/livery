@@ -43,7 +43,8 @@ Early. In this repository today:
 | `livery-wear-widgets` | `LiveryWearWidget`: Glance Wear widgets from Livery templates, framed per container on rc-players' `rc-widget-core` |
 | `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify |
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |
-| `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts |
+| `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
+| `livery-uibuilder` | optional: Compose UI Builder designs (at a revision) as documents for `livery-mcp` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
 | `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |
 

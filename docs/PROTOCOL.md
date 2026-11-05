@@ -63,8 +63,10 @@ is above its level and keep using what it had (§3.3).
 
 A template entry is one document for one target: `sha256`, `bytes`, `designId`, `contract`
 (`id@major`), `target`, `tags`, `previews`, `revoked`, `reads` (the named values it reads),
-`emits` (the actions it may emit), `assets` (hashes of the images and fonts it needs) and `fonts`
-(the families it names).
+`emits` (the actions it may emit), `assets` (hashes of the images and fonts it needs), `fonts`
+(the families it names) and `source` (a free-form string map of where the document came from, such
+as `tool`, `design`, `revision` and `commit`, for tracing a version; clients never read it to
+decide anything).
 
 A target is `surface` (`in-app`, `launcher-widget`, `wear-widget`, `wear-app`, `web`, `desktop`,
 `tv`, `snapshot`, or an app's own), `rcApiLevel`, `profiles` (operation profiles the document stays
