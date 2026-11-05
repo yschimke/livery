@@ -135,11 +135,11 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       Log.w(TAG, "widget ${slot.instanceId}: plan failed", e)
       return fallback(context, slot, e.message ?: "plan failed")
     }
+    // Fetched whether or not the plan found something to draw: an older cached or bundled version
+    // may play now while the newer one it skipped is still owed.
+    if (cacheOnly.misses > 0) retryAfter(context, params) { cacheOnly.fetchMissed() }
     return when (plan) {
-      is PlanResult.Fallback -> {
-        retryAfter(context, params) { cacheOnly.misses > 0 && cacheOnly.fetchMissed() }
-        fallback(context, slot, plan.reason)
-      }
+      is PlanResult.Fallback -> fallback(context, slot, plan.reason)
       is PlanResult.Ready -> TemplateData(slot, plan.plan)
     }
   }

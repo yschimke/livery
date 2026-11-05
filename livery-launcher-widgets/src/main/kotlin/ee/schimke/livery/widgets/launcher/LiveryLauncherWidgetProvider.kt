@@ -162,11 +162,12 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     // Planning downloads nothing here (CacheOnly): a template not on the device yet is fetched
     // after this update, like a missing image below.
     val cacheOnly = CacheOnly()
-    val plan = when (val p = withContext(cacheOnly) { plan(context, slot) }) {
-      is PlanResult.Fallback -> {
-        if (cacheOnly.misses > 0) retries.add(id) { cacheOnly.fetchMissed() }
-        return Attempt.Failed(p.reason, appOwned = false)
-      }
+    val planned = withContext(cacheOnly) { plan(context, slot) }
+    // Fetched whether or not the plan found something to draw: an older cached or bundled version
+    // may play now while the newer one it skipped is still owed.
+    if (cacheOnly.misses > 0) retries.add(id) { cacheOnly.fetchMissed() }
+    val plan = when (val p = planned) {
+      is PlanResult.Fallback -> return Attempt.Failed(p.reason, appOwned = false)
       is PlanResult.Ready -> p.plan
     }
     val density = context.resources.displayMetrics.density
