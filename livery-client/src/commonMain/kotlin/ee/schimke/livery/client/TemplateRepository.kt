@@ -130,7 +130,8 @@ class TemplateRepository(
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
       if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
-        prefetch(cached)
+        // A retry of downloads an earlier refresh couldn't finish: new bytes can change an answer.
+        if (prefetch(cached)) _revision.update { it + 1 }
         return RefreshResult.Skipped("fresh")
       }
     }
@@ -144,7 +145,7 @@ class TemplateRepository(
       is FetchResult.Failed -> fail("manifest: ${r.status} ${r.message}", r.retryAfterSeconds)
       FetchResult.NotModified -> {
         putMeta(m.copy(fetchedAtEpochMs = now, failures = 0, nextAttemptEpochMs = 0))
-        cached?.let { prefetch(it) }
+        if (cached != null && prefetch(cached)) _revision.update { it + 1 }
         RefreshResult.Unchanged
       }
       is FetchResult.Ok -> {
@@ -326,11 +327,17 @@ class TemplateRepository(
 
   // --- internals ------------------------------------------------------------------------------
 
-  private suspend fun prefetch(m: Manifest) {
+  /** Downloads what the install policy asks for; true when a template became available. */
+  private suspend fun prefetch(m: Manifest): Boolean {
     val installed = installedIds()
+    var added = false
     m.designs.filter { !it.revoked && (it.install == InstallPolicy.Always || it.id in installed) }
       .flatMap { entriesForTargets(m, it.id) }
-      .forEach { obtain(m, it) }
+      .forEach { e ->
+        val had = blobs.get(e.sha256) != null && e.assets.all { blobs.get(it) != null }
+        if (!had && obtain(m, e) != null) added = true
+      }
+    return added
   }
 
 

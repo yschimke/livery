@@ -21,9 +21,11 @@ class RepositoryTest {
   private inner class Host(var manifest: Manifest, var signed: Boolean = true) : Fetcher {
     val requests = mutableListOf<String>()
     var down = false
+    var blobsDown = false
     override suspend fun get(url: String, etag: String?): FetchResult {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
+      if (blobsDown && !url.endsWith(".json")) return FetchResult.Failed(503, "blobs down")
       val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
       return when {
         url.endsWith("manifest.json") -> if (etag == "e${manifest.serial}") FetchResult.NotModified else FetchResult.Ok(bytes, "e${manifest.serial}")
@@ -113,6 +115,19 @@ class RepositoryTest {
     assertEquals(2, r.revision.value)
     r.uninstall("tile-retro")
     assertEquals(3, r.revision.value)
+  }
+
+  @Test fun revisionMovesWhenARetryDownloadsWhatAnEarlierRefreshMissed() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    host.blobsDown = true
+    r.refresh()
+    assertEquals(1, r.revision.value, "catalog accepted, templates missing")
+    host.blobsDown = false
+    r.refresh() // fresh: only the downloads retry
+    assertEquals(2, r.revision.value, "the missing templates arrived")
+    r.refresh()
+    assertEquals(2, r.revision.value, "nothing new")
   }
 
   @Test fun fallsBackToBundledWhenNothingIsCached() = runTest {
