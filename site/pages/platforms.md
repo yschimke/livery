@@ -13,7 +13,9 @@ order: 24
 | `livery-publish` (`livery` CLI) | JVM | Available |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
 | `@livery/web` | Browsers | Planned |
-| `livery-server`, `livery-mcp` | JVM | Planned |
+| `livery-render` | JVM (Linux, macOS, Windows) | Available |
+| `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
+| `livery-server` | JVM | Planned |
 
 ## Kotlin
 

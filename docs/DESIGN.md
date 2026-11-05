@@ -189,7 +189,8 @@ and schedulers are per platform:
 | `@livery/web` *(planned)* | browsers | TypeScript client (fetch, `crypto.subtle`, Cache API / IndexedDB) and a `<livery-template>` element over rc-players' TypeScript player |
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
-| `livery-mcp` *(planned)* | JVM | agent tools over any catalog (see below) |
+| `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
+| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview`, and with flags `submit_draft` and `build_preview`. Sessions are *planned*, with `livery-server` |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance
@@ -245,8 +246,8 @@ themes/*.json                         ThemePack
 `livery build` refuses a catalog with problems instead of publishing it: unknown contracts, a
 template reading a value or emitting an action its contract doesn't declare, examples or
 placement payloads that don't bind, duplicate ids, two templates for one target. A pluggable
-`inspect` hook adds deep checks (op profile, byte budget, decoded named values) where the RC
-libraries are available.
+`inspect` hook adds deep checks; `livery build --inspect` uses `TemplateInspector`, which decodes
+every `.rc` and refuses one that reads or emits anything its sidecar doesn't declare.
 
 Hosting is just files: `livery build --github owner/repo --tag catalog-12` writes flat assets
 for `gh release upload`; the default layout fits any static host or a server channel.
@@ -274,10 +275,13 @@ Rules that hold in every workflow:
 - **The agent sees what the person sees**: a render with the person's or the contract's example
   data, on each target, at each size tier.
 
-`livery-mcp` (planned) exposes this to any agent: `list_contracts`, `get_contract`,
-`list_designs`, `validate_template`, `validate_data`, `render_preview` (template + data or example
-+ target → PNG), `compile_rc_json`, `submit_draft`, `await_feedback`, `send_message`,
-`set_status`, `publish(channel)`. Sessions follow the relay Home Assistant built: both sides
+`livery-mcp` exposes this to any agent over a catalog source tree: `list_contracts`,
+`get_contract`, `list_designs`, `validate_data`, `validate_template` (reads the document's own
+named values and actions, never trusting its sidecar), `render_preview` (template + example or
+data → PNG, through `livery-render`), and, when started with `--write` and `--preview-out`,
+`submit_draft` (written only if it passes the gate) and `build_preview(channel)` (unsigned, never
+the catalog's own channel). *Planned* with `livery-server`: `compile_rc_json`, `await_feedback`,
+`send_message`, `set_status`. Sessions follow the relay Home Assistant built: both sides
 connect out, long-polls of at most 25 s, no inbound connection to the app or its backend, and a
 session capability per scope. An authoring tool's own MCP server (UI Builder's `ui_builder_*`) is
 one producer among others.
@@ -294,7 +298,9 @@ one producer among others.
 6. **Widgets**: launcher instantiation and the Wear widget host, built on `rc-widget-core`. *Done*,
    not yet device-tested; phone-to-watch blob sync over the Data Layer is next.
 7. **Home Assistant migration** ([plan](migrating-homeassistant-remotecompose.md)).
-8. **`livery-server`** (with an image proxy) and **`livery-mcp`**.
+8. **`livery-mcp`** and **`livery-render`**: agent tools and headless previews over a source tree.
+   *Done*; live sessions come with `livery-server`.
+9. **`livery-server`** (with an image proxy and agent sessions).
 
 ## Open questions
 

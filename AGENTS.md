@@ -41,6 +41,7 @@ install `platforms;android-37.1`. The Swift package needs Xcode; CI runs it on m
 ./gradlew build                 # compile every target + every test
 swift test                      # the Swift package, on macOS
 ./gradlew :livery-publish:installDist && livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
+./gradlew :livery-render:jvmTest -Plivery.render.out=build/renders   # keep the test renders to look at
 scripts/test-agent-attribution.sh
 ```
 

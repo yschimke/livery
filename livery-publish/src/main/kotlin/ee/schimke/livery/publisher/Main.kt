@@ -19,6 +19,8 @@ private const val USAGE = """livery — build, sign and check a template catalog
   livery build <src> <out> [options]   validates <src> and writes a catalog to <out>
       --key <file> --key-id <id>           sign manifest.json (writes manifest.sig.json)
       --serial <n>                         default: now in ms (must only grow per channel)
+      --inspect                            decode every .rc and check it reads and emits only what
+                                           its sidecar declares
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
                                            upload with: gh release upload <tag> <out>/*
   livery verify <out> --pub <file> --key-id <id>
@@ -42,7 +44,8 @@ fun main(args: Array<String>) {
         val layout = opt("--github")?.let {
           Layout.GitHubRelease(it.substringBefore('/'), it.substringAfter('/'), opt("--tag") ?: error("--github needs --tag"))
         } ?: Layout.Static
-        val result = CatalogBuilder().build(src, layout, opt("--serial")?.toLong())
+        val builder = if ("--inspect" in a) CatalogBuilder(inspect = CatalogBuilder.INSPECT) else CatalogBuilder()
+        val result = builder.build(src, layout, opt("--serial")?.toLong())
         out.mkdirs()
         result.files.forEach { (path, bytes) -> File(out, path).apply { parentFile.mkdirs() }.writeBytes(bytes) }
         File(out, Manifest.FILE).writeBytes(result.manifestBytes)

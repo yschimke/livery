@@ -46,7 +46,8 @@ designs/banner-classic/in-app.json  { "target": { "surface": "in-app", "rcApiLev
 ```
 
 `livery build` refuses a catalog with problems instead of publishing it: a template reading a
-value its contract doesn't declare, an example that doesn't fit its contract, a duplicate id.
+value its contract doesn't declare, an example that doesn't fit its contract, a duplicate id. Add
+`--inspect` to also decode every `.rc` and check it against its sidecar.
 
 ## 4. Publish it as a GitHub release
 

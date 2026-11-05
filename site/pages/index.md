@@ -46,6 +46,7 @@ Read [Concepts](concepts.md) for the model, or go straight to [Getting started](
 | Swift package (`Livery`, `LiveryUI`) | Available; CI on macOS |
 | Launcher widgets (Android 16+) | Available |
 | Wear widgets (Glance Wear) | Available |
-| Phone-to-watch sync, web element, reference server, MCP tools | Planned |
+| Agent tools (`livery-mcp`) and headless previews | Available |
+| Phone-to-watch sync, web element, reference server | Planned |
 
 See [Platforms](platforms.md) for details.

@@ -50,9 +50,12 @@ jobs:
           printf '%s' "$LIVERY_KEY" > acme.key
           tag="catalog-${{ github.run_number }}"
           livery/livery-publish/build/install/livery/bin/livery build catalog build/release \
-            --github ${{ github.repository }} --tag "$tag" --key acme.key --key-id acme-1
+            --github ${{ github.repository }} --tag "$tag" --key acme.key --key-id acme-1 --inspect
           gh release create "$tag" build/release/* --title "$tag"
 ```
+
+`--inspect` decodes every `.rc` and refuses one that reads or emits anything its sidecar doesn't
+declare. Use it whenever documents come from more than one tool, or from an agent.
 
 The serial defaults to the build time in milliseconds, which only grows. If you pass `--serial`
 yourself, never let it go down for a channel: apps refuse a lower one as a rollback.

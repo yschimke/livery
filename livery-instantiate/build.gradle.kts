@@ -21,7 +21,7 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       api(project(":livery-client"))
-      implementation(project.dependencies.platform(libs.rc.players.bom))
+      api(project.dependencies.platform(libs.rc.players.bom))
       implementation(libs.rc.player.edit)
       // rc-players' widget documents: baking, profile adaptation, Wear frames.
       api(libs.rc.widget.core)
