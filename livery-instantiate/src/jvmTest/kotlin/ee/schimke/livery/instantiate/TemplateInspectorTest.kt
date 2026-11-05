@@ -3,6 +3,9 @@ package ee.schimke.livery.instantiate
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
+import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.InputSpec
+import ee.schimke.livery.protocol.ValueType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,5 +29,13 @@ class TemplateInspectorTest {
     assertTrue("hero" in TemplateInspector.facts(bytes)!!.declaredReads)
     val problems = TemplateInspector.problems(bytes, listOf("light.kitchen.state", "light.kitchen.is_on"), listOf("ha"))
     assertEquals(listOf("reads [hero] that its sidecar doesn't declare"), problems)
+  }
+
+  @Test fun typesComeFromTheDocument() {
+    val f = TemplateInspector.facts(tile)!!
+    val right = Contract("ha/tile", 1, inputs = mapOf("light.kitchen.state" to InputSpec(ValueType.String), "light.kitchen.is_on" to InputSpec(ValueType.Bool)))
+    assertEquals(emptyList(), TemplateInspector.typeProblems(tile, right))
+    val wrong = right.copy(inputs = right.inputs + ("light.kitchen.state" to InputSpec(ValueType.Float)))
+    assertEquals(listOf("reads 'light.kitchen.state' as a string, but ha/tile@1 declares float"), TemplateInspector.typeProblems(tile, wrong))
   }
 }

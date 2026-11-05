@@ -143,13 +143,15 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
   public var previews: [Preview]
   public var revoked: Bool
   public var reads: [String]
+  /// The lowest contract minor an app must implement to play it (§5.1).
+  public var requiresMinor: Int
   public var emits: [String]
   public var assets: [String]
   public var fonts: [String]
   /// Where the document came from (tool, design, revision, commit); never read for decisions.
   public var source: [String: String]
 
-  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, emits, assets, fonts, source }
+  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, requiresMinor, emits, assets, fonts, source }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     sha256 = try c.decode(String.self, forKey: .sha256)
@@ -161,6 +163,7 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
     previews = try c.value(.previews, [])
     revoked = try c.value(.revoked, false)
     reads = try c.value(.reads, [])
+    requiresMinor = try c.value(.requiresMinor, 0)
     emits = try c.value(.emits, [])
     assets = try c.value(.assets, [])
     fonts = try c.value(.fonts, [])
@@ -355,8 +358,10 @@ public struct InputSpec: Codable, Equatable, Sendable {
   public var max: Double?
   public var role: String?
   public var description: String?
+  /// The contract minor that added this input.
+  public var since: Int
 
-  enum CodingKeys: String, CodingKey { case type, required, `default`, maxLength, min, max, role, description }
+  enum CodingKeys: String, CodingKey { case type, required, `default`, maxLength, min, max, role, description, since }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     type = try c.decode(ValueType.self, forKey: .type)
@@ -367,6 +372,7 @@ public struct InputSpec: Codable, Equatable, Sendable {
     max = try c.decodeIfPresent(Double.self, forKey: .max)
     role = try c.decodeIfPresent(String.self, forKey: .role)
     description = try c.decodeIfPresent(String.self, forKey: .description)
+    since = try c.value(.since, 0)
   }
 }
 
@@ -374,19 +380,33 @@ public struct ListSpec: Codable, Equatable, Sendable {
   public var item: [String: InputSpec]
   public var max: Int
   public var description: String?
+  /// The contract minor that added this list.
+  public var since: Int
+
+  enum CodingKeys: String, CodingKey { case item, max, description, since }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    item = try c.decode([String: InputSpec].self, forKey: .item)
+    max = try c.decode(Int.self, forKey: .max)
+    description = try c.decodeIfPresent(String.self, forKey: .description)
+    since = try c.value(.since, 0)
+  }
 }
 
 public struct ActionSpec: Codable, Equatable, Sendable {
   public var kind: String
   public var args: [String: InputSpec]
   public var description: String?
+  /// The contract minor that added this action.
+  public var since: Int
 
-  enum CodingKeys: String, CodingKey { case kind, args, description }
+  enum CodingKeys: String, CodingKey { case kind, args, description, since }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     kind = try c.decode(String.self, forKey: .kind)
     args = try c.value(.args, [:])
     description = try c.decodeIfPresent(String.self, forKey: .description)
+    since = try c.value(.since, 0)
   }
 }
 

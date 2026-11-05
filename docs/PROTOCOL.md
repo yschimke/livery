@@ -63,7 +63,8 @@ is above its level and keep using what it had (§3.3).
 
 A template entry is one document for one target: `sha256`, `bytes`, `designId`, `contract`
 (`id@major`), `target`, `tags`, `previews`, `revoked`, `reads` (the named values it reads),
-`emits` (the actions it may emit), `assets` (hashes of the images and fonts it needs), `fonts`
+`emits` (the actions it may emit), `requiresMinor` (the lowest contract minor an app must implement
+to play it, §4.3; 0 when absent), `assets` (hashes of the images and fonts it needs), `fonts`
 (the families it names) and `source` (a free-form string map of where the document came from, such
 as `tool`, `design`, `revision` and `commit`, for tracing a version; clients never read it to
 decide anything).
@@ -129,10 +130,13 @@ everything.
 
 A contract is `id`, `major`, `minor`, `inputs` (name → `InputSpec`), `lists` (name → `ListSpec`),
 `actions` (name → `ActionSpec`), `examples` (name → dataset) and `dataSource` (`App`, `Decision` or
-`Feed`). Templates bind `id@major`; a later minor may only add optional inputs, lists and actions.
+`Feed`). Templates bind `id@major`; a later minor may only add optional inputs, lists and actions
+(§4.3).
 
 `InputSpec`: `type` (`string`, `int`, `long`, `float`, `bool`, `color`, `image`), `required`,
-`default`, `maxLength`, `min`, `max`, `role`, `description`.
+`default`, `maxLength`, `min`, `max`, `role`, `description`, `since`. `ListSpec`: `item` (field →
+`InputSpec`), `max`, `description`, `since`. `ActionSpec`: `kind`, `args`, `description`, `since`.
+`since` is the contract minor that added the input, list or action; 0 when absent.
 
 ### 4.1 Binding a dataset
 
@@ -159,13 +163,37 @@ A template reads its data as Remote Compose named values in the `USER` domain, u
 names above. Theme roles are `theme.<role>`. A publisher must refuse a template whose `reads` names
 a value its contract cannot produce.
 
+### 4.3 Evolution
+
+Within one major, a contract changes only in ways every template and data producer of that major
+survives. A new minor may:
+
+- add an optional input, list, list field or action, with `since` set to the new minor;
+- loosen a limit (raise `maxLength` or a list's `max`, widen `min`/`max`), when every template still
+  draws at the new limit;
+- change descriptions, examples and defaults.
+
+Anything else needs a new major: removing an input, list, field or action; changing a type, an
+action's `kind` or its `args`; adding a required input or making an optional one required; and
+tightening a limit, since producers already send values the old limit allowed. A publisher must
+refuse a catalog that holds two versions of one major whose difference is not a minor change, or an
+input, list or action whose `since` is above its contract's `minor`, or whose `since` is above 0
+while it is `required`.
+
+A template's `requiresMinor` is the highest `since` among the inputs, list fields and actions it
+`reads` and `emits` (a list value takes the higher of its list's and its field's; theme roles count
+as 0). The publisher computes it, so a template that reads a newer input never reaches an app that
+doesn't fill it, and one that emits a newer action never reaches an app that can't route it.
+
 ## 5. Selection
 
 ### 5.1 Eligibility
 
 A template entry is eligible for a query (contract, player capabilities, optional width and height
-in dp, optional design, variant, theme and tags) when all of these hold: its contract equals the
-query's; its design exists, is not revoked and has that contract; the entry is not revoked; its
+in dp, optional design, variant, theme and tags, and optionally the contract `minor` the app
+implements) when all of these hold: its contract equals the query's; its design exists, is not
+revoked and has that contract; the entry is not revoked; with a `minor` in the query, its
+`requiresMinor` is at most that minor; its
 `bytes` fit the player's budget; its `rcApiLevel` is at most the player's; the player supports
 every profile it lists; the surfaces are equal; the containers are equal; the size range covers
 the requested width and height where given; for a `host` theme the player accepts `host`, and for

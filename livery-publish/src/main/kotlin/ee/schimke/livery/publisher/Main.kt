@@ -23,6 +23,11 @@ private const val USAGE = """livery — build, sign and check a template catalog
                                            its sidecar declares
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
                                            upload with: gh release upload <tag> <out>/*
+  livery check <src> --against <rev|dir> [--inspect] [--json]
+                                       compares <src> with a git revision of its repository (e.g.
+                                       origin/main) or another source tree: contract changes,
+                                       template reads, emits, types and the minor they require;
+                                       exits 1 when something isn't compatible
   livery verify <out> --pub <file> --key-id <id>
   livery preview <doc.rc> <out> --src <catalog> --contract <id@major> [--target <json>] [--title <t>]
                                        one document as an unsigned catalog in <out>/preview-<hash>/,
@@ -58,6 +63,13 @@ fun main(args: Array<String>) {
         }
         val m = result.manifest
         println("${m.catalog}/${m.channel} serial ${m.serial}: ${m.designs.size} designs, ${m.templates.size} templates, ${m.contracts.size} contracts, ${m.placements.size} placements -> $out")
+      }
+      "check" -> {
+        val src = File(a.getOrNull(1) ?: usage())
+        val report = CompatibilityCheck.check(src, opt("--against") ?: usage(), inspect = "--inspect" in a)
+        if ("--json" in a) println(Json { prettyPrint = true; encodeDefaults = false }.encodeToString(CompatibilityCheck.Report.serializer(), report))
+        else print(CompatibilityCheck.text(report))
+        if (!report.ok) exitProcess(1)
       }
       "verify" -> {
         val out = File(a.getOrNull(1) ?: usage())

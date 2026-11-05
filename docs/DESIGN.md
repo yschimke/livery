@@ -192,7 +192,7 @@ and schedulers are per platform:
 | `livery-gradle-plugin` | Gradle | `ee.schimke.composeai.livery.catalog`: builds a catalog source tree into an Android app's generated assets on every build (inspected, reproducible: serial 0 and fixed dates), read back by `livery-client`'s `AndroidBundled.fromAssets` as the repository's bundled copy |
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
-| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
+| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
 | `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `ui_builder_export` (a design at a revision, with its `source`), loaded into `livery-mcp` as an extension |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
@@ -250,7 +250,18 @@ themes/*.json                         ThemePack
 template reading a value or emitting an action its contract doesn't declare, examples or
 placement payloads that don't bind, duplicate ids, two templates for one target. A pluggable
 `inspect` hook adds deep checks; `livery build --inspect` uses `TemplateInspector`, which decodes
-every `.rc` and refuses one that reads or emits anything its sidecar doesn't declare.
+every `.rc` and refuses one that reads or emits anything its sidecar doesn't declare, or reads a
+value as a different type than its contract declares (a named value's type comes from its default
+in the document).
+
+Contracts evolve within a major only by minor changes (PROTOCOL.md §4.3): additions carry `since`,
+and the build refuses two minors of one major whose difference isn't a minor change. Each template
+entry gets `requiresMinor`, the newest `since` it reads or emits, and `TemplateQuery.minor` keeps a
+template from an app that doesn't implement that minor. `ContractEvolution` (in `livery-client`) is
+the one gate for this, like `ContractBinder` for data. `livery check --against <rev|dir>`
+(`CompatibilityCheck`, and the MCP server's `check_compatibility`) compares a tree with an earlier
+version of itself: contract changes, and per template its reads, emits, types, required minor,
+size and which values only the document's own default covers.
 
 Hosting is just files: `livery build --github owner/repo --tag catalog-12` writes flat assets
 for `gh release upload`; the default layout fits any static host or a server channel.

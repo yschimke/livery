@@ -59,17 +59,18 @@ class ConformanceTest {
   @Serializable data class Query(
     val contract: String, val caps: PlayerCapabilities, val widthDp: Int? = null, val heightDp: Int? = null,
     val designId: String? = null, val variant: String? = null, val theme: String? = null, val tags: Map<String, String> = emptyMap(),
+    val minor: Int? = null,
   )
   @Serializable data class SelectionFixture(val manifest: Manifest, val cases: List<SelectionCase>)
 
-  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap()) =
-    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked)
+  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap(), requiresMinor: Int = 0) =
+    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked, requiresMinor = requiresMinor)
 
   @Test fun selection() {
     val inApp = { level: Int -> Target(Surfaces.IN_APP, level, listOf("androidx")) }
     val m = Manifest(
       catalog = "conformance", serial = 1, generatedAtEpochMs = 0, expiresAtEpochMs = 1,
-      contracts = listOf(Contract("c/tile", 1)),
+      contracts = listOf(Contract("c/tile", 1, minor = 2)),
       designs = listOf(
         Design("builtin", "c/tile@1", "Built-in", install = InstallPolicy.Always),
         Design("compact", "c/tile@1", "Compact", variant = "compact", install = InstallPolicy.Always, tags = mapOf("style" to "flat")),
@@ -84,6 +85,8 @@ class ConformanceTest {
         t('5', "builtin", Target(Surfaces.LAUNCHER_WIDGET, 7, listOf("widgets"), SizeRange(110, 200, 40, 200))),
         t('6', "builtin", Target(Surfaces.WEAR_WIDGET, 7, listOf("glance-wear"), theme = "baked:dark", container = "wear:small")),
         t('7', "compact", inApp(7)),
+        // The compact design's newer version reads an input contract minor 2 added.
+        t('a', "compact", inApp(8), requiresMinor = 2),
         t('8', "skin", inApp(9)),
         t('9', "gone", inApp(8)),
         // Sorts first on a tie, so only the byte budget keeps it out.
@@ -109,10 +112,13 @@ class ConformanceTest {
       SelectionCase("byte budget", q(app8.copy(maxBytes = 150)), expect = null),
       SelectionCase("tags", q(app8).copy(tags = mapOf("style" to "flat")), expect = null),
       SelectionCase("other contract major", Query("c/tile@2", app8), expect = null),
+      SelectionCase("app on the contract's minor gets the newer template", q(app8).copy(variant = "compact", minor = 2), expect = null),
+      SelectionCase("app on an older minor gets the older template", q(app8).copy(variant = "compact", minor = 1), expect = null),
+      SelectionCase("no minor accepts any", q(app8).copy(variant = "compact"), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
       val qq = c.query
-      val got = TemplateSelector.select(m, TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags), automatic = auto)
+      val got = TemplateSelector.select(m, TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor), automatic = auto)
       c.copy(expect = got?.sha256)
     }
     check("selection.json", json.encodeToJsonElement(SelectionFixture.serializer(), SelectionFixture(m, cases)))

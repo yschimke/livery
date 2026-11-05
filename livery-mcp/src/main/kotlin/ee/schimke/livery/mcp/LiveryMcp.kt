@@ -2,6 +2,7 @@ package ee.schimke.livery.mcp
 
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
@@ -10,6 +11,7 @@ import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.publisher.CatalogBuilder
 import ee.schimke.livery.publisher.CatalogConfig
 import ee.schimke.livery.publisher.CatalogProblems
+import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.Layout
 import ee.schimke.livery.publisher.PreviewCatalog
 import ee.schimke.livery.publisher.TemplateSpec
@@ -95,6 +97,7 @@ class LiveryMcp(
       "build_preview" -> previewOut?.let { text(buildPreview(it, args.str("channel"))) } ?: failed("no preview output: start the server with --preview-out <dir>")
       "publish_preview" -> previewOut?.let { text(publishPreview(it, args)) } ?: failed("no preview output: start the server with --preview-out <dir>")
       "list_history" -> text(listHistory(args))
+      "check_compatibility" -> text(checkCompatibility(args))
       else -> extensions.firstOrNull { e -> e.tools.any { (it["name"] as? JsonPrimitive)?.content == name } }
         ?.call(name, args, this) ?: failed("unknown tool $name")
     }
@@ -160,10 +163,13 @@ class LiveryMcp(
       if (reads.isNotEmpty()) add("reads values outside ${c.ref}: ${reads.sorted()}")
       val emits = facts.emits.filterNot { it in c.actions }
       if (emits.isNotEmpty()) add("emits actions ${c.ref} doesn't declare: ${emits.sorted()}")
+      addAll(TemplateInspector.typeProblems(bytes, c))
       args.intOrNull("max_bytes")?.let { if (facts.bytes > it) add("${facts.bytes} bytes, over the host's budget of $it") }
     }
     return buildJsonObject {
       put("ok", problems.isEmpty()); put("bytes", facts.bytes)
+      // Apps on an older minor of the contract won't be offered it (PROTOCOL.md §4.3).
+      put("requiresMinor", ContractEvolution.requiresMinor(c, facts.declaredReads, facts.emits))
       putJsonArray("reads") { facts.reads.sorted().forEach { add(it) } }
       putJsonArray("emits") { facts.emits.sorted().forEach { add(it) } }
       putJsonArray("problems") { problems.forEach { add(it) } }
@@ -310,6 +316,19 @@ class LiveryMcp(
     }
   }
 
+  /**
+   * The catalog against an earlier version of itself ([CompatibilityCheck]): a git revision of its
+   * repository (HEAD by default: what this working tree changes) or another source tree.
+   */
+  private fun checkCompatibility(args: JsonObject): JsonElement {
+    val against = args.strOrNull("against") ?: "HEAD"
+    if (!File(against).isDirectory && !history.available) throw ToolError("the catalog isn't a git checkout: pass another source tree as 'against'")
+    val report = CompatibilityCheck.check(tree.root, against, inspect = args.boolOrNull("inspect") ?: false)
+    return json.encodeToJsonElement(CompatibilityCheck.Report.serializer(), report).let { r ->
+      JsonObject((r as JsonObject) + ("ok" to JsonPrimitive(report.ok)))
+    }
+  }
+
   /** The commits that changed a design's templates, newest first, from git. */
   private fun listHistory(args: JsonObject): JsonElement {
     if (!history.available) throw ToolError("the catalog isn't a git checkout: no history")
@@ -373,7 +392,8 @@ class LiveryMcp(
         "list_contracts and get_contract. Prefer data to documents: for copy, images or a campaign, " +
         "write data and check it with validate_data. For a new or changed document, validate_template " +
         "first (it reads the document itself), then render_preview with the contract's examples (and " +
-        "dark=true) to look at it as a person would, then submit_draft when the server accepts writes. " +
+        "dark=true) to look at it as a person would, check_compatibility to see what it changes for apps " +
+        "already installed, then submit_draft when the server accepts writes. " +
         "Drafts are unsigned; a person reviews them, and production catalogs are signed by CI, never by you."
   }
 }

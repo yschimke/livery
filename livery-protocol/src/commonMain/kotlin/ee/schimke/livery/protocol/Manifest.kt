@@ -132,6 +132,12 @@ data class TemplateEntry(
   val revoked: Boolean = false,
   /** Named values the document actually reads, as the publisher decoded them. */
   val reads: List<String> = emptyList(),
+  /**
+   * The lowest contract minor an app must implement to play it: the highest `since` among what it
+   * [reads] and [emits]. The publisher computes it (PROTOCOL.md §4.3); a query with an older minor
+   * skips it (§5.1).
+   */
+  val requiresMinor: Int = 0,
   /** Host actions the document can emit. */
   val emits: List<String> = emptyList(),
   /** Hashes of the [AssetEntry]s (images, fonts) it needs, downloaded with it. */

@@ -8,7 +8,8 @@ import kotlinx.serialization.json.JsonObject
 /**
  * The interface between a template and the app that plays it: what data it reads, what actions it
  * may emit, and example datasets to design and preview against. Templates pin `id@major`; a minor
- * revision may only add optional inputs and actions, so every template of a major keeps working.
+ * revision may only add optional inputs, list fields and actions (each marked with the [InputSpec.since]
+ * minor that added it), so every template of a major keeps working (PROTOCOL.md §4.3).
  *
  * Remote Compose named values are flat, so [lists] flatten to indexed names:
  * `items.count`, `items.0.title`, `items.1.title`, … up to [ListSpec.max].
@@ -77,6 +78,11 @@ data class InputSpec(
   /** A theme role (`primary`, `onSurface`) the host fills from its own theme. */
   val role: String? = null,
   val description: String? = null,
+  /**
+   * The contract minor that added this input (0: there from the start). A template that reads it
+   * needs an app that implements at least this minor ([TemplateEntry.requiresMinor]).
+   */
+  val since: Int = 0,
 )
 
 @Serializable
@@ -84,6 +90,8 @@ data class ListSpec(
   val item: Map<String, InputSpec>,
   val max: Int,
   val description: String? = null,
+  /** The contract minor that added this list; its fields carry their own [InputSpec.since]. */
+  val since: Int = 0,
 )
 
 /**
@@ -95,6 +103,8 @@ data class ActionSpec(
   val kind: String,
   val args: Map<String, InputSpec> = emptyMap(),
   val description: String? = null,
+  /** The contract minor that added this action: an app below it can't route it. */
+  val since: Int = 0,
 )
 
 /** Built-in action kinds every client understands; anything else needs an app handler. */

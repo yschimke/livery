@@ -55,7 +55,24 @@ jobs:
 ```
 
 `--inspect` decodes every `.rc` and refuses one that reads or emits anything its sidecar doesn't
-declare. Use it whenever documents come from more than one tool, or from an agent.
+declare, or reads a value as a different type than its contract declares. Use it whenever
+documents come from more than one tool, or from an agent.
+
+## Checking a change
+
+`livery check` compares a catalog source tree with an earlier version of itself: a git revision of
+its repository, or another tree. Run it on every pull request:
+
+```sh
+livery check catalog --against origin/main --inspect
+```
+
+It exits 1 when a contract changes in a way apps already installed would break (see
+[Concepts](concepts.md#versions-within-a-major)), or when the tree doesn't build. It also lists,
+for review, every template added, removed or changed: what it now reads and emits, the contract
+minor it requires (apps on an older minor stop getting it), its size, and which values only the
+template's own default covers when data leaves them out. `--json` prints the same report for
+other tools; agents get it from the MCP server's `check_compatibility`.
 
 The serial defaults to the build time in milliseconds, which only grows. If you pass `--serial`
 yourself, never let it go down for a channel: apps refuse a lower one as a rollback.

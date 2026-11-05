@@ -36,9 +36,10 @@ data class NotificationSlot(
   internal var namedDesign = false
     private set
 
-  fun query(contract: String, designId: String? = null): TemplateQuery {
+  /** The query for this slot; [minor] is the contract minor the app implements (TemplateQuery.minor). */
+  fun query(contract: String, designId: String? = null, minor: Int? = null): TemplateQuery {
     if (designId != null) namedDesign = true
-    return TemplateQuery(contract, caps, widthDp = widthDp, heightDp = heightDp, designId = designId.takeUnless { automaticOnly })
+    return TemplateQuery(contract, caps, widthDp = widthDp, heightDp = heightDp, designId = designId.takeUnless { automaticOnly }, minor = minor)
   }
 }
 

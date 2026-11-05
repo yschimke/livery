@@ -48,6 +48,7 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-
 | `build_preview` (`--preview-out`) | an unsigned catalog for a preview channel; the catalog's own channel is refused |
 | `publish_preview` (`--preview-out`) | one document on its own, as an unsigned catalog of one design, checked against its contract |
 | `list_history` | a design's templates' versions from the catalog's git log; `render_preview` with `revision` draws one |
+| `check_compatibility` | the catalog against a git revision (default `HEAD`) or another tree, as `livery check` does: contract changes marked compatible or breaking, and per template what it reads and emits, the minor it requires and which values only its own default covers |
 | `ui_builder_export` (`--ui-builder`) | a Compose UI Builder design at a revision, as a document with its `source` |
 
 The server never signs anything. A failed draft is never left in the tree.
@@ -81,8 +82,10 @@ revision and submit it again; `list_history` shows each step.
 
 1. The agent works in a branch with the server above: it reads the contract, validates and renders
    its document, and calls `submit_draft`.
-2. CI runs `livery build --inspect`. That refuses undeclared reads, bad examples and bad payloads,
-   and decodes every `.rc` to check it against its sidecar. CI then publishes the branch to a
+2. CI runs `livery build --inspect` and `livery check --against origin/main`. The build refuses
+   undeclared reads, bad examples and bad payloads, and decodes every `.rc` to check it against its
+   sidecar and its contract's types; the check refuses a contract change apps already installed
+   would break, and lists what the branch changes for review. CI then publishes the branch to a
    `pr-<n>` channel.
 3. Reviewers point a debug build at that channel and look at it with real data.
 4. Merging publishes `main`, signed by CI.
@@ -99,7 +102,8 @@ result on every template of the design.
 
 - [ ] `livery-mcp` in the agent's tools, pointed at the catalog source in a working branch.
 - [ ] `--write` only where the agent works in a branch; read-only everywhere else.
-- [ ] CI runs `livery build --inspect`, then signs with a key the agent can't read.
+- [ ] CI runs `livery build --inspect` and `livery check --against origin/main`, then signs with a
+      key the agent can't read.
 - [ ] Preview channels for review, never the production channel.
 
 ## Planned
@@ -108,5 +112,9 @@ result on every template of the design.
   `await_feedback`, `send_message` and `set_status`, so a person and an agent edit together with
   the person's real data on screen.
 - `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly.
+- Pictures in `check_compatibility` and `livery check`: each changed template rendered before and
+  after with every example, side by side.
+- `livery check --against <release URL>`: a published catalog as the baseline, not only a git
+  revision or a source tree.
 - Retired versions in the manifest, so a decision or feed item pinned to an older template's hash
   keeps playing after the design moves on.

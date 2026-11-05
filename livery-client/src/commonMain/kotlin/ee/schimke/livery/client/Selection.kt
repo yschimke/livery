@@ -11,6 +11,10 @@ import ee.schimke.livery.protocol.themeFits
 /**
  * What a slot in the app asks for. [designId] is the chosen design (a skin, a decision's
  * template); without one, the contract's [variant] (then `default`, then any) is used.
+ *
+ * [minor] is the contract minor the app implements: templates that need a newer one (an input it
+ * doesn't fill, an action it can't route) are skipped, so an older version of the same design plays
+ * instead. Null accepts any minor, as clients did before minors were tracked.
  */
 data class TemplateQuery(
   val contract: String,
@@ -21,6 +25,7 @@ data class TemplateQuery(
   val variant: String? = null,
   val theme: String? = null,
   val tags: Map<String, String> = emptyMap(),
+  val minor: Int? = null,
 )
 
 /** Pure selection over a manifest: the same answer on every platform, and unit-testable. */
@@ -59,8 +64,9 @@ object TemplateSelector {
   }
 
   /**
-   * Whether [t] may play for [query]: right contract, a live design, not revoked, within the
-   * player's byte budget, level, profiles, container, size and theme, and matching its tags. Exact
+   * Whether [t] may play for [query]: right contract, a live design, not revoked, needing no newer
+   * contract minor than the app's, within the player's byte budget, level, profiles, container, size
+   * and theme, and matching its tags. Exact
    * references (a decision's or feed item's `sha256`) pass through this same check.
    */
   fun eligible(
@@ -72,6 +78,7 @@ object TemplateSelector {
     val design = liveDesigns[t.designId] ?: return false
     return !t.revoked &&
       t.contract == query.contract &&
+      (query.minor == null || t.requiresMinor <= query.minor) &&
       t.bytes <= query.caps.maxBytes &&
       t.target.themeFits(query.caps, query.theme) &&
       t.target.fits(query.caps, query.widthDp, query.heightDp) &&
