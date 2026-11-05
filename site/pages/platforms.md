@@ -25,7 +25,8 @@ order: 24
 ## Compose Multiplatform
 
 `LiveryTemplate(plan, host)` plays a render plan through rc-players' Compose player;
-`LiverySlot(key, host) { plan }` plans and falls back. Catalog images and fonts go through the
+`LiverySlot(key, host) { plan }` plans and falls back, replanning when `key` changes or the
+repository's `revision` does (a refreshed catalog, an install). Catalog images and fonts go through the
 player's own loaders.
 
 ## Swift

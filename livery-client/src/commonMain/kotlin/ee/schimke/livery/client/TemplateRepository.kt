@@ -13,6 +13,10 @@ import ee.schimke.livery.protocol.TemplateRef
 import ee.schimke.livery.protocol.fits
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
@@ -92,6 +96,14 @@ class TemplateRepository(
 
   private fun k(name: String) = "livery/${source.id}/$name"
 
+  private val _revision = MutableStateFlow(0L)
+
+  /**
+   * Bumped whenever what [resolve] can answer changes: a newly accepted catalog, an install or an
+   * uninstall. A slot that plans from this repository replans when it changes (`LiverySlot` does).
+   */
+  val revision: StateFlow<Long> = _revision.asStateFlow()
+
   suspend fun manifest(): Manifest? = stateLock.withLock { loadCachedLocked() }
 
   private suspend fun loadCachedLocked(): Manifest? {
@@ -154,6 +166,7 @@ class TemplateRepository(
                 }
                 putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
                 prefetch(next)
+                _revision.update { it + 1 }
                 RefreshResult.Updated(next.serial)
               }
             }
@@ -262,11 +275,13 @@ class TemplateRepository(
     if (needed.isEmpty()) return false
     for (e in needed) if (obtain(m, e) == null) return false
     kv.put(k("installed"), json.encodeToString(SetSerializer, installedIds() + designId))
+    _revision.update { it + 1 }
     return true
   }
 
   suspend fun uninstall(designId: String) {
     kv.put(k("installed"), json.encodeToString(SetSerializer, installedIds() - designId))
+    _revision.update { it + 1 }
   }
 
   suspend fun installedIds(): Set<String> =

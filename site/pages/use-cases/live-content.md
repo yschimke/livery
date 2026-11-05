@@ -33,7 +33,7 @@ LiverySlot(key = state to chosenSkin, host = host, fallback = { NativeTile(state
 ## 2. Let people pick a skin
 
 ```kotlin
-val designs = rememberDesigns(repository, "live/status-tile@1", key = installedVersion)
+val designs = rememberDesigns(repository, "live/status-tile@1") // refreshes after installs
 DesignPicker(designs, onChoose = { d ->
   scope.launch { if (d.installed || repository.install(d.design.id)) chosenSkin = d.design.id }
 }, preview = { d -> AsyncImage(d.previews.firstOrNull()?.url, null) })

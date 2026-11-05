@@ -101,6 +101,20 @@ class RepositoryTest {
     assertNull(blobs.get(Fx.manifest().templates[5].sha256))
   }
 
+  @Test fun revisionMovesWhenWhatResolveCanAnswerChanges() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    assertEquals(0, r.revision.value)
+    r.refresh()
+    assertEquals(1, r.revision.value, "a newly accepted catalog")
+    r.refresh(force = true)
+    assertEquals(1, r.revision.value, "not modified: nothing new to answer")
+    assertTrue(r.install("tile-retro"))
+    assertEquals(2, r.revision.value)
+    r.uninstall("tile-retro")
+    assertEquals(3, r.revision.value)
+  }
+
   @Test fun fallsBackToBundledWhenNothingIsCached() = runTest {
     val bundledManifest = Fx.manifest()
     val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled(bundledManifest) { sha ->

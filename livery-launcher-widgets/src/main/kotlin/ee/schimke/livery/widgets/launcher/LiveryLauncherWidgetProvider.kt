@@ -126,7 +126,12 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     val ok = when (result) {
       is InstantiateResult.Failed -> {
         // An image not on the device yet: fetch it after this update, then draw the template.
-        if (images.misses.isNotEmpty()) scope.launch { if (images.fetchMissed()) onUpdate(context, manager, intArrayOf(id)) }
+        // A new broadcast, not onUpdate: this receiver's goAsync result is already taken.
+        if (images.misses.isNotEmpty()) {
+          val app = context.applicationContext
+          val provider = this@LiveryLauncherWidgetProvider.javaClass
+          scope.launch { if (images.fetchMissed()) requestUpdate(app, provider, intArrayOf(id)) }
+        }
         return fallback(context, id, result.reason)
       }
       is InstantiateResult.Ok -> result
@@ -148,8 +153,10 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     fun updateAll(context: Context, provider: Class<out LiveryLauncherWidgetProvider>) {
       val manager = AppWidgetManager.getInstance(context)
       val ids = manager.getAppWidgetIds(ComponentName(context, provider))
-      if (ids.isEmpty()) return
-      context.sendBroadcast(Intent(context, provider).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
+      if (ids.isNotEmpty()) requestUpdate(context, provider, ids)
     }
+
+    private fun requestUpdate(context: Context, provider: Class<out AppWidgetProvider>, ids: IntArray) =
+      context.sendBroadcast(Intent(context, provider).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
   }
 }

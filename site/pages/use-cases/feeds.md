@@ -34,7 +34,8 @@ val feedClient = FeedClient { feed, cursor -> api.page(feed, cursor) }   // your
 
 LazyColumn {
   items(page.items, key = { it.id }) { item ->
-    LiverySlot(key = item.id, host = host, fallback = { NativeArticleRow(item) }) {
+    // Keyed on the whole item: a refresh that changes an item's data or template replans it.
+    LiverySlot(key = item, host = host, fallback = { NativeArticleRow(item) }) {
       planner.forFeedItem(TemplateQuery("feed/article@1", inApp, widthDp = 360), item)
     }
   }

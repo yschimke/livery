@@ -40,10 +40,10 @@ val decider = FirstDecider(listOf(myRemoteDecider, LocalRulesDecider({ repositor
 val context = DecisionContext(nowEpochMs = clock(), platform = "android", locale = "en-GB",
   appVersion = BuildConfig.VERSION_CODE.toLong(), bucketingId = installId, segments = userSegments)
 
-// The key is everything the decision reads: new segments (a new subscriber) or a catalog refresh
-// re-decides. Bump `catalogVersion` after each repository refresh; add a time bucket if rules
-// have schedules that should flip while the screen stays open.
-LiverySlot(key = Triple("home.top", userSegments, catalogVersion), host = host) {
+// The key is everything the decision reads from the app: new segments (a new subscriber)
+// re-decide. A refreshed catalog re-decides on its own. Add a time bucket if rules have schedules
+// that should flip while the screen stays open.
+LiverySlot(key = "home.top" to userSegments, host = host) {
   decider.decide("home.top", context)?.let { planner.forDecision(bannerQuery, it) } ?: PlanResult.Fallback("none")
 }
 ```
