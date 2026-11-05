@@ -23,6 +23,6 @@ class CacheOnly : AbstractCoroutineContextElement(Key) {
 
   internal fun miss(fetch: suspend () -> Boolean) { missed += fetch }
 
-  /** Performs the skipped downloads; true when there were some and all succeeded. */
-  suspend fun fetchMissed(): Boolean = missed.isNotEmpty() && missed.toList().all { it() }
+  /** Performs every skipped download, each attempted even after one fails; true when there were some and all succeeded. */
+  suspend fun fetchMissed(): Boolean = missed.isNotEmpty() && missed.toList().map { it() }.all { it }
 }

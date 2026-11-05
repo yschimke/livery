@@ -196,11 +196,15 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
 
     fun add(id: Int, fetch: suspend () -> Boolean) { fetches += id to fetch }
 
-    /** Runs each fetch, then asks for one new update of the widgets whose downloads all arrived. */
+    /**
+     * Runs every fetch, each on its own (a chosen design whose image is gone for good must not
+     * hold back the automatic design's), then asks for one new update of each widget for which any
+     * of them completed: that widget now has a design it can draw.
+     */
     suspend fun run(context: Context, provider: Class<out AppWidgetProvider>) {
       if (fetches.isEmpty()) return
-      val ok = fetches.groupBy({ it.first }, { it.second })
-        .filterValues { fs -> fs.all { f -> runCatching { f() }.getOrDefault(false) } }.keys
+      val ok = fetches.map { (id, f) -> id to runCatching { f() }.getOrDefault(false) }
+        .filter { it.second }.mapTo(LinkedHashSet()) { it.first }
       // A new broadcast, not onUpdate: this receiver's goAsync result is in use.
       if (ok.isNotEmpty()) requestUpdate(context, provider, ok.toIntArray())
     }

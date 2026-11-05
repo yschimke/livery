@@ -23,7 +23,10 @@ class CachedImages(private val resolver: ImageResolver) {
     resolver.cached(ref, w, h) ?: null.also { missed += ImageRequest(ref, w, h) }
   }
 
-  /** Fetches every missed image; true when there were some and all arrived, so a render can draw. */
+  /**
+   * Fetches every missed image, each attempted even after one fails; true when there were some and
+   * all arrived, so a render can draw.
+   */
   suspend fun fetchMissed(): Boolean =
-    missed.isNotEmpty() && missed.toList().all { resolver.resolve(it.ref, it.widthPx, it.heightPx) != null }
+    missed.isNotEmpty() && missed.toList().map { resolver.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
 }
