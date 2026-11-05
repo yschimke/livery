@@ -1,5 +1,6 @@
 package ee.schimke.livery.instantiate
 
+import ee.schimke.composeai.rcplayer.edit.bitmapUrls
 import ee.schimke.composeai.rcplayer.edit.namedVariables
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
@@ -25,7 +26,10 @@ object TemplateInspector {
   /** The document's facts, or null when the bytes aren't a Remote Compose document. */
   fun facts(template: ByteArray): TemplateFacts? = runCatching {
     val d = RcDocumentCodec.decode(template, RcWireLimits())
-    TemplateFacts(template.size, d.namedVariables.map { it.name.removePrefix("USER:") }.toSet(), RcHostActionRewrites.actionNames(d))
+    // A data-bound image (`livery:value/<input>`) is a read too: the player never sees it as a named
+    // value, but the slot's binding for that input is what it draws.
+    val images = d.bitmapUrls.filter { it.startsWith(TemplateInstantiator.VALUE_PREFIX) }.map { it.removePrefix(TemplateInstantiator.VALUE_PREFIX) }
+    TemplateFacts(template.size, (d.namedVariables.map { it.name.removePrefix("USER:") } + images).toSet(), RcHostActionRewrites.actionNames(d))
   }.getOrNull()
 
   /**

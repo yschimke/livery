@@ -22,11 +22,37 @@ class GitHistory(private val root: File) {
         if (p.size < 4) null else Change(p[0], p[1].toLongOrNull() ?: 0, p[2], p[3])
       }.orEmpty()
 
-  /** [file]'s bytes at [revision], or null when it didn't exist then. */
+  /**
+   * [file]'s bytes at [revision], or null when it didn't exist then. A commit [log] listed from
+   * before a rename is read under the name the file had then.
+   */
   fun show(file: File, revision: String): ByteArray? {
     require(REVISION.matches(revision)) { "bad revision '$revision'" }
-    return gitBytes("show", "$revision:${rel(file)}")
+    val commit = git("rev-parse", "--verify", "--quiet", "$revision^{commit}")?.trim() ?: return null
+    return gitBytes("show", "$commit:${pathAt(file, commit) ?: rel(file)}")
   }
+
+  /**
+   * The path [file] had at [commit], following renames back from today's name: the name in the
+   * newest change to it (newest first, as git lists them) that [commit] descends from.
+   */
+  private fun pathAt(file: File, commit: String): String? {
+    val changes = mutableListOf<Pair<String, String>>()
+    var hash: String? = null
+    val lines = git("log", "--follow", "-n", "200", "--format=%x1e%H", "--name-only", "--", ":(top)${rel(file)}")?.lines().orEmpty()
+    // Only whitespace is trimmed: trim() would also take the record separator that marks a commit.
+    for (line in lines.map { it.trim(' ', '\t', '\r') }.filter { it.isNotEmpty() }) {
+      if (line.startsWith("\u001e")) hash = line.removePrefix("\u001e")
+      else hash?.let { changes += it to line; hash = null }
+    }
+    return changes.firstOrNull { (h, _) -> h == commit || isAncestor(h, commit) }?.second
+  }
+
+  private fun isAncestor(ancestor: String, of: String): Boolean = runCatching {
+    val p = ProcessBuilder("git", "-C", root.path, "merge-base", "--is-ancestor", ancestor, of)
+      .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    p.waitFor(20, TimeUnit.SECONDS) && p.exitValue() == 0
+  }.getOrDefault(false)
 
   /**
    * [file]'s path from the repository's top: what `git show <rev>:<path>` takes, and what a

@@ -188,4 +188,19 @@ class LiveryMcpTest {
     assertEquals(listOf("add catalog"), h["changes"]!!.jsonArray.map { it.jsonObject["subject"]!!.jsonPrimitive.content })
     assertFalse(sub.call("render_preview", args("design" to "tile-default", "template" to "in-app", "revision" to first)).isError())
   }
+
+  @Test fun anOlderRevisionRendersUnderTheNameItHadThen() {
+    fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
+      .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
+    val dir = File(src, "designs/tile-default")
+    File(dir, "in-app.rc").renameTo(File(dir, "phone.rc")); File(dir, "in-app.json").renameTo(File(dir, "phone.json"))
+    git("init", "-q"); git("add", "."); git("commit", "-qm", "as phone")
+    val first = git("rev-parse", "HEAD").trim()
+    git("mv", "designs/tile-default/phone.rc", "designs/tile-default/in-app.rc"); git("mv", "designs/tile-default/phone.json", "designs/tile-default/in-app.json")
+    git("commit", "-qm", "rename to in-app")
+    val h = call("list_history", "design" to "tile-default", "template" to "in-app").body().jsonArray.single().jsonObject
+    assertTrue(first in h["changes"].toString(), "history follows the rename")
+    val r = call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to first)
+    assertFalse(r.isError(), r.toString())
+  }
 }
