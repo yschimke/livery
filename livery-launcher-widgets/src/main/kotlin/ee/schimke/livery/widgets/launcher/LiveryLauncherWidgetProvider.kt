@@ -30,6 +30,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -98,7 +99,7 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
         // Every widget is published (template or fallback) before anything is downloaded. What
         // the renders lacked is fetched now, outside the update lock but inside this broadcast,
         // which keeps the process alive; a widget whose downloads arrive is updated again.
-        withTimeoutOrNull(RETRY_BUDGET_MS) { retries.run(context.applicationContext, provider) }
+        retries.run(context.applicationContext, provider, RETRY_BUDGET_MS)
       } finally {
         result.finish()
       }
@@ -198,14 +199,19 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     fun add(id: Int, fetch: suspend () -> Boolean) { fetches += id to fetch }
 
     /**
-     * Runs every fetch, each on its own (a chosen design whose image is gone for good must not
-     * hold back the automatic design's), then asks for one new update of each widget for which any
-     * of them completed: that widget now has a design it can draw.
+     * Runs every fetch at once, each on its own, for at most [budgetMs]: a chosen design whose
+     * image is gone for good, or whose host is slow, must not hold back the automatic design's.
+     * Then asks for one new update of each widget for which any fetch completed in time: that
+     * widget now has a design it can draw.
      */
-    suspend fun run(context: Context, provider: Class<out AppWidgetProvider>) {
+    suspend fun run(context: Context, provider: Class<out AppWidgetProvider>, budgetMs: Long) {
       if (fetches.isEmpty()) return
-      val ok = fetches.map { (id, f) -> id to runCatching { f() }.getOrDefault(false) }
-        .filter { it.second }.mapTo(LinkedHashSet()) { it.first }
+      val ok = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+      withTimeoutOrNull(budgetMs) {
+        coroutineScope {
+          for ((id, f) in fetches) launch { if (runCatching { f() }.getOrDefault(false)) ok += id }
+        }
+      }
       // A new broadcast, not onUpdate: this receiver's goAsync result is in use.
       if (ok.isNotEmpty()) requestUpdate(context, provider, ok.toIntArray())
     }
