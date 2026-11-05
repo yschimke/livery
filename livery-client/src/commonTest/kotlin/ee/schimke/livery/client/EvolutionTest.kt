@@ -84,4 +84,15 @@ class EvolutionTest {
     assertEquals(2, ContractEvolution.requiresMinor(v3, listOf("title"), listOf("share")))
     assertEquals(3, ContractEvolution.requiresMinor(v3, listOf("rows.1.icon"), emptyList()))
   }
+
+  @Test fun actionArgsFollowTheInputRules() {
+    val withArg = v1.copy(actions = mapOf("open" to ActionSpec("navigate", args = mapOf("route" to InputSpec(ValueType.String)))))
+    fun arg(spec: InputSpec) = withArg.copy(minor = 2, actions = mapOf("open" to ActionSpec("navigate", args = mapOf("route" to spec))))
+    fun breakingFrom(new: Contract) = ContractEvolution.compare(withArg, new).filter { it.breaking }.map { it.path }
+    assertEquals(listOf("actions.open.args.route"), breakingFrom(arg(InputSpec(ValueType.String, required = true))))
+    assertEquals(listOf("actions.open.args.route"), breakingFrom(arg(InputSpec(ValueType.String, maxLength = 10))))
+    assertEquals(listOf("actions.open.args.route"), breakingFrom(arg(InputSpec(ValueType.Int))))
+    val optionalArg = withArg.copy(minor = 2, actions = mapOf("open" to ActionSpec("navigate", args = withArg.actions.getValue("open").args + ("tab" to InputSpec(ValueType.String, since = 2)))))
+    assertEquals(emptyList(), breakingFrom(optionalArg))
+  }
 }

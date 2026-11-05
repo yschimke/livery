@@ -81,4 +81,18 @@ class CompatibilityCheckTest {
     assertTrue(r2.ok, r2.problems.toString())
     assertTrue(r2.templates.all { it.status == "added" })
   }
+
+  @Test fun targetsThatDifferOnlyInProfilesAreReportedApart() {
+    fun File.addProfileTwin(reads: String) {
+      File(this, "designs/tile-default/in-app.rc").copyTo(File(this, "designs/tile-default/in-app-compose.rc"), overwrite = true)
+      File(this, "designs/tile-default/in-app-compose.json").writeText("""{ "target": { "surface": "in-app", "rcApiLevel": 7, "profiles": ["compose"] }, "reads": [$reads] }""")
+    }
+    val old = copy().apply { addProfileTwin("\"name\",\"state\"") }
+    val new = copy().apply { addProfileTwin("\"name\"") }
+    val r = CompatibilityCheck.compare(new, old)
+    val inApp = r.templates.filter { it.design == "tile-default" && it.target.startsWith("in-app") }
+    assertEquals(2, inApp.size, inApp.toString())
+    assertEquals(listOf("state"), inApp.single { "compose" in it.target }.readsRemoved)
+    assertEquals("unchanged", inApp.single { "androidx" in it.target }.status)
+  }
 }

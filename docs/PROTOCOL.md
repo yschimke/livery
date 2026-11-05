@@ -168,14 +168,16 @@ a value its contract cannot produce.
 Within one major, a contract changes only in ways every template and data producer of that major
 survives. A new minor may:
 
-- add an optional input, list, list field or action, with `since` set to the new minor;
+- add an optional input, list, list field, action or action argument, with `since` set to the new
+  minor;
 - loosen a limit (raise `maxLength` or a list's `max`, widen `min`/`max`), when every template still
   draws at the new limit;
 - change descriptions, examples and defaults.
 
-Anything else needs a new major: removing an input, list, field or action; changing a type, an
-action's `kind` or its `args`; adding a required input or making an optional one required; and
-tightening a limit, since producers already send values the old limit allowed. A publisher must
+Anything else needs a new major: removing an input, list, field, action or action argument;
+changing a type or an action's `kind`; adding a required input or argument, or making an optional
+one required; and tightening a limit, since producers (an action's arguments are produced by
+templates) already send values the old limit allowed. A publisher must
 refuse a catalog that holds two versions of one major whose difference is not a minor change, or an
 input, list or action whose `since` is above its contract's `minor`, or whose `since` is above 0
 while it is `required`.

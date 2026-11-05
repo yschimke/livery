@@ -40,7 +40,7 @@ object ContractEvolution {
     for ((name, o) in old.actions) {
       val n = new.actions[name]
       if (n == null) { add(ContractChange("actions.$name", "removed", breaking = true)); continue }
-      action("actions.$name", o, n)
+      action("actions.$name", o, n, old.minor)
     }
     for ((name, n) in new.actions) if (name !in old.actions) {
       add(added("actions.$name", n.since, old.minor))
@@ -144,11 +144,11 @@ object ContractEvolution {
     inputs("$path.", o.item, n.item, oldMinor)
   }
 
-  private fun MutableList<ContractChange>.action(path: String, o: ActionSpec, n: ActionSpec) {
+  private fun MutableList<ContractChange>.action(path: String, o: ActionSpec, n: ActionSpec, oldMinor: Int) {
     if (o.kind != n.kind) add(ContractChange(path, "kind changed from ${o.kind} to ${n.kind}", breaking = true))
     if (o.since != n.since) add(ContractChange(path, "since changed from ${o.since} to ${n.since}", breaking = true))
-    if (o.args.keys != n.args.keys || o.args.any { (k, v) -> n.args[k]?.type != v.type }) {
-      add(ContractChange(path, "args changed from ${o.args.keys.sorted()} to ${n.args.keys.sorted()}", breaking = true))
-    }
+    // Templates send the args and the app reads them: the same rules as inputs (a new required arg,
+    // a tightened limit or a type change breaks templates of the old minor).
+    inputs("$path.args.", o.args, n.args, oldMinor)
   }
 }

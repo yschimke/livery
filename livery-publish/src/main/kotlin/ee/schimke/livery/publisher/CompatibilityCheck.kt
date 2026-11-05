@@ -116,13 +116,17 @@ object CompatibilityCheck {
   }
 
   private fun templateReports(old: CatalogBuilder.Output?, new: CatalogBuilder.Output, warnings: MutableList<String>): List<TemplateReport> {
-    fun key(t: TemplateEntry) = t.designId to describe(t)
+    // The whole target identifies a template (the build allows one per design and target); its
+    // description is only for people, and two targets can read the same (profiles aren't shown).
+    fun key(t: TemplateEntry) = t.designId to t.target
     val before = old?.manifest?.templates.orEmpty().associateBy(::key)
     val after = new.manifest.templates.associateBy(::key)
     val contracts = new.manifest.contracts.groupBy { it.ref }.mapValues { (_, v) -> v.maxBy { it.minor } }
-    return (before.keys + after.keys).sortedWith(compareBy({ it.first }, { it.second })).map { k ->
-      val a = before[k]
-      val b = after[k]
+    return (before.keys + after.keys).map { (design, target) -> Triple(design, target, (after[design to target] ?: before[design to target])!!) }
+      .sortedWith(compareBy({ it.first }, { describe(it.third) }, { it.third.target.toString() })).map { (design, target, any) ->
+      val k = design to describe(any)
+      val a = before[design to target]
+      val b = after[design to target]
       if (b == null) {
         warnings += "${k.first} ${k.second}: removed; that slot falls back to another design"
         return@map TemplateReport(k.first, k.second, "removed", previousRequiresMinor = a!!.requiresMinor, previousBytes = a.bytes)
@@ -177,6 +181,7 @@ object CompatibilityCheck {
 
   private fun describe(t: TemplateEntry): String = buildString {
     append(t.target.surface)
+    if (t.target.profiles.isNotEmpty()) append(" [").append(t.target.profiles.joinToString(",")).append(']')
     t.target.container?.let { append('/').append(it) }
     val s = t.target.size
     if (listOf(s.minWidthDp, s.maxWidthDp, s.minHeightDp, s.maxHeightDp).any { it != null }) {
