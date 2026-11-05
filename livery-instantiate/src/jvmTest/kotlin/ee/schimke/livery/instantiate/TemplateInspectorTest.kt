@@ -58,4 +58,13 @@ class TemplateInspectorTest {
     assertEquals(listOf("reads 'hero' as an image, but ha/tile@1 declares string"), TemplateInspector.typeProblems(bytes, c))
     assertEquals(emptyList(), TemplateInspector.typeProblems(bytes, c.copy(inputs = mapOf("hero" to InputSpec(ValueType.Image)))))
   }
+
+  @Test fun aValueUsedAsBothAStringAndAnImageConflicts() {
+    // The tile's string `light.kitchen.state` also drawn as a data-bound image.
+    val d = RcDocumentCodec.decode(tile, RcWireLimits())
+    val bytes = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "livery:value/light.kitchen.state".encodeToByteArray())) + d.operations))
+    assertEquals(setOf(RcNamedVariable.STRING_TYPE, RcNamedVariable.IMAGE_TYPE), TemplateInspector.facts(bytes)!!.types.getValue("light.kitchen.state"))
+    val asString = Contract("ha/tile", 1, inputs = mapOf("light.kitchen.state" to InputSpec(ValueType.String)))
+    assertEquals(listOf("reads 'light.kitchen.state' as an image, but ha/tile@1 declares string"), TemplateInspector.typeProblems(bytes, asString))
+  }
 }
