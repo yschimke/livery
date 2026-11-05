@@ -18,7 +18,7 @@ fills it with data through a typed contract, and reports what was shown and tapp
 | [Feeds](use-cases/feeds.md) | A feed page is a list of template references plus data; a handful of templates draw thousands of items. |
 | [Live content](use-cases/live-content.md) | The app pushes its own live values into a template, and people install skins for it. |
 | [Launcher widgets](use-cases/launcher-widgets.md) | Subclass one provider; Livery instantiates the template for each widget's size and routes taps back. |
-| [Wear widgets](use-cases/wear-widgets.md) | *Planned.* The same templates in Glance Wear containers. |
+| [Wear widgets](use-cases/wear-widgets.md) | Subclass one Glance Wear widget; Livery frames the template in each watch's container and turns taps into your `PendingIntent`s. |
 | [The web](use-cases/web.md) | *Planned.* A `<livery-template>` element over the TypeScript player. |
 
 ## How it fits together
@@ -45,6 +45,7 @@ Read [Concepts](concepts.md) for the model, or go straight to [Getting started](
 | Compose Multiplatform (`LiveryTemplate`, `LiverySlot`) | Available |
 | Swift package (`Livery`, `LiveryUI`) | Available; CI on macOS |
 | Launcher widgets (Android 16+) | Available |
-| Wear widgets, web element, reference server, MCP tools | Planned |
+| Wear widgets (Glance Wear) | Available |
+| Phone-to-watch sync, web element, reference server, MCP tools | Planned |
 
 See [Platforms](platforms.md) for details.

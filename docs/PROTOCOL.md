@@ -257,6 +257,12 @@ whose id rc-players' `RcWidgetActionIds.register` gives the action's name, with 
 value, if any, as its metadata. The player evaluates that metadata when tapped and delivers it with
 the tap, so the arguments arrive as above. Numeric values are dropped on such a host.
 
+A host that runs only `SendPendingIntent` (a Glance Wear widget) gets each distinct tap (action and
+constant arguments) rewritten to send its own `PendingIntent` index, in order of first appearance;
+the host app supplies the `PendingIntent` for each. A `PendingIntent` is fixed when the widget is
+published, so a tap whose value is not a constant text (or nothing) can't be carried there: it is
+left unrewritten, which the host ignores.
+
 ## 8. Decisions, feeds and events
 
 - A **decision** names a template (`designId` or `sha256`), carries the data, a TTL, tracking URLs

@@ -1,10 +1,15 @@
 package ee.schimke.livery.instantiate
 
+import ee.schimke.composeai.rcplayer.edit.RcDisplay
 import ee.schimke.composeai.rcplayer.edit.RcHardcodedValue
 import ee.schimke.composeai.rcplayer.edit.bitmapUrls
 import ee.schimke.composeai.rcplayer.edit.namedVariables
+import ee.schimke.composeai.rcplayer.protocol.RcDocument
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
+import ee.schimke.composeai.rcplayer.protocol.RcHeader
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
+import ee.schimke.composeai.rcwidget.RcWearFrame
+import ee.schimke.composeai.rcwidget.RcWearTemplates
 import ee.schimke.composeai.rcwidget.RcWidgetDocuments
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
@@ -15,8 +20,10 @@ sealed interface InstantiateResult {
   /**
    * @property actions for [TemplateInstantiator.instantiate] with `numericActions`, each numeric tap
    *   id with its contract action ([LauncherActions]); empty otherwise.
+   * @property taps for [TemplateInstantiator.instantiateForWear], the tap each `PendingIntent` index
+   *   stands for ([WearActions]); empty otherwise.
    */
-  data class Ok(val bytes: ByteArray, val actions: Map<Int, String> = emptyMap()) : InstantiateResult
+  data class Ok(val bytes: ByteArray, val actions: Map<Int, String> = emptyMap(), val taps: List<WidgetTap> = emptyList()) : InstantiateResult
   /** The template can't be written for this host; draw the native fallback and report why. */
   data class Failed(val reason: String) : InstantiateResult
 }
@@ -58,26 +65,67 @@ class TemplateInstantiator(
     imageHeightPx: Int,
     maxBytes: Long = Long.MAX_VALUE,
     numericActions: Boolean = false,
-  ): InstantiateResult = try {
-    val document = RcDocumentCodec.decode(template, RcWireLimits())
-    val fetched = LinkedHashMap<String, ByteArray>()
-    for (url in document.bitmapUrls.distinct()) {
-      val ref = imageRef(url, bindings) ?: return InstantiateResult.Failed("image $url has no value")
-      fetched[url] = images(ref, imageWidthPx, imageHeightPx) ?: return InstantiateResult.Failed("image $ref unavailable")
-    }
-    // rc-widget-core's bake: embeds the images, writes the values in, collapses the state layouts
-    // that became constant and optimises, exactly as rc-players' own widget hosts do.
-    val baked = RcWidgetDocuments.bake(document, hardcoded(bindings), fetched)
+  ): InstantiateResult = attempt {
+    val baked = bake(template, bindings, imageWidthPx, imageHeightPx)
     // A launcher's RemoteViews player sends numeric host actions only.
     val rewritten = if (numericActions) LauncherActions.rewrite(baked) else LauncherActions.Rewritten(baked, emptyMap())
-    val bytes = RcDocumentCodec.encode(rewritten.document)
-    if (bytes.size > maxBytes) InstantiateResult.Failed("${bytes.size} bytes, budget $maxBytes")
-    else InstantiateResult.Ok(bytes, rewritten.actions)
+    budgeted(RcDocumentCodec.encode(rewritten.document), maxBytes) { bytes -> InstantiateResult.Ok(bytes, rewritten.actions) }
+  }
+
+  /**
+   * [template] as the document for one Glance Wear widget: the slot's values and images written in
+   * (images asked at the container's size), then rc-widget-core's Wear instantiation for [frame] on
+   * a watch with [display] (the container's padding, corners and fill, density folded in, and the
+   * Wear widget profile's rewrites), then the taps made `PendingIntent`s ([WearActions]): the
+   * result's `taps[i]` is what `PendingIntent` index `i` must send.
+   *
+   * @param header the header Glance Wear writes for this widget's params, which the document takes.
+   * @param containerArgb the container's fill (a state tint); null keeps the template's own.
+   */
+  suspend fun instantiateForWear(
+    template: ByteArray,
+    bindings: Bindings,
+    frame: RcWearFrame,
+    display: RcDisplay,
+    header: RcHeader? = null,
+    containerArgb: Int? = null,
+    maxBytes: Long = Long.MAX_VALUE,
+  ): InstantiateResult = attempt {
+    val w = (frame.outerWidthDp * display.density).toInt()
+    val h = (frame.outerHeightDp * display.density).toInt()
+    val baked = bake(template, bindings, w, h)
+    val adapted = RcWearTemplates.instantiate(baked, frame, display, containerArgb = containerArgb, header = header)
+    if (!adapted.isPlayable) return@attempt InstantiateResult.Failed("not playable as a Wear widget: ${adapted.violations.take(3)}")
+    val rewritten = WearActions.rewrite(adapted.document)
+    budgeted(RcDocumentCodec.encode(rewritten.document), maxBytes) { bytes -> InstantiateResult.Ok(bytes, taps = rewritten.taps) }
+  }
+
+  private inline fun attempt(block: () -> InstantiateResult): InstantiateResult = try {
+    block()
   } catch (e: CancellationException) {
     throw e
+  } catch (e: ImageMissing) {
+    InstantiateResult.Failed(e.message!!)
   } catch (e: Exception) {
     InstantiateResult.Failed("not instantiable: ${e.message ?: e::class.simpleName}")
   }
+
+  private inline fun budgeted(bytes: ByteArray, maxBytes: Long, ok: (ByteArray) -> InstantiateResult): InstantiateResult =
+    if (bytes.size > maxBytes) InstantiateResult.Failed("${bytes.size} bytes, budget $maxBytes") else ok(bytes)
+
+  private suspend fun bake(template: ByteArray, bindings: Bindings, imageWidthPx: Int, imageHeightPx: Int): RcDocument {
+    val document = RcDocumentCodec.decode(template, RcWireLimits())
+    val fetched = LinkedHashMap<String, ByteArray>()
+    for (url in document.bitmapUrls.distinct()) {
+      val ref = imageRef(url, bindings) ?: throw ImageMissing("image $url has no value")
+      fetched[url] = images(ref, imageWidthPx, imageHeightPx) ?: throw ImageMissing("image $ref unavailable")
+    }
+    // rc-widget-core's bake: embeds the images, writes the values in, collapses the state layouts
+    // that became constant and optimises, exactly as rc-players' own widget hosts do.
+    return RcWidgetDocuments.bake(document, hardcoded(bindings), fetched)
+  }
+
+  private class ImageMissing(message: String) : Exception(message)
 
   companion object {
     const val VALUE_PREFIX: String = "livery:value/"

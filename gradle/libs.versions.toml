@@ -6,6 +6,8 @@ compose-multiplatform = "1.13.0-beta02"
 rc-players = "2.22.0"
 agp = "9.5.0"
 ktor = "3.6.1"
+# Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
+glance-wear = "1.0.0-alpha21"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
@@ -26,6 +28,8 @@ rc-player-edit = { module = "ee.schimke.composeai:rc-player-edit" }
 rc-widget-core = { module = "ee.schimke.composeai:rc-widget-core" }
 rc-widget-launcher = { module = "ee.schimke.composeai:rc-widget-launcher" }
 rc-player-protocol = { module = "ee.schimke.composeai:rc-player-protocol" }
+glance-wear = { module = "androidx.glance.wear:wear", version.ref = "glance-wear" }
+glance-wear-core = { module = "androidx.glance.wear:wear-core", version.ref = "glance-wear" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

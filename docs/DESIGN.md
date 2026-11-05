@@ -184,7 +184,7 @@ and schedulers are per platform:
 | `livery-instantiate` | KMP | writes a slot's values and images into a template for hosts that only play bytes (launcher, Glance Wear, snapshots), on rc-players' `RcWidgetDocuments.bake`, with Livery's image rules and byte budget |
 | `livery-android` *(planned)* | Android | the AndroidX View/Compose player, WorkManager refresh, file stores, image loading |
 | `livery-launcher-widgets` | Android 16+ | `LiveryLauncherWidgetProvider`, on rc-players' `rc-widget-launcher` (`RcWidgetSizing`, `RcLauncherWidgets.remoteViews`, `actionBroadcast`, `tapOf`). Taps: `livery-instantiate`'s `LauncherActions` rewrites a template's named actions to numeric ones (PROTOCOL.md §7), written to move into rc-widget-core beside its Wear `SendPendingIntent` rewrite. Per widget: per resize or data change, resolve the `launcher-widget` template for the cell, instantiate it with the app's data, hand it to `RemoteViews` draw instructions, map host actions to `PendingIntent`s; a `RemoteViews` fallback for older launchers |
-| `livery-wear-widgets` *(planned)* | Wear OS | on rc-widget-core's `RcWearTemplates` and `RcWearHost` frames. Glance Wear: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding and corner radius as named values, instantiated per widget; blobs synced from the phone over the Data Layer as content-addressed assets, or fetched by an LTE watch; bundled fallbacks on the watch |
+| `livery-wear-widgets` | Wear OS (Glance Wear) | `LiveryWearWidget : GlanceWearWidget`: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding, corners and fill as named values, instantiated per widget by `TemplateInstantiator.instantiateForWear` (bake, then rc-widget-core's `RcWearTemplates.instantiate` with the header of Glance Wear's own empty-container capture). Taps: `WearActions` gives each distinct constant-argument tap its own `SendPendingIntent` index (PROTOCOL.md §7), generalising rc-widget-core's single-index `toPendingIntent`; the app builds the `PendingIntent`s. *Planned:* blobs synced from the phone over the Data Layer as content-addressed assets (an LTE watch can run its own repository today) |
 | **`Livery` / `LiveryUI` Swift package** | iOS, macOS, watchOS, tvOS | a **native SwiftPM package** at the repository root, not a Kotlin export: Codable protocol types, the client on **`URLSession`** and **CryptoKit** Ed25519, file stores, decisions, and SwiftUI `LiveryTemplateView` / `LiverySlotView` over any player. The adapter for rc-players' pure Swift `RcNativePlayerUIKit` (`swift/Integrations/RcNativePlayer`) is a file an app adds beside its own player dependency, so depending on Livery never pulls in a player or the Compose XCFramework |
 | `@livery/web` *(planned)* | browsers | TypeScript client (fetch, `crypto.subtle`, Cache API / IndexedDB) and a `<livery-template>` element over rc-players' TypeScript player |
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
@@ -291,7 +291,8 @@ one producer among others.
    wired yet.
 4. **TypeScript port** over the same fixtures, so a browser can play the sample catalog.
 5. **`livery-android`**: the AndroidX View player, WorkManager refresh.
-6. **Widgets**: launcher instantiation and the Wear widget host, built on `rc-player-edit`.
+6. **Widgets**: launcher instantiation and the Wear widget host, built on `rc-widget-core`. *Done*,
+   not yet device-tested; phone-to-watch blob sync over the Data Layer is next.
 7. **Home Assistant migration** ([plan](migrating-homeassistant-remotecompose.md)).
 8. **`livery-server`** (with an image proxy) and **`livery-mcp`**.
 

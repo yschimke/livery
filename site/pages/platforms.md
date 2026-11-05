@@ -11,7 +11,7 @@ order: 24
 | `livery-launcher-widgets` | Android 16+ | Available; not yet device-tested in CI |
 | `Livery`, `LiveryUI` (Swift package) | iOS 15, macOS 12, watchOS 8, tvOS 15 | Available; CI on macOS |
 | `livery-publish` (`livery` CLI) | JVM | Available |
-| Wear widget host | Wear OS | Planned |
+| `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
 | `@livery/web` | Browsers | Planned |
 | `livery-server`, `livery-mcp` | JVM | Planned |
 
