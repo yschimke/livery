@@ -31,11 +31,27 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** A widget's cell, and the query its template is chosen with. */
-data class WidgetSlot(val widgetId: Int, val widthDp: Int, val heightDp: Int, val caps: PlayerCapabilities) {
-  fun query(contract: String, designId: String? = null): TemplateQuery =
-    TemplateQuery(contract, caps, widthDp = widthDp, heightDp = heightDp, designId = designId)
+data class WidgetSlot(
+  val widgetId: Int,
+  val widthDp: Int,
+  val heightDp: Int,
+  val caps: PlayerCapabilities,
+  /**
+   * True when the provider asks again because the chosen design couldn't be drawn: [query] then
+   * ignores its `designId`, so the plan falls back to the automatic design, never to nothing.
+   */
+  val automaticOnly: Boolean = false,
+) {
+  internal var namedDesign = false
+    private set
+
+  fun query(contract: String, designId: String? = null): TemplateQuery {
+    if (designId != null) namedDesign = true
+    return TemplateQuery(contract, caps, widthDp = widthDp, heightDp = heightDp, designId = designId.takeUnless { automaticOnly })
+  }
 }
 
 /**
@@ -74,8 +90,18 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val result = goAsync()
+    val provider = javaClass
     scope.launch {
-      try { updates.withLock { for (id in ids) update(context, manager, id) } } finally { result.finish() }
+      try {
+        val retries = Retries()
+        updates.withLock { for (id in ids) update(context, manager, id, retries) }
+        // Every widget is published (template or fallback) before anything is downloaded. What
+        // the renders lacked is fetched now, outside the update lock but inside this broadcast,
+        // which keeps the process alive; a widget whose downloads arrive is updated again.
+        withTimeoutOrNull(RETRY_BUDGET_MS) { retries.run(context.applicationContext, provider) }
+      } finally {
+        result.finish()
+      }
     }
   }
 
@@ -96,10 +122,10 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     }
   }
 
-  private suspend fun update(context: Context, manager: AppWidgetManager, id: Int) {
+  private suspend fun update(context: Context, manager: AppWidgetManager, id: Int, retries: Retries) {
     val views = runCatching {
       // Android 16 is the first whose launcher plays Remote Compose layouts in draw instructions.
-      if (Build.VERSION.SDK_INT >= RcLauncherWidgets.MIN_HOST_API && RcLauncherWidgets.isSupported) render(context, manager, id)
+      if (Build.VERSION.SDK_INT >= RcLauncherWidgets.MIN_HOST_API && RcLauncherWidgets.isSupported) render(context, manager, id, retries)
       else fallback(context, id, "launcher can't play Remote Compose")
     }
       .onFailure {
@@ -111,16 +137,35 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
   }
 
   @RequiresApi(RcLauncherWidgets.MIN_HOST_API)
-  private suspend fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews? {
+  private suspend fun render(context: Context, manager: AppWidgetManager, id: Int, retries: Retries): RemoteViews? {
     val size = RcWidgetSizing.slotOf(manager, id)
     val slot = WidgetSlot(id, size.widthDp, size.heightDp, capabilities(context))
+    val first = attempt(context, slot, retries)
+    if (first is Attempt.Drawn) return first.views
+    // A design the app chose that can't be drawn (a missing image, over budget) falls back to the
+    // automatic design, never to nothing. A decision's or feed item's template stays exact.
+    if (first is Attempt.Failed && first.appOwned && slot.namedDesign) {
+      val automatic = attempt(context, slot.copy(automaticOnly = true), retries)
+      if (automatic is Attempt.Drawn) return automatic.views
+    }
+    return fallback(context, id, (first as Attempt.Failed).reason)
+  }
+
+  private sealed interface Attempt {
+    class Drawn(val views: RemoteViews) : Attempt
+    class Failed(val reason: String, val appOwned: Boolean) : Attempt
+  }
+
+  @RequiresApi(RcLauncherWidgets.MIN_HOST_API)
+  private suspend fun attempt(context: Context, slot: WidgetSlot, retries: Retries): Attempt {
+    val id = slot.widgetId
     // Planning downloads nothing here (CacheOnly): a template not on the device yet is fetched
     // after this update, like a missing image below.
     val cacheOnly = CacheOnly()
     val plan = when (val p = withContext(cacheOnly) { plan(context, slot) }) {
       is PlanResult.Fallback -> {
-        retryAfter(context, id) { cacheOnly.misses > 0 && cacheOnly.fetchMissed() }
-        return fallback(context, id, p.reason)
+        if (cacheOnly.misses > 0) retries.add(id) { cacheOnly.fetchMissed() }
+        return Attempt.Failed(p.reason, appOwned = false)
       }
       is PlanResult.Ready -> p.plan
     }
@@ -134,30 +179,42 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     val ok = when (result) {
       is InstantiateResult.Failed -> {
         // An image not on the device yet: fetch it after this update, then draw the template.
-        retryAfter(context, id) { images.misses.isNotEmpty() && images.fetchMissed() }
-        return fallback(context, id, result.reason)
+        if (images.misses.isNotEmpty()) retries.add(id) { images.fetchMissed() }
+        return Attempt.Failed(result.reason, appOwned = plan.decision == null && plan.feedItem == null)
       }
       is InstantiateResult.Ok -> result
     }
     val taps = ok.actions.mapValues { (actionId, action) -> RcLauncherWidgets.actionBroadcast(context, javaClass, id, actionId, action) }
     // No Impression: publishing isn't drawing, and a launcher doesn't say when (or whether) the
     // widget is on screen (PROTOCOL.md §8).
-    return RcLauncherWidgets.remoteViews(ok.bytes, taps)
+    return Attempt.Drawn(RcLauncherWidgets.remoteViews(ok.bytes, taps))
   }
 
-  /**
-   * Runs [fetch] off this update, outside the update lock, and updates [id] again when it got
-   * something. A new broadcast, not onUpdate: this receiver's goAsync result is already taken.
-   */
-  private fun retryAfter(context: Context, id: Int, fetch: suspend () -> Boolean) {
-    val app = context.applicationContext
-    val provider = javaClass
-    scope.launch { if (runCatching { fetch() }.getOrDefault(false)) requestUpdate(app, provider, intArrayOf(id)) }
+  /** Downloads an update's renders skipped, by widget, run after every widget is published. */
+  private class Retries {
+    private val fetches = ArrayList<Pair<Int, suspend () -> Boolean>>()
+
+    fun add(id: Int, fetch: suspend () -> Boolean) { fetches += id to fetch }
+
+    /** Runs each fetch, then asks for one new update of the widgets whose downloads all arrived. */
+    suspend fun run(context: Context, provider: Class<out AppWidgetProvider>) {
+      if (fetches.isEmpty()) return
+      val ok = fetches.groupBy({ it.first }, { it.second })
+        .filterValues { fs -> fs.all { f -> runCatching { f() }.getOrDefault(false) } }.keys
+      // A new broadcast, not onUpdate: this receiver's goAsync result is in use.
+      if (ok.isNotEmpty()) requestUpdate(context, provider, ok.toIntArray())
+    }
   }
 
   companion object {
     /** About what launchers accept comfortably for a widget document. */
     const val DEFAULT_MAX_BYTES: Long = 50_000
+
+    /**
+     * How long an update keeps its broadcast open to fetch what its renders lacked, after every
+     * widget is published; anything slower waits for the next update.
+     */
+    const val RETRY_BUDGET_MS: Long = 7_000
     private const val TAG = "LiveryWidget"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val updates = Mutex()

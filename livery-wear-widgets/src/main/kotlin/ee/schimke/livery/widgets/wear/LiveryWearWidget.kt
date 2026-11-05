@@ -41,9 +41,23 @@ import kotlinx.coroutines.withContext
  * A widget's container on this watch, and the query its template is chosen with: the container
  * type is the template's `wear:small` / `wear:large` target, its content size the size it fits.
  */
-data class WearWidgetSlot(val instanceId: Int, val frame: RcWearFrame, val caps: PlayerCapabilities) {
-  fun query(contract: String, designId: String? = null): TemplateQuery =
-    TemplateQuery(contract, caps, widthDp = frame.widthDp.toInt(), heightDp = frame.heightDp.toInt(), designId = designId)
+data class WearWidgetSlot(
+  val instanceId: Int,
+  val frame: RcWearFrame,
+  val caps: PlayerCapabilities,
+  /**
+   * True when the widget asks again because the chosen design couldn't be drawn: [query] then
+   * ignores its `designId`, so the plan falls back to the automatic design, never to nothing.
+   */
+  val automaticOnly: Boolean = false,
+) {
+  internal var namedDesign = false
+    private set
+
+  fun query(contract: String, designId: String? = null): TemplateQuery {
+    if (designId != null) namedDesign = true
+    return TemplateQuery(contract, caps, widthDp = frame.widthDp.toInt(), heightDp = frame.heightDp.toInt(), designId = designId.takeUnless { automaticOnly })
+  }
 
   companion object {
     fun containerOf(type: RcWearContainerType): String = when (type) {
@@ -142,17 +156,30 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       val header = RcDocumentCodec.decode(empty.rcDocument, RcWireLimits()).header
       val resources = context.resources
       val display = RcDisplay(resources.displayMetrics.density, resources.configuration.fontScale)
-      val images = CachedImages(images(context))
-      val result = images.instantiator.instantiateForWear(
-        plan.template.bytes, plan.bindings, slot.frame, display,
-        header = header, containerArgb = containerArgb(context, slot), maxBytes = slot.caps.maxBytes,
-      )
+      suspend fun instantiate(p: RenderPlan): InstantiateResult {
+        val images = CachedImages(images(context))
+        val r = images.instantiator.instantiateForWear(
+          p.template.bytes, p.bindings, slot.frame, display,
+          header = header, containerArgb = containerArgb(context, slot), maxBytes = slot.caps.maxBytes,
+        )
+        // An image not on the watch yet: fetch it after this render, then draw the template.
+        if (r is InstantiateResult.Failed && !isPreview && images.misses.isNotEmpty()) retryAfter(context, params) { images.fetchMissed() }
+        return r
+      }
+      var result = instantiate(plan)
+      // A design the app chose that can't be drawn falls back to the automatic design, never to
+      // nothing. A decision's or feed item's template stays exact.
+      if (result is InstantiateResult.Failed && plan.decision == null && plan.feedItem == null && slot.namedDesign) {
+        val automatic = runCatching { withContext(CacheOnly()) { plan(context, slot.copy(automaticOnly = true)) } }.getOrNull()
+        if (automatic is PlanResult.Ready) {
+          val retried = instantiate(automatic.plan)
+          if (retried is InstantiateResult.Ok) result = retried
+        }
+      }
       val ok = when (result) {
         is InstantiateResult.Failed -> {
           Log.w(TAG, "widget ${slot.instanceId}: ${result.reason}")
           events.emit(event(TemplateEvent.Type.Fallback, result.reason))
-          // An image not on the watch yet: fetch it after this render, then draw the template.
-          if (!isPreview) retryAfter(context, params) { images.misses.isNotEmpty() && images.fetchMissed() }
           return fallback(context, slot, result.reason).captureRawContent(context, params, isPreview)
         }
         is InstantiateResult.Ok -> result
