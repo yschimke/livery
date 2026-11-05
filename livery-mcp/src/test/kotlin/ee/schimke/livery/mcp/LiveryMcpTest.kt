@@ -175,4 +175,17 @@ class LiveryMcpTest {
     assertEquals(listOf("state"), v["sidecar"]!!.jsonObject["reads"]!!.jsonArray.map { it.jsonPrimitive.content })
     assertFalse(call("publish_preview", "contract" to "live/status-tile@1", "rc_base64" to b64).isError(), "and a preview of it builds")
   }
+
+  @Test fun historyWhenTheCatalogIsASubdirectoryOfTheCheckout() {
+    val repo = Files.createTempDirectory("repo").toFile()
+    val catalog = File(repo, "catalogs/main").also { File("../samples/catalog").copyRecursively(it) }
+    fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", repo.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
+      .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
+    git("init", "-q"); git("add", "."); git("commit", "-qm", "add catalog")
+    val first = git("rev-parse", "HEAD").trim()
+    val sub = LiveryMcp(SourceTree(catalog))
+    val h = Json.parseToJsonElement(sub.call("list_history", args("design" to "tile-default", "template" to "in-app")).text()).jsonArray.single().jsonObject
+    assertEquals(listOf("add catalog"), h["changes"]!!.jsonArray.map { it.jsonObject["subject"]!!.jsonPrimitive.content })
+    assertFalse(sub.call("render_preview", args("design" to "tile-default", "template" to "in-app", "revision" to first)).isError())
+  }
 }

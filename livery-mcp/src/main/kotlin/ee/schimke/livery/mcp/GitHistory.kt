@@ -16,7 +16,7 @@ class GitHistory(private val root: File) {
 
   /** Commits that changed [file] (newest first), following renames. */
   fun log(file: File, limit: Int = 20): List<Change> =
-    git("log", "--follow", "-n", limit.coerceIn(1, 100).toString(), "--format=%H%x1f%ct%x1f%an%x1f%s", "--", rel(file))
+    git("log", "--follow", "-n", limit.coerceIn(1, 100).toString(), "--format=%H%x1f%ct%x1f%an%x1f%s", "--", ":(top)${rel(file)}")
       ?.lines()?.filter { it.isNotBlank() }?.mapNotNull { line ->
         val p = line.split('\u001f')
         if (p.size < 4) null else Change(p[0], p[1].toLongOrNull() ?: 0, p[2], p[3])
@@ -28,6 +28,11 @@ class GitHistory(private val root: File) {
     return gitBytes("show", "$revision:${rel(file)}")
   }
 
+  /**
+   * [file]'s path from the repository's top: what `git show <rev>:<path>` takes, and what a
+   * `:(top)` pathspec anchors there whatever directory git runs in (the catalog may be a
+   * subdirectory of the checkout).
+   */
   private fun rel(file: File): String {
     val top = git("rev-parse", "--show-toplevel")?.trim()?.let(::File) ?: root
     return file.canonicalFile.relativeTo(top.canonicalFile).path
