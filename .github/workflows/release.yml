@@ -80,14 +80,16 @@ jobs:
           manifest-file: .release-please-manifest.json
           skip-github-pull-request: true
 
-      # A draft release has no tag until it is published, and `publish` checks the tag out.
+      # A draft release has no tag until it is published, and `publish` checks the tag out. The tag
+      # goes on the commit release-please released (the release PR's merge), which a later push
+      # that picks up an unreleased merged PR is not.
       - name: Ensure the release tag exists for the draft
         if: ${{ !cancelled() && steps.release.outputs.release_created == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag_name }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.release.outputs.sha || github.sha }}
         run: |
           set -euo pipefail
           if sha=$(gh api "repos/{owner}/{repo}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null); then
