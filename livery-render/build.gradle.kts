@@ -12,10 +12,16 @@ kotlin {
   sourceSets {
     jvmMain.dependencies {
       api(project(":livery-compose"))
-      // Skia's native library for the machine this runs on (CI, a developer's laptop, a server).
+      // Platform-neutral: Skia's natives for every desktop platform come with Compose's
+      // skiko-awt-runtime-all, so the published library (and livery-mcp's zip, built on Linux)
+      // renders on Linux, macOS and Windows. Never compose.desktop.currentOs here: it would publish
+      // the build machine's platform as everyone's.
+      api(compose.desktop.common)
+    }
+    jvmTest.dependencies {
+      implementation(kotlin("test"))
       implementation(compose.desktop.currentOs)
     }
-    jvmTest.dependencies { implementation(kotlin("test")) }
   }
 }
 
