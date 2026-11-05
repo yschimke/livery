@@ -50,4 +50,12 @@ class TemplateInspectorTest {
     val c = Contract("ha/tile", 1, lists = mapOf("light.kitchen" to ListSpec(emptyMap(), max = 2)))
     assertEquals(listOf("reads 'light.kitchen.count' as a string, but ha/tile@1 declares int"), TemplateInspector.typeProblems(withCount, c))
   }
+
+  @Test fun aDataBoundImageMustBeAnImage() {
+    val d = RcDocumentCodec.decode(tile, RcWireLimits())
+    val bytes = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "livery:value/hero".encodeToByteArray())) + d.operations))
+    val c = Contract("ha/tile", 1, inputs = mapOf("hero" to InputSpec(ValueType.String)))
+    assertEquals(listOf("reads 'hero' as an image, but ha/tile@1 declares string"), TemplateInspector.typeProblems(bytes, c))
+    assertEquals(emptyList(), TemplateInspector.typeProblems(bytes, c.copy(inputs = mapOf("hero" to InputSpec(ValueType.Image)))))
+  }
 }

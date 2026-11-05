@@ -40,7 +40,8 @@ object TemplateInspector {
     // value, but the slot's binding for that input is what it draws.
     val images = d.bitmapUrls.filter { it.startsWith(TemplateInstantiator.VALUE_PREFIX) }.map { it.removePrefix(TemplateInstantiator.VALUE_PREFIX) }
     val named = d.namedVariables.associate { it.name.removePrefix("USER:") to it.type }
-    TemplateFacts(template.size, (named.keys + images).toSet(), RcHostActionRewrites.actionNames(d), named)
+    // A data-bound image is drawn from an image binding, so its input must be an image.
+    TemplateFacts(template.size, (named.keys + images).toSet(), RcHostActionRewrites.actionNames(d), images.associateWith { RcNamedVariable.IMAGE_TYPE } + named)
   }.getOrNull()
 
   /**
