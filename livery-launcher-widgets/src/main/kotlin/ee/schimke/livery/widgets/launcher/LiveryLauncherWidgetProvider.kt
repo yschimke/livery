@@ -13,6 +13,7 @@ import androidx.annotation.RequiresApi
 import ee.schimke.composeai.rcwidget.launcher.RcLauncherWidgets
 import ee.schimke.composeai.rcwidget.launcher.RcWidgetSizing
 import ee.schimke.livery.client.ActionArguments
+import ee.schimke.livery.client.CacheOnly
 import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.TemplateQuery
@@ -29,6 +30,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** A widget's cell, and the query its template is chosen with. */
 data class WidgetSlot(val widgetId: Int, val widthDp: Int, val heightDp: Int, val caps: PlayerCapabilities) {
@@ -112,8 +114,14 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
   private suspend fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews? {
     val size = RcWidgetSizing.slotOf(manager, id)
     val slot = WidgetSlot(id, size.widthDp, size.heightDp, capabilities(context))
-    val plan = when (val p = plan(context, slot)) {
-      is PlanResult.Fallback -> return fallback(context, id, p.reason)
+    // Planning downloads nothing here (CacheOnly): a template not on the device yet is fetched
+    // after this update, like a missing image below.
+    val cacheOnly = CacheOnly()
+    val plan = when (val p = withContext(cacheOnly) { plan(context, slot) }) {
+      is PlanResult.Fallback -> {
+        retryAfter(context, id) { cacheOnly.misses > 0 && cacheOnly.fetchMissed() }
+        return fallback(context, id, p.reason)
+      }
       is PlanResult.Ready -> p.plan
     }
     val density = context.resources.displayMetrics.density
@@ -126,12 +134,7 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     val ok = when (result) {
       is InstantiateResult.Failed -> {
         // An image not on the device yet: fetch it after this update, then draw the template.
-        // A new broadcast, not onUpdate: this receiver's goAsync result is already taken.
-        if (images.misses.isNotEmpty()) {
-          val app = context.applicationContext
-          val provider = this@LiveryLauncherWidgetProvider.javaClass
-          scope.launch { if (images.fetchMissed()) requestUpdate(app, provider, intArrayOf(id)) }
-        }
+        retryAfter(context, id) { images.misses.isNotEmpty() && images.fetchMissed() }
         return fallback(context, id, result.reason)
       }
       is InstantiateResult.Ok -> result
@@ -140,6 +143,16 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     // No Impression: publishing isn't drawing, and a launcher doesn't say when (or whether) the
     // widget is on screen (PROTOCOL.md §8).
     return RcLauncherWidgets.remoteViews(ok.bytes, taps)
+  }
+
+  /**
+   * Runs [fetch] off this update, outside the update lock, and updates [id] again when it got
+   * something. A new broadcast, not onUpdate: this receiver's goAsync result is already taken.
+   */
+  private fun retryAfter(context: Context, id: Int, fetch: suspend () -> Boolean) {
+    val app = context.applicationContext
+    val provider = javaClass
+    scope.launch { if (runCatching { fetch() }.getOrDefault(false)) requestUpdate(app, provider, intArrayOf(id)) }
   }
 
   companion object {

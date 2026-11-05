@@ -2,6 +2,7 @@ package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.ManifestSignature
+import ee.schimke.livery.protocol.TemplateRef
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -115,6 +116,21 @@ class RepositoryTest {
     assertEquals(2, r.revision.value)
     r.uninstall("tile-retro")
     assertEquals(3, r.revision.value)
+  }
+
+  @Test fun cacheOnlyEnsureDownloadsNothingAndRecordsTheMiss() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    val retro = Fx.manifest().templates.first { it.designId == "tile-retro" && it.target == Fx.inAppV7 }
+    val ref = TemplateRef(sha256 = retro.sha256)
+    val before = host.requests.size
+    val cacheOnly = CacheOnly()
+    assertNull(kotlinx.coroutines.withContext(cacheOnly) { r.ensure(ref, q) }, "not on the device: unavailable now")
+    assertEquals(before, host.requests.size, "and nothing was fetched")
+    assertEquals(1, cacheOnly.misses)
+    assertTrue(cacheOnly.fetchMissed(), "fetched off the render path")
+    assertNotNull(kotlinx.coroutines.withContext(CacheOnly()) { r.ensure(ref, q) }, "the next render plays it")
   }
 
   @Test fun revisionMovesWhenARetryDownloadsWhatAnEarlierRefreshMissed() = runTest {

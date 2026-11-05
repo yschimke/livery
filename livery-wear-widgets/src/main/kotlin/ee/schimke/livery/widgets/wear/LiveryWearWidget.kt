@@ -17,6 +17,7 @@ import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import ee.schimke.composeai.rcwidget.RcWearContainerType
 import ee.schimke.composeai.rcwidget.RcWearFrame
+import ee.schimke.livery.client.CacheOnly
 import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RenderPlan
@@ -34,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * A widget's container on this watch, and the query its template is chosen with: the container
@@ -108,8 +110,11 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
   override suspend fun provideWidgetData(context: Context, params: WearWidgetParams): WearWidgetData {
     val frame = frameOf(params)
     val slot = WearWidgetSlot(params.instanceId.id, frame, capabilities(context, WearWidgetSlot.containerOf(frame.type)))
+    // Planning downloads nothing here (CacheOnly): a template not on the watch yet is fetched
+    // after this render, like a missing image at capture.
+    val cacheOnly = CacheOnly()
     val plan = try {
-      plan(context, slot)
+      withContext(cacheOnly) { plan(context, slot) }
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
@@ -117,7 +122,10 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       return fallback(context, slot, e.message ?: "plan failed")
     }
     return when (plan) {
-      is PlanResult.Fallback -> fallback(context, slot, plan.reason)
+      is PlanResult.Fallback -> {
+        retryAfter(context, params) { cacheOnly.misses > 0 && cacheOnly.fetchMissed() }
+        fallback(context, slot, plan.reason)
+      }
       is PlanResult.Ready -> TemplateData(slot, plan.plan)
     }
   }
@@ -144,10 +152,7 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
           Log.w(TAG, "widget ${slot.instanceId}: ${result.reason}")
           events.emit(event(TemplateEvent.Type.Fallback, result.reason))
           // An image not on the watch yet: fetch it after this render, then draw the template.
-          if (images.misses.isNotEmpty() && !isPreview) {
-            val app = context.applicationContext
-            scope.launch { if (images.fetchMissed()) runCatching { triggerUpdate(app, params.instanceId) } }
-          }
+          if (!isPreview) retryAfter(context, params) { images.misses.isNotEmpty() && images.fetchMissed() }
           return fallback(context, slot, result.reason).captureRawContent(context, params, isPreview)
         }
         is InstantiateResult.Ok -> result
@@ -167,6 +172,14 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       type, System.currentTimeMillis(), plan.decision?.placement, plan.decision?.decisionId,
       plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, detail = detail,
     )
+  }
+
+  /** Runs [fetch] off this render, and asks the host to render [params]' widget again when it got something. */
+  private fun retryAfter(context: Context, params: WearWidgetParams, fetch: suspend () -> Boolean) {
+    val app = context.applicationContext
+    scope.launch {
+      if (runCatching { fetch() }.getOrDefault(false)) runCatching { triggerUpdate(app, params.instanceId) }
+    }
   }
 
   companion object {

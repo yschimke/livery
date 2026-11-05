@@ -18,7 +18,7 @@ render the widget:
 1. asks you for a plan for the widget's container (`WearWidgetSlot`: its type, size, padding and
    corner radius as the host reports them);
 2. writes the values and images into the template (`livery-instantiate`). Renders never wait on
-   the network: an image that isn't on the watch yet draws your fallback, is fetched in the
+   the network: a template or image that isn't on the watch yet draws your fallback, is fetched in the
    background, and the widget is asked to render again;
 3. frames it in the container: the container's padding, corners and fill go into the template's
    `wear.container.*` named values, the watch's density and font scale are folded in, and anything

@@ -13,6 +13,7 @@ import ee.schimke.livery.protocol.TemplateRef
 import ee.schimke.livery.protocol.fits
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -212,7 +213,8 @@ class TemplateRepository(
   private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 
   /**
-   * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand).
+   * Resolves a feed item's or decision's reference, downloading the blob if needed (on-demand;
+   * never inside [CacheOnly], where a missing blob is recorded and the answer is null).
    *
    * An exact reference ([TemplateRef.sha256]) is played exactly or not at all: it must be in the
    * manifest, live, and pass the same eligibility checks as selection ([TemplateSelector.eligible]),
@@ -350,6 +352,12 @@ class TemplateRepository(
    * out without its fonts and images.
    */
   private suspend fun obtain(m: Manifest, e: TemplateEntry): ByteArray? {
+    // A render on a deadline: download nothing, and tell the host what to fetch afterwards.
+    currentCoroutineContext()[CacheOnly]?.let { cacheOnly ->
+      val complete = blobs.get(e.sha256)?.takeIf { e.assets.all { blobs.get(it) != null } }
+      if (complete == null) cacheOnly.miss { obtain(m, e) != null }
+      return complete
+    }
     for (sha in e.assets) {
       if (blobs.get(sha) != null) continue
       val a = m.asset(sha) ?: return null
