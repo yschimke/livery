@@ -64,9 +64,12 @@ object TemplateInspector {
   fun typeProblems(template: ByteArray, contract: Contract): List<String> {
     val f = facts(template) ?: return listOf("not a Remote Compose document")
     return f.types.entries.sortedBy { it.key }.mapNotNull { (name, rcType) ->
-      val spec = ContractEvolution.specOf(contract, name) ?: return@mapNotNull null
-      val ok = RC_TYPES[spec.type] ?: return@mapNotNull null
-      if (rcType in ok) null else "reads '$name' as ${rcTypeName(rcType)}, but ${contract.ref} declares ${spec.type.name.lowercase()}"
+      // A list's count is always bound as an int (PROTOCOL.md §4.1).
+      val type = ContractEvolution.specOf(contract, name)?.type
+        ?: ValueType.Int.takeIf { contract.lists.keys.any { name == "$it.count" } }
+        ?: return@mapNotNull null
+      val ok = RC_TYPES[type] ?: return@mapNotNull null
+      if (rcType in ok) null else "reads '$name' as ${rcTypeName(rcType)}, but ${contract.ref} declares ${type.name.lowercase()}"
     }
   }
 

@@ -58,7 +58,11 @@ object ContractEvolution {
       check(n, l.since, required = false)
       for ((f, s) in l.item) check("$n.$f", maxOf(l.since, s.since), s.required && s.since > l.since)
     }
-    for ((n, a) in c.actions) check("actions.$n", a.since, required = false)
+    for ((n, a) in c.actions) {
+      check("actions.$n", a.since, required = false)
+      // An argument added after its action follows the input rules: it may not be required.
+      for ((arg, s) in a.args) check("actions.$n.args.$arg", maxOf(a.since, s.since), s.required && s.since > a.since)
+    }
   }
 
   /**

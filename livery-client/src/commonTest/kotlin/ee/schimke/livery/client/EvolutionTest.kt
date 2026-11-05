@@ -95,4 +95,17 @@ class EvolutionTest {
     val optionalArg = withArg.copy(minor = 2, actions = mapOf("open" to ActionSpec("navigate", args = withArg.actions.getValue("open").args + ("tab" to InputSpec(ValueType.String, since = 2)))))
     assertEquals(emptyList(), breakingFrom(optionalArg))
   }
+
+  @Test fun actionArgsAreCheckedOnTheirOwn() {
+    val c = v1.copy(actions = mapOf("open" to ActionSpec("navigate", args = mapOf(
+      "later" to InputSpec(ValueType.String, since = 2),
+      "late" to InputSpec(ValueType.String, since = 1, required = true),
+    ))))
+    val problems = ContractEvolution.problems(c)
+    assertEquals(2, problems.size, problems.toString())
+    assertTrue(problems.any { it.startsWith("actions.open.args.later:") } && problems.any { it.startsWith("actions.open.args.late:") })
+    // An action added with its required args in the same minor is fine.
+    val fresh = v1.copy(minor = 2, actions = mapOf("share" to ActionSpec("share", since = 2, args = mapOf("to" to InputSpec(ValueType.String, required = true, since = 2)))))
+    assertEquals(emptyList(), ContractEvolution.problems(fresh))
+  }
 }

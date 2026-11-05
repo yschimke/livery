@@ -2,9 +2,11 @@ package ee.schimke.livery.instantiate
 
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
+import ee.schimke.composeai.rcplayer.protocol.RcNamedVariable
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.InputSpec
+import ee.schimke.livery.protocol.ListSpec
 import ee.schimke.livery.protocol.ValueType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,5 +39,15 @@ class TemplateInspectorTest {
     assertEquals(emptyList(), TemplateInspector.typeProblems(tile, right))
     val wrong = right.copy(inputs = right.inputs + ("light.kitchen.state" to InputSpec(ValueType.Float)))
     assertEquals(listOf("reads 'light.kitchen.state' as a string, but ha/tile@1 declares float"), TemplateInspector.typeProblems(tile, wrong))
+  }
+
+  @Test fun aListCountIsAnInt() {
+    // Rename the tile's string value to a list's count: the binder always writes an int there.
+    val d = RcDocumentCodec.decode(tile, RcWireLimits())
+    val withCount = RcDocumentCodec.encode(d.copy(operations = d.operations.map {
+      if (it is RcNamedVariable && it.name == "USER:light.kitchen.state") it.copy(name = "USER:light.kitchen.count") else it
+    }))
+    val c = Contract("ha/tile", 1, lists = mapOf("light.kitchen" to ListSpec(emptyMap(), max = 2)))
+    assertEquals(listOf("reads 'light.kitchen.count' as a string, but ha/tile@1 declares int"), TemplateInspector.typeProblems(withCount, c))
   }
 }
