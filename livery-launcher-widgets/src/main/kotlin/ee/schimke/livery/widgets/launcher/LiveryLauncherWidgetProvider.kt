@@ -16,8 +16,9 @@ import ee.schimke.livery.client.ActionArguments
 import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.TemplateQuery
+import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.instantiate.CachedImages
 import ee.schimke.livery.instantiate.InstantiateResult
-import ee.schimke.livery.instantiate.TemplateInstantiator
 import ee.schimke.livery.instantiate.WidgetTap
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
@@ -42,6 +43,7 @@ data class WidgetSlot(val widgetId: Int, val widthDp: Int, val heightDp: Int, va
  * For each widget, on update and on resize: [plan] chooses the template and data for the widget's
  * cell (usually `SlotPlanner.forAppData` / `forDecision` with [WidgetSlot.query]); the template is
  * instantiated for that size (values and images written in, taps made numeric) and published.
+ * Nothing in an update waits on the network: images come from the device ([CachedImages]).
  * Taps arrive as [WidgetTap]s in [onTap], with the contract action and its arguments.
  *
  * Updates run one at a time per process, off the main thread, inside `goAsync`.
@@ -50,8 +52,11 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
   /** The template and data for this widget, or a fallback. */
   protected abstract suspend fun plan(context: Context, slot: WidgetSlot): PlanResult
 
-  /** Writes values and images in; usually `TemplateInstantiator(imageResolver)`. */
-  protected abstract fun instantiator(context: Context): TemplateInstantiator
+  /**
+   * The app's image resolver. A render draws only images already on the device; one that lacks an
+   * image draws [fallback], fetches it in the background, and renders again.
+   */
+  protected abstract fun images(context: Context): ImageResolver
 
   /** A tap on a published widget. */
   protected abstract suspend fun onTap(context: Context, widgetId: Int, tap: WidgetTap)
@@ -112,13 +117,18 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
       is PlanResult.Ready -> p.plan
     }
     val density = context.resources.displayMetrics.density
-    val result = instantiator(context).instantiate(
+    val images = CachedImages(images(context))
+    val result = images.instantiator.instantiate(
       plan.template.bytes, plan.bindings,
       imageWidthPx = (slot.widthDp * density).toInt(), imageHeightPx = (slot.heightDp * density).toInt(),
       maxBytes = slot.caps.maxBytes, numericActions = true,
     )
     val ok = when (result) {
-      is InstantiateResult.Failed -> return fallback(context, id, result.reason)
+      is InstantiateResult.Failed -> {
+        // An image not on the device yet: fetch it after this update, then draw the template.
+        if (images.misses.isNotEmpty()) scope.launch { if (images.fetchMissed()) onUpdate(context, manager, intArrayOf(id)) }
+        return fallback(context, id, result.reason)
+      }
       is InstantiateResult.Ok -> result
     }
     val taps = ok.actions.mapValues { (actionId, action) -> RcLauncherWidgets.actionBroadcast(context, javaClass, id, actionId, action) }

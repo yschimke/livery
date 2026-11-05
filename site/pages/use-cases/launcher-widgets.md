@@ -14,7 +14,9 @@ older launchers get your fallback. Built on rc-players' `rc-widget-launcher`.
 A launcher can't receive pushed values, so on every update and resize the provider:
 
 1. asks you for a plan for the widget's cell (`WidgetSlot` with its dp size);
-2. writes the values and images into the template (`livery-instantiate`);
+2. writes the values and images into the template (`livery-instantiate`). Updates never wait on
+   the network: an image that isn't on the device yet draws your fallback, is fetched in the
+   background, and the widget updates again;
 3. rewrites the template's named taps into the numeric actions a launcher sends;
 4. publishes the result.
 
@@ -38,7 +40,7 @@ class TileWidget : LiveryLauncherWidgetProvider() {
   override suspend fun plan(context: Context, slot: WidgetSlot): PlanResult =
     app(context).planner.forAppData(slot.query("live/status-tile@1"), app(context).tileData())
 
-  override fun instantiator(context: Context) = TemplateInstantiator(app(context).images)
+  override fun images(context: Context) = app(context).images // an ImageResolver
 
   override suspend fun onTap(context: Context, widgetId: Int, tap: WidgetTap) {
     if (tap.action == "toggle") app(context).toggle()

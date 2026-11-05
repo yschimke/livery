@@ -116,10 +116,13 @@ class TemplateInstantiator(
   private suspend fun bake(template: ByteArray, bindings: Bindings, imageWidthPx: Int, imageHeightPx: Int): RcDocument {
     val document = RcDocumentCodec.decode(template, RcWireLimits())
     val fetched = LinkedHashMap<String, ByteArray>()
+    val missing = ArrayList<String>()
     for (url in document.bitmapUrls.distinct()) {
       val ref = imageRef(url, bindings) ?: throw ImageMissing("image $url has no value")
-      fetched[url] = images(ref, imageWidthPx, imageHeightPx) ?: throw ImageMissing("image $ref unavailable")
+      // Every image is asked for, even after a miss, so a cache-only source learns all it lacks.
+      images(ref, imageWidthPx, imageHeightPx)?.let { fetched[url] = it } ?: missing.add(ref)
     }
+    if (missing.isNotEmpty()) throw ImageMissing("image ${missing.joinToString()} unavailable")
     // rc-widget-core's bake: embeds the images, writes the values in, collapses the state layouts
     // that became constant and optimises, exactly as rc-players' own widget hosts do.
     return RcWidgetDocuments.bake(document, hardcoded(bindings), fetched)

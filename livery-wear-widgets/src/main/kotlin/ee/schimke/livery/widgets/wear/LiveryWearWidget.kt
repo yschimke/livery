@@ -21,14 +21,19 @@ import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.TemplateQuery
+import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.instantiate.CachedImages
 import ee.schimke.livery.instantiate.InstantiateResult
-import ee.schimke.livery.instantiate.TemplateInstantiator
 import ee.schimke.livery.instantiate.WidgetTap
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEvent
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * A widget's container on this watch, and the query its template is chosen with: the container
@@ -68,8 +73,11 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
   /** The template and data for this widget, or a fallback. */
   protected abstract suspend fun plan(context: Context, slot: WearWidgetSlot): PlanResult
 
-  /** Writes values and images in; usually `TemplateInstantiator(imageResolver)`. */
-  protected abstract fun instantiator(context: Context): TemplateInstantiator
+  /**
+   * The app's image resolver. A render draws only images already on the watch; one that lacks an
+   * image draws [fallback], fetches it in the background, and asks the host to render again.
+   */
+  protected abstract fun images(context: Context): ImageResolver
 
   /**
    * The `PendingIntent` a tap sends: usually a broadcast or an activity in the app that runs
@@ -126,7 +134,8 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       val header = RcDocumentCodec.decode(empty.rcDocument, RcWireLimits()).header
       val resources = context.resources
       val display = RcDisplay(resources.displayMetrics.density, resources.configuration.fontScale)
-      val result = instantiator(context).instantiateForWear(
+      val images = CachedImages(images(context))
+      val result = images.instantiator.instantiateForWear(
         plan.template.bytes, plan.bindings, slot.frame, display,
         header = header, containerArgb = containerArgb(context, slot), maxBytes = slot.caps.maxBytes,
       )
@@ -134,6 +143,11 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
         is InstantiateResult.Failed -> {
           Log.w(TAG, "widget ${slot.instanceId}: ${result.reason}")
           events.emit(event(TemplateEvent.Type.Fallback, result.reason))
+          // An image not on the watch yet: fetch it after this render, then draw the template.
+          if (images.misses.isNotEmpty() && !isPreview) {
+            val app = context.applicationContext
+            scope.launch { if (images.fetchMissed()) runCatching { triggerUpdate(app, params.instanceId) } }
+          }
           return fallback(context, slot, result.reason).captureRawContent(context, params, isPreview)
         }
         is InstantiateResult.Ok -> result
@@ -168,6 +182,7 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
     /** A Wear widget document's comfortable size. */
     const val DEFAULT_MAX_BYTES: Long = 100_000
     private const val TAG = "LiveryWearWidget"
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** The host's frame for [params], as rc-widget-core reads it. */
     fun frameOf(params: WearWidgetParams): RcWearFrame = RcWearFrame(

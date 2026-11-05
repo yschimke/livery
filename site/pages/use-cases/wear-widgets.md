@@ -17,7 +17,9 @@ render the widget:
 
 1. asks you for a plan for the widget's container (`WearWidgetSlot`: its type, size, padding and
    corner radius as the host reports them);
-2. writes the values and images into the template (`livery-instantiate`);
+2. writes the values and images into the template (`livery-instantiate`). Renders never wait on
+   the network: an image that isn't on the watch yet draws your fallback, is fetched in the
+   background, and the widget is asked to render again;
 3. frames it in the container: the container's padding, corners and fill go into the template's
    `wear.container.*` named values, the watch's density and font scale are folded in, and anything
    the Wear widget player can't read is rewritten (rc-players' `RcWearTemplates.instantiate`);
@@ -49,7 +51,7 @@ abstract class TileWidget : LiveryWearWidget() {
   override suspend fun plan(context: Context, slot: WearWidgetSlot): PlanResult =
     app(context).planner.forAppData(slot.query("live/status-tile@1"), app(context).tileData())
 
-  override fun instantiator(context: Context) = TemplateInstantiator(app(context).images)
+  override fun images(context: Context) = app(context).images // an ImageResolver
 
   override fun tapIntent(context: Context, instanceId: Int, index: Int, tap: WidgetTap): PendingIntent =
     PendingIntent.getBroadcast(
