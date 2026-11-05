@@ -9,7 +9,11 @@ plugins {
 android {
   namespace = "ee.schimke.livery.widgets.wear"
   compileSdk { version = release(37) { minorApiLevel = 1 } }
-  defaultConfig { minSdk = 30 }
+  defaultConfig {
+    minSdk = 30
+    // Built against 37.1 for its dependencies; nothing here needs more than 36 of an app.
+    aarMetadata { minCompileSdk = 36 }
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17

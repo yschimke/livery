@@ -12,6 +12,8 @@ kotlin {
     namespace = "ee.schimke.livery.instantiate"
     compileSdk { version = release(37) { minorApiLevel = 1 } }
     minSdk = 26
+    // Built against 37.1 for its dependencies; nothing here needs more than 36 of an app.
+    aarMetadata { minCompileSdk = 36 }
   }
   // Compiled for the browser; its tests are the common ones, run on the JVM (no headless browser in CI).
   @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class) wasmJs { browser { testTask { enabled = false } } }
