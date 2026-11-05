@@ -181,9 +181,10 @@ and schedulers are per platform:
 | `livery-protocol` | KMP (JVM, Android, iOS, Wasm) | the wire types ([PROTOCOL.md](PROTOCOL.md)) |
 | `livery-client` | KMP | sources, trust, cache, selection, install, preview, resources, decisions, feeds, actions, events; HTTP through **Ktor** (OkHttp on the JVM and Android, Darwin on iOS, `fetch` in the browser) |
 | `livery-compose` | **Compose Multiplatform** (Android, desktop, iOS, Wasm) | `LiveryTemplate` / `LiverySlot` over rc-players' Compose player: values seeded before the first frame and pushed live, actions through the router, impression and viewability events, catalog fonts and images through the player's loaders, `rememberDesigns` / `DesignPicker` |
+| `livery-instantiate` | KMP | writes a slot's values and images into a template for hosts that only play bytes (launcher, Glance Wear, snapshots), on rc-players' `RcWidgetDocuments.bake`, with Livery's image rules and byte budget |
 | `livery-android` *(planned)* | Android | the AndroidX View/Compose player, WorkManager refresh, file stores, image loading |
-| `livery-launcher-widgets` *(planned)* | Android 16+ | a `LiveryWidgetProvider` base: per resize or data change, resolve the `launcher-widget` template for the cell, instantiate it with the app's data, hand it to `RemoteViews` draw instructions, map host actions to `PendingIntent`s; a `RemoteViews` fallback for older launchers |
-| `livery-wear-widgets` *(planned)* | Wear OS | Glance Wear: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding and corner radius as named values, instantiated per widget; blobs synced from the phone over the Data Layer as content-addressed assets, or fetched by an LTE watch; bundled fallbacks on the watch |
+| `livery-launcher-widgets` *(planned)* | Android 16+ | built on rc-players' `rc-widget-launcher` (`RcWidgetSizing`, `RcLauncherWidgets.remoteViews`, `tapOf`); needs a rewrite of a template's named actions into launcher host-action ids, which rc-widget-core does not have yet (it rewrites to Wear's `SendPendingIntent` only). A `LiveryWidgetProvider` base: per resize or data change, resolve the `launcher-widget` template for the cell, instantiate it with the app's data, hand it to `RemoteViews` draw instructions, map host actions to `PendingIntent`s; a `RemoteViews` fallback for older launchers |
+| `livery-wear-widgets` *(planned)* | Wear OS | on rc-widget-core's `RcWearTemplates` and `RcWearHost` frames. Glance Wear: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding and corner radius as named values, instantiated per widget; blobs synced from the phone over the Data Layer as content-addressed assets, or fetched by an LTE watch; bundled fallbacks on the watch |
 | **`Livery` / `LiveryUI` Swift package** | iOS, macOS, watchOS, tvOS | a **native SwiftPM package** at the repository root, not a Kotlin export: Codable protocol types, the client on **`URLSession`** and **CryptoKit** Ed25519, file stores, decisions, and SwiftUI `LiveryTemplateView` / `LiverySlotView` over any player. The adapter for rc-players' pure Swift `RcNativePlayerUIKit` (`swift/Integrations/RcNativePlayer`) is a file an app adds beside its own player dependency, so depending on Livery never pulls in a player or the Compose XCFramework |
 | `@livery/web` *(planned)* | browsers | TypeScript client (fetch, `crypto.subtle`, Cache API / IndexedDB) and a `<livery-template>` element over rc-players' TypeScript player |
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
@@ -295,6 +296,13 @@ one producer among others.
 8. **`livery-server`** (with an image proxy) and **`livery-mcp`**.
 
 ## Open questions
+
+- **Where widget documents live.** rc-players' `rc-widget-core` already has a widget-side template
+  layer (`RcTemplateLibrary`, `RcTemplateStore`, `RcBindingContract`, `RcDocumentCache`,
+  `RcBundledTemplates`, `RcPlayerCapabilities`) beside its document work (`RcWidgetDocuments`,
+  `RcWearTemplates`, `RcHostActionRewrites`). Livery builds on the document work; its catalog,
+  contracts and selection overlap the template layer. Either rc-widget-core's template layer
+  becomes a thin adapter over Livery, or Livery's widget hosts read through it.
 
 - Manifest size for large catalogs (Home Assistant's library is hundreds of MB of blobs): split
   the manifest by contract or surface, or keep one index plus per-contract pages?
