@@ -7,6 +7,7 @@ import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.FontFace
+import ee.schimke.livery.protocol.ImageProxy
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlacementRule
@@ -42,6 +43,8 @@ data class CatalogConfig(
   val ttlSeconds: Long = 3600,
   val expiresInDays: Long = 14,
   val minClient: Int = 0,
+  /** How remote images in datasets are fetched (PROTOCOL.md §6.2); written into the manifest. */
+  val imageProxy: ImageProxy? = null,
 )
 
 /** The sidecar beside each `.rc`: what it was built for. */
@@ -225,6 +228,7 @@ class CatalogBuilder(
       placements = placements,
       assetBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "assets/",
       assets = assets.values.toList(),
+      imageProxy = config.imageProxy,
     )
     val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
     return Output(manifest, bytes, files)

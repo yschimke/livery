@@ -110,6 +110,15 @@ class AssetPublishingTest {
     assertEquals(emptyList(), m.templates.single { it.designId == "banner-classic" }.assets, "system fonts need no asset")
   }
 
+  @Test fun theImageProxyComesFromCatalogJson() {
+    val src = Files.createTempDirectory("proxy").toFile()
+    sample.copyRecursively(src)
+    File(src, "catalog.json").writeText("""{ "catalog": "sample", "imageProxy": { "urlTemplate": "https://img.example/{width}?u={url}", "sourceHosts": ["cdn.example"] } }""")
+    val proxy = CatalogBuilder().build(src, Layout.Static).manifest.imageProxy
+    assertEquals("https://img.example/{width}?u={url}", proxy?.urlTemplate)
+    assertEquals(listOf("cdn.example"), proxy?.sourceHosts)
+  }
+
   @Test fun unknownFontFamiliesAreRefused() {
     val src = Files.createTempDirectory("fonts").toFile()
     sample.copyRecursively(src)

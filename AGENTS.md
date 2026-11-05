@@ -19,6 +19,10 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`), and updates the Swift
   package in the same PR; CI runs both against the same files. `docs/PROTOCOL.md` is normative:
   change it with the code.
+- **The site is documentation users follow.** `site/pages/` must match the code: a change to a
+  public API, CLI flag or catalog file updates the pages that show it, in the same PR, and
+  anything not built yet stays marked *Planned*. Build it with `python3 site/build.py build/site`
+  (needs `pip install markdown`); `.github/workflows/pages.yml` deploys it from `main`.
 - **Rendering never waits on the network**, and a chosen design that can't play falls back to the
   automatic one, never to nothing. Automatic selection never picks an `OnRequest` design that
   isn't installed.
