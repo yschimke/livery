@@ -11,6 +11,7 @@ order: 24
 | `livery-launcher-widgets` | Android 16+ | Available; not yet device-tested in CI |
 | `Livery`, `LiveryUI` (Swift package) | iOS 15, macOS 12, watchOS 8, tvOS 15 | Available; CI on macOS |
 | `livery-publish` (`livery` CLI) | JVM | Available |
+| `livery-gradle-plugin` (`ee.schimke.livery.catalog`) | Gradle, Android apps | Available |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
 | `@livery/web` | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |

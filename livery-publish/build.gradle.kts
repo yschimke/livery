@@ -7,8 +7,8 @@ plugins {
 kotlin { jvmToolchain(17) }
 
 dependencies {
-  implementation(project(":livery-protocol"))
-  implementation(project(":livery-client"))
+  api(project(":livery-protocol"))
+  api(project(":livery-client"))
   // TemplateInspector, for `livery build --inspect`: what a document really reads and emits.
   implementation(project(":livery-instantiate"))
   testImplementation(kotlin("test"))

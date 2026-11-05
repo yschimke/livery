@@ -31,6 +31,9 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   Install the hooks once per clone: `scripts/install-git-hooks.sh`.
 - Branch names use `agent/...`. Commit subjects and PR titles use Conventional Commits.
 - Merge only when explicitly asked.
+- **Releases** are `v<version>` tags: `.github/workflows/release.yml` publishes every module listed
+  in the root `build.gradle.kts` (`published`) to Maven Central as `ee.schimke.livery:<module>`, and
+  the CLIs to the GitHub release. A new library module goes into that list.
 
 ## Checks
 

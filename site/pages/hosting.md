@@ -79,6 +79,27 @@ ships. Apps cache each source separately, so switching back is clean. Set `"chan
 
 ## Bundled fallback
 
-Build the catalog at app build time into the app's assets and pass it as `Bundled`, so a first
-launch with no network still draws. On Android, read assets with `LocalFetcher` or your own
-`read`; the bundled copy is just older than what the app downloads later.
+Ship an initial catalog inside the app, so a first launch with no network still draws. On
+Android, the Gradle plugin builds the catalog's source tree into the APK's assets on every build.
+It applies the same checks as `livery build --inspect`, and it is reproducible:
+
+```kotlin
+plugins { id("ee.schimke.livery.catalog") version "<version>" }
+
+livery {
+  source.set(layout.projectDirectory.dir("livery"))   // catalog.json, contracts/, designs/
+  assetsPath.set("livery")                            // the default
+}
+```
+
+```kotlin
+val repository = TemplateRepository(
+  source, KtorFetcher(), JavaCrypto, trust, blobs, kv, clock, targets,
+  bundled = AndroidBundled.fromAssets(context),       // null if the app ships none
+)
+```
+
+The bundled catalog is trusted as the APK is: it isn't signature-checked and never expires.
+Anything the repository downloads replaces it. A remote source is optional: an app can start with
+only the baked catalog and add hosting later. Elsewhere, write a `livery build` output into the
+app's resources and pass a `TemplateRepository.Bundled(manifest, read)`.

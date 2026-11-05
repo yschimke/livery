@@ -7,8 +7,18 @@ From nothing to a signed catalog on a GitHub release, read by an app, in five st
 
 ## 1. Get the tools
 
-Livery isn't on Maven Central or tagged for SwiftPM yet. Until it is, build the CLI from source and
-depend on the libraries from a checkout.
+The libraries are published to Maven Central as `ee.schimke.livery:<module>`, from the first
+release on. Each release attaches the `livery` and `livery-mcp` CLIs as zips:
+
+```kotlin
+dependencies {
+  implementation("ee.schimke.livery:livery-client:<version>")   // fetch, verify, cache, select, bind
+  implementation("ee.schimke.livery:livery-compose:<version>")  // LiveryTemplate, LiverySlot
+  // launcher and Wear widgets: livery-launcher-widgets, livery-wear-widgets
+}
+```
+
+The Swift package isn't tagged yet; use it from a checkout. To build the CLI from source:
 
 ```bash
 git clone https://github.com/yschimke/livery

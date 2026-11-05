@@ -1,3 +1,5 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+
 plugins {
   alias(libs.plugins.kotlin.multiplatform) apply false
   alias(libs.plugins.kotlin.jvm) apply false
@@ -6,9 +8,65 @@ plugins {
   alias(libs.plugins.compose.compiler) apply false
   alias(libs.plugins.android.kmp.library) apply false
   alias(libs.plugins.android.library) apply false
+  alias(libs.plugins.maven.publish) apply false
 }
+
+// A release sets -Plivery.version (the tag without its v); everything else builds a snapshot.
+val liveryVersion = providers.gradleProperty("livery.version").getOrElse("0.1.0-SNAPSHOT")
 
 allprojects {
   group = "ee.schimke.livery"
-  version = "0.1.0-SNAPSHOT"
+  version = liveryVersion
+}
+
+/**
+ * The libraries an app depends on, published to Maven Central as `ee.schimke.livery:<module>`.
+ * The CLIs (`livery-publish` as `livery`, `livery-mcp`) ship as distributions, but their code is a
+ * library too: `livery-gradle-plugin` builds catalogs with `livery-publish`.
+ */
+val published = mapOf(
+  ":livery-protocol" to ("Livery protocol" to "Wire types for server-driven Remote Compose templates: manifests, contracts, designs, targets, decisions, feeds, events"),
+  ":livery-client" to ("Livery client" to "Fetch, verify, cache, select and bind Remote Compose templates: Kotlin Multiplatform"),
+  ":livery-compose" to ("Livery Compose" to "LiveryTemplate and LiverySlot over rc-players' Compose player: Compose Multiplatform"),
+  ":livery-instantiate" to ("Livery instantiate" to "Write a slot's values and images into a template for widget hosts and snapshots"),
+  ":livery-launcher-widgets" to ("Livery launcher widgets" to "Android launcher AppWidgets drawn from Livery templates"),
+  ":livery-wear-widgets" to ("Livery Wear widgets" to "Glance Wear widgets drawn from Livery templates"),
+  ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
+  ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),
+  ":livery-gradle-plugin" to ("Livery Gradle plugin" to "Builds a Livery catalog into an app's assets at build time"),
+)
+
+subprojects {
+  val (title, about) = published[path] ?: return@subprojects
+  apply(plugin = "com.vanniktech.maven.publish")
+  extensions.configure<MavenPublishBaseExtension> {
+    publishToMavenCentral(automaticRelease = true)
+    if (!version.toString().endsWith("SNAPSHOT")) signAllPublications()
+    coordinates("ee.schimke.livery", name, version.toString())
+    pom {
+      name.set(title)
+      description.set(about)
+      url.set("https://github.com/yschimke/livery")
+      inceptionYear.set("2026")
+      licenses {
+        license {
+          name.set("The Apache License, Version 2.0")
+          url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+          distribution.set("repo")
+        }
+      }
+      developers {
+        developer {
+          id.set("yschimke")
+          name.set("Yuri Schimke")
+          url.set("https://github.com/yschimke")
+        }
+      }
+      scm {
+        url.set("https://github.com/yschimke/livery")
+        connection.set("scm:git:https://github.com/yschimke/livery.git")
+        developerConnection.set("scm:git:ssh://git@github.com/yschimke/livery.git")
+      }
+    }
+  }
 }
