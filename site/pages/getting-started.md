@@ -14,7 +14,7 @@ release on. Each release attaches the `livery` and `livery-mcp` CLIs as zips:
 dependencies {
   implementation("ee.schimke.composeai:livery-client:<version>")   // fetch, verify, cache, select, bind
   implementation("ee.schimke.composeai:livery-compose:<version>")  // LiveryTemplate, LiverySlot
-  // launcher and Wear widgets: livery-launcher-widgets, livery-wear-widgets
+  // launcher and Wear widgets, notifications: livery-launcher-widgets, livery-wear-widgets, livery-notifications
 }
 ```
 

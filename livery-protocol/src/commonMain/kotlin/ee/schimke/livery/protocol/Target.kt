@@ -33,11 +33,13 @@ object Surfaces {
   const val IN_APP: String = "in-app"
   const val LAUNCHER_WIDGET: String = "launcher-widget"
   const val WEAR_WIDGET: String = "wear-widget"
+  /** A notification's expanded body, played by SystemUI (Android 16+). */
+  const val NOTIFICATION: String = "notification"
   const val WEAR_APP: String = "wear-app"
   const val WEB: String = "web"
   const val DESKTOP: String = "desktop"
   const val TV: String = "tv"
-  /** Rendered server-side to bytes or an image, e.g. a notification or an email snapshot. */
+  /** Rendered server-side to bytes or an image, e.g. an email snapshot. */
   const val SNAPSHOT: String = "snapshot"
 }
 

@@ -19,6 +19,7 @@ fills it with data through a typed contract, and reports what was shown and tapp
 | [Live content](use-cases/live-content.md) | The app pushes its own live values into a template, and people install skins for it. |
 | [Launcher widgets](use-cases/launcher-widgets.md) | Subclass one provider; Livery instantiates the template for each widget's size and routes taps back. |
 | [Wear widgets](use-cases/wear-widgets.md) | Subclass one Glance Wear widget; Livery frames the template in each watch's container and turns taps into your `PendingIntent`s. |
+| [Notifications](use-cases/notifications.md) | Render a template for a notification's expanded body; taps come back to your receiver. |
 | [The web](use-cases/web.md) | *Planned.* A `<livery-template>` element over the TypeScript player. |
 
 ## How it fits together
