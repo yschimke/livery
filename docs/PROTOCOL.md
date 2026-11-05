@@ -251,6 +251,12 @@ drop, and report, an action its contract doesn't declare, one whose kind has no 
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
 `track`, `refresh`; anything else is the app's (`app:<kind>`).
 
+A host that dispatches only numeric host actions (a launcher widget's `RemoteViews` player) gets
+the template's named actions rewritten when it is instantiated: each becomes the numeric action
+whose id rc-players' `RcWidgetActionIds.register` gives the action's name, with the action's text
+value, if any, as its metadata. The player evaluates that metadata when tapped and delivers it with
+the tap, so the arguments arrive as above. Numeric values are dropped on such a host.
+
 ## 8. Decisions, feeds and events
 
 - A **decision** names a template (`designId` or `sha256`), carries the data, a TTL, tracking URLs

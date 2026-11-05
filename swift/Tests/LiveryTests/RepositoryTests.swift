@@ -76,6 +76,26 @@ final class RepositoryTests: XCTestCase {
     if case .ready = await planner.forAppData(q, data: ["typo": .int(1)]) { XCTFail("bad data accepted") }
   }
 
+  func testEachDecisionInASlotIsItsOwnRenderedItem() async throws {
+    let (m, blobs) = manifestJSON(serial: 1)
+    var files = blobs
+    files["manifest.json"] = m
+    let repo = TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: Host(files: files), trust: .allowUnsigned,
+      blobs: MemoryBlobStore(), kv: MemoryKeyValueStore(), clock: { 1_000 }, targets: [caps])
+    _ = await repo.refresh()
+    let planner = SlotPlanner(repository: repo)
+    let q = TemplateQuery(contract: "c/tile@1", caps: caps)
+    func plan(_ id: String) async -> RenderPlan? {
+      let d = Decision(placement: "home.top", decisionId: id, template: TemplateRef(designId: "builtin"), data: ["name": .string("Ad")])
+      if case .ready(let p) = await planner.forDecision(q, d) { return p }
+      return nil
+    }
+    let first = await plan("d1"), again = await plan("d1"), second = await plan("d2")
+    XCTAssertNotNil(first)
+    XCTAssertEqual(first?.renderIdentity, again?.renderIdentity, "the same item keeps its identity across renders")
+    XCTAssertNotEqual(first?.renderIdentity, second?.renderIdentity, "a new decision in the slot is a new item")
+  }
+
   func testActionArguments() {
     XCTAssertEqual(ActionRouter.arguments(fromText: nil), [:])
     XCTAssertEqual(ActionRouter.arguments(fromText: #"{"route":"/premium"}"#), ["route": "/premium"])

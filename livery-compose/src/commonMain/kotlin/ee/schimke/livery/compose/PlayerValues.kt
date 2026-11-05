@@ -3,11 +3,9 @@ package ee.schimke.livery.compose
 import ee.schimke.composeai.rcplayer.runtime.RcHostActionValue
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.composeai.rcplayer.runtime.RcPlayerEvent
+import ee.schimke.livery.client.ActionArguments
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.protocol.NamedValue
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The named values the player is handed. Images are not named values in Remote Compose: a
@@ -47,9 +45,4 @@ fun RcPlayerEvent.toTemplateAction(): TemplateAction? {
   return TemplateAction(e.name, args)
 }
 
-private fun parseArgs(text: String): Map<String, String>? {
-  if (text.isBlank()) return emptyMap()
-  if (!text.trimStart().startsWith("{")) return mapOf("value" to text)
-  val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
-  return obj.mapValues { (_, v) -> (v as? JsonPrimitive)?.content ?: return null }
-}
+private fun parseArgs(text: String): Map<String, String>? = ActionArguments.parse(text)

@@ -134,7 +134,7 @@ public struct LiverySlotView<Player: View, Fallback: View>: View {
       // with its own impression and viewability (PROTOCOL.md §8), never the previous item's state.
       case .ready(let p)?:
         LiveryTemplateView(plan: p, actions: actions, events: events, player: player)
-          .id("\(p.template.entry.sha256)|\(p.decision?.decisionId ?? "")|\(p.feedItem?.id ?? "")")
+          .id(p.renderIdentity)
       case .fallback(let reason)?: fallback(reason)
       case nil: fallback(nil)
       }

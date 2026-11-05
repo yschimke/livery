@@ -9,6 +9,14 @@ public struct RenderPlan: Sendable {
   public var feedItem: FeedItem?
 }
 
+extension RenderPlan {
+  /// One identity per rendered item: a different template, decision or feed item in the same slot
+  /// is a different item, measured on its own (PROTOCOL.md §8). Views key themselves on it.
+  public var renderIdentity: String {
+    "\(template.entry.sha256)|\(decision?.decisionId ?? "")|\(feedItem?.id ?? "")"
+  }
+}
+
 public enum PlanResult: Sendable {
   case ready(RenderPlan)
   case fallback(String)

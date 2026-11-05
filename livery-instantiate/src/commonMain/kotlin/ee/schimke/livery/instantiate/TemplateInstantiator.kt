@@ -12,7 +12,11 @@ import ee.schimke.livery.protocol.NamedValue
 import kotlinx.coroutines.CancellationException
 
 sealed interface InstantiateResult {
-  data class Ok(val bytes: ByteArray) : InstantiateResult
+  /**
+   * @property actions for [TemplateInstantiator.instantiate] with `numericActions`, each numeric tap
+   *   id with its contract action ([LauncherActions]); empty otherwise.
+   */
+  data class Ok(val bytes: ByteArray, val actions: Map<Int, String> = emptyMap()) : InstantiateResult
   /** The template can't be written for this host; draw the native fallback and report why. */
   data class Failed(val reason: String) : InstantiateResult
 }
@@ -44,6 +48,8 @@ class TemplateInstantiator(
    * @param imageWidthPx / imageHeightPx the size to ask remote images at: the widget's size, as a
    *   document's bitmap URL carries none.
    * @param maxBytes the host's budget ([ee.schimke.livery.protocol.PlayerCapabilities.maxBytes]).
+   * @param numericActions rewrite the template's named taps to numeric host actions, for a
+   *   launcher widget ([LauncherActions]); the result's `actions` maps their ids back.
    */
   suspend fun instantiate(
     template: ByteArray,
@@ -51,6 +57,7 @@ class TemplateInstantiator(
     imageWidthPx: Int,
     imageHeightPx: Int,
     maxBytes: Long = Long.MAX_VALUE,
+    numericActions: Boolean = false,
   ): InstantiateResult = try {
     val document = RcDocumentCodec.decode(template, RcWireLimits())
     val fetched = LinkedHashMap<String, ByteArray>()
@@ -60,9 +67,12 @@ class TemplateInstantiator(
     }
     // rc-widget-core's bake: embeds the images, writes the values in, collapses the state layouts
     // that became constant and optimises, exactly as rc-players' own widget hosts do.
-    val bytes = RcDocumentCodec.encode(RcWidgetDocuments.bake(document, hardcoded(bindings), fetched))
+    val baked = RcWidgetDocuments.bake(document, hardcoded(bindings), fetched)
+    // A launcher's RemoteViews player sends numeric host actions only.
+    val rewritten = if (numericActions) LauncherActions.rewrite(baked) else LauncherActions.Rewritten(baked, emptyMap())
+    val bytes = RcDocumentCodec.encode(rewritten.document)
     if (bytes.size > maxBytes) InstantiateResult.Failed("${bytes.size} bytes, budget $maxBytes")
-    else InstantiateResult.Ok(bytes)
+    else InstantiateResult.Ok(bytes, rewritten.actions)
   } catch (e: CancellationException) {
     throw e
   } catch (e: Exception) {
