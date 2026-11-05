@@ -40,6 +40,6 @@ swift test                      # the Swift package, on macOS
 scripts/test-agent-attribution.sh
 ```
 
-CI's required check is the aggregate `gradle` job (which needs `build` and `swift`) (`.github/workflows/ci.yml`): add a job to its
+CI's required check is the aggregate `gradle` job (which needs `build` and, when a change touches `swift/`, `Package.swift` or `conformance/`, `swift`) (`.github/workflows/ci.yml`): add a job to its
 `needs`, never to the ruleset. The merge policy is applied from
 [yschimke/renovate-config `repo-policy/`](https://github.com/yschimke/renovate-config/tree/main/repo-policy).
