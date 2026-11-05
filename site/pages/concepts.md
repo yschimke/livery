@@ -60,6 +60,18 @@ TemplateQuery("promo/banner@1", caps, minor = 1)   // or slot.query("promo/banne
 Leave `minor` out to accept any. Before a change ships, `livery check` compares the catalog with
 the version already published (see [Hosting](hosting.md#checking-a-change)).
 
+Apps on a Livery client from before minors (protocol level 2) don't filter this way: they may get
+a template whose new input they don't fill (it draws its own default) or whose new action they
+can't route (the button does nothing). Decide per catalog, or per contract, in `catalog.json`:
+
+```json
+"minorPolicy": { "default": "lenient", "contracts": { "promo/banner@1": "strict" } }
+```
+
+**Lenient** (the default) lets those clients keep updating. **Strict** raises the manifest's
+`minClient` to 3 as soon as a template of that contract needs a newer minor, so those clients
+refuse the update and keep the templates they had.
+
 ## Designs, templates and targets
 
 A **design** is a look for one contract (`banner-classic`, `banner-bold`). It has one or more

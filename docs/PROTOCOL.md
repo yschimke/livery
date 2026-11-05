@@ -1,4 +1,4 @@
-# Livery protocol, level 2
+# Livery protocol, level 3
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 2 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 3 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -56,8 +56,13 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 **Levels.** Level 1 is this document without §6 and the `assets`, `assetBase`, `imageProxy` and
 `TemplateEntry.assets` / `fonts` fields. Level 2 added them. A level-1 client would ignore them and
 hand out templates without their resources, so a publisher must set `minClient` to at least 2 for
-a catalog in which any template lists `assets`. A client must reject a manifest whose `minClient`
-is above its level and keep using what it had (§3.3).
+a catalog in which any template lists `assets`. Level 3 added contract minors (`since`,
+`requiresMinor`, and the query's `minor` in §5.1). A level-2 client ignores `requiresMinor`, as a
+level-3 query without a `minor` does: an input its app doesn't fill draws the template's own
+default, and an action it can't route does nothing. Whether that is acceptable is the publisher's
+policy (§4.3): a strict catalog sets `minClient` to at least 3 when a template of a strict contract
+has a `requiresMinor` above 0, so older clients keep what they had. A client must reject a
+manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
 
@@ -186,6 +191,11 @@ A template's `requiresMinor` is the highest `since` among the inputs, list field
 `reads` and `emits` (a list value takes the higher of its list's and its field's; theme roles count
 as 0). The publisher computes it, so a template that reads a newer input never reaches an app that
 doesn't fill it, and one that emits a newer action never reaches an app that can't route it.
+
+Clients below level 3 don't filter by minor (§2.1). A publisher decides, per catalog and per
+contract, whether that is acceptable: **lenient** (the default) leaves `minClient` as it is, and
+**strict** raises it to 3 when any template of the contract has a `requiresMinor` above 0, so a
+pre-minor client refuses the manifest and keeps the templates it had.
 
 ## 5. Selection
 

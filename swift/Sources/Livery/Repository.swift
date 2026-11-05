@@ -75,8 +75,9 @@ public actor TemplateRepository {
     public init(manifest: Manifest, read: @escaping @Sendable (String) async -> Data?) { self.manifest = manifest; self.read = read }
   }
 
-  /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy).
-  public static let protocolLevel = 2
+  /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy); level 3 added
+  /// contract minors (`requiresMinor`, `TemplateQuery.minor`).
+  public static let protocolLevel = 3
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 

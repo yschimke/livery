@@ -60,4 +60,36 @@ class ContractEvolutionPublishTest {
     val problems = assertFailsWith<CatalogProblems> { CatalogBuilder().build(src, Layout.Static) }.problems
     assertTrue(problems.any { "since 2 is above the contract's minor 1" in it }, problems.toString())
   }
+
+  /** The sample tile at minor 1, with its launcher template reading the new input. */
+  private fun minorTree(policy: String?): File = tree().apply {
+    addMinor1()
+    File(this, "designs/tile-default/launcher.json").writeText(
+      """{ "target": { "surface": "launcher-widget", "rcApiLevel": 7, "profiles": ["widgets"], "size": { "minWidthDp": 110, "maxWidthDp": 400, "minHeightDp": 40, "maxHeightDp": 400 } }, "reads": ["name","subtitle"], "emits": ["toggle"] }""",
+    )
+    if (policy != null) File(this, "catalog.json").let { it.writeText(it.readText().trimEnd().removeSuffix("}").trimEnd() + ",\n  \"minorPolicy\": $policy\n}\n") }
+  }
+
+  // The sample has assets, so its catalogs already require the resources level.
+  @Test fun leniencyIsTheDefault() {
+    assertEquals(RESOURCES_LEVEL, CatalogBuilder(now = { 0 }).build(minorTree(null), Layout.Static, serial = 1).manifest.minClient)
+  }
+
+  @Test fun aStrictCatalogRequiresAClientThatKnowsMinors() {
+    val m = CatalogBuilder(now = { 0 }).build(minorTree("""{ "default": "strict" }"""), Layout.Static, serial = 1).manifest
+    assertEquals(MINORS_LEVEL, m.minClient)
+  }
+
+  @Test fun strictnessCanBePerContract() {
+    val strictTile = CatalogBuilder(now = { 0 }).build(minorTree("""{ "contracts": { "live/status-tile@1": "strict" } }"""), Layout.Static, serial = 1).manifest
+    assertEquals(MINORS_LEVEL, strictTile.minClient)
+    // Strict elsewhere, lenient for the tile: the tile's newer template doesn't raise the level.
+    val strictBanner = CatalogBuilder(now = { 0 }).build(minorTree("""{ "default": "strict", "contracts": { "live/status-tile@1": "lenient" } }"""), Layout.Static, serial = 1).manifest
+    assertEquals(RESOURCES_LEVEL, strictBanner.minClient)
+  }
+
+  @Test fun refusesAPolicyForAnUnknownContract() {
+    val problems = assertFailsWith<CatalogProblems> { CatalogBuilder().build(minorTree("""{ "contracts": { "live/status-tyle@1": "strict" } }"""), Layout.Static) }.problems
+    assertEquals(listOf("catalog.json minorPolicy: unknown contract live/status-tyle@1"), problems)
+  }
 }
