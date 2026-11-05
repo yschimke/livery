@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the Livery documentation site: site/pages/**/*.md -> <out>/**/*.html.
 
-Each page starts with `title:` and `order:` lines, then a blank line, then Markdown.
+Each page starts with `title:` and `order:` lines (and optionally `layout: home`), then a blank line, then Markdown.
 Links between pages are written to the .md file and rewritten to .html.
 
   python3 site/build.py build/site
@@ -52,7 +52,7 @@ def main(out):
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(ROOT / "assets", out / "assets")
-    template = (ROOT / "template.html").read_text()
+    templates = {name: (ROOT / f"{name}.html").read_text() for name in ("template", "home")}
     pages = {}
     for path in sorted(PAGES.rglob("*.md")):
         rel = path.relative_to(PAGES).with_suffix("").as_posix()
@@ -71,13 +71,16 @@ def main(out):
                 cls = ' class="current"' if item == rel else ""
                 nav.append(f'<li><a{cls} href="{prefix}{item}.html">{html.escape(pages[item][0]["title"])}</a></li>')
             nav.append("</ul>")
+        # `layout: home` pages are hand-written HTML in a full-width landing layout, no sidebar.
+        template = templates["home" if meta.get("layout") == "home" else "template"]
+        content = body if meta.get("layout") == "home" else render(body)
         page = (template
                 .replace("{{title}}", html.escape(meta["title"]))
                 .replace("{{prefix}}", prefix)
                 .replace("{{nav}}", "\n".join(nav))
                 .replace("{{repo}}", REPO)
                 .replace("{{source}}", f"{REPO}/blob/main/site/pages/{rel}.md")
-                .replace("{{content}}", render(body)))
+                .replace("{{content}}", content))
         target = out / f"{rel}.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(page)
