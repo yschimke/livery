@@ -1,13 +1,13 @@
 name: Release
 
 # A `v<version>` tag publishes that version: the libraries to Maven Central as
-# `ee.schimke.livery:<module>:<version>` (and the Gradle plugin `ee.schimke.livery.catalog`), and
+# `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin `ee.schimke.composeai.livery.catalog`), and
 # the `livery` and `livery-mcp` CLIs to a GitHub release for the tag. A dispatch with `tag` runs it
 # again for an existing tag, e.g. after adding a missing secret; Maven Central refuses a version it
 # already has, so only re-run a publish that failed.
 #
 # Secrets (as compose-ui-builder uses): MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central
-# Portal user token for the ee.schimke namespace), SIGNING_KEY (an ASCII-armoured private PGP key),
+# Portal user token for the ee.schimke.composeai namespace), SIGNING_KEY (an ASCII-armoured private PGP key),
 # SIGNING_KEY_ID and SIGNING_KEY_PASSWORD.
 
 on:

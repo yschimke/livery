@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The catalog an app was built with, from its assets: what the `ee.schimke.livery.catalog` Gradle
+ * The catalog an app was built with, from its assets: what the `ee.schimke.composeai.livery.catalog` Gradle
  * plugin writes (`manifest.json`, `blobs/`, `assets/` under [path]). Pass it to
  * `TemplateRepository(..., bundled = AndroidBundled.fromAssets(context))` so a fresh install
  * plays templates before it has downloaded anything, and offline after that.

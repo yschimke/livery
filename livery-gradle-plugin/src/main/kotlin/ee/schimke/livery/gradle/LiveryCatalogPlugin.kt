@@ -8,7 +8,7 @@ import org.gradle.api.provider.Property
 
 /**
  * ```
- * plugins { id("ee.schimke.livery.catalog") }
+ * plugins { id("ee.schimke.composeai.livery.catalog") }
  * livery { source.set(layout.projectDirectory.dir("livery")) }
  * ```
  *
