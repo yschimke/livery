@@ -41,12 +41,16 @@ Early. In this repository today:
 | `livery-instantiate` | writes a slot's values, images and numeric taps into a template for hosts that only play bytes (launcher and Wear widgets, snapshots), on rc-players' `rc-widget-core` |
 | `livery-launcher-widgets` | `LiveryLauncherWidgetProvider`: launcher AppWidgets (Android 16+) from Livery templates, on rc-players' `rc-widget-launcher` |
 | `livery-wear-widgets` | `LiveryWearWidget`: Glance Wear widgets from Livery templates, framed per container on rc-players' `rc-widget-core` |
-| `livery-publish` | `livery` CLI: validate a source tree, write a static or GitHub-release catalog, sign, verify |
+| `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify |
+| `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |
+| `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
+| `livery-uibuilder` | optional: Compose UI Builder designs (at a revision) as documents for `livery-mcp` |
+| `livery-gradle-plugin` | `ee.schimke.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
-| `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font (placeholder `.rc` and font bytes) |
+| `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |
 
-Planned: the Android View player, phone-to-watch template sync, a web client, an optional server
-(with an image proxy) and agent (MCP) tools. See the
+Planned: the Android View player, phone-to-watch template sync, a web client, and an optional
+server (with an image proxy and live agent sessions). See the
 [roadmap](docs/DESIGN.md#roadmap).
 
 ## Try it
@@ -63,6 +67,11 @@ livery verify build/catalog --pub sample.pub --key-id sample-1
 livery build samples/catalog build/release --github <owner>/<repo> --tag catalog-1 --key sample.key --key-id sample-1
 gh release create catalog-1 build/release/*
 ```
+
+For agents (MCP over stdio): `./gradlew :livery-mcp:installDist`, then
+`livery-mcp/build/install/livery-mcp/bin/livery-mcp samples/catalog`. Try `render_preview` with
+`design=tile-default`, `template=in-app`, `example=on`. See
+[AI workflows](site/pages/ai-workflows.md).
 
 In an app:
 

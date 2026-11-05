@@ -44,8 +44,9 @@ show it live with the person's own data.
 
 ## 3. Bundle a fallback catalog
 
-Build the same catalog into the app's assets and pass it as `TemplateRepository.Bundled`, so a
-first launch with no network still draws the built-in design.
+Build the same catalog into the app's assets with the `ee.schimke.livery.catalog` Gradle plugin,
+and pass `AndroidBundled.fromAssets(context)` as the repository's `bundled`. A first launch with no
+network then still draws the built-in design. See [Hosting](../hosting.md#bundled-fallback).
 
 ## Deployment checklist
 

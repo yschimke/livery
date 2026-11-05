@@ -138,6 +138,12 @@ data class TemplateEntry(
   val assets: List<String> = emptyList(),
   /** Font families the document names; each is a catalog font asset, `google:<family>`, or a system family. */
   val fonts: List<String> = emptyList(),
+  /**
+   * Where the document came from, for people and agents tracing a version: e.g. `tool`
+   * (`ui-builder`, `capture`, an agent), the tool's `design` id and `revision`, a `commit`. Free-form;
+   * never read by clients for decisions.
+   */
+  val source: Map<String, String> = emptyMap(),
 )
 
 /** An image of a design or template, content addressed under [Manifest.previewBase]. */

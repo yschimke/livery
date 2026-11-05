@@ -1,5 +1,7 @@
 package ee.schimke.livery.publisher
 
+import ee.schimke.livery.instantiate.TemplateInspector
+
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.JavaCrypto
@@ -57,6 +59,8 @@ data class TemplateSpec(
   val emits: List<String> = emptyList(),
   /** Font families it names: a family in `fonts/fonts.json`, `google:<family>` or `system:<family>`. */
   val fonts: List<String> = emptyList(),
+  /** Where the document came from (tool, design, revision, commit): copied to the manifest entry. */
+  val source: Map<String, String> = emptyMap(),
 )
 
 /** One entry of `fonts/fonts.json`: a font file beside it and the face it provides. */
@@ -172,7 +176,7 @@ class CatalogBuilder(
         val bytes = rc.readBytes()
         inspect(bytes, spec).forEach { problems += "${design.id}/${rc.name}: $it" }
         contract(design.contract)?.let { c ->
-          val undeclared = spec.reads.filterNot { r -> r in c.inputs || readsListValue(c, r) || r.startsWith("theme.") }
+          val undeclared = spec.reads.filterNot { r -> declares(c, r) }
           if (undeclared.isNotEmpty()) problems += "${design.id}/${rc.name}: reads values outside ${c.ref}: $undeclared"
           val actions = spec.emits.filterNot { it in c.actions }
           if (actions.isNotEmpty()) problems += "${design.id}/${rc.name}: emits undeclared actions $actions"
@@ -192,6 +196,7 @@ class CatalogBuilder(
           sha, bytes.size.toLong(), design.id, design.contract, spec.target, spec.tags,
           reads = spec.reads, emits = spec.emits,
           assets = (images + fontAssets).map { it.sha256 }.distinct(), fonts = spec.fonts,
+          source = spec.source,
         )
       }
     }
@@ -239,13 +244,23 @@ class CatalogBuilder(
    * `<list>.count`, or `<list>.<index>.<field>` with the index below the list's `max` and the field
    * one of its item's fields. Anything else (a typo, `-1`, an index past `max`) is never bound.
    */
-  private fun readsListValue(c: Contract, read: String): Boolean = c.lists.any { (name, list) ->
+  private fun readsListValue(c: Contract, read: String): Boolean = Companion.readsListValue(c, read)
+
+  companion object {
+    /** Whether [read] is a value a template may read under [c]: an input, a list value or a theme role. */
+    fun declares(c: Contract, read: String): Boolean = read in c.inputs || readsListValue(c, read) || read.startsWith("theme.")
+
+    /** The inspect hook `livery build --inspect` and agent drafts use: [TemplateInspector]. */
+    val INSPECT: (ByteArray, TemplateSpec) -> List<String> = { bytes, spec -> TemplateInspector.problems(bytes, spec.reads, spec.emits) }
+
+    private fun readsListValue(c: Contract, read: String): Boolean = c.lists.any { (name, list) ->
     if (read == "$name.count") return@any true
     if (!read.startsWith("$name.")) return@any false
     val rest = read.removePrefix("$name.")
     val index = rest.substringBefore('.').toIntOrNull() ?: return@any false
     val field = rest.substringAfter('.', "")
     rest.substringBefore('.') == index.toString() && index in 0 until list.max && field in list.item
+  }
   }
 
   private fun jsonFiles(dir: File) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }

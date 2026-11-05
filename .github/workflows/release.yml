@@ -1,0 +1,71 @@
+name: Release
+
+# A `v<version>` tag publishes that version: the libraries to Maven Central as
+# `ee.schimke.livery:<module>:<version>` (and the Gradle plugin `ee.schimke.livery.catalog`), and
+# the `livery` and `livery-mcp` CLIs to a GitHub release for the tag. A dispatch with `tag` runs it
+# again for an existing tag, e.g. after adding a missing secret; Maven Central refuses a version it
+# already has, so only re-run a publish that failed.
+#
+# Secrets (as compose-ui-builder uses): MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central
+# Portal user token for the ee.schimke namespace), SIGNING_KEY (an ASCII-armoured private PGP key),
+# SIGNING_KEY_ID and SIGNING_KEY_PASSWORD.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to publish, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Version from the tag
+        run: |
+          case "$TAG" in v[0-9]*) ;; *) echo "::error::tag '$TAG' is not v<version>"; exit 1 ;; esac
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+      - name: Build and test
+        run: ./gradlew build -Plivery.version="$VERSION"
+      - name: Publish to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: ./gradlew publishToMavenCentral -Plivery.version="$VERSION" --no-configuration-cache
+      - name: CLI distributions
+        run: ./gradlew :livery-publish:distZip :livery-mcp:distZip -Plivery.version="$VERSION"
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          gh release upload "$TAG" livery-publish/build/distributions/*.zip livery-mcp/build/distributions/*.zip --clobber

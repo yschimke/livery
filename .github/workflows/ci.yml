@@ -35,7 +35,7 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: Build and test every target, then build the sample catalog
         run: |
-          ./gradlew build :livery-publish:installDist
+          ./gradlew build :livery-publish:installDist :livery-mcp:installDist
           livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
       - name: Upload test reports
         if: failure()
