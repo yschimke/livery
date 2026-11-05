@@ -84,7 +84,7 @@ Android, the Gradle plugin builds the catalog's source tree into the APK's asset
 It applies the same checks as `livery build --inspect`, and it is reproducible:
 
 ```kotlin
-plugins { id("ee.schimke.livery.catalog") version "<version>" }
+plugins { id("ee.schimke.composeai.livery.catalog") version "<version>" }
 
 livery {
   source.set(layout.projectDirectory.dir("livery"))   // catalog.json, contracts/, designs/

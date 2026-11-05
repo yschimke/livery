@@ -45,7 +45,7 @@ Early. In this repository today:
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |
 | `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
 | `livery-uibuilder` | optional: Compose UI Builder designs (at a revision) as documents for `livery-mcp` |
-| `livery-gradle-plugin` | `ee.schimke.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
+| `livery-gradle-plugin` | `ee.schimke.composeai.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
 | `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |
 

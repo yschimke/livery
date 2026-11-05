@@ -14,7 +14,7 @@ class LiveryCatalogPluginTest {
     File(this, "settings.gradle.kts").writeText("rootProject.name = \"app\"\n")
     File(this, "build.gradle.kts").writeText(
       """
-      plugins { id("ee.schimke.livery.catalog") }
+      plugins { id("ee.schimke.composeai.livery.catalog") }
       livery {
         assetsPath.set("catalogs/sample")
         inspect.set($inspect)

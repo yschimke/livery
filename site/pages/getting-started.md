@@ -7,13 +7,13 @@ From nothing to a signed catalog on a GitHub release, read by an app, in five st
 
 ## 1. Get the tools
 
-The libraries are published to Maven Central as `ee.schimke.livery:<module>`, from the first
+The libraries are published to Maven Central as `ee.schimke.composeai:<module>`, from the first
 release on. Each release attaches the `livery` and `livery-mcp` CLIs as zips:
 
 ```kotlin
 dependencies {
-  implementation("ee.schimke.livery:livery-client:<version>")   // fetch, verify, cache, select, bind
-  implementation("ee.schimke.livery:livery-compose:<version>")  // LiveryTemplate, LiverySlot
+  implementation("ee.schimke.composeai:livery-client:<version>")   // fetch, verify, cache, select, bind
+  implementation("ee.schimke.composeai:livery-compose:<version>")  // LiveryTemplate, LiverySlot
   // launcher and Wear widgets: livery-launcher-widgets, livery-wear-widgets
 }
 ```
@@ -78,8 +78,8 @@ other hosts, see [Hosting](hosting.md).
 // settings.gradle.kts
 includeBuild("../livery")
 // build.gradle.kts
-implementation("ee.schimke.livery:livery-client:0.1.0-SNAPSHOT")
-implementation("ee.schimke.livery:livery-compose:0.1.0-SNAPSHOT")
+implementation("ee.schimke.composeai:livery-client:0.1.0-SNAPSHOT")
+implementation("ee.schimke.composeai:livery-compose:0.1.0-SNAPSHOT")
 ```
 
 ```kotlin

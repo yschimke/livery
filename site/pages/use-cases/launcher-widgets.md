@@ -30,8 +30,11 @@ Give the design a template for the launcher, sized for widget cells:
   "reads": ["name", "state"], "emits": ["toggle"] }
 ```
 
-Keep it small: launchers expect documents of a few tens of kilobytes (`DEFAULT_MAX_BYTES` is
-50 000).
+Keep what the launcher gets small: launchers expect documents of a few tens of kilobytes
+(`documentMaxBytes`, 50 000 by default). That is the instantiated document. The template can hold
+a conditional layout (`RemoteStateLayout` on a named value) with a branch for each state, because
+instantiation writes the values in and keeps only the live branch. Templates may be up to the
+capabilities' `maxBytes` (500 000 by default).
 
 ## 2. The provider
 
@@ -49,6 +52,11 @@ class TileWidget : LiveryLauncherWidgetProvider() {
 
   override fun fallback(context: Context, widgetId: Int, reason: String) =
     RemoteViews(context.packageName, R.layout.tile_widget_fallback)
+
+  // Opening the app is an activity, which a broadcast receiver may not start.
+  override fun tapIntent(context: Context, widgetId: Int, actionId: Int, action: String) =
+    if (action == "open") RcLauncherWidgets.actionActivity(context, launchIntent(context), widgetId, actionId)
+    else super.tapIntent(context, widgetId, actionId, action)
 }
 ```
 
@@ -62,13 +70,15 @@ Add the launcher's capabilities to the repository's `targets`, so `Always` and i
 download their launcher templates with every refresh, before anyone places a widget:
 
 ```kotlin
-val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf("widgets"), livePush = false, maxBytes = 50_000)
+val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf("widgets"), livePush = false, maxBytes = 500_000)
 TemplateRepository(..., targets = listOf(inApp, launcher))
 ```
 
 ## Deployment checklist
 
-- [ ] A `launcher-widget` template per design, inside the byte budget.
+- [ ] A `launcher-widget` template per design and size tier; its instantiated document inside
+      `documentMaxBytes`.
+- [ ] Taps that open the app go through `tapIntent` as activities.
 - [ ] The launcher in the repository's `targets`.
 - [ ] A `RemoteViews` fallback for Android 15 and older, and for failures.
 - [ ] `updateAll` on data and catalog changes.

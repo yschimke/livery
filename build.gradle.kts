@@ -15,12 +15,12 @@ plugins {
 val liveryVersion = providers.gradleProperty("livery.version").getOrElse("0.1.0-SNAPSHOT")
 
 allprojects {
-  group = "ee.schimke.livery"
+  group = "ee.schimke.composeai"
   version = liveryVersion
 }
 
 /**
- * The libraries an app depends on, published to Maven Central as `ee.schimke.livery:<module>`.
+ * The libraries an app depends on, published to Maven Central as `ee.schimke.composeai:<module>`.
  * The CLIs (`livery-publish` as `livery`, `livery-mcp`) ship as distributions, but their code is a
  * library too: `livery-gradle-plugin` builds catalogs with `livery-publish`.
  */
@@ -42,7 +42,7 @@ subprojects {
   extensions.configure<MavenPublishBaseExtension> {
     publishToMavenCentral(automaticRelease = true)
     if (!version.toString().endsWith("SNAPSHOT")) signAllPublications()
-    coordinates("ee.schimke.livery", name, version.toString())
+    coordinates("ee.schimke.composeai", name, version.toString())
     pom {
       name.set(title)
       description.set(about)

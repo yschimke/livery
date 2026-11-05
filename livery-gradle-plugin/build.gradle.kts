@@ -10,7 +10,7 @@ kotlin { jvmToolchain(17) }
 gradlePlugin {
   plugins {
     create("liveryCatalog") {
-      id = "ee.schimke.livery.catalog"
+      id = "ee.schimke.composeai.livery.catalog"
       implementationClass = "ee.schimke.livery.gradle.LiveryCatalogPlugin"
       displayName = "Livery catalog"
       description = "Builds a Livery catalog into an Android app's assets"
