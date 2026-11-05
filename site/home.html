@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Livery · Server-driven Remote Compose templates</title>
+<meta name="description" content="Publish a Remote Compose design once; apps, launcher widgets, watches and notifications take it on without an app release.">
+<link rel="stylesheet" href="{{prefix}}assets/site.css">
+<link rel="stylesheet" href="{{prefix}}assets/home.css">
+</head>
+<body class="home">
+<header class="home-nav">
+  <a class="brand" href="index.html"><span class="mark" aria-hidden="true"></span>Livery</a>
+  <nav>
+    <a href="#how">How it works</a>
+    <a href="#use-cases">Use cases</a>
+    <a href="#features">Features</a>
+    <a href="concepts.html">Docs</a>
+    <a href="{{repo}}">GitHub</a>
+    <a class="button small" href="#get-started">Get started</a>
+  </nav>
+</header>
+<main>
+{{content}}
+</main>
+<footer class="home-foot">
+  <p>Livery is open source under the Apache 2.0 license.
+    <a href="{{repo}}">GitHub</a> · <a href="{{repo}}/releases">Releases</a> ·
+    <a href="getting-started.html">Docs</a> · <a href="protocol.html">Protocol</a> ·
+    <a href="{{source}}">Edit this page</a></p>
+  <p class="muted">The status tiles are real: the <code>tile-default</code> sample from
+    <a href="{{repo}}/tree/main/samples/catalog"><code>samples/catalog</code></a> drawn by
+    <code>livery-mcp</code>'s renderer with its contract's examples (<code>site/renders.py</code>).
+    The other screens in the hero are illustrations.</p>
+</footer>
+<script>
+  // Install tabs: one panel visible per group; works without JS (all panels show).
+  document.querySelectorAll('[data-tabs]').forEach(group => {
+    const tabs = group.querySelectorAll('[role=tab]');
+    const show = id => tabs.forEach(t => {
+      const on = t.dataset.panel === id;
+      t.setAttribute('aria-selected', on);
+      group.querySelector('#' + t.dataset.panel).hidden = !on;
+    });
+    tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.panel)));
+    show(tabs[0].dataset.panel);
+  });
+</script>
+</body>
+</html>
