@@ -14,6 +14,8 @@ dependencies {
   implementation(project(":livery-instantiate"))
   implementation(libs.kotlinx.serialization.json)
   testImplementation(kotlin("test"))
+  testImplementation(platform(libs.rc.players.bom))
+  testImplementation(libs.rc.player.protocol)
 }
 
 application {

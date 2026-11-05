@@ -149,4 +149,30 @@ class LiveryMcpTest {
     assertFalse(old.isError(), old.toString())
     assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to "--output=/tmp/x").isError())
   }
+
+  @Test fun badArgumentsAreToolErrorsNotACrash() {
+    for (bad in listOf("width_dp" to 0, "height_dp" to 4097, "density" to 5)) {
+      assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", bad).isError(), "$bad")
+    }
+  }
+
+  @Test fun aDraftCannotReplaceTheDesignsMetadata() {
+    val good = Json.parseToJsonElement("""{"target":{"surface":"in-app","rcApiLevel":8},"reads":["state","is_on"],"emits":["toggle"]}""").jsonObject
+    val before = File(src, "designs/tile-retro/design.json").readText()
+    assertTrue(call("submit_draft", "design" to "tile-retro", "template" to "design", "rc_base64" to tileB64, "sidecar" to good).isError())
+    assertEquals(before, File(src, "designs/tile-retro/design.json").readText())
+  }
+
+  @Test fun hostWrittenNamesAreNotInTheSuggestedSidecar() {
+    // The tile with one of its values renamed to a Wear container name, which the host writes.
+    val doc = ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec.decode(tile, ee.schimke.composeai.rcplayer.protocol.RcWireLimits())
+    val wear = doc.copy(operations = doc.operations.map { op ->
+      if (op is ee.schimke.composeai.rcplayer.protocol.RcNamedVariable && op.name == "USER:is_on") op.copy(name = "USER:wear.container.corner_radius") else op
+    })
+    val b64 = Base64.getEncoder().encodeToString(ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec.encode(wear))
+    val v = call("validate_template", "contract" to "live/status-tile@1", "rc_base64" to b64).body().jsonObject
+    assertEquals("true", v["ok"]!!.jsonPrimitive.content)
+    assertEquals(listOf("state"), v["sidecar"]!!.jsonObject["reads"]!!.jsonArray.map { it.jsonPrimitive.content })
+    assertFalse(call("publish_preview", "contract" to "live/status-tile@1", "rc_base64" to b64).isError(), "and a preview of it builds")
+  }
 }

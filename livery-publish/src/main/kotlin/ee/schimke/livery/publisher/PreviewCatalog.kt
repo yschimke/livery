@@ -36,7 +36,7 @@ object PreviewCatalog {
   ): Result {
     val facts = TemplateInspector.facts(document) ?: throw CatalogProblems(listOf("not a Remote Compose document"))
     val problems = buildList {
-      val reads = facts.reads.filterNot { CatalogBuilder.declares(contract, it) || it.startsWith("wear.container.") }
+      val reads = facts.declaredReads.filterNot { CatalogBuilder.declares(contract, it) }
       if (reads.isNotEmpty()) add("reads values outside ${contract.ref}: ${reads.sorted()}")
       val emits = facts.emits.filterNot { it in contract.actions }
       if (emits.isNotEmpty()) add("emits actions ${contract.ref} doesn't declare: ${emits.sorted()}")
@@ -56,7 +56,7 @@ object PreviewCatalog {
         Design(designId, contract.ref, title ?: "Preview ${sha.take(12)}", install = InstallPolicy.Always)))
       File(dir, "preview.rc").writeBytes(document)
       File(dir, "preview.json").writeText(json.encodeToString(TemplateSpec.serializer(),
-        TemplateSpec(target, reads = facts.reads.sorted(), emits = facts.emits.sorted(), source = source)))
+        TemplateSpec(target, reads = facts.declaredReads.sorted(), emits = facts.emits.sorted(), source = source)))
       return Result(CatalogBuilder().build(src, Layout.Static), channel)
     } finally {
       src.deleteRecursively()

@@ -2,6 +2,7 @@ package ee.schimke.livery.mcp
 
 import java.io.File
 import kotlin.system.exitProcess
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -25,9 +26,19 @@ fun main(args: Array<String>) {
   for (line in System.`in`.bufferedReader().lineSequence()) {
     if (line.isBlank()) continue
     val message = runCatching { json.parseToJsonElement(line) as? JsonObject }.getOrNull()
-    val response = message?.let(mcp::handle) ?: if (message == null) PARSE_ERROR else continue
+    val response = message?.let { m ->
+      runCatching { mcp.handle(m) }.getOrElse { e -> internalError(m, e) }
+    } ?: if (message == null) PARSE_ERROR else continue
     stdout.write(json.encodeToString(JsonElement.serializer(), response)); stdout.newLine(); stdout.flush()
   }
+}
+
+/** A request the server itself failed on: an error response, never the end of the server. */
+private fun internalError(message: JsonObject, e: Throwable): JsonObject? {
+  val id = message["id"] ?: return null
+  return Json.parseToJsonElement(
+    """{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":${Json.encodeToString(String.serializer(), e.message ?: "internal error")}}}"""
+  ) as JsonObject
 }
 
 private val PARSE_ERROR = Json.parseToJsonElement("""{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}""") as JsonObject

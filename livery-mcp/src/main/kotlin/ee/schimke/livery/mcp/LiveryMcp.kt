@@ -104,6 +104,11 @@ class LiveryMcp(
     failed(e.message!!)
   } catch (e: kotlinx.serialization.SerializationException) {
     failed("invalid JSON in the catalog or the arguments: ${e.message}")
+  } catch (e: IllegalArgumentException) {
+    failed(e.message ?: "invalid arguments")
+  } catch (e: Exception) {
+    // A tool's failure is the tool's result: it never takes the server down.
+    failed("$name failed: ${e.message ?: e::class.simpleName}")
   }
 
   // --- tools ------------------------------------------------------------------------------------
@@ -151,7 +156,7 @@ class LiveryMcp(
       put("ok", false); putJsonArray("problems") { add("not a Remote Compose document") }
     }
     val problems = buildList {
-      val reads = facts.reads.filterNot { CatalogBuilder.declares(c, it) || it.startsWith("wear.container.") }
+      val reads = facts.declaredReads.filterNot { CatalogBuilder.declares(c, it) }
       if (reads.isNotEmpty()) add("reads values outside ${c.ref}: ${reads.sorted()}")
       val emits = facts.emits.filterNot { it in c.actions }
       if (emits.isNotEmpty()) add("emits actions ${c.ref} doesn't declare: ${emits.sorted()}")
@@ -162,8 +167,9 @@ class LiveryMcp(
       putJsonArray("reads") { facts.reads.sorted().forEach { add(it) } }
       putJsonArray("emits") { facts.emits.sorted().forEach { add(it) } }
       putJsonArray("problems") { problems.forEach { add(it) } }
+      // What to declare: the host's own names (a Wear container's frame) are never the sidecar's.
       put("sidecar", buildJsonObject {
-        putJsonArray("reads") { facts.reads.sorted().forEach { add(it) } }
+        putJsonArray("reads") { facts.declaredReads.sorted().forEach { add(it) } }
         putJsonArray("emits") { facts.emits.sorted().forEach { add(it) } }
       })
     }
@@ -192,10 +198,12 @@ class LiveryMcp(
       is BindResult.Ok -> r.bindings
       is BindResult.Invalid -> throw ToolError("the data doesn't bind to ${c.ref}: ${r.problems.map { "${it.name}: ${it.message}" }}")
     }
-    val spec = RenderSpec(
-      widthDp = args.intOrNull("width_dp") ?: 360, heightDp = args.intOrNull("height_dp") ?: 200,
-      density = args.intOrNull("density")?.toFloat() ?: 2f, dark = args.boolOrNull("dark") ?: false,
-    )
+    val spec = runCatching {
+      RenderSpec(
+        widthDp = args.intOrNull("width_dp") ?: 360, heightDp = args.intOrNull("height_dp") ?: 200,
+        density = args.intOrNull("density")?.toFloat() ?: 2f, dark = args.boolOrNull("dark") ?: false,
+      )
+    }.getOrElse { throw ToolError("width_dp and height_dp must be 1 to 4096, density 1 to 4") }
     TemplateInspector.facts(bytes) ?: throw ToolError("not a Remote Compose document")
     val png = TemplateRenderer.png(bytes, bindings, spec)
     return buildJsonObject {
@@ -217,7 +225,11 @@ class LiveryMcp(
    */
   private fun submitDraft(args: JsonObject): JsonObject {
     val designId = args.str("design").also { if (!SourceTree.safeName(it)) throw ToolError("bad design id '$it'") }
-    val name = args.str("template").also { if (!SourceTree.safeName(it)) throw ToolError("bad template name '$it'") }
+    val name = args.str("template").also {
+      if (!SourceTree.safeName(it)) throw ToolError("bad template name '$it'")
+      // Its sidecar would be written over the design's own metadata.
+      if (it == "design") throw ToolError("'design' is reserved: design.json is the design's metadata")
+    }
     val bytes = args.bytes("rc_base64")
     val spec = json.decodeFromJsonElement(TemplateSpec.serializer(), args.obj("sidecar"))
     val dir = File(File(tree.root, "designs"), designId)
@@ -246,12 +258,14 @@ class LiveryMcp(
     writes.forEach { (f, b) -> f.writeBytes(b) }
     val manifest = try {
       CatalogBuilder().build(tree.root, Layout.Static, serial = 0).manifest
-    } catch (e: CatalogProblems) {
+    } catch (e: Exception) {
+      // Any failure (catalog problems, a sidecar or design that doesn't decode) puts the tree back.
       before.forEach { (f, b) -> if (b == null) f.delete() else f.writeBytes(b) }
       if (dir.listFiles().isNullOrEmpty()) dir.delete()
+      val problems = (e as? CatalogProblems)?.problems ?: listOf(e.message ?: e::class.simpleName.orEmpty())
       return buildJsonObject {
         put("ok", false)
-        putJsonArray("problems") { e.problems.forEach { add(it) } }
+        putJsonArray("problems") { problems.forEach { add(it) } }
         put("note", "nothing was written: the draft would leave the catalog with problems")
       }
     }

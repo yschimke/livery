@@ -7,7 +7,10 @@ import ee.schimke.composeai.rcwidget.RcHostActionRewrites
 import ee.schimke.composeai.rcwidget.RcWearContainer
 
 /** What a document really reads and emits, read from its operations rather than its sidecar. */
-data class TemplateFacts(val bytes: Int, val reads: Set<String>, val emits: Set<String>)
+data class TemplateFacts(val bytes: Int, val reads: Set<String>, val emits: Set<String>) {
+  /** [reads] without the names a host writes itself: what a sidecar declares. */
+  val declaredReads: Set<String> get() = reads - TemplateInspector.HOST_NAMES
+}
 
 /**
  * The deep check of a template (DESIGN.md: the publisher's `inspect` hook): it decodes, and it reads
@@ -16,6 +19,9 @@ data class TemplateFacts(val bytes: Int, val reads: Set<String>, val emits: Set<
  * document itself.
  */
 object TemplateInspector {
+  /** Named values a host writes into a document itself (a Wear container's frame), never data. */
+  val HOST_NAMES: Set<String> = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR
+
   /** The document's facts, or null when the bytes aren't a Remote Compose document. */
   fun facts(template: ByteArray): TemplateFacts? = runCatching {
     val d = RcDocumentCodec.decode(template, RcWireLimits())
@@ -28,9 +34,8 @@ object TemplateInspector {
    */
   fun problems(template: ByteArray, reads: Collection<String>, emits: Collection<String>): List<String> {
     val f = facts(template) ?: return listOf("not a Remote Compose document")
-    val hostNames = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR
     return buildList {
-      val undeclared = f.reads - reads.toSet() - hostNames
+      val undeclared = f.declaredReads - reads.toSet()
       if (undeclared.isNotEmpty()) add("reads ${undeclared.sorted()} that its sidecar doesn't declare")
       val unlisted = f.emits - emits.toSet()
       if (unlisted.isNotEmpty()) add("emits ${unlisted.sorted()} that its sidecar doesn't declare")
