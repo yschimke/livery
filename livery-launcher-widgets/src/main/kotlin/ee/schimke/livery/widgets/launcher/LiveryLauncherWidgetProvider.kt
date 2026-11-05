@@ -1,5 +1,6 @@
 package ee.schimke.livery.widgets.launcher
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
@@ -80,9 +81,26 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
   /** A tap on a published widget. */
   protected abstract suspend fun onTap(context: Context, widgetId: Int, tap: WidgetTap)
 
-  /** What this launcher plays; override to raise the level or budget for a known host. */
+  /**
+   * What this launcher plays; override to raise the level for a known host. Its `maxBytes` bounds
+   * the *template* chosen and downloaded, which may hold every state's branch (a template with
+   * conditional layout): the launcher is handed only the instantiated document, held to
+   * [documentMaxBytes].
+   */
   protected open fun capabilities(context: Context): PlayerCapabilities =
-    PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, maxRcApiLevel = 7, profiles = setOf("widgets"), livePush = false, maxBytes = DEFAULT_MAX_BYTES)
+    PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, maxRcApiLevel = 7, profiles = setOf("widgets"), livePush = false, maxBytes = DEFAULT_TEMPLATE_MAX_BYTES)
+
+  /** The largest document the launcher is handed, after the values are written in. */
+  protected open val documentMaxBytes: Long = DEFAULT_MAX_BYTES
+
+  /**
+   * The `PendingIntent` a tap on [action] sends: by default a broadcast back to this provider,
+   * delivered to [onTap]. Override for an action that must start an activity (opening the app),
+   * which Android doesn't allow from a broadcast receiver: e.g.
+   * `RcLauncherWidgets.actionActivity(context, launchIntent, widgetId, actionId)`.
+   */
+  protected open fun tapIntent(context: Context, widgetId: Int, actionId: Int, action: String): PendingIntent =
+    RcLauncherWidgets.actionBroadcast(context, javaClass, widgetId, actionId, action)
 
   /** What to show when no template can be drawn (older launcher, offline first run, bad data). */
   protected open fun fallback(context: Context, widgetId: Int, reason: String): RemoteViews? = null
@@ -176,7 +194,7 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     val result = images.instantiator.instantiate(
       plan.template.bytes, plan.bindings,
       imageWidthPx = (slot.widthDp * density).toInt(), imageHeightPx = (slot.heightDp * density).toInt(),
-      maxBytes = slot.caps.maxBytes, numericActions = true,
+      maxBytes = documentMaxBytes, numericActions = true,
     )
     val ok = when (result) {
       is InstantiateResult.Failed -> {
@@ -186,7 +204,7 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
       }
       is InstantiateResult.Ok -> result
     }
-    val taps = ok.actions.mapValues { (actionId, action) -> RcLauncherWidgets.actionBroadcast(context, javaClass, id, actionId, action) }
+    val taps = ok.actions.mapValues { (actionId, action) -> tapIntent(context, id, actionId, action) }
     // No Impression: publishing isn't drawing, and a launcher doesn't say when (or whether) the
     // widget is on screen (PROTOCOL.md §8).
     return Attempt.Drawn(RcLauncherWidgets.remoteViews(ok.bytes, taps))
@@ -220,6 +238,9 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
   companion object {
     /** About what launchers accept comfortably for a widget document. */
     const val DEFAULT_MAX_BYTES: Long = 50_000
+
+    /** A template, before instantiation: room for a branch per state. */
+    const val DEFAULT_TEMPLATE_MAX_BYTES: Long = 500_000
 
     /**
      * How long an update keeps its broadcast open to fetch what its renders lacked, after every

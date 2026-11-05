@@ -108,13 +108,18 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
 
   /**
    * What this host plays: Glance Wear's profile, a baked dark theme (a widget can't take the app's
-   * live theme), and this [container]. Override to raise the level or budget for a known watch.
+   * live theme), and this [container]. Override to raise the level for a known watch. Its
+   * `maxBytes` bounds the *template*, which may hold every state's branch; the host is handed only
+   * the instantiated document, held to [documentMaxBytes].
    */
   protected open fun capabilities(context: Context, container: String): PlayerCapabilities =
     PlayerCapabilities(
       Surfaces.WEAR_WIDGET, maxRcApiLevel = 7, profiles = setOf(PROFILE), livePush = false,
-      themes = setOf(Target.baked(dark = true)), container = container, maxBytes = DEFAULT_MAX_BYTES,
+      themes = setOf(Target.baked(dark = true)), container = container, maxBytes = DEFAULT_TEMPLATE_MAX_BYTES,
     )
+
+  /** The largest document the host is handed, after the values are written in. */
+  protected open val documentMaxBytes: Long = DEFAULT_MAX_BYTES
 
   /** The container's fill for this widget (a state tint), or null for the template's own. */
   protected open fun containerArgb(context: Context, slot: WearWidgetSlot): Int? = null
@@ -160,7 +165,7 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
         val images = CachedImages(images(context))
         val r = images.instantiator.instantiateForWear(
           p.template.bytes, p.bindings, slot.frame, display,
-          header = header, containerArgb = containerArgb(context, slot), maxBytes = slot.caps.maxBytes,
+          header = header, containerArgb = containerArgb(context, slot), maxBytes = documentMaxBytes,
         )
         // An image not on the watch yet: fetch it after this render, then draw the template.
         if (r is InstantiateResult.Failed && !isPreview && images.misses.isNotEmpty()) retryAfter(context, params) { images.fetchMissed() }
@@ -221,6 +226,9 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
 
     /** A Wear widget document's comfortable size. */
     const val DEFAULT_MAX_BYTES: Long = 100_000
+
+    /** A template, before instantiation: room for a branch per state. */
+    const val DEFAULT_TEMPLATE_MAX_BYTES: Long = 500_000
     private const val TAG = "LiveryWearWidget"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
