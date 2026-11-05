@@ -95,7 +95,10 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
       if (Build.VERSION.SDK_INT >= RcLauncherWidgets.MIN_HOST_API && RcLauncherWidgets.isSupported) render(context, manager, id)
       else fallback(context, id, "launcher can't play Remote Compose")
     }
-      .onFailure { Log.w(TAG, "widget $id failed", it) }
+      .onFailure {
+        Log.w(TAG, "widget $id failed", it)
+        events.emit(TemplateEvent(TemplateEvent.Type.Error, System.currentTimeMillis(), detail = it.message))
+      }
       .getOrElse { fallback(context, id, it.message ?: "failed") }
     views?.let { manager.updateAppWidget(id, it) }
   }
@@ -119,8 +122,8 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
       is InstantiateResult.Ok -> result
     }
     val taps = ok.actions.mapValues { (actionId, action) -> RcLauncherWidgets.actionBroadcast(context, javaClass, id, actionId, action) }
-    events.emit(TemplateEvent(TemplateEvent.Type.Impression, System.currentTimeMillis(), plan.decision?.placement, plan.decision?.decisionId,
-      plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256))
+    // No Impression: publishing isn't drawing, and a launcher doesn't say when (or whether) the
+    // widget is on screen (PROTOCOL.md §8).
     return RcLauncherWidgets.remoteViews(ok.bytes, taps)
   }
 

@@ -20,7 +20,9 @@ designs people install.
 
 ```kotlin
 val state by viewModel.kitchen.collectAsState()
-LiverySlot(key = state, host = host, fallback = { NativeTile(state) }) {
+var chosenSkin by rememberSaveable { mutableStateOf<String?>(null) }
+// The key is everything the plan reads: new data or a newly chosen skin replans the slot.
+LiverySlot(key = state to chosenSkin, host = host, fallback = { NativeTile(state) }) {
   planner.forAppData(
     TemplateQuery("live/status-tile@1", inApp, designId = chosenSkin),
     buildJsonObject { put("name", state.name); put("state", state.label); put("is_on", state.on) },

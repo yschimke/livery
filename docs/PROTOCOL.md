@@ -270,7 +270,8 @@ the tap, so the arguments arrive as above. Numeric values are dropped on such a 
   `next` and `ttlSeconds`.
 - **Events** are `Impression` (first frame drawn), `Viewable` (at least half on screen for one
   second), `Action`, `Dismiss`, `Fallback` and `Error`, with the placement, decision, feed item,
-  design and blob they concern.
+  design and blob they concern. A host that is only handed a document and never reports drawing it
+  (a launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
 
 ## Conformance
 
