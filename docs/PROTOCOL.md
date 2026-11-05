@@ -68,8 +68,8 @@ A template entry is one document for one target: `sha256`, `bytes`, `designId`, 
 as `tool`, `design`, `revision` and `commit`, for tracing a version; clients never read it to
 decide anything).
 
-A target is `surface` (`in-app`, `launcher-widget`, `wear-widget`, `wear-app`, `web`, `desktop`,
-`tv`, `snapshot`, or an app's own), `rcApiLevel`, `profiles` (operation profiles the document stays
+A target is `surface` (`in-app`, `launcher-widget`, `wear-widget`, `notification`, `wear-app`, `web`,
+`desktop`, `tv`, `snapshot`, or an app's own), `rcApiLevel`, `profiles` (operation profiles the document stays
 inside), `size` (inclusive dp ranges `minWidthDp`, `maxWidthDp`, `minHeightDp`, `maxHeightDp`; a
 missing bound is unbounded), `theme` (`host`, or `baked:<mode>`) and `container` (a fixed host
 container such as `wear:small`, or none).

@@ -172,6 +172,7 @@ public enum Surfaces {
   public static let inApp = "in-app"
   public static let launcherWidget = "launcher-widget"
   public static let wearWidget = "wear-widget"
+  public static let notification = "notification"
   public static let wearApp = "wear-app"
   public static let web = "web"
   public static let desktop = "desktop"

@@ -1,44 +1,155 @@
 name: Release
 
-# A `v<version>` tag publishes that version: the libraries to Maven Central as
-# `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin `ee.schimke.composeai.livery.catalog`), and
-# the `livery` and `livery-mcp` CLIs to a GitHub release for the tag. A dispatch with `tag` runs it
-# again for an existing tag, e.g. after adding a missing secret; Maven Central refuses a version it
-# already has, so only re-run a publish that failed.
+# release-please, as in yschimke/compose-ui-builder: a push to main keeps a release PR open that
+# proposes the next version from the Conventional Commit subjects (always a minor bump) and its
+# CHANGELOG.md entry. Merging that PR cuts a draft GitHub release and its `v<version>` tag, and
+# this workflow publishes it: the libraries to Maven Central as
+# `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin
+# `ee.schimke.composeai.livery.catalog`), the `livery` and `livery-mcp` CLIs to the release. The
+# release is un-drafted only once both succeed.
+#
+# There is no `push: tags` trigger: release-please makes the tag itself, so a tag trigger would
+# publish twice, and Maven Central refuses a version it already has.
+#
+# `workflow_dispatch` with `publish_tag` is the recovery path: it runs the publish for an EXISTING
+# tag and release (a draft whose publish failed) instead of cutting a new one. Maven Central still
+# refuses a version it already has, so only re-run a publish that failed before uploading.
 #
 # Secrets (as compose-ui-builder uses): MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central
-# Portal user token for the ee.schimke.composeai namespace), SIGNING_KEY (an ASCII-armoured private PGP key),
-# SIGNING_KEY_ID and SIGNING_KEY_PASSWORD.
+# Portal user token for the ee.schimke.composeai namespace), SIGNING_KEY (an ASCII-armoured private
+# PGP key), SIGNING_KEY_ID and SIGNING_KEY_PASSWORD. RELEASE_PLEASE_TOKEN is optional: without it
+# the release PR is opened by github-actions[bot], whose pushes start no workflows, so
+# `release-pr-ci` dispatches the required checks on it. The repository must allow GitHub Actions
+# to create pull requests (Settings → Actions → General).
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
     inputs:
-      tag:
-        description: An existing tag to publish, e.g. v0.1.0
-        required: true
+      publish_tag:
+        description: >-
+          Publish an EXISTING tag (e.g. v0.2.0) instead of cutting a new release: the recovery path
+          for a release whose publish failed. Leave it empty for the normal run.
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref }}
+  # A merged release PR gets its own slot, so an ordinary push can't cancel or queue behind its
+  # publish. (Quoted: `chore(main): release ` contains `: `.)
+  group: "release-${{ github.ref }}-${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(main): release ') && github.sha || inputs.publish_tag && format('recover-{0}', inputs.publish_tag) || 'updates' }}"
   cancel-in-progress: false
 
 jobs:
+  # The release half. The PR half is `update-release-pr`, after the publish: with draft releases,
+  # one invocation doing both would read the previous release as its baseline and propose the
+  # version being released again.
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      publish: ${{ steps.plan.outputs.publish }}
+      publish_tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ !inputs.publish_tag }}
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      # A release finished outside release-please (by hand, or through `publish_tag`) leaves its
+      # merged PR `autorelease: pending`, which wedges release-please on every later push.
+      - name: Mark a release PR released outside release-please as tagged
+        if: ${{ !inputs.publish_tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/release-pr-mark-tagged.sh
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        if: ${{ !inputs.publish_tag }}
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+      # A draft release has no tag until it is published, and `publish` checks the tag out. The tag
+      # goes on the commit release-please released (the release PR's merge), which a later push
+      # that picks up an unreleased merged PR is not.
+      - name: Ensure the release tag exists for the draft
+        if: ${{ !cancelled() && steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          SHA: ${{ steps.release.outputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if sha=$(gh api "repos/{owner}/{repo}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null); then
+            if [ "${sha}" != "${SHA}" ]; then
+              echo "::error::${TAG} already exists at ${sha}, not this release's ${SHA}; delete the stale tag and re-run"
+              exit 1
+            fi
+            echo "tag ${TAG} already exists"
+            exit 0
+          fi
+          gh api --method POST "repos/{owner}/{repo}/git/refs" \
+            -f "ref=refs/tags/${TAG}" -f "sha=${SHA}" >/dev/null
+          echo "created tag ${TAG} at ${SHA}"
+
+      - name: Plan what this run publishes
+        id: plan
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
+          RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PUBLISH_TAG}" ]; then
+            if ! gh api "repos/{owner}/{repo}/git/ref/tags/${PUBLISH_TAG}" >/dev/null 2>&1; then
+              echo "::error::no tag ${PUBLISH_TAG} in this repository"
+              exit 1
+            fi
+            if ! gh release view "${PUBLISH_TAG}" --json isDraft >/dev/null 2>&1; then
+              echo "::error::no release for tag ${PUBLISH_TAG}"
+              exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
+          elif [ "${RELEASE_CREATED}" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "nothing to publish in this run"
+          fi
+
   publish:
     name: Publish
+    needs: release-please
+    if: ${{ needs.release-please.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: write
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG: ${{ needs.release-please.outputs.publish_tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.release-please.outputs.publish_tag }}
           persist-credentials: false
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
@@ -63,9 +174,70 @@ jobs:
         run: ./gradlew publishToMavenCentral -Plivery.version="$VERSION" --no-configuration-cache
       - name: CLI distributions
         run: ./gradlew :livery-publish:distZip :livery-mcp:distZip -Plivery.version="$VERSION"
-      - name: GitHub release
+      - name: Attach the CLIs to the release
+        run: gh release upload "$TAG" livery-publish/build/distributions/*.zip livery-mcp/build/distributions/*.zip --clobber
+
+  # Un-drafts the release once everything it promises is published.
+  finish-release:
+    needs: [release-please, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.publish_tag }}
+        run: gh release edit "$TAG" --draft=false --latest
+
+  # The PR half: opens or updates the next release PR, after a release this run cut is finished.
+  update-release-pr:
+    needs: [release-please, finish-release]
+    if: >-
+      ${{ !cancelled()
+      && !inputs.publish_tag
+      && (needs.release-please.outputs.release_created != 'true'
+      || needs.finish-release.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr: ${{ steps.rp.outputs.pr }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true
+
+  # A PR pushed with the workflow token starts no workflows, so the required checks are dispatched
+  # on its branch: CI's `gradle`, the PR title and the attribution scan.
+  release-pr-ci:
+    needs: update-release-pr
+    if: ${{ !cancelled() && needs.update-release-pr.result == 'success' && needs.update-release-pr.outputs.pr != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run the required checks on the release PR's branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RP_PR: ${{ needs.update-release-pr.outputs.pr }}
         run: |
-          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
-          gh release upload "$TAG" livery-publish/build/distributions/*.zip livery-mcp/build/distributions/*.zip --clobber
+          set -euo pipefail
+          branch="$(jq -r '.headBranchName // empty' <<<"$RP_PR")"
+          number="$(jq -r '.number // empty' <<<"$RP_PR")"
+          if [ -z "$branch" ] || [ -z "$number" ]; then
+            echo "::error::release-please reported no PR branch or number"
+            exit 1
+          fi
+          gh workflow run ci.yml --ref "$branch"
+          gh workflow run pr-title.yml --ref "$branch" -f pr="$number"
+          gh workflow run no-agent-attribution.yml --ref "$branch" -f pr="$number"
+          echo "dispatched ci.yml, pr-title.yml and no-agent-attribution.yml for #$number on $branch"

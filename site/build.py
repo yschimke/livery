@@ -22,7 +22,8 @@ REPO = "https://github.com/yschimke/livery"
 NAV = [
     ("Start", ["index", "getting-started", "concepts"]),
     ("Use cases", ["use-cases/ads", "use-cases/promotions", "use-cases/feeds", "use-cases/live-content",
-                   "use-cases/launcher-widgets", "use-cases/wear-widgets", "use-cases/web"]),
+                   "use-cases/launcher-widgets", "use-cases/wear-widgets",
+                   "use-cases/notifications", "use-cases/web"]),
     ("Running it", ["hosting", "signing", "images-and-fonts", "ai-workflows", "platforms"]),
     ("Reference", ["protocol"]),
 ]

@@ -13,6 +13,7 @@ order: 24
 | `livery-publish` (`livery` CLI) | JVM | Available |
 | `livery-gradle-plugin` (`ee.schimke.composeai.livery.catalog`) | Gradle, Android apps | Available |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
+| `livery-notifications` | Android 16+ | Available; not yet device-tested in CI |
 | `@livery/web` | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |

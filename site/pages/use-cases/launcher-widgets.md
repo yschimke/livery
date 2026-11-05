@@ -32,9 +32,11 @@ Give the design a template for the launcher, sized for widget cells:
 
 Keep what the launcher gets small: launchers expect documents of a few tens of kilobytes
 (`documentMaxBytes`, 50 000 by default). That is the instantiated document. The template can hold
-a conditional layout (`RemoteStateLayout` on a named value) with a branch for each state, because
-instantiation writes the values in and keeps only the live branch. Templates may be up to the
-capabilities' `maxBytes` (500 000 by default).
+a conditional layout (`RemoteStateLayout` on a named value) with a branch for each state:
+instantiation writes the values in and the launcher's player draws the live branch. Every branch
+stays in the document, so count them all against `documentMaxBytes` (rc-players drops a branch only
+when it defines no values, which a Compose capture's branches always do). Templates may be up to
+the capabilities' `maxBytes` (500 000 by default).
 
 ## 2. The provider
 

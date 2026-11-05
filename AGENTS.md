@@ -31,9 +31,11 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   Install the hooks once per clone: `scripts/install-git-hooks.sh`.
 - Branch names use `agent/...`. Commit subjects and PR titles use Conventional Commits.
 - Merge only when explicitly asked.
-- **Releases** are `v<version>` tags: `.github/workflows/release.yml` publishes every module listed
-  in the root `build.gradle.kts` (`published`) to Maven Central as `ee.schimke.composeai:<module>`, and
-  the CLIs to the GitHub release. A new library module goes into that list.
+- **Releases** are cut by release-please (`.github/workflows/release.yml`, as in
+  compose-ui-builder): it keeps a `chore(main): release <version>` PR open from the Conventional
+  Commit subjects, and merging it tags `v<version>` and publishes every module listed in the root
+  `build.gradle.kts` (`published`) to Maven Central as `ee.schimke.composeai:<module>`, and the CLIs
+  to the GitHub release. Don't push `v*` tags by hand. A new library module goes into that list.
 
 ## Checks
 
