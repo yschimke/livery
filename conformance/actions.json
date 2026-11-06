@@ -1,0 +1,184 @@
+{
+  "contract": {
+    "id": "c/card",
+    "major": 1,
+    "actions": {
+      "open": {
+        "kind": "navigate",
+        "args": {
+          "route": {
+            "type": "string",
+            "required": true,
+            "maxLength": 20
+          }
+        }
+      },
+      "expand": {
+        "kind": "track",
+        "args": {
+          "section": {
+            "type": "string"
+          },
+          "index": {
+            "type": "int",
+            "min": 0.0,
+            "max": 9.0
+          }
+        }
+      },
+      "rate": {
+        "kind": "app:rate",
+        "args": {
+          "stars": {
+            "type": "int",
+            "required": true,
+            "min": 1.0,
+            "max": 5.0
+          },
+          "liked": {
+            "type": "bool"
+          },
+          "at": {
+            "type": "long"
+          },
+          "score": {
+            "type": "float",
+            "max": 1.0
+          }
+        }
+      },
+      "close": {
+        "kind": "dismiss"
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "declared arguments only",
+      "action": "open",
+      "args": {
+        "route": "home",
+        "secret": "x"
+      },
+      "expect": {
+        "args": {
+          "route": "home"
+        }
+      }
+    },
+    {
+      "name": "required argument missing",
+      "action": "open",
+      "args": {},
+      "expect": {
+        "problem": "missing argument 'route'"
+      }
+    },
+    {
+      "name": "too long",
+      "action": "open",
+      "args": {
+        "route": "xxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expect": {
+        "problem": "argument 'route' is longer than 20"
+      }
+    },
+    {
+      "name": "optional arguments left out",
+      "action": "expand",
+      "args": {},
+      "expect": {}
+    },
+    {
+      "name": "int in range",
+      "action": "expand",
+      "args": {
+        "index": "9",
+        "section": "specs"
+      },
+      "expect": {
+        "args": {
+          "index": "9",
+          "section": "specs"
+        }
+      }
+    },
+    {
+      "name": "int out of range",
+      "action": "expand",
+      "args": {
+        "index": "10"
+      },
+      "expect": {
+        "problem": "argument 'index' is above 9.0"
+      }
+    },
+    {
+      "name": "not an int",
+      "action": "expand",
+      "args": {
+        "index": "2.5"
+      },
+      "expect": {
+        "problem": "argument 'index' is not an int"
+      }
+    },
+    {
+      "name": "bool, long and float",
+      "action": "rate",
+      "args": {
+        "stars": "5",
+        "liked": "true",
+        "at": "1793000000000",
+        "score": "0.5"
+      },
+      "expect": {
+        "args": {
+          "at": "1793000000000",
+          "liked": "true",
+          "score": "0.5",
+          "stars": "5"
+        }
+      }
+    },
+    {
+      "name": "not a bool",
+      "action": "rate",
+      "args": {
+        "stars": "5",
+        "liked": "yes"
+      },
+      "expect": {
+        "problem": "argument 'liked' is not a bool"
+      }
+    },
+    {
+      "name": "float above max",
+      "action": "rate",
+      "args": {
+        "stars": "5",
+        "score": "1.5"
+      },
+      "expect": {
+        "problem": "argument 'score' is above 1.0"
+      }
+    },
+    {
+      "name": "no arguments declared",
+      "action": "close",
+      "args": {
+        "value": "x"
+      },
+      "expect": {}
+    },
+    {
+      "name": "undeclared action",
+      "action": "share",
+      "args": {},
+      "expect": {
+        "problem": "undeclared action"
+      }
+    }
+  ]
+}

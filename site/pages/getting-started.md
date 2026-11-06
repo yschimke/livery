@@ -15,6 +15,7 @@ dependencies {
   implementation("ee.schimke.composeai:livery-client:<version>")   // fetch, verify, cache, select, bind
   implementation("ee.schimke.composeai:livery-compose:<version>")  // LiveryTemplate, LiverySlot
   // launcher and Wear widgets, notifications: livery-launcher-widgets, livery-wear-widgets, livery-notifications
+  // Firebase Analytics, Remote Config experiments, Firestore frequency caps: livery-firebase
 }
 ```
 

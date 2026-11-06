@@ -203,7 +203,7 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
 
     private fun event(type: TemplateEvent.Type, detail: String?) = TemplateEvent(
       type, System.currentTimeMillis(), plan.decision?.placement, plan.decision?.decisionId,
-      plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, detail = detail,
+      plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, detail = detail, experiments = plan.experiments,
     )
   }
 

@@ -66,6 +66,6 @@ class UiBuilderExtensionTest {
   @Test fun onlyWhenConfigured() {
     assertNull(UiBuilderExtension.Factory().create(listOf("catalog"), emptyMap()))
     val loaded = McpExtension.load(listOf("catalog", "--ui-builder", url), mapOf("UI_BUILDER_TOKEN" to "secret"))
-    assertEquals(listOf(UiBuilderExtension.TOOL), loaded.flatMap { it.tools }.map { it["name"]!!.jsonPrimitive.content }, "found by ServiceLoader")
+    assertEquals(listOf(UiBuilderExtension.TOOL, UiBuilderExtension.SCAFFOLD), loaded.flatMap { it.tools }.map { it["name"]!!.jsonPrimitive.content }, "found by ServiceLoader")
   }
 }

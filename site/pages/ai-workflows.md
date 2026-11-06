@@ -1,5 +1,5 @@
 title: AI workflows
-order: 23
+order: 24
 
 # AI workflows
 
@@ -50,6 +50,7 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-
 | `list_history` | a design's templates' versions from the catalog's git log; `render_preview` with `revision` draws one |
 | `check_compatibility` | the catalog against a git revision (default `HEAD`) or another tree, as `livery check` does: contract changes marked compatible or breaking, and per template what it reads and emits, the minor it requires and which values only its own default covers |
 | `ui_builder_export` (`--ui-builder`) | a Compose UI Builder design at a revision, as a document with its `source` |
+| `ui_builder_scaffold` (`--ui-builder`) | a contract as UI Builder host inputs, to add to a design before laying it out |
 
 The server never signs anything. A failed draft is never left in the tree.
 
@@ -72,11 +73,13 @@ changing one.
 ## Compose UI Builder
 
 Start the server with `--ui-builder https://<ui builder host>` and `UI_BUILDER_TOKEN` set
-(module `livery-uibuilder`). `ui_builder_export` returns a design's document at a revision, or its
+(module `livery-uibuilder`). `ui_builder_scaffold` gives the agent a contract as UI Builder host
+inputs to add to the design first, so it reads Livery's names. `ui_builder_export` returns a design's document at a revision, or its
 latest, with `source: {tool: ui-builder, design, revision}`. From there it is a document like any
 other: `validate_template`, `render_preview`, then `submit_draft` with that `source` in the
 sidecar, or `publish_preview`. To move a template to a newer UI Builder revision, export that
-revision and submit it again; `list_history` shows each step.
+revision and submit it again; `list_history` shows each step. Without an agent, the same flow is
+`livery ui-builder scaffold` and `livery ui-builder import` (see [Authoring templates](authoring.md)).
 
 ## 2. Repository + CI (start here)
 

@@ -4,6 +4,7 @@ import ee.schimke.livery.instantiate.TemplateInspector
 
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.protocol.AssetEntry
@@ -12,6 +13,7 @@ import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.FontFace
 import ee.schimke.livery.protocol.ImageProxy
 import ee.schimke.livery.protocol.Design
+import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlacementRule
 import ee.schimke.livery.protocol.Preview
@@ -36,6 +38,7 @@ import kotlinx.serialization.json.Json
  * designs/<designId>/assets/<name>.png|webp|svg   images its templates need, named <name>
  * fonts/fonts.json                  FontFile list: the catalog's typefaces and their licences
  * placements/<any>.json             PlacementRule (local growth rules)
+ * experiments/<any>.json            Experiment (A/B tests over designs and placements)
  * themes/<any>.json                 ThemePack
  * ```
  */
@@ -118,6 +121,16 @@ const val RESOURCES_LEVEL: Int = 2
 /** The protocol level that added contract minors: a strict [MinorPolicy] requires it. */
 const val MINORS_LEVEL: Int = 3
 
+/** The protocol level that added experiments: a placement rule limited to an arm requires it. */
+const val EXPERIMENTS_LEVEL: Int = 4
+
+/**
+ * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
+ * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
+ * never share a key.
+ */
+val EXPERIMENT_ID: Regex = Regex("[a-z][a-z0-9_]{0,19}")
+
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
 /**
@@ -142,6 +155,7 @@ class CatalogBuilder(
     val contracts = jsonFiles(File(src, "contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val themes = jsonFiles(File(src, "themes")).map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
     val placements = jsonFiles(File(src, "placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
+    val experiments = jsonFiles(File(src, "experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
     val files = linkedMapOf<String, ByteArray>()
     val (blobDir, previewDir) = when (layout) {
       Layout.Static -> "blobs/" to "previews/"
@@ -170,6 +184,7 @@ class CatalogBuilder(
 
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
     for (c in contracts) ContractEvolution.problems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
+    for (c in contracts) for ((n, a) in c.actions) ActionGate.declarationProblems(n, a).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     (config.minorPolicy.contracts.keys - contracts.map { it.ref }.toSet()).forEach { problems += "catalog.json minorPolicy: unknown contract $it" }
     // Every minor a catalog keeps of one major must be a minor change from the one before (PROTOCOL.md §4.3).
     for ((_, versions) in contracts.groupBy { it.ref }) {
@@ -257,6 +272,27 @@ class CatalogBuilder(
       else (ContractBinder.bind(c, p.data) as? BindResult.Invalid)?.let { problems += "placement ${p.id}: ${it.problems}" }
     }
 
+    experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment ${it.key}" }
+    for (e in experiments) {
+      if (!EXPERIMENT_ID.matches(e.id)) problems += "experiment ${e.id}: an id is lowercase letters, digits and _, starting with a letter, at most 20 (it names analytics parameters and Remote Config keys as it is)"
+      if (e.arms.none { it.weight > 0 }) problems += "experiment ${e.id}: no arm with a weight above 0"
+      if (e.arms.any { it.weight < 0 }) problems += "experiment ${e.id}: a negative weight"
+      if (e.allocationBasisPoints !in 0..10_000) problems += "experiment ${e.id}: allocationBasisPoints ${e.allocationBasisPoints} is outside 0..10000"
+      e.arms.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "experiment ${e.id}: duplicate arm ${it.key}" }
+      for (arm in e.arms) for ((ref, designId) in arm.designs) {
+        val d = designs.firstOrNull { it.id == designId }
+        when {
+          d == null -> problems += "experiment ${e.id} arm ${arm.id}: unknown design $designId"
+          d.contract != ref -> problems += "experiment ${e.id} arm ${arm.id}: design $designId is for ${d.contract}, not $ref"
+        }
+      }
+    }
+    for (p in placements) p.arm?.let { a ->
+      val e = experiments.firstOrNull { it.id == a.experiment }
+      if (e == null) problems += "placement ${p.id}: unknown experiment ${a.experiment}"
+      else if (e.arms.none { it.id == a.arm }) problems += "placement ${p.id}: experiment ${a.experiment} has no arm ${a.arm}"
+    }
+
     if (problems.isNotEmpty()) throw CatalogProblems(problems)
 
     val t = now()
@@ -273,6 +309,8 @@ class CatalogBuilder(
         config.minClient,
         if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0,
         if (templates.any { it.requiresMinor > 0 && config.minorPolicy.modeFor(it.contract) == MinorPolicy.Mode.Strict }) MINORS_LEVEL else 0,
+        // An older client ignores `arm` and would show an arm's rule to everyone.
+        if (placements.any { it.arm != null }) EXPERIMENTS_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",
@@ -281,6 +319,7 @@ class CatalogBuilder(
       templates = templates,
       themes = themes,
       placements = placements,
+      experiments = experiments,
       assetBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "assets/",
       assets = assets.values.toList(),
       imageProxy = config.imageProxy,

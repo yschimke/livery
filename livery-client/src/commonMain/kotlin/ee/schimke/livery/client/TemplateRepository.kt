@@ -223,6 +223,15 @@ class TemplateRepository(
     return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
+  /**
+   * Whether automatic selection may pick [designId]: live, and shipped by default (`Always`) or
+   * installed. An experiment's design arm is automatic selection, so it uses this too.
+   */
+  suspend fun automaticallySelectable(designId: String): Boolean {
+    val d = (usable() ?: bundled?.manifest)?.design(designId) ?: return false
+    return !d.revoked && (d.install == InstallPolicy.Always || designId in installedIds())
+  }
+
   /** The cached manifest while it may still be played: until [STALE_GRACE_MS] past its expiry. */
   private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 
@@ -395,8 +404,9 @@ class TemplateRepository(
      * added resources (assets, fonts, the image proxy): a level-1 client would hand out templates
      * without them, so catalogs that use them require level 2. Level 3 added contract minors
      * (`requiresMinor`, `TemplateQuery.minor`): a catalog whose minor policy is strict requires it.
+     * Level 4 added experiments: a catalog with placement rules limited to an arm requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 3
+    const val PROTOCOL_LEVEL: Int = 4
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

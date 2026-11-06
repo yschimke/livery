@@ -17,7 +17,15 @@ data class RenderPlan(
   val bindings: Bindings,
   val decision: Decision? = null,
   val feedItem: FeedItem? = null,
+  /** Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event. */
+  val experiments: Map<String, String> = decision?.experiments.orEmpty(),
 )
+
+/**
+ * A stable tag for the node a plan draws in, for tools that name a tapped node by its tag (UI tests,
+ * Sentry, Datadog): `livery:<placement, or the contract>:<design>`. The same on every platform.
+ */
+val RenderPlan.slotTag: String get() = "livery:${decision?.placement ?: template.entry.contract}:${template.entry.designId}"
 
 sealed interface PlanResult {
   data class Ready(val plan: RenderPlan) : PlanResult
@@ -32,14 +40,35 @@ fun interface EventSink {
 /**
  * Turns "what goes here" into a [RenderPlan] for the three ways data arrives: the app's own (live
  * content), a decision (ads, promotions), or a feed item. All three end at the same contract gate.
+ *
+ * With [experiments], a slot whose query names no design draws the design the user's experiment arm
+ * picks for the contract (PROTOCOL.md §8.1); an arm that picks none (a control) draws the usual
+ * choice. Either way the plan carries the arm, and its exposure is reported when it draws, through
+ * [Experiments.sink].
  */
 class SlotPlanner(
   private val repository: TemplateRepository,
   private val events: EventSink,
   private val clock: Clock,
+  private val experiments: Experiments? = null,
 ) {
   /** App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change. */
   suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY): PlanResult {
+    val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
+    val design = arm?.designId
+    if (arm != null && design == null) {
+      // An arm without a design (a control) draws the usual choice, tagged with its arm.
+      val t = repository.resolve(query) ?: return fallback(query, "no template", null)
+      return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+    }
+    // An arm's design is automatic selection: never a skin nobody installed (AGENTS.md).
+    if (arm != null && design != null && repository.automaticallySelectable(design)) {
+      // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
+      // user wasn't exposed to the arm here.
+      repository.resolve(query.copy(designId = design))?.takeIf { it.entry.designId == design }?.let { t ->
+        return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+      }
+    }
     val t = repository.resolve(query) ?: return fallback(query, "no template", null)
     return plan(t, data, extra, null, null)
   }
@@ -60,26 +89,30 @@ class SlotPlanner(
     return plan(t, item.data, extra, null, item)
   }
 
-  private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?): PlanResult {
+  private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?, arms: Map<String, String> = emptyMap()): PlanResult {
     val contract = t.contract ?: return PlanResult.Fallback("contract ${t.entry.contract} unknown")
+    val experiments = d?.experiments.orEmpty() + arms
     return when (val b = ContractBinder.bind(contract, data)) {
-      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f))
+      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f, experiments))
       is BindResult.Invalid -> {
-        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, d?.decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }))
+        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, d?.decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }, experiments = experiments))
         PlanResult.Fallback("invalid data")
       }
     }
   }
 
   private fun fallback(q: TemplateQuery, reason: String, d: Decision?): PlanResult {
-    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, d?.decisionId, detail = "${q.contract}: $reason"))
+    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, d?.decisionId, detail = "${q.contract}: $reason", experiments = d?.experiments.orEmpty()))
     return PlanResult.Fallback(reason)
   }
 }
 
 /**
- * Routes a template's host action to a handler by the kind its contract declares. Unknown actions
- * and kinds are dropped and reported: a template can only reach what the app registered.
+ * Routes a template's host action to a handler by the kind its contract declares (PROTOCOL.md §7).
+ * [ActionGate] checks it first: undeclared actions, missing or ill-typed declared arguments, and
+ * URLs outside the allowlist are dropped and reported. A `track` action is recorded and needs no
+ * handler (one registered for `track` still runs). Every event carries only the declared
+ * arguments; a handler gets all of them.
  */
 class ActionRouter(
   private val handlers: Map<String, suspend (plan: RenderPlan, action: String, args: Map<String, String>) -> Unit>,
@@ -88,12 +121,14 @@ class ActionRouter(
   private val clock: Clock,
 ) {
   suspend fun dispatch(plan: RenderPlan, action: String, args: Map<String, String>) {
-    val spec = plan.contract.actions[action]
-    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action)
-    if (spec == null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "undeclared action")); return }
+    val check = ActionGate.check(plan.contract, action, args)
+    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
+    val spec = check.spec
+    if (spec == null || check.problem != null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = check.problem)); return }
     if (spec.kind == "open-url" && args["url"]?.let(urlAllowlist) != true) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "url not allowed")); return }
-    val h = handlers[spec.kind] ?: run { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }
+    val h = handlers[spec.kind]
+    if (h == null && !ActionGate.isTrackOnly(spec.kind)) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }
     events.emit(base)
-    h(plan, action, args)
+    h?.invoke(plan, action, args)
   }
 }

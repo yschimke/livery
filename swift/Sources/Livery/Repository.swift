@@ -76,8 +76,8 @@ public actor TemplateRepository {
   }
 
   /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy); level 3 added
-  /// contract minors (`requiresMinor`, `TemplateQuery.minor`).
-  public static let protocolLevel = 3
+  /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments.
+  public static let protocolLevel = 4
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 
@@ -223,6 +223,16 @@ public actor TemplateRepository {
       let bytes = await b.read(e.sha256)
     else { return nil }
     return loaded(b.manifest, e, bytes, .bundled)
+  }
+
+  /// Whether automatic selection may pick `designId` (§5.2): not revoked, and `Always` or installed.
+  /// An experiment's design arm is automatic selection, so it uses this too.
+  public func automaticallySelectable(_ designId: String) async -> Bool {
+    let m: Manifest?
+    if let u = await usable() { m = u } else { m = bundled?.manifest }
+    guard let d = m?.design(designId), !d.revoked else { return false }
+    if d.install == .always { return true }
+    return await installedIds().contains(designId)
   }
 
   /// A decision's or feed item's reference (§5.3): an exact `sha256` plays exactly or not at all.

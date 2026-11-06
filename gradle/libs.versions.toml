@@ -15,11 +15,27 @@ ktor = "3.6.1"
 maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
 glance-wear = "1.0.0-alpha21"
+firebase-bom = "35.1.0"
+sentry = "8.62.0"
+datadog = "3.15.0"
+amplitude = "1.36.0"
+compose-remote = "1.0.0-alpha22"
+robolectric = "4.17"
+robolectric-sdk35 = "15-robolectric-13954326-i7"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinx-coroutines" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-config = { module = "com.google.firebase:firebase-config" }
+firebase-firestore = { module = "com.google.firebase:firebase-firestore" }
+sentry = { module = "io.sentry:sentry", version.ref = "sentry" }
+sentry-compose = { module = "io.sentry:sentry-compose-android", version.ref = "sentry" }
+datadog-rum = { module = "com.datadoghq:dd-sdk-android-rum", version.ref = "datadog" }
+amplitude-android = { module = "com.amplitude:analytics-android", version.ref = "amplitude" }
 
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
@@ -35,6 +51,10 @@ rc-player-edit = { module = "ee.schimke.composeai:rc-player-edit" }
 rc-widget-core = { module = "ee.schimke.composeai:rc-widget-core" }
 rc-widget-launcher = { module = "ee.schimke.composeai:rc-widget-launcher" }
 rc-player-protocol = { module = "ee.schimke.composeai:rc-player-protocol" }
+rc-widget-creation = { module = "ee.schimke.composeai:rc-widget-creation" }
+compose-remote-creation-compose = { module = "androidx.compose.remote:remote-creation-compose", version.ref = "compose-remote" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-sdk35 = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-sdk35" }
 android-gradle-api = { module = "com.android.tools.build:gradle-api", version.ref = "agp" }
 glance-wear = { module = "androidx.glance.wear:wear", version.ref = "glance-wear" }
 glance-wear-core = { module = "androidx.glance.wear:wear-core", version.ref = "glance-wear" }

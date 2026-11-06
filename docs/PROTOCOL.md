@@ -1,4 +1,4 @@
-# Livery protocol, level 3
+# Livery protocol, level 4
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 3 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 4 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -50,6 +50,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `assets` | AssetEntry[] | `[]` | §6 |
 | `themes` | ThemePack[] | `[]` | named values pushed beside a template's own |
 | `placements` | PlacementRule[] | `[]` | local decision rules (§8) |
+| `experiments` | Experiment[] | `[]` | A/B tests over designs and placements (§8.1) |
 | `imageProxy` | ImageProxy? | `null` | §6.2 |
 | `provenance` | map<string,string> | `{}` | informational; clients never decide on it |
 
@@ -61,7 +62,11 @@ a catalog in which any template lists `assets`. Level 3 added contract minors (`
 level-3 query without a `minor` does: an input its app doesn't fill draws the template's own
 default, and an action it can't route does nothing. Whether that is acceptable is the publisher's
 policy (§4.3): a strict catalog sets `minClient` to at least 3 when a template of a strict contract
-has a `requiresMinor` above 0, so older clients keep what they had. A client must reject a
+has a `requiresMinor` above 0, so older clients keep what they had. Level 4 added experiments
+(§8.1). A level-3 client ignores a placement rule's `arm` and would show an arm's rule to everyone,
+so a publisher must set `minClient` to at least 4 for a catalog in which any placement rule has an
+`arm`. Design arms need no level: a client that ignores them draws what the control arm does. A
+client must reject a
 manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
@@ -293,6 +298,19 @@ drop, and report, an action its contract doesn't declare, one whose kind has no 
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
 `track`, `refresh`; anything else is the app's (`app:<kind>`).
 
+An action's `args` declare its arguments, each a `string`, `int`, `long`, `float` or `bool` with
+the input checks it carries (`required`, `maxLength`, `min`, `max`); a catalog declaring another type
+is refused. A client checks them in name order before routing: a required argument missing, or a
+declared one that isn't of its type or is out of its range, drops and reports the action. The
+action's event carries only the declared arguments that were given (`args`); one the contract
+doesn't declare still reaches the app's handler, but never an event, so an analytics pipeline only
+ever sees what the contract names.
+
+A `track` action needs no handler: the client records its `Action` event and does nothing else (a
+handler an app registers for `track` still runs). It reports an interaction that changes only the
+template's own state, combined with that change in one tap (`combinedAction(valueChange(…),
+hostAction(…))`).
+
 A host that dispatches only numeric host actions (a launcher widget's `RemoteViews` player) gets
 the template's named actions rewritten when it is instantiated: each becomes the numeric action
 whose id rc-players' `RcWidgetActionIds.register` gives the action's name, with the action's text
@@ -310,16 +328,54 @@ left unrewritten, which the host ignores.
 - A **decision** names a template (`designId` or `sha256`), carries the data, a TTL, tracking URLs
   and experiment arms.
 - A **placement rule** is a local decision: schedule (`startEpochMs` inclusive, `endEpochMs`
-  exclusive), conditions (platform, locale prefix, app version, segments), a sticky rollout and a
-  frequency cap. The highest priority eligible rule wins, ties to the lexically lower `id`. The
-  rollout bucket is FNV-1a 32 of the UTF-8 bytes of `<experiment>:<bucketing id>`, unsigned, modulo
-  10000; the rule applies when the bucket is in `[fromBasisPoints, toBasisPoints)`.
+  exclusive), conditions (platform, locale prefix, app version, segments), a sticky rollout, an
+  experiment `arm` (§8.1) and a frequency cap. The highest priority eligible rule wins, ties to the
+  lexically lower `id`. The rollout bucket is FNV-1a 32 of the UTF-8 bytes of
+  `<experiment>:<bucketing id>`, unsigned, modulo 10000; the rule applies when the bucket is in
+  `[fromBasisPoints, toBasisPoints)`. A rule with an `arm` applies only while that experiment runs
+  for the user and assigns them that arm; its decision's `experiments` names it.
+- A **frequency cap** counts the rule's impressions on the device. A client may share them between
+  a user's devices, but decisions must read only what is on the device: a shared count arrives by
+  a background sync, never while a slot decides.
 - A **feed page** is `feed`, `items` (each an `id`, a template reference, data and tracking),
   `next` and `ttlSeconds`.
 - **Events** are `Impression` (first frame drawn), `Viewable` (at least half on screen for one
-  second), `Action`, `Dismiss`, `Fallback` and `Error`, with the placement, decision, feed item,
-  design and blob they concern. A host that is only handed a document and never reports drawing it
-  (a launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
+  unbroken second), `Action` (with its declared `args`, §7), `Dismiss`, `Fallback`, `Error`,
+  `Exposure` (§8.1) and `Leave` (the template left the screen, or its slot showed another item;
+  `durationMs` is the time it was at least half on screen since it appeared), with the placement,
+  decision, feed item, design and blob they concern, and `experiments`: the arm of every experiment
+  that shaped what drew. A host that is only handed a document and never reports drawing it (a
+  launcher or Wear widget) emits no `Impression`, `Viewable` or `Leave`: publishing is not drawing.
+  Its taps are `Action` events like any other.
+
+### 8.1 Experiments
+
+An experiment is `id` (lowercase letters, digits and `_`, starting with a letter, at most 20, so it
+names analytics parameters and remote configuration keys unchanged and two experiments never share
+one), `arms` (each an `id`, a `weight`, default 1, and `designs`: contract
+`id@major` → design id), a schedule (`startEpochMs` inclusive, `endEpochMs` exclusive),
+`conditions` as for placement rules, and `allocationBasisPoints` (default 10000).
+
+It **runs** for a user within its schedule when the conditions match. Local assignment enrols the
+user when the bucket of `<id>:<bucketing id>` (as above) is below `allocationBasisPoints`, in the
+first arm (arms with weight 0 skipped) whose cumulative weight is above `a × totalWeight / 10000`
+(integer arithmetic), where `a` is the bucket of `<id>#arm:<bucketing id>`. The two buckets are
+independent, so raising the allocation only adds users and an enrolled user keeps their arm. A
+client may take the arm from another assigner instead (a remote configuration service); an arm id
+the experiment doesn't list counts as no answer.
+
+A slot of a contract that names no design takes its design arm from the experiments with an arm
+that names a design for that contract: the first of them, in manifest order, that is running and
+gives the user an arm. Experiments that name no design for the contract don't touch the slot. With
+an arm that names a design, the slot draws that design, when it has a template for the slot and
+automatic selection may pick it (the design is `Always` or installed, §5.2: an arm never draws a
+skin nobody installed); otherwise it selects as usual and carries no arm. With an arm that names
+none (a control), it selects as usual and carries the arm, so the control group is exposed the
+same way as the others. The first
+time a template an arm chose draws (its `Impression`, whether the arm picked its design or a rule
+for the arm decided it), the client emits one `Exposure` event for that experiment and arm. Planning
+is not exposure, and a host that reports no impressions reports exposure when it knows the user saw
+the template. Exposure, not assignment, is what an analysis counts.
 
 ## Conformance
 
@@ -331,6 +387,9 @@ left unrewritten, which the host ignores.
 | `binding.json` | §4.1: a contract and datasets, and the bindings or the sorted names of the problems |
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
+| `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
+| `actions.json` | §7: a contract's actions and emitted arguments, and the arguments its event carries or why it is dropped |
+| `design-arms.json` | §8.1: experiments with design arms, and per contract and user the design arm (experiment, arm, design or none) or `null` |
 
 The Kotlin client writes them (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`)
 and fails when its answers drift from them; every other implementation must run them in its own

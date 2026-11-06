@@ -14,10 +14,13 @@ order: 24
 | `livery-gradle-plugin` (`ee.schimke.composeai.livery.catalog`) | Gradle, Android apps | Available |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
 | `livery-notifications` | Android 16+ | Available; not yet device-tested in CI |
+| `livery-firebase` | Android | Available (Firebase Analytics, Remote Config, Firestore); not yet tested against a live project |
 | `@livery/web` | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
-| `livery-uibuilder` | JVM | Available (optional `livery-mcp` extension) |
+| `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android | Available from the release after 0.1.1; not yet tested against live projects |
+| `livery-capture` | Android (unit tests, Robolectric) | Available from the release after 0.1.1 |
+| `livery-uibuilder` | JVM | Available (optional: `livery ui-builder` commands and `livery-mcp` tools) |
 | `livery-server` | JVM | Planned |
 
 ## Kotlin

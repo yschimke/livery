@@ -46,7 +46,8 @@ import kotlinx.serialization.json.putJsonObject
  * notification), so stdio ([main]) and an HTTP endpoint can share it.
  */
 class LiveryMcp(
-  private val tree: SourceTree,
+  /** The catalog source tree its tools read (and an extension may read too). */
+  val tree: SourceTree,
   private val writable: Boolean = false,
   private val previewOut: File? = null,
   private val extensions: List<McpExtension> = emptyList(),

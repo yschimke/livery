@@ -19,6 +19,9 @@ import kotlinx.serialization.json.putJsonObject
  * `validate_template` for its sidecar, `render_preview`, then `submit_draft` with that `source` in
  * the sidecar, or `publish_preview` for a quick look. Re-exporting another revision is how a person
  * or agent moves a template along UI Builder's history.
+ *
+ * `ui_builder_scaffold`: a catalog contract as UI Builder host inputs ([UiBuilderScaffold]), for the
+ * agent to add to a design's state variables before it lays the design out.
  */
 class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
   override val tools: List<JsonObject> = listOf(buildJsonObject {
@@ -34,9 +37,43 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
       putJsonArray("required") { add("ui_design") }
       put("additionalProperties", false)
     }
+  }, buildJsonObject {
+    put("name", SCAFFOLD)
+    put("description", "A catalog contract as UI Builder host inputs: state variables with \"persistence\": \"host\", " +
+      "named as Livery binds them, with the contract's defaults. Add them to a UI Builder design before laying it out.")
+    putJsonObject("inputSchema") {
+      put("type", "object")
+      putJsonObject("properties") {
+        putJsonObject("contract") { put("type", "string"); put("description", "id@major") }
+        putJsonObject("items") { put("type", "integer"); put("description", "Items per list; default each list's max") }
+      }
+      putJsonArray("required") { add("contract") }
+      put("additionalProperties", false)
+    }
   })
 
-  override fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject = try {
+  override fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject =
+    if (name == SCAFFOLD) scaffold(args, server) else export(args)
+
+  private fun scaffold(args: JsonObject, server: LiveryMcp): JsonObject = try {
+    val ref = (args["contract"] as? JsonPrimitive)?.contentOrNull ?: error("missing argument 'contract'")
+    val contract = server.tree.contract(ref) ?: error("unknown contract $ref: ${server.tree.contracts().map { it.ref }}")
+    val r = UiBuilderScaffold.hostInputs(contract, (args["items"] as? JsonPrimitive)?.longOrNull?.toInt())
+    text(buildJsonObject {
+      put("stateVariables", r.stateVariables)
+      putJsonArray("skipped") { r.skipped.forEach { add(it) } }
+      put("next", "add stateVariables to the UI Builder design, bind controls to them, then ui_builder_export it")
+    }.toString())
+  } catch (e: Exception) {
+    text(e.message ?: "scaffold failed", error = true)
+  }
+
+  private fun text(body: String, error: Boolean = false): JsonObject = buildJsonObject {
+    putJsonArray("content") { add(buildJsonObject { put("type", "text"); put("text", body) }) }
+    if (error) put("isError", true)
+  }
+
+  private fun export(args: JsonObject): JsonObject = try {
     val design = (args["ui_design"] as? JsonPrimitive)?.contentOrNull ?: error("missing argument 'ui_design'")
     val e = client.export(design, (args["revision"] as? JsonPrimitive)?.longOrNull)
     buildJsonObject {
@@ -74,5 +111,6 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
 
   companion object {
     const val TOOL: String = "ui_builder_export"
+    const val SCAFFOLD: String = "ui_builder_scaffold"
   }
 }

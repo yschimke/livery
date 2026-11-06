@@ -1,6 +1,10 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.ActionSpec
+import ee.schimke.livery.protocol.Arm
+import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.ImageProxy
 import ee.schimke.livery.protocol.ImageRef
@@ -122,6 +126,92 @@ class ConformanceTest {
       c.copy(expect = got?.sha256)
     }
     check("selection.json", json.encodeToJsonElement(SelectionFixture.serializer(), SelectionFixture(m, cases)))
+  }
+
+  // --- experiments ----------------------------------------------------------------------------
+
+  @Serializable data class ExperimentCase(
+    val name: String, val experiment: String, val bucketingId: String,
+    val nowEpochMs: Long = 1_000, val segments: Set<String> = emptySet(), val expect: String?,
+  )
+  @Serializable data class ExperimentFixture(val experiments: List<Experiment>, val cases: List<ExperimentCase>)
+
+  @Test fun experiments() {
+    val experiments = listOf(
+      Experiment("even", listOf(Arm("a"), Arm("b"))),
+      Experiment("weighted", listOf(Arm("control", 3), Arm("treatment", 1), Arm("off", 0))),
+      Experiment("tenth", listOf(Arm("a"), Arm("b")), allocationBasisPoints = 1_000),
+      Experiment("scheduled", listOf(Arm("a")), startEpochMs = 500, endEpochMs = 2_000),
+      Experiment("beta", listOf(Arm("a"), Arm("b")), conditions = Conditions(segments = setOf("beta"))),
+    )
+    val cases = buildList {
+      for (e in listOf("even", "weighted", "tenth")) for (i in 0 until 12) add(ExperimentCase("$e user-$i", e, "user-$i", expect = null))
+      add(ExperimentCase("before the start", "scheduled", "user-1", nowEpochMs = 400, expect = null))
+      add(ExperimentCase("running", "scheduled", "user-1", expect = null))
+      add(ExperimentCase("at the end", "scheduled", "user-1", nowEpochMs = 2_000, expect = null))
+      add(ExperimentCase("outside the segment", "beta", "user-1", expect = null))
+      add(ExperimentCase("in the segment", "beta", "user-1", segments = setOf("beta"), expect = null))
+    }.map { c ->
+      val e = experiments.single { it.id == c.experiment }
+      c.copy(expect = LocalBucketing.assignNow(e, DecisionContext(c.nowEpochMs, "test", "en", 1, c.bucketingId, c.segments)))
+    }
+    check("experiments.json", json.encodeToJsonElement(ExperimentFixture.serializer(), ExperimentFixture(experiments, cases)))
+  }
+
+  @Serializable data class ActionExpect(val args: Map<String, String> = emptyMap(), val problem: String? = null)
+  @Serializable data class ActionCase(val name: String, val action: String, val args: Map<String, String>, val expect: ActionExpect?)
+  @Serializable data class ActionFixture(val contract: Contract, val cases: List<ActionCase>)
+
+  /** PROTOCOL.md §7: what an emitted action's event carries, or why it is dropped. */
+  @Test fun actions() {
+    val c = Contract(
+      "c/card", 1,
+      actions = mapOf(
+        "open" to ActionSpec("navigate", args = mapOf("route" to InputSpec(ValueType.String, required = true, maxLength = 20))),
+        "expand" to ActionSpec("track", args = mapOf("section" to InputSpec(ValueType.String), "index" to InputSpec(ValueType.Int, min = 0.0, max = 9.0))),
+        "rate" to ActionSpec("app:rate", args = mapOf("stars" to InputSpec(ValueType.Int, required = true, min = 1.0, max = 5.0), "liked" to InputSpec(ValueType.Bool), "at" to InputSpec(ValueType.Long), "score" to InputSpec(ValueType.Float, max = 1.0))),
+        "close" to ActionSpec("dismiss"),
+      ),
+    )
+    val cases = listOf(
+      ActionCase("declared arguments only", "open", mapOf("route" to "home", "secret" to "x"), null),
+      ActionCase("required argument missing", "open", emptyMap(), null),
+      ActionCase("too long", "open", mapOf("route" to "x".repeat(21)), null),
+      ActionCase("optional arguments left out", "expand", emptyMap(), null),
+      ActionCase("int in range", "expand", mapOf("index" to "9", "section" to "specs"), null),
+      ActionCase("int out of range", "expand", mapOf("index" to "10"), null),
+      ActionCase("not an int", "expand", mapOf("index" to "2.5"), null),
+      ActionCase("bool, long and float", "rate", mapOf("stars" to "5", "liked" to "true", "at" to "1793000000000", "score" to "0.5"), null),
+      ActionCase("not a bool", "rate", mapOf("stars" to "5", "liked" to "yes"), null),
+      ActionCase("float above max", "rate", mapOf("stars" to "5", "score" to "1.5"), null),
+      ActionCase("no arguments declared", "close", mapOf("value" to "x"), null),
+      ActionCase("undeclared action", "share", emptyMap(), null),
+    ).map { k -> ActionGate.check(c, k.action, k.args).let { k.copy(expect = ActionExpect(it.args, it.problem)) } }
+    check("actions.json", json.encodeToJsonElement(ActionFixture.serializer(), ActionFixture(c, cases)))
+  }
+
+  @Serializable data class DesignArmExpect(val experiment: String, val arm: String, val designId: String? = null)
+  @Serializable data class DesignArmCase(val name: String, val contract: String, val bucketingId: String, val expect: DesignArmExpect?)
+  @Serializable data class DesignArmFixture(val experiments: List<Experiment>, val cases: List<DesignArmCase>)
+
+  @Test fun designArms() {
+    val experiments = listOf(
+      // Names no design: never a design arm, though it comes first.
+      Experiment("copy", listOf(Arm("a"), Arm("b"))),
+      Experiment("tile_look", listOf(Arm("control"), Arm("retro", designs = mapOf("c/tile@1" to "tile-retro"))), allocationBasisPoints = 5_000),
+      Experiment("banner_look", listOf(Arm("bold", designs = mapOf("c/banner@1" to "banner-bold")), Arm("classic", designs = mapOf("c/banner@1" to "banner-classic"))), allocationBasisPoints = 5_000),
+      // A later experiment over the tile decides only for users tile_look leaves out.
+      Experiment("tile_late", listOf(Arm("late", designs = mapOf("c/tile@1" to "tile-late")))),
+    )
+    val cases = buildList {
+      for (c in listOf("c/tile@1", "c/banner@1")) for (i in 0 until 24) add(DesignArmCase("$c user-$i", c, "user-$i", null))
+      add(DesignArmCase("no experiment over the contract", "c/feed@1", "user-0", null))
+    }.map { c ->
+      val ctx = DecisionContext(1_000, "test", "en", 1, c.bucketingId)
+      val got = kotlinx.coroutines.runBlocking { designArm(experiments, c.contract, ctx) { LocalBucketing.assignNow(it, ctx) } }
+      c.copy(expect = got?.let { DesignArmExpect(it.experiment, it.arm, it.designId) })
+    }
+    check("design-arms.json", json.encodeToJsonElement(DesignArmFixture.serializer(), DesignArmFixture(experiments, cases)))
   }
 
   // --- binding --------------------------------------------------------------------------------

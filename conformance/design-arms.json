@@ -1,0 +1,489 @@
+{
+  "experiments": [
+    {
+      "id": "copy",
+      "arms": [
+        {
+          "id": "a"
+        },
+        {
+          "id": "b"
+        }
+      ]
+    },
+    {
+      "id": "tile_look",
+      "arms": [
+        {
+          "id": "control"
+        },
+        {
+          "id": "retro",
+          "designs": {
+            "c/tile@1": "tile-retro"
+          }
+        }
+      ],
+      "allocationBasisPoints": 5000
+    },
+    {
+      "id": "banner_look",
+      "arms": [
+        {
+          "id": "bold",
+          "designs": {
+            "c/banner@1": "banner-bold"
+          }
+        },
+        {
+          "id": "classic",
+          "designs": {
+            "c/banner@1": "banner-classic"
+          }
+        }
+      ],
+      "allocationBasisPoints": 5000
+    },
+    {
+      "id": "tile_late",
+      "arms": [
+        {
+          "id": "late",
+          "designs": {
+            "c/tile@1": "tile-late"
+          }
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "c/tile@1 user-0",
+      "contract": "c/tile@1",
+      "bucketingId": "user-0",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-1",
+      "contract": "c/tile@1",
+      "bucketingId": "user-1",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-2",
+      "contract": "c/tile@1",
+      "bucketingId": "user-2",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-3",
+      "contract": "c/tile@1",
+      "bucketingId": "user-3",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-4",
+      "contract": "c/tile@1",
+      "bucketingId": "user-4",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-5",
+      "contract": "c/tile@1",
+      "bucketingId": "user-5",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-6",
+      "contract": "c/tile@1",
+      "bucketingId": "user-6",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-7",
+      "contract": "c/tile@1",
+      "bucketingId": "user-7",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-8",
+      "contract": "c/tile@1",
+      "bucketingId": "user-8",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-9",
+      "contract": "c/tile@1",
+      "bucketingId": "user-9",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-10",
+      "contract": "c/tile@1",
+      "bucketingId": "user-10",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-11",
+      "contract": "c/tile@1",
+      "bucketingId": "user-11",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-12",
+      "contract": "c/tile@1",
+      "bucketingId": "user-12",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "retro",
+        "designId": "tile-retro"
+      }
+    },
+    {
+      "name": "c/tile@1 user-13",
+      "contract": "c/tile@1",
+      "bucketingId": "user-13",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-14",
+      "contract": "c/tile@1",
+      "bucketingId": "user-14",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-15",
+      "contract": "c/tile@1",
+      "bucketingId": "user-15",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "control"
+      }
+    },
+    {
+      "name": "c/tile@1 user-16",
+      "contract": "c/tile@1",
+      "bucketingId": "user-16",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "retro",
+        "designId": "tile-retro"
+      }
+    },
+    {
+      "name": "c/tile@1 user-17",
+      "contract": "c/tile@1",
+      "bucketingId": "user-17",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-18",
+      "contract": "c/tile@1",
+      "bucketingId": "user-18",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-19",
+      "contract": "c/tile@1",
+      "bucketingId": "user-19",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "retro",
+        "designId": "tile-retro"
+      }
+    },
+    {
+      "name": "c/tile@1 user-20",
+      "contract": "c/tile@1",
+      "bucketingId": "user-20",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-21",
+      "contract": "c/tile@1",
+      "bucketingId": "user-21",
+      "expect": {
+        "experiment": "tile_late",
+        "arm": "late",
+        "designId": "tile-late"
+      }
+    },
+    {
+      "name": "c/tile@1 user-22",
+      "contract": "c/tile@1",
+      "bucketingId": "user-22",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "retro",
+        "designId": "tile-retro"
+      }
+    },
+    {
+      "name": "c/tile@1 user-23",
+      "contract": "c/tile@1",
+      "bucketingId": "user-23",
+      "expect": {
+        "experiment": "tile_look",
+        "arm": "retro",
+        "designId": "tile-retro"
+      }
+    },
+    {
+      "name": "c/banner@1 user-0",
+      "contract": "c/banner@1",
+      "bucketingId": "user-0",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-1",
+      "contract": "c/banner@1",
+      "bucketingId": "user-1",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-2",
+      "contract": "c/banner@1",
+      "bucketingId": "user-2",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-3",
+      "contract": "c/banner@1",
+      "bucketingId": "user-3",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-4",
+      "contract": "c/banner@1",
+      "bucketingId": "user-4",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-5",
+      "contract": "c/banner@1",
+      "bucketingId": "user-5",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-6",
+      "contract": "c/banner@1",
+      "bucketingId": "user-6",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-7",
+      "contract": "c/banner@1",
+      "bucketingId": "user-7",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-8",
+      "contract": "c/banner@1",
+      "bucketingId": "user-8",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-9",
+      "contract": "c/banner@1",
+      "bucketingId": "user-9",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-10",
+      "contract": "c/banner@1",
+      "bucketingId": "user-10",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-11",
+      "contract": "c/banner@1",
+      "bucketingId": "user-11",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-12",
+      "contract": "c/banner@1",
+      "bucketingId": "user-12",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-13",
+      "contract": "c/banner@1",
+      "bucketingId": "user-13",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-14",
+      "contract": "c/banner@1",
+      "bucketingId": "user-14",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-15",
+      "contract": "c/banner@1",
+      "bucketingId": "user-15",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-16",
+      "contract": "c/banner@1",
+      "bucketingId": "user-16",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-17",
+      "contract": "c/banner@1",
+      "bucketingId": "user-17",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-18",
+      "contract": "c/banner@1",
+      "bucketingId": "user-18",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-19",
+      "contract": "c/banner@1",
+      "bucketingId": "user-19",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-20",
+      "contract": "c/banner@1",
+      "bucketingId": "user-20",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-21",
+      "contract": "c/banner@1",
+      "bucketingId": "user-21",
+      "expect": null
+    },
+    {
+      "name": "c/banner@1 user-22",
+      "contract": "c/banner@1",
+      "bucketingId": "user-22",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "bold",
+        "designId": "banner-bold"
+      }
+    },
+    {
+      "name": "c/banner@1 user-23",
+      "contract": "c/banner@1",
+      "bucketingId": "user-23",
+      "expect": {
+        "experiment": "banner_look",
+        "arm": "classic",
+        "designId": "banner-classic"
+      }
+    },
+    {
+      "name": "no experiment over the contract",
+      "contract": "c/feed@1",
+      "bucketingId": "user-0",
+      "expect": null
+    }
+  ]
+}

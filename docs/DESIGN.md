@@ -186,6 +186,7 @@ and schedulers are per platform:
 | `livery-launcher-widgets` | Android 16+ | `LiveryLauncherWidgetProvider`, on rc-players' `rc-widget-launcher` (`RcWidgetSizing`, `RcLauncherWidgets.remoteViews`, `actionBroadcast`, `tapOf`). Taps: `livery-instantiate`'s `LauncherActions` rewrites a template's named actions to numeric ones (PROTOCOL.md §7), written to move into rc-widget-core beside its Wear `SendPendingIntent` rewrite. Per widget: per resize or data change, resolve the `launcher-widget` template for the cell, instantiate it with the app's data, hand it to `RemoteViews` draw instructions, map host actions to `PendingIntent`s; a `RemoteViews` fallback for older launchers |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | `LiveryWearWidget : GlanceWearWidget`: `wear-widget` templates per container (`wear:small`, `wear:large`) with the container's padding, corners and fill as named values, instantiated per widget by `TemplateInstantiator.instantiateForWear` (bake, then rc-widget-core's `RcWearTemplates.instantiate` with the header of Glance Wear's own empty-container capture). Taps: `WearActions` gives each distinct constant-argument tap its own `SendPendingIntent` index (PROTOCOL.md §7), generalising rc-widget-core's single-index `toPendingIntent`; the app builds the `PendingIntent`s. *Planned:* blobs synced from the phone over the Data Layer as content-addressed assets (an LTE watch can run its own repository today) |
 | `livery-notifications` | Android 16+ | `LiveryNotifications.render`: a `notification` template instantiated for the expanded body (the shade's width, at most 256dp tall) and returned as `RemoteViews` draw instructions for `setCustomBigContentView`, on rc-players' `rc-widget-launcher`. Taps: numeric actions bound to `PendingIntent`s, delivered to a `LiveryNotificationReceiver`. Planning is `CacheOnly`; what a render missed is fetched by `NotificationRender.fetchMissed`, then the app re-posts |
+| `livery-firebase` | Android | Adapters only: `FirebaseAnalyticsSink : AnalyticsSink`, `RemoteConfigAssigner : ExperimentAssigner` (parameter `livery_exp_<experiment>`), `FirestoreFrequencyBackend : FrequencyBackend`. Firebase libraries are `compileOnly`; an app adds those it uses. The interfaces, `AnalyticsEventSink`, `Experiments`/`LocalBucketing` (PROTOCOL.md §8.1) and `SyncedFrequencyStore` live in `livery-client`, so other pipelines plug in the same way |
 | **`Livery` / `LiveryUI` Swift package** | iOS, macOS, watchOS, tvOS | a **native SwiftPM package** at the repository root, not a Kotlin export: Codable protocol types, the client on **`URLSession`** and **CryptoKit** Ed25519, file stores, decisions, and SwiftUI `LiveryTemplateView` / `LiverySlotView` over any player. The adapter for rc-players' pure Swift `RcNativePlayerUIKit` (`swift/Integrations/RcNativePlayer`) is a file an app adds beside its own player dependency, so depending on Livery never pulls in a player or the Compose XCFramework |
 | `@livery/web` *(planned)* | browsers | TypeScript client (fetch, `crypto.subtle`, Cache API / IndexedDB) and a `<livery-template>` element over rc-players' TypeScript player |
 | `livery-publish` | JVM CLI | validate a source tree, write a static or GitHub-release catalog, sign, verify |
@@ -193,7 +194,9 @@ and schedulers are per platform:
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
 | `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
-| `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `ui_builder_export` (a design at a revision, with its `source`), loaded into `livery-mcp` as an extension |
+| `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android, optional | integrations, each with its SDK `compileOnly`: Datadog RUM actions and errors, Sentry breadcrumbs and slot tags, Amplitude events and arm properties. Interaction tracking is by contract action (`ActionGate`, PROTOCOL.md §7), not by the app's layout tree, which can't see inside a document |
+| `livery-capture` | Android | Compose authoring: `LiveryValues` (a contract's values as named Remote Compose values, refusing undeclared names and wrong types), `LiveryCapture.capture` per target, and `DesignFolder` to write or check a design's files from a unit test |
+| `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `livery ui-builder scaffold` (a contract as host inputs) and `import` (a design at a revision into the tree, with its `source`) as a `LiveryCommand`, and `ui_builder_scaffold` / `ui_builder_export` in `livery-mcp` as an `McpExtension` |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance
@@ -224,15 +227,38 @@ A document never fetches anything; every byte it draws comes through the client
   image and typeface loaders; on iOS the same goes through the native player's resource and font
   resolvers.
 
+## Interaction tracking
+
+A template is one player node to the host app, so tools that find a tapped node in the app's
+layout tree can't see inside it. Livery tracks interactions by contract action instead: every
+emitted action passes `ActionGate` (declared, required arguments present, declared arguments of
+their type), its event carries only the declared arguments, and a `track` action, sent in the same
+tap as a template-local state change (`combinedAction(valueChange(…), hostAction(…))`), records an
+interaction that needs no app handler. Names come from the contract, so they hold across designs
+and experiment arms. Visibility is per rendered item: `Impression`, `Viewable` and `Leave` (time in
+view), with each item's node tagged `livery:<placement>:<design>` for tools that name nodes by tag.
+
+*Planned, in rc-players:* per-component visibility. The player reports only host actions today, so
+a host can't tell which part of one document scrolled into view. The proposal: a document marks a
+component with a name (as a host action is named), and the player reports when that component is
+at least a given fraction visible, as it reports a host action; Livery would declare such names in
+the contract (`views`) and emit them as events like actions. Until then, feeds use one template
+per item.
+
 ## Authoring and hosting are plugins
 
 Livery takes **`.rc` bytes and a sidecar**, from anything:
 
-- Kotlin capture code (`@RemoteComposable` content captured at build time, as Home Assistant's
-  library is);
-- UI Builder's `.uid` → RC authoring JSON → `remotecompose-json` → `.rc` export;
+- Kotlin capture code (`@RemoteComposable` content captured at build time): `livery-capture`;
+- UI Builder's `.uid` → RC authoring JSON → `remotecompose-json` → `.rc` export:
+  `livery-uibuilder`;
 - an agent writing RC authoring JSON directly, compiled with `remotecompose-json`;
-- a hand-built or third-party document.
+- a hand-built or third-party document, through `livery import`.
+
+The two supported flows (site page "Authoring templates") both start from the contract and end in
+`TemplateImport`'s checks or the same checks at capture: the sidecar's reads and emits are read
+from the document, and a name or type the contract doesn't declare is refused before anything is
+written.
 
 The source tree:
 
@@ -297,8 +323,9 @@ data → PNG, through `livery-render`), and, when started with `--write` and `--
 the catalog's own channel) and `publish_preview` (one document as a catalog of its own, for a look
 before it joins). Versions: each template entry's `source` says where it came from (tool, design,
 revision, commit), and in a git checkout `list_history` and `render_preview(revision)` show and
-draw earlier versions. Authoring tools plug in as optional modules (`McpExtension`):
-`livery-uibuilder` exports a UI Builder design at a revision.
+draw earlier versions. Authoring tools plug in as optional modules (`McpExtension` for
+`livery-mcp`, `LiveryCommand` for `livery`): `livery-uibuilder` scaffolds a contract as host inputs
+and exports a UI Builder design at a revision.
 
 *Next*: retired versions in the manifest. When a design's template changes, the publisher keeps
 the previous entries (and their blobs) as retired, so an exact reference (a decision or feed item

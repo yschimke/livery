@@ -29,13 +29,15 @@ public struct Manifest: Codable, Equatable, Sendable {
   public var templates: [TemplateEntry]
   public var themes: [ThemePack]
   public var placements: [PlacementRule]
+  /// A/B tests over designs and placements (§8.1).
+  public var experiments: [Experiment]
   public var assets: [AssetEntry]
   public var imageProxy: ImageProxy?
   public var provenance: [String: String]
 
   enum CodingKeys: String, CodingKey {
     case schema, catalog, channel, serial, generatedAtEpochMs, expiresAtEpochMs, ttlSeconds, minClient
-    case blobBase, previewBase, assetBase, contracts, designs, templates, themes, placements, assets, imageProxy, provenance
+    case blobBase, previewBase, assetBase, contracts, designs, templates, themes, placements, experiments, assets, imageProxy, provenance
   }
 
   public init(from d: Decoder) throws {
@@ -56,6 +58,7 @@ public struct Manifest: Codable, Equatable, Sendable {
     templates = try c.value(.templates, [])
     themes = try c.value(.themes, [])
     placements = try c.value(.placements, [])
+    experiments = try c.value(.experiments, [])
     assets = try c.value(.assets, [])
     imageProxy = try c.decodeIfPresent(ImageProxy.self, forKey: .imageProxy)
     provenance = try c.value(.provenance, [:])
@@ -626,8 +629,10 @@ public struct PlacementRule: Codable, Equatable, Sendable {
   public var rollout: Rollout?
   public var frequency: FrequencyCap?
   public var tracking: Tracking
+  /// Only for users assigned this arm of a manifest experiment (§8.1).
+  public var arm: ArmRef?
 
-  enum CodingKeys: String, CodingKey { case id, placement, template, data, priority, startEpochMs, endEpochMs, conditions, rollout, frequency, tracking }
+  enum CodingKeys: String, CodingKey { case id, placement, template, data, priority, startEpochMs, endEpochMs, conditions, rollout, frequency, tracking, arm }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     id = try c.decode(String.self, forKey: .id)
@@ -641,7 +646,57 @@ public struct PlacementRule: Codable, Equatable, Sendable {
     rollout = try c.decodeIfPresent(Rollout.self, forKey: .rollout)
     frequency = try c.decodeIfPresent(FrequencyCap.self, forKey: .frequency)
     tracking = try c.value(.tracking, Tracking())
+    arm = try c.decodeIfPresent(ArmRef.self, forKey: .arm)
   }
+}
+
+/// An A/B test (§8.1): users matching `conditions` during the schedule are enrolled at
+/// `allocationBasisPoints`, each in one sticky arm in proportion to the arms' weights.
+public struct Experiment: Codable, Equatable, Sendable {
+  public var id: String
+  public var arms: [Arm]
+  public var startEpochMs: Int64?
+  public var endEpochMs: Int64?
+  public var conditions: Conditions
+  public var allocationBasisPoints: Int
+
+  public init(id: String, arms: [Arm], startEpochMs: Int64? = nil, endEpochMs: Int64? = nil, conditions: Conditions = Conditions(), allocationBasisPoints: Int = 10_000) {
+    self.id = id; self.arms = arms; self.startEpochMs = startEpochMs; self.endEpochMs = endEpochMs
+    self.conditions = conditions; self.allocationBasisPoints = allocationBasisPoints
+  }
+
+  enum CodingKeys: String, CodingKey { case id, arms, startEpochMs, endEpochMs, conditions, allocationBasisPoints }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    arms = try c.decode([Arm].self, forKey: .arms)
+    startEpochMs = try c.decodeIfPresent(Int64.self, forKey: .startEpochMs)
+    endEpochMs = try c.decodeIfPresent(Int64.self, forKey: .endEpochMs)
+    conditions = try c.value(.conditions, Conditions())
+    allocationBasisPoints = try c.value(.allocationBasisPoints, 10_000)
+  }
+}
+
+/// One arm: its weight among the experiment's arms, and the design it picks per contract (`id@major` → design id).
+public struct Arm: Codable, Equatable, Sendable {
+  public var id: String
+  public var weight: Int
+  public var designs: [String: String]
+
+  public init(id: String, weight: Int = 1, designs: [String: String] = [:]) { self.id = id; self.weight = weight; self.designs = designs }
+
+  enum CodingKeys: String, CodingKey { case id, weight, designs }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    weight = try c.value(.weight, 1)
+    designs = try c.value(.designs, [:])
+  }
+}
+
+public struct ArmRef: Codable, Equatable, Sendable {
+  public var experiment: String
+  public var arm: String
 }
 
 public struct FeedItem: Codable, Equatable, Sendable {
@@ -677,7 +732,7 @@ public struct FeedPage: Codable, Equatable, Sendable {
 }
 
 public struct TemplateEvent: Codable, Equatable, Sendable {
-  public enum Kind: String, Codable, Sendable { case impression = "Impression", viewable = "Viewable", action = "Action", dismiss = "Dismiss", fallback = "Fallback", error = "Error" }
+  public enum Kind: String, Codable, Sendable { case impression = "Impression", viewable = "Viewable", action = "Action", dismiss = "Dismiss", fallback = "Fallback", error = "Error", exposure = "Exposure", leave = "Leave" }
   public var type: Kind
   public var atEpochMs: Int64
   public var placement: String?
@@ -687,9 +742,33 @@ public struct TemplateEvent: Codable, Equatable, Sendable {
   public var sha256: String?
   public var action: String?
   public var detail: String?
+  /// Experiment → arm for every experiment that shaped what drew.
+  public var experiments: [String: String]
+  /// An action's arguments that its contract declares (§7): never any other.
+  public var args: [String: String]
+  /// A `leave`'s time on screen: milliseconds at least half visible while it was shown.
+  public var durationMs: Int64?
 
-  public init(type: Kind, atEpochMs: Int64, placement: String? = nil, decisionId: String? = nil, feedItemId: String? = nil, designId: String? = nil, sha256: String? = nil, action: String? = nil, detail: String? = nil) {
+  public init(type: Kind, atEpochMs: Int64, placement: String? = nil, decisionId: String? = nil, feedItemId: String? = nil, designId: String? = nil, sha256: String? = nil, action: String? = nil, detail: String? = nil, experiments: [String: String] = [:], args: [String: String] = [:], durationMs: Int64? = nil) {
     self.type = type; self.atEpochMs = atEpochMs; self.placement = placement; self.decisionId = decisionId
     self.feedItemId = feedItemId; self.designId = designId; self.sha256 = sha256; self.action = action; self.detail = detail
+    self.experiments = experiments; self.args = args; self.durationMs = durationMs
+  }
+
+  enum CodingKeys: String, CodingKey { case type, atEpochMs, placement, decisionId, feedItemId, designId, sha256, action, detail, experiments, args, durationMs }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    type = try c.decode(Kind.self, forKey: .type)
+    atEpochMs = try c.decode(Int64.self, forKey: .atEpochMs)
+    placement = try c.decodeIfPresent(String.self, forKey: .placement)
+    decisionId = try c.decodeIfPresent(String.self, forKey: .decisionId)
+    feedItemId = try c.decodeIfPresent(String.self, forKey: .feedItemId)
+    designId = try c.decodeIfPresent(String.self, forKey: .designId)
+    sha256 = try c.decodeIfPresent(String.self, forKey: .sha256)
+    action = try c.decodeIfPresent(String.self, forKey: .action)
+    detail = try c.decodeIfPresent(String.self, forKey: .detail)
+    experiments = try c.value(.experiments, [:])
+    args = try c.value(.args, [:])
+    durationMs = try c.decodeIfPresent(Int64.self, forKey: .durationMs)
   }
 }

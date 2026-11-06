@@ -34,6 +34,56 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct ExperimentFixture: Decodable {
+    struct Case: Decodable { var name: String; var experiment: String; var bucketingId: String; var nowEpochMs: Int64?; var segments: Set<String>?; var expect: String? }
+    var experiments: [Experiment]
+    var cases: [Case]
+  }
+
+  func testExperiments() throws {
+    let f = try JSONDecoder().decode(ExperimentFixture.self, from: fixture("experiments.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let e = try XCTUnwrap(f.experiments.first { $0.id == c.experiment })
+      let ctx = DecisionContext(nowEpochMs: c.nowEpochMs ?? 1_000, platform: "test", locale: "en", appVersion: 1, bucketingId: c.bucketingId, segments: c.segments ?? [])
+      XCTAssertEqual(LocalBucketing.assignNow(e, ctx), c.expect, c.name)
+    }
+  }
+
+  struct ActionFixture: Decodable {
+    struct Expect: Decodable { var args: [String: String]?; var problem: String? }
+    struct Case: Decodable { var name: String; var action: String; var args: [String: String]; var expect: Expect }
+    var contract: Contract
+    var cases: [Case]
+  }
+
+  func testActions() throws {
+    let f = try JSONDecoder().decode(ActionFixture.self, from: fixture("actions.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let got = ActionGate.check(f.contract, c.action, c.args)
+      XCTAssertEqual(got.args, c.expect.args ?? [:], c.name)
+      XCTAssertEqual(got.problem, c.expect.problem, c.name)
+    }
+  }
+
+  struct DesignArmFixture: Decodable {
+    struct Expect: Decodable, Equatable { var experiment: String; var arm: String; var designId: String? }
+    struct Case: Decodable { var name: String; var contract: String; var bucketingId: String; var expect: Expect? }
+    var experiments: [Experiment]
+    var cases: [Case]
+  }
+
+  func testDesignArms() async throws {
+    let f = try JSONDecoder().decode(DesignArmFixture.self, from: fixture("design-arms.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let ctx = DecisionContext(nowEpochMs: 1_000, platform: "test", locale: "en", appVersion: 1, bucketingId: c.bucketingId)
+      let got = await DesignArm.choose(f.experiments, contract: c.contract, context: ctx) { LocalBucketing.assignNow($0, ctx) }
+      XCTAssertEqual(got.map { DesignArmFixture.Expect(experiment: $0.experiment, arm: $0.arm, designId: $0.designId) }, c.expect, c.name)
+    }
+  }
+
   struct BindingFixture: Decodable {
     struct Expect: Decodable { var ok: [String: NamedValue]?; var problems: [String]? }
     struct Case: Decodable { var name: String; var data: [String: JSONValue]; var expect: Expect }
