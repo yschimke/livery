@@ -10,7 +10,9 @@ public final class LiveryScreensModel: ObservableObject {
 
   public init(_ screens: LiveryScreens) {
     self.screens = screens
-    screens.onChange = { [weak self] s in Task { @MainActor in self?.stack = s } }
+    // Each change reads the stack as it is when it runs on the main actor, never the snapshot the
+    // change carried: notifications that arrive out of order can't bring back a closed screen.
+    screens.onChange = { [weak self, screens] _ in Task { @MainActor in self?.stack = screens.stack } }
   }
 }
 

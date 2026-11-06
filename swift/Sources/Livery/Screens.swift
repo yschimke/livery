@@ -175,8 +175,10 @@ public final class LiveryScreens: @unchecked Sendable {
     nextId += 1
     let now = screens
     lock.unlock()
-    if let decision, let record = recordImpression { await record(decision, planner.clock()) }
+    // Publish before anything that can suspend, so a dismiss meanwhile is never overwritten by
+    // this older stack.
     onChange?(now)
+    if let decision, let record = recordImpression { await record(decision, planner.clock()) }
     return true
   }
 
