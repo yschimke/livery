@@ -23,9 +23,10 @@ fun interface ExperimentAssigner {
 
 /**
  * Sticky, offline assignment (PROTOCOL.md §8.1): within the schedule, for users matching the
- * conditions, `b = bucket(experiment.id, bucketingId)`; a user with `b < allocationBasisPoints` is
- * enrolled, in the arm whose cumulative weight covers `b × totalWeight / allocationBasisPoints`.
- * One hash decides both, so raising the allocation only adds users and never moves one.
+ * conditions, a user is enrolled when `bucket(experiment.id, bucketingId) < allocationBasisPoints`,
+ * in the arm whose cumulative weight covers `bucket(experiment.id + "#arm", bucketingId) ×
+ * totalWeight / 10000`. Two independent hashes: raising the allocation only adds users, and an
+ * enrolled user keeps their arm.
  */
 object LocalBucketing : ExperimentAssigner {
   override suspend fun assign(experiment: Experiment, context: DecisionContext): String? = assignNow(experiment, context)
@@ -36,9 +37,8 @@ object LocalBucketing : ExperimentAssigner {
     val total = arms.sumOf { it.weight.toLong() }
     val allocation = experiment.allocationBasisPoints.coerceIn(0, 10_000)
     if (total == 0L || allocation == 0) return null
-    val b = LocalRulesDecider.bucket(experiment.id, context.bucketingId)
-    if (b >= allocation) return null
-    val position = b.toLong() * total / allocation
+    if (LocalRulesDecider.bucket(experiment.id, context.bucketingId) >= allocation) return null
+    val position = LocalRulesDecider.bucket(experiment.id + ARM_SALT, context.bucketingId).toLong() * total / 10_000
     var upTo = 0L
     for (arm in arms) {
       upTo += arm.weight
@@ -46,6 +46,9 @@ object LocalBucketing : ExperimentAssigner {
     }
     return arms.last().id
   }
+
+  /** Appended to the experiment id for the arm's bucket, so it is independent of enrolment's. */
+  const val ARM_SALT: String = "#arm"
 
   /** Whether [experiment] runs for this user now: its schedule and conditions. */
   fun running(experiment: Experiment, context: DecisionContext): Boolean {

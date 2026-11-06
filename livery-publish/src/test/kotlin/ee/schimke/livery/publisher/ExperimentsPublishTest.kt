@@ -48,4 +48,11 @@ class ExperimentsPublishTest {
     val problems = assertFailsWith<CatalogProblems> { CatalogBuilder().build(src, Layout.Static) }.problems
     assertEquals(listOf("placement spring-trial: experiment tile-look has no arm retro"), problems)
   }
+
+  @Test fun aRuleForAnArmRequiresAClientThatKnowsExperiments() {
+    val withDesignArm = tree("""{ "id": "tile-look", "arms": [ { "id": "control" }, { "id": "retro", "designs": { "live/status-tile@1": "tile-retro" } } ] }""")
+    assertEquals(RESOURCES_LEVEL, CatalogBuilder(now = { 0 }).build(withDesignArm, Layout.Static, serial = 1).manifest.minClient, "design arms need no level")
+    File(withDesignArm, "placements/spring-trial.json").let { it.writeText(it.readText().trimEnd().removeSuffix("}") + """, "arm": { "experiment": "tile-look", "arm": "retro" } }""") }
+    assertEquals(EXPERIMENTS_LEVEL, CatalogBuilder(now = { 0 }).build(withDesignArm, Layout.Static, serial = 1).manifest.minClient)
+  }
 }

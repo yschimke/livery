@@ -46,7 +46,9 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
 - An arm's `designs` pick the design a contract's slots draw when the app didn't choose one. Here,
   enrolled users in `retro` see the retro tile everywhere it has a template.
 - A placement rule can be limited to an arm, to test copy, timing or a different creative:
-  `"arm": { "experiment": "promo-copy", "arm": "b" }`.
+  `"arm": { "experiment": "promo-copy", "arm": "b" }`. A catalog with such a rule requires
+  protocol level 4, so older clients, which would show it to everyone, keep their previous
+  catalog. Design arms don't: an older client simply draws what the control arm does.
 - The first time an arm changes what a slot draws, Livery emits one `Exposure` event. Analyse
   exposures, not assignments: a user assigned to an arm they never saw isn't in the test.
 

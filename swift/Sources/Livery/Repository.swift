@@ -76,8 +76,8 @@ public actor TemplateRepository {
   }
 
   /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy); level 3 added
-  /// contract minors (`requiresMinor`, `TemplateQuery.minor`).
-  public static let protocolLevel = 3
+  /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments.
+  public static let protocolLevel = 4
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 

@@ -120,6 +120,9 @@ const val RESOURCES_LEVEL: Int = 2
 /** The protocol level that added contract minors: a strict [MinorPolicy] requires it. */
 const val MINORS_LEVEL: Int = 3
 
+/** The protocol level that added experiments: a placement rule limited to an arm requires it. */
+const val EXPERIMENTS_LEVEL: Int = 4
+
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
 /**
@@ -296,6 +299,8 @@ class CatalogBuilder(
         config.minClient,
         if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0,
         if (templates.any { it.requiresMinor > 0 && config.minorPolicy.modeFor(it.contract) == MinorPolicy.Mode.Strict }) MINORS_LEVEL else 0,
+        // An older client ignores `arm` and would show an arm's rule to everyone.
+        if (placements.any { it.arm != null }) EXPERIMENTS_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",

@@ -33,8 +33,8 @@ public protocol ExperimentAssigner: Sendable {
   func assign(_ experiment: Experiment, context: DecisionContext) async -> String?
 }
 
-/// Sticky, offline assignment (§8.1): `b = bucket(id, bucketingId)`; enrolled when
-/// `b < allocationBasisPoints`, in the arm whose cumulative weight covers `b × total / allocation`.
+/// Sticky, offline assignment (§8.1): enrolled when `bucket(id, bucketingId) < allocationBasisPoints`,
+/// in the arm whose cumulative weight covers `bucket(id + "#arm", bucketingId) × total / 10000`.
 public struct LocalBucketing: ExperimentAssigner {
   public init() {}
   public func assign(_ experiment: Experiment, context: DecisionContext) async -> String? { Self.assignNow(experiment, context) }
@@ -45,9 +45,8 @@ public struct LocalBucketing: ExperimentAssigner {
     let total = arms.reduce(Int64(0)) { $0 + Int64($1.weight) }
     let allocation = min(max(e.allocationBasisPoints, 0), 10_000)
     guard total > 0, allocation > 0, let last = arms.last else { return nil }
-    let b = LocalRulesDecider.bucket(e.id, c.bucketingId)
-    guard b < allocation else { return nil }
-    let position = Int64(b) * total / Int64(allocation)
+    guard LocalRulesDecider.bucket(e.id, c.bucketingId) < allocation else { return nil }
+    let position = Int64(LocalRulesDecider.bucket(e.id + "#arm", c.bucketingId)) * total / 10_000
     var upTo: Int64 = 0
     for arm in arms {
       upTo += Int64(arm.weight)

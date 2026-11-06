@@ -381,8 +381,9 @@ class TemplateRepository(
      * added resources (assets, fonts, the image proxy): a level-1 client would hand out templates
      * without them, so catalogs that use them require level 2. Level 3 added contract minors
      * (`requiresMinor`, `TemplateQuery.minor`): a catalog whose minor policy is strict requires it.
+     * Level 4 added experiments: a catalog with placement rules limited to an arm requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 3
+    const val PROTOCOL_LEVEL: Int = 4
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

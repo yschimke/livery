@@ -165,7 +165,8 @@ interface FrequencyBackend {
 /**
  * Frequency caps across devices. Decisions read only the local store, so rendering never waits on
  * the network; impressions are queued and [sync] (on app start, on a schedule, after a placement
- * draws) pushes them and pulls the other devices'. A cap is at most one sync out of date.
+ * draws) pushes them and pulls the other devices' over [lookbackMs] (keep it at least the longest
+ * cap's window). A cap is at most one sync out of date.
  */
 class SyncedFrequencyStore(
   private val kv: KeyValueStore,
@@ -188,10 +189,10 @@ class SyncedFrequencyStore(
       val queued = lock.withLockSafe { pending() }
       if (queued.isNotEmpty()) backend.push(queued)
       lock.withLockSafe { kv.put(PENDING, json.encodeToString(pendingSerializer, pending() - queued.toSet())) }
+      // The whole window every time: another device may upload an older impression it queued
+      // offline after this one last pulled, and merging counts each record once.
       val now = clock.nowEpochMs()
-      val since = kv.get(PULLED)?.toLongOrNull()?.let { maxOf(it, now - lookbackMs) } ?: (now - lookbackMs)
-      merge(backend.pull(since), now)
-      kv.put(PULLED, now.toString())
+      merge(backend.pull(now - lookbackMs), now)
     }.isSuccess
   }
 
@@ -200,7 +201,6 @@ class SyncedFrequencyStore(
 
   private companion object {
     const val PENDING = "livery.frequency~pending"
-    const val PULLED = "livery.frequency~pulled"
   }
 }
 

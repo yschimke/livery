@@ -39,7 +39,8 @@ class ExperimentsTest {
     val tenth = users.associateWith { LocalBucketing.assignNow(ab.copy(allocationBasisPoints = 1_000), ctx(it)) }
     val half = users.associateWith { LocalBucketing.assignNow(ab.copy(allocationBasisPoints = 5_000), ctx(it)) }
     assertTrue(tenth.values.count { it != null } in 150..250)
-    for ((u, arm) in tenth) if (arm != null) assertTrue(half[u] != null, "$u left the experiment when it grew")
+    for ((u, arm) in tenth) if (arm != null) assertEquals(arm, half[u], "$u changed arm when the experiment grew")
+    assertTrue(users.count { half[it] != null && tenth[it] == null } > 0, "growing added users")
   }
 
   @Test fun scheduleAndConditionsGateEnrolment() {
@@ -159,6 +160,15 @@ class ExperimentsTest {
     backend.down = false
     assertTrue(tablet.sync()); assertTrue(phone.sync())
     assertEquals(3, phone.impressions("nudge", 0))
+
+    // A device that uploads an older impression late, after the others last pulled, still counts.
+    val laptop = SyncedFrequencyStore(MemoryKeyValueStore(), backend, "laptop", { now })
+    laptop.record("nudge", 9_000)
+    now += 1_000
+    assertTrue(phone.sync())
+    assertTrue(laptop.sync())
+    assertTrue(phone.sync())
+    assertEquals(4, phone.impressions("nudge", 0), "the late upload counts")
   }
 
   @Test fun theLocalStoreSurvivesARestart() = runTest {

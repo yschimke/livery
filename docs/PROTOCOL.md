@@ -1,4 +1,4 @@
-# Livery protocol, level 3
+# Livery protocol, level 4
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 3 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 4 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -62,7 +62,11 @@ a catalog in which any template lists `assets`. Level 3 added contract minors (`
 level-3 query without a `minor` does: an input its app doesn't fill draws the template's own
 default, and an action it can't route does nothing. Whether that is acceptable is the publisher's
 policy (§4.3): a strict catalog sets `minClient` to at least 3 when a template of a strict contract
-has a `requiresMinor` above 0, so older clients keep what they had. A client must reject a
+has a `requiresMinor` above 0, so older clients keep what they had. Level 4 added experiments
+(§8.1). A level-3 client ignores a placement rule's `arm` and would show an arm's rule to everyone,
+so a publisher must set `minClient` to at least 4 for a catalog in which any placement rule has an
+`arm`. Design arms need no level: a client that ignores them draws what the control arm does. A
+client must reject a
 manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
@@ -334,12 +338,13 @@ An experiment is `id`, `arms` (each an `id`, a `weight`, default 1, and `designs
 `id@major` → design id), a schedule (`startEpochMs` inclusive, `endEpochMs` exclusive),
 `conditions` as for placement rules, and `allocationBasisPoints` (default 10000).
 
-It **runs** for a user within its schedule when the conditions match. Local assignment then takes
-`b`, the bucket of `<id>:<bucketing id>` as above. The user is enrolled when `b <
-allocationBasisPoints`, in the first arm (arms with weight 0 skipped) whose cumulative weight is
-above `b × totalWeight / allocationBasisPoints` (integer arithmetic). One bucket decides both, so
-raising the allocation only adds users. A client may take the arm from another assigner instead (a
-remote configuration service); an arm id the experiment doesn't list counts as no answer.
+It **runs** for a user within its schedule when the conditions match. Local assignment enrols the
+user when the bucket of `<id>:<bucketing id>` (as above) is below `allocationBasisPoints`, in the
+first arm (arms with weight 0 skipped) whose cumulative weight is above `a × totalWeight / 10000`
+(integer arithmetic), where `a` is the bucket of `<id>#arm:<bucketing id>`. The two buckets are
+independent, so raising the allocation only adds users and an enrolled user keeps their arm. A
+client may take the arm from another assigner instead (a remote configuration service); an arm id
+the experiment doesn't list counts as no answer.
 
 An arm with a design for a contract makes a slot of that contract that names no design draw that
 design, when it has a template for the slot; otherwise the slot selects as usual (§5.2). The first
