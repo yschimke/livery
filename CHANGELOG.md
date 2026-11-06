@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/yschimke/livery/compare/v0.1.1...v0.2.0) (2026-11-06)
+
+
+### Features
+
+* contract minors, template compatibility checks and livery check ([#11](https://github.com/yschimke/livery/issues/11)) ([2b2c744](https://github.com/yschimke/livery/commit/2b2c744400aa5605fe06eb6e86a26c12cbe0f6fd))
+
 ## 0.1.1 (2026-11-05)
 
 
