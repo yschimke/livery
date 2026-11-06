@@ -43,10 +43,11 @@ Early. In this repository today:
 | `livery-wear-widgets` | `LiveryWearWidget`: Glance Wear widgets from Livery templates, framed per container on rc-players' `rc-widget-core` |
 | `livery-firebase` | Firebase for analytics (`FirebaseAnalyticsSink`), A/B test arms (`RemoteConfigAssigner`) and frequency caps across devices (`FirestoreFrequencyBackend`); any other pipeline plugs into the same interfaces in `livery-client` |
 | `livery-notifications` | `LiveryNotifications`: notification bodies (Android 16+) from Livery templates, with taps through `LiveryNotificationReceiver` |
-| `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, and `check` a change against what is published |
+| `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, `check` a change against what is published, and `import` a document from any authoring tool |
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |
 | `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
-| `livery-uibuilder` | optional: Compose UI Builder designs (at a revision) as documents for `livery-mcp` |
+| `livery-capture` | author templates in Compose: contract-typed named values (`LiveryValues`), capture per target, and a design folder a unit test writes or checks |
+| `livery-uibuilder` | optional: Compose UI Builder as an authoring tool: `livery ui-builder scaffold` / `import`, and `ui_builder_*` tools for `livery-mcp` |
 | `livery-gradle-plugin` | `ee.schimke.composeai.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
 | `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |

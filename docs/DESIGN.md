@@ -194,7 +194,8 @@ and schedulers are per platform:
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
 | `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
-| `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `ui_builder_export` (a design at a revision, with its `source`), loaded into `livery-mcp` as an extension |
+| `livery-capture` | Android | Compose authoring: `LiveryValues` (a contract's values as named Remote Compose values, refusing undeclared names and wrong types), `LiveryCapture.capture` per target, and `DesignFolder` to write or check a design's files from a unit test |
+| `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `livery ui-builder scaffold` (a contract as host inputs) and `import` (a design at a revision into the tree, with its `source`) as a `LiveryCommand`, and `ui_builder_scaffold` / `ui_builder_export` in `livery-mcp` as an `McpExtension` |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance
@@ -229,11 +230,16 @@ A document never fetches anything; every byte it draws comes through the client
 
 Livery takes **`.rc` bytes and a sidecar**, from anything:
 
-- Kotlin capture code (`@RemoteComposable` content captured at build time, as Home Assistant's
-  library is);
-- UI Builder's `.uid` → RC authoring JSON → `remotecompose-json` → `.rc` export;
+- Kotlin capture code (`@RemoteComposable` content captured at build time): `livery-capture`;
+- UI Builder's `.uid` → RC authoring JSON → `remotecompose-json` → `.rc` export:
+  `livery-uibuilder`;
 - an agent writing RC authoring JSON directly, compiled with `remotecompose-json`;
-- a hand-built or third-party document.
+- a hand-built or third-party document, through `livery import`.
+
+The two supported flows (site page "Authoring templates") both start from the contract and end in
+`TemplateImport`'s checks or the same checks at capture: the sidecar's reads and emits are read
+from the document, and a name or type the contract doesn't declare is refused before anything is
+written.
 
 The source tree:
 
@@ -298,8 +304,9 @@ data → PNG, through `livery-render`), and, when started with `--write` and `--
 the catalog's own channel) and `publish_preview` (one document as a catalog of its own, for a look
 before it joins). Versions: each template entry's `source` says where it came from (tool, design,
 revision, commit), and in a git checkout `list_history` and `render_preview(revision)` show and
-draw earlier versions. Authoring tools plug in as optional modules (`McpExtension`):
-`livery-uibuilder` exports a UI Builder design at a revision.
+draw earlier versions. Authoring tools plug in as optional modules (`McpExtension` for
+`livery-mcp`, `LiveryCommand` for `livery`): `livery-uibuilder` scaffolds a contract as host inputs
+and exports a UI Builder design at a revision.
 
 *Next*: retired versions in the manifest. When a design's template changes, the publisher keeps
 the previous entries (and their blobs) as retired, so an exact reference (a decision or feed item

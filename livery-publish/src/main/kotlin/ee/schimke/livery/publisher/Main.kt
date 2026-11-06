@@ -32,10 +32,15 @@ private const val USAGE = """livery — build, sign and check a template catalog
   livery preview <doc.rc> <out> --src <catalog> --contract <id@major> [--target <json>] [--title <t>]
                                        one document as an unsigned catalog in <out>/preview-<hash>/,
                                        checked against the contract, for a debug build to play
+  livery import <doc.rc> <src> --as <design>/<name> --target <json> [--source <key>=<value>]...
+                                       puts a document from any authoring tool into <src> as
+                                       designs/<design>/<name>.rc with a sidecar read from the
+                                       document; refuses names or types its contract doesn't declare
 """
 
 fun main(args: Array<String>) {
   val a = args.toList()
+  val extensions = LiveryCommand.installed()
   fun opt(name: String) = a.indexOf(name).takeIf { it >= 0 }?.let { a.getOrNull(it + 1) }
   try {
     when (a.firstOrNull()) {
@@ -97,11 +102,27 @@ fun main(args: Array<String>) {
         val dir = PreviewCatalog.write(result, out)
         println("${result.channel}: unsigned preview of ${doc.name} for $ref -> $dir")
       }
-      else -> usage()
+      "import" -> {
+        val doc = File(a.getOrNull(1) ?: usage(extensions))
+        val src = File(a.getOrNull(2) ?: usage(extensions))
+        val (design, name) = (opt("--as") ?: usage(extensions)).split('/', limit = 2).takeIf { it.size == 2 } ?: usage(extensions)
+        val target = Json.decodeFromString(ee.schimke.livery.protocol.Target.serializer(), opt("--target") ?: usage(extensions))
+        val source = a.withIndex().filter { it.value == "--source" }.mapNotNull { a.getOrNull(it.index + 1) }
+          .associate { it.substringBefore('=') to it.substringAfter('=', "") }
+        val i = TemplateImport.into(src, design, name, doc.readBytes(), target, source)
+        println("${i.rc} for ${i.contract}: reads ${i.spec.reads}, emits ${i.spec.emits}")
+      }
+      else -> {
+        val ext = extensions.firstOrNull { it.name == a.firstOrNull() } ?: usage(extensions)
+        exitProcess(ext.run(a.drop(1), System.getenv()))
+      }
     }
   } catch (e: CatalogProblems) {
     System.err.println(e.message); exitProcess(2)
   }
 }
 
-private fun usage(): Nothing { System.err.println(USAGE); exitProcess(64) }
+private fun usage(extensions: List<LiveryCommand> = LiveryCommand.installed()): Nothing {
+  System.err.println(USAGE + extensions.joinToString("") { it.usage.trimEnd() + "\n" })
+  exitProcess(64)
+}

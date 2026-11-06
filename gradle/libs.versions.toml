@@ -10,6 +10,9 @@ maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
 glance-wear = "1.0.0-alpha21"
 firebase-bom = "35.1.0"
+compose-remote = "1.0.0-alpha22"
+robolectric = "4.17"
+robolectric-sdk35 = "15-robolectric-13954326-i7"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
@@ -35,6 +38,10 @@ rc-player-edit = { module = "ee.schimke.composeai:rc-player-edit" }
 rc-widget-core = { module = "ee.schimke.composeai:rc-widget-core" }
 rc-widget-launcher = { module = "ee.schimke.composeai:rc-widget-launcher" }
 rc-player-protocol = { module = "ee.schimke.composeai:rc-player-protocol" }
+rc-widget-creation = { module = "ee.schimke.composeai:rc-widget-creation" }
+compose-remote-creation-compose = { module = "androidx.compose.remote:remote-creation-compose", version.ref = "compose-remote" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-sdk35 = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-sdk35" }
 android-gradle-api = { module = "com.android.tools.build:gradle-api", version.ref = "agp" }
 glance-wear = { module = "androidx.glance.wear:wear", version.ref = "glance-wear" }
 glance-wear-core = { module = "androidx.glance.wear:wear-core", version.ref = "glance-wear" }

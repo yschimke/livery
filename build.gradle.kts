@@ -32,6 +32,7 @@ val published = mapOf(
   ":livery-launcher-widgets" to ("Livery launcher widgets" to "Android launcher AppWidgets drawn from Livery templates"),
   ":livery-wear-widgets" to ("Livery Wear widgets" to "Glance Wear widgets drawn from Livery templates"),
   ":livery-notifications" to ("Livery notifications" to "Android notification bodies drawn from Livery templates"),
+  ":livery-capture" to ("Livery capture" to "Author Livery templates in Compose: contract-typed named values, capture per target, and catalog files that stay current"),
   ":livery-firebase" to ("Livery Firebase" to "Firebase Analytics, Remote Config experiments and Firestore frequency caps for Livery"),
   ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
   ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),
