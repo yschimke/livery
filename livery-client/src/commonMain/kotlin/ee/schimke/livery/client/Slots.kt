@@ -36,7 +36,8 @@ fun interface EventSink {
  * content), a decision (ads, promotions), or a feed item. All three end at the same contract gate.
  *
  * With [experiments], a slot whose query names no design draws the design the user's experiment arm
- * picks for the contract (PROTOCOL.md §8.1), and reports the exposure when it does.
+ * picks for the contract (PROTOCOL.md §8.1). The plan carries the arm; its exposure is reported when
+ * it draws, through [Experiments.sink].
  */
 class SlotPlanner(
   private val repository: TemplateRepository,
@@ -51,9 +52,7 @@ class SlotPlanner(
       // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
       // user wasn't exposed to the arm here.
       repository.resolve(query.copy(designId = arm.designId))?.takeIf { it.entry.designId == arm.designId }?.let { t ->
-        val planned = plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
-        if (planned is PlanResult.Ready) experiments?.exposed(arm.experiment, arm.arm, clock.nowEpochMs(), designId = arm.designId)
-        return planned
+        return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
       }
     }
     val t = repository.resolve(query) ?: return fallback(query, "no template", null)

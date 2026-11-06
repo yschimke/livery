@@ -348,8 +348,10 @@ the experiment doesn't list counts as no answer.
 
 An arm with a design for a contract makes a slot of that contract that names no design draw that
 design, when it has a template for the slot; otherwise the slot selects as usual (§5.2). The first
-time an arm shapes what a slot draws, the client emits one `Exposure` event for that experiment and
-arm. Exposure, not assignment, is what an analysis counts.
+time a template an arm chose draws (its `Impression`, whether the arm picked its design or a rule
+for the arm decided it), the client emits one `Exposure` event for that experiment and arm. Planning
+is not exposure, and a host that reports no impressions reports exposure when it knows the user saw
+the template. Exposure, not assignment, is what an analysis counts.
 
 ## Conformance
 

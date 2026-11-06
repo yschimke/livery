@@ -5,8 +5,8 @@ import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.TemplateEvent
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 /**
  * Who decides which arm of an [Experiment] a user is in. The default, [LocalBucketing], needs no
@@ -70,15 +70,28 @@ class FirstAssigner(private val assigners: List<ExperimentAssigner>) : Experimen
  * The manifest's experiments for one app: which arm the user is in, which design an arm picks for
  * a contract, and one [TemplateEvent.Type.Exposure] per experiment and arm the first time it shapes
  * what draws (exposure, not assignment, is what an A/B analysis counts).
+ *
+ * Exposure follows drawing, not planning: give slots [sink] as their event sink, and the first
+ * `Impression` carrying an arm (a design arm's plan, a decision from an arm's rule) reports it.
+ * A host that never reports impressions (a launcher or Wear widget) calls [exposed] when it knows
+ * the user saw the plan.
  */
+@OptIn(ExperimentalAtomicApi::class)
 class Experiments(
   private val manifest: suspend () -> Manifest?,
   private val context: suspend () -> DecisionContext,
   private val assigner: ExperimentAssigner = LocalBucketing,
   private val events: EventSink = EventSink { },
 ) {
-  private val exposed = mutableSetOf<Pair<String, String>>()
-  private val lock = Mutex()
+  private val exposed = AtomicReference(emptySet<Pair<String, String>>())
+
+  /** Passes every event to [events], adding one Exposure the first time an arm's template draws. */
+  val sink: EventSink = EventSink { e ->
+    events.emit(e)
+    if (e.type == TemplateEvent.Type.Impression) {
+      for ((experiment, arm) in e.experiments) exposed(experiment, arm, e.atEpochMs, e.placement, e.designId)
+    }
+  }
 
   /** The user's arm of [experimentId], or null when it isn't running for them. */
   suspend fun arm(experimentId: String): String? {
@@ -101,9 +114,14 @@ class Experiments(
   }
 
   /** Reports the exposure once per experiment and arm for this [Experiments]. */
-  suspend fun exposed(experiment: String, arm: String, atEpochMs: Long, placement: String? = null, designId: String? = null) {
-    val first = lock.withLock { exposed.add(experiment to arm) }
-    if (first) events.emit(TemplateEvent(TemplateEvent.Type.Exposure, atEpochMs, placement, designId = designId, experiments = mapOf(experiment to arm)))
+  fun exposed(experiment: String, arm: String, atEpochMs: Long, placement: String? = null, designId: String? = null) {
+    val key = experiment to arm
+    while (true) {
+      val seen = exposed.load()
+      if (key in seen) return
+      if (exposed.compareAndSet(seen, seen + key)) break
+    }
+    events.emit(TemplateEvent(TemplateEvent.Type.Exposure, atEpochMs, placement, designId = designId, experiments = mapOf(experiment to arm)))
   }
 
   private suspend fun armOf(e: Experiment, ctx: DecisionContext): Arm? {

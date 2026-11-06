@@ -21,7 +21,7 @@ val events = AnalyticsEventSink(
   FirebaseAnalyticsSink(Firebase.analytics),            // livery-firebase
   AnalyticsSink { name, params -> amplitude.track(name, params) },  // or Segment, your warehouse, …
 )
-val planner = SlotPlanner(repository, events, clock, experiments)
+val planner = SlotPlanner(repository, events, clock)   // with experiments: see below
 ```
 
 A pipeline that throws doesn't stop the others. To also keep Livery's raw events (a debug log, a
@@ -49,8 +49,9 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
   `"arm": { "experiment": "promo-copy", "arm": "b" }`. A catalog with such a rule requires
   protocol level 4, so older clients, which would show it to everyone, keep their previous
   catalog. Design arms don't: an older client simply draws what the control arm does.
-- The first time an arm changes what a slot draws, Livery emits one `Exposure` event. Analyse
-  exposures, not assignments: a user assigned to an arm they never saw isn't in the test.
+- The first time a template an arm chose actually draws (its `Impression`), Livery emits one
+  `Exposure` event, for design arms and arm-targeted placements alike. Analyse exposures, not
+  assignments: a user assigned to an arm they never saw isn't in the test.
 
 ```kotlin
 val experiments = Experiments(
@@ -59,7 +60,9 @@ val experiments = Experiments(
   assigner = FirstAssigner(RemoteConfigAssigner(Firebase.remoteConfig), LocalBucketing),
   events = events,
 )
-SlotPlanner(repository, events, clock, experiments)
+// Slots report through experiments.sink: every event passes on, and an arm's first impression
+// adds its exposure. A widget, which reports no impressions, calls experiments.exposed(…) itself.
+SlotPlanner(repository, experiments.sink, clock, experiments)
 LocalRulesDecider({ repository.manifest() }, caps, experiments = LocalBucketing)
 ```
 

@@ -65,30 +65,51 @@ class ExperimentsTest {
     TemplateRepository.Bundled(m) { sha -> listOf("default-v7", "retro-v7").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha } },
   )
 
-  @Test fun anArmPicksTheDesignAndIsExposedOnce() = runTest {
+  /** What a renderer reports when a plan's first frame draws. */
+  private fun impression(p: RenderPlan) = TemplateEvent(
+    TemplateEvent.Type.Impression, 1_000, p.decision?.placement, p.decision?.decisionId,
+    designId = p.template.entry.designId, sha256 = p.template.entry.sha256, experiments = p.experiments,
+  )
+
+  @Test fun anArmPicksTheDesignAndIsExposedOnceWhenItDraws() = runTest {
     val m = Fx.manifest().copy(experiments = listOf(ab))
     val events = mutableListOf<TemplateEvent>()
-    val sink = EventSink { events += it }
     val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 7))
     val data = JsonObject(mapOf("name" to kotlinx.serialization.json.JsonPrimitive("Hall")))
-    fun planner(arm: String) = SlotPlanner(repo(m), sink, { 1_000 }, Experiments({ m }, { ctx("u") }, { _, _ -> arm }, sink))
+    fun experiments(arm: String) = Experiments({ m }, { ctx("u") }, { _, _ -> arm }, EventSink { events += it })
+    fun planner(e: Experiments) = SlotPlanner(repo(m), e.sink, { 1_000 }, e)
 
-    val retro = planner("retro")
-    val p = assertIs<PlanResult.Ready>(retro.forAppData(q, data)).plan
+    val retro = experiments("retro")
+    val p = assertIs<PlanResult.Ready>(planner(retro).forAppData(q, data)).plan
     assertEquals("tile-retro", p.template.entry.designId)
     assertEquals(mapOf("tile-look" to "retro"), p.experiments)
-    retro.forAppData(q, data)
+    assertTrue(events.none { it.type == TemplateEvent.Type.Exposure }, "planning isn't seeing")
+    retro.sink.emit(impression(p))
+    retro.sink.emit(impression(p))
     assertEquals(1, events.count { it.type == TemplateEvent.Type.Exposure }, "one exposure per arm")
     assertEquals(mapOf("tile-look" to "retro"), events.single { it.type == TemplateEvent.Type.Exposure }.experiments)
+    assertEquals(2, events.count { it.type == TemplateEvent.Type.Impression }, "every event still passes through")
 
-    // The control arm picks no design: the usual choice, and no exposure from the design.
+    // The control arm picks no design: the usual choice, and its plan carries no arm.
     events.clear()
-    val control = assertIs<PlanResult.Ready>(planner("control").forAppData(q, data)).plan
-    assertEquals("tile-default", control.template.entry.designId)
+    val control = experiments("control")
+    val c = assertIs<PlanResult.Ready>(planner(control).forAppData(q, data)).plan
+    assertEquals("tile-default", c.template.entry.designId)
+    control.sink.emit(impression(c))
     assertTrue(events.none { it.type == TemplateEvent.Type.Exposure })
 
     // A slot that names its design keeps it.
-    assertEquals("tile-default", assertIs<PlanResult.Ready>(planner("retro").forAppData(q.copy(designId = "tile-default"), data)).plan.template.entry.designId)
+    assertEquals("tile-default", assertIs<PlanResult.Ready>(planner(experiments("retro")).forAppData(q.copy(designId = "tile-default"), data)).plan.template.entry.designId)
+  }
+
+  @Test fun aDecisionFromAnArmsRuleIsExposedWhenItDraws() = runTest {
+    val events = mutableListOf<TemplateEvent>()
+    val e = Experiments({ Fx.manifest() }, { ctx("u") }, events = EventSink { events += it })
+    val drew = TemplateEvent(TemplateEvent.Type.Impression, 1_000, "home.top", "local:copy-a", experiments = mapOf("promo-copy" to "a"))
+    e.sink.emit(drew)
+    val exposure = events.single { it.type == TemplateEvent.Type.Exposure }
+    assertEquals(mapOf("promo-copy" to "a"), exposure.experiments)
+    assertEquals("home.top", exposure.placement)
   }
 
   @Test fun placementRulesCanTargetAnArm() = runTest {
