@@ -12,6 +12,7 @@ import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.FontFace
 import ee.schimke.livery.protocol.ImageProxy
 import ee.schimke.livery.protocol.Design
+import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlacementRule
 import ee.schimke.livery.protocol.Preview
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.Json
  * designs/<designId>/assets/<name>.png|webp|svg   images its templates need, named <name>
  * fonts/fonts.json                  FontFile list: the catalog's typefaces and their licences
  * placements/<any>.json             PlacementRule (local growth rules)
+ * experiments/<any>.json            Experiment (A/B tests over designs and placements)
  * themes/<any>.json                 ThemePack
  * ```
  */
@@ -142,6 +144,7 @@ class CatalogBuilder(
     val contracts = jsonFiles(File(src, "contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val themes = jsonFiles(File(src, "themes")).map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
     val placements = jsonFiles(File(src, "placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
+    val experiments = jsonFiles(File(src, "experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
     val files = linkedMapOf<String, ByteArray>()
     val (blobDir, previewDir) = when (layout) {
       Layout.Static -> "blobs/" to "previews/"
@@ -257,6 +260,26 @@ class CatalogBuilder(
       else (ContractBinder.bind(c, p.data) as? BindResult.Invalid)?.let { problems += "placement ${p.id}: ${it.problems}" }
     }
 
+    experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment ${it.key}" }
+    for (e in experiments) {
+      if (e.arms.none { it.weight > 0 }) problems += "experiment ${e.id}: no arm with a weight above 0"
+      if (e.arms.any { it.weight < 0 }) problems += "experiment ${e.id}: a negative weight"
+      if (e.allocationBasisPoints !in 0..10_000) problems += "experiment ${e.id}: allocationBasisPoints ${e.allocationBasisPoints} is outside 0..10000"
+      e.arms.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "experiment ${e.id}: duplicate arm ${it.key}" }
+      for (arm in e.arms) for ((ref, designId) in arm.designs) {
+        val d = designs.firstOrNull { it.id == designId }
+        when {
+          d == null -> problems += "experiment ${e.id} arm ${arm.id}: unknown design $designId"
+          d.contract != ref -> problems += "experiment ${e.id} arm ${arm.id}: design $designId is for ${d.contract}, not $ref"
+        }
+      }
+    }
+    for (p in placements) p.arm?.let { a ->
+      val e = experiments.firstOrNull { it.id == a.experiment }
+      if (e == null) problems += "placement ${p.id}: unknown experiment ${a.experiment}"
+      else if (e.arms.none { it.id == a.arm }) problems += "placement ${p.id}: experiment ${a.experiment} has no arm ${a.arm}"
+    }
+
     if (problems.isNotEmpty()) throw CatalogProblems(problems)
 
     val t = now()
@@ -281,6 +304,7 @@ class CatalogBuilder(
       templates = templates,
       themes = themes,
       placements = placements,
+      experiments = experiments,
       assetBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "assets/",
       assets = assets.values.toList(),
       imageProxy = config.imageProxy,

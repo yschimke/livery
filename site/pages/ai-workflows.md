@@ -1,5 +1,5 @@
 title: AI workflows
-order: 23
+order: 24
 
 # AI workflows
 

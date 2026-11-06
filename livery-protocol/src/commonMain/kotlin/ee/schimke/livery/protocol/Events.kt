@@ -14,6 +14,8 @@ data class TemplateEvent(
   val sha256: String? = null,
   val action: String? = null,
   val detail: String? = null,
+  /** Experiment → arm for every experiment that shaped what drew (a decision's, a design's). */
+  val experiments: Map<String, String> = emptyMap(),
 ) {
   @Serializable
   enum class Type {
@@ -26,5 +28,7 @@ data class TemplateEvent(
     /** The chosen template couldn't be played; [detail] says which fallback drew instead. */
     Fallback,
     Error,
+    /** The user was shown an experiment's arm: what A/B analysis counts ([experiments] says which). */
+    Exposure,
   }
 }

@@ -1,0 +1,322 @@
+{
+  "experiments": [
+    {
+      "id": "even",
+      "arms": [
+        {
+          "id": "a"
+        },
+        {
+          "id": "b"
+        }
+      ]
+    },
+    {
+      "id": "weighted",
+      "arms": [
+        {
+          "id": "control",
+          "weight": 3
+        },
+        {
+          "id": "treatment"
+        },
+        {
+          "id": "off",
+          "weight": 0
+        }
+      ]
+    },
+    {
+      "id": "tenth",
+      "arms": [
+        {
+          "id": "a"
+        },
+        {
+          "id": "b"
+        }
+      ],
+      "allocationBasisPoints": 1000
+    },
+    {
+      "id": "scheduled",
+      "arms": [
+        {
+          "id": "a"
+        }
+      ],
+      "startEpochMs": 500,
+      "endEpochMs": 2000
+    },
+    {
+      "id": "beta",
+      "arms": [
+        {
+          "id": "a"
+        },
+        {
+          "id": "b"
+        }
+      ],
+      "conditions": {
+        "segments": [
+          "beta"
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "even user-0",
+      "experiment": "even",
+      "bucketingId": "user-0",
+      "expect": "a"
+    },
+    {
+      "name": "even user-1",
+      "experiment": "even",
+      "bucketingId": "user-1",
+      "expect": "b"
+    },
+    {
+      "name": "even user-2",
+      "experiment": "even",
+      "bucketingId": "user-2",
+      "expect": "b"
+    },
+    {
+      "name": "even user-3",
+      "experiment": "even",
+      "bucketingId": "user-3",
+      "expect": "a"
+    },
+    {
+      "name": "even user-4",
+      "experiment": "even",
+      "bucketingId": "user-4",
+      "expect": "a"
+    },
+    {
+      "name": "even user-5",
+      "experiment": "even",
+      "bucketingId": "user-5",
+      "expect": "b"
+    },
+    {
+      "name": "even user-6",
+      "experiment": "even",
+      "bucketingId": "user-6",
+      "expect": "b"
+    },
+    {
+      "name": "even user-7",
+      "experiment": "even",
+      "bucketingId": "user-7",
+      "expect": "a"
+    },
+    {
+      "name": "even user-8",
+      "experiment": "even",
+      "bucketingId": "user-8",
+      "expect": "a"
+    },
+    {
+      "name": "even user-9",
+      "experiment": "even",
+      "bucketingId": "user-9",
+      "expect": "a"
+    },
+    {
+      "name": "even user-10",
+      "experiment": "even",
+      "bucketingId": "user-10",
+      "expect": "b"
+    },
+    {
+      "name": "even user-11",
+      "experiment": "even",
+      "bucketingId": "user-11",
+      "expect": "a"
+    },
+    {
+      "name": "weighted user-0",
+      "experiment": "weighted",
+      "bucketingId": "user-0",
+      "expect": "treatment"
+    },
+    {
+      "name": "weighted user-1",
+      "experiment": "weighted",
+      "bucketingId": "user-1",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-2",
+      "experiment": "weighted",
+      "bucketingId": "user-2",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-3",
+      "experiment": "weighted",
+      "bucketingId": "user-3",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-4",
+      "experiment": "weighted",
+      "bucketingId": "user-4",
+      "expect": "treatment"
+    },
+    {
+      "name": "weighted user-5",
+      "experiment": "weighted",
+      "bucketingId": "user-5",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-6",
+      "experiment": "weighted",
+      "bucketingId": "user-6",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-7",
+      "experiment": "weighted",
+      "bucketingId": "user-7",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-8",
+      "experiment": "weighted",
+      "bucketingId": "user-8",
+      "expect": "treatment"
+    },
+    {
+      "name": "weighted user-9",
+      "experiment": "weighted",
+      "bucketingId": "user-9",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-10",
+      "experiment": "weighted",
+      "bucketingId": "user-10",
+      "expect": "control"
+    },
+    {
+      "name": "weighted user-11",
+      "experiment": "weighted",
+      "bucketingId": "user-11",
+      "expect": "control"
+    },
+    {
+      "name": "tenth user-0",
+      "experiment": "tenth",
+      "bucketingId": "user-0",
+      "expect": null
+    },
+    {
+      "name": "tenth user-1",
+      "experiment": "tenth",
+      "bucketingId": "user-1",
+      "expect": null
+    },
+    {
+      "name": "tenth user-2",
+      "experiment": "tenth",
+      "bucketingId": "user-2",
+      "expect": null
+    },
+    {
+      "name": "tenth user-3",
+      "experiment": "tenth",
+      "bucketingId": "user-3",
+      "expect": "b"
+    },
+    {
+      "name": "tenth user-4",
+      "experiment": "tenth",
+      "bucketingId": "user-4",
+      "expect": null
+    },
+    {
+      "name": "tenth user-5",
+      "experiment": "tenth",
+      "bucketingId": "user-5",
+      "expect": null
+    },
+    {
+      "name": "tenth user-6",
+      "experiment": "tenth",
+      "bucketingId": "user-6",
+      "expect": null
+    },
+    {
+      "name": "tenth user-7",
+      "experiment": "tenth",
+      "bucketingId": "user-7",
+      "expect": "a"
+    },
+    {
+      "name": "tenth user-8",
+      "experiment": "tenth",
+      "bucketingId": "user-8",
+      "expect": null
+    },
+    {
+      "name": "tenth user-9",
+      "experiment": "tenth",
+      "bucketingId": "user-9",
+      "expect": null
+    },
+    {
+      "name": "tenth user-10",
+      "experiment": "tenth",
+      "bucketingId": "user-10",
+      "expect": null
+    },
+    {
+      "name": "tenth user-11",
+      "experiment": "tenth",
+      "bucketingId": "user-11",
+      "expect": null
+    },
+    {
+      "name": "before the start",
+      "experiment": "scheduled",
+      "bucketingId": "user-1",
+      "nowEpochMs": 400,
+      "expect": null
+    },
+    {
+      "name": "running",
+      "experiment": "scheduled",
+      "bucketingId": "user-1",
+      "expect": "a"
+    },
+    {
+      "name": "at the end",
+      "experiment": "scheduled",
+      "bucketingId": "user-1",
+      "nowEpochMs": 2000,
+      "expect": null
+    },
+    {
+      "name": "outside the segment",
+      "experiment": "beta",
+      "bucketingId": "user-1",
+      "expect": null
+    },
+    {
+      "name": "in the segment",
+      "experiment": "beta",
+      "bucketingId": "user-1",
+      "segments": [
+        "beta"
+      ],
+      "expect": "a"
+    }
+  ]
+}

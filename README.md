@@ -41,6 +41,7 @@ Early. In this repository today:
 | `livery-instantiate` | writes a slot's values, images and numeric taps into a template for hosts that only play bytes (launcher and Wear widgets, snapshots), on rc-players' `rc-widget-core` |
 | `livery-launcher-widgets` | `LiveryLauncherWidgetProvider`: launcher AppWidgets (Android 16+) from Livery templates, on rc-players' `rc-widget-launcher` |
 | `livery-wear-widgets` | `LiveryWearWidget`: Glance Wear widgets from Livery templates, framed per container on rc-players' `rc-widget-core` |
+| `livery-firebase` | Firebase for analytics (`FirebaseAnalyticsSink`), A/B test arms (`RemoteConfigAssigner`) and frequency caps across devices (`FirestoreFrequencyBackend`); any other pipeline plugs into the same interfaces in `livery-client` |
 | `livery-notifications` | `LiveryNotifications`: notification bodies (Android 16+) from Livery templates, with taps through `LiveryNotificationReceiver` |
 | `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, and `check` a change against what is published |
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |

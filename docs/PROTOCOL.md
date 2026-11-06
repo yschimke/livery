@@ -50,6 +50,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `assets` | AssetEntry[] | `[]` | §6 |
 | `themes` | ThemePack[] | `[]` | named values pushed beside a template's own |
 | `placements` | PlacementRule[] | `[]` | local decision rules (§8) |
+| `experiments` | Experiment[] | `[]` | A/B tests over designs and placements (§8.1) |
 | `imageProxy` | ImageProxy? | `null` | §6.2 |
 | `provenance` | map<string,string> | `{}` | informational; clients never decide on it |
 
@@ -310,16 +311,40 @@ left unrewritten, which the host ignores.
 - A **decision** names a template (`designId` or `sha256`), carries the data, a TTL, tracking URLs
   and experiment arms.
 - A **placement rule** is a local decision: schedule (`startEpochMs` inclusive, `endEpochMs`
-  exclusive), conditions (platform, locale prefix, app version, segments), a sticky rollout and a
-  frequency cap. The highest priority eligible rule wins, ties to the lexically lower `id`. The
-  rollout bucket is FNV-1a 32 of the UTF-8 bytes of `<experiment>:<bucketing id>`, unsigned, modulo
-  10000; the rule applies when the bucket is in `[fromBasisPoints, toBasisPoints)`.
+  exclusive), conditions (platform, locale prefix, app version, segments), a sticky rollout, an
+  experiment `arm` (§8.1) and a frequency cap. The highest priority eligible rule wins, ties to the
+  lexically lower `id`. The rollout bucket is FNV-1a 32 of the UTF-8 bytes of
+  `<experiment>:<bucketing id>`, unsigned, modulo 10000; the rule applies when the bucket is in
+  `[fromBasisPoints, toBasisPoints)`. A rule with an `arm` applies only while that experiment runs
+  for the user and assigns them that arm; its decision's `experiments` names it.
+- A **frequency cap** counts the rule's impressions on the device. A client may share them between
+  a user's devices, but decisions must read only what is on the device: a shared count arrives by
+  a background sync, never while a slot decides.
 - A **feed page** is `feed`, `items` (each an `id`, a template reference, data and tracking),
   `next` and `ttlSeconds`.
 - **Events** are `Impression` (first frame drawn), `Viewable` (at least half on screen for one
-  second), `Action`, `Dismiss`, `Fallback` and `Error`, with the placement, decision, feed item,
-  design and blob they concern. A host that is only handed a document and never reports drawing it
-  (a launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
+  second), `Action`, `Dismiss`, `Fallback`, `Error` and `Exposure` (§8.1), with the placement,
+  decision, feed item, design and blob they concern, and `experiments`: the arm of every experiment
+  that shaped what drew. A host that is only handed a document and never reports drawing it (a
+  launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
+
+### 8.1 Experiments
+
+An experiment is `id`, `arms` (each an `id`, a `weight`, default 1, and `designs`: contract
+`id@major` → design id), a schedule (`startEpochMs` inclusive, `endEpochMs` exclusive),
+`conditions` as for placement rules, and `allocationBasisPoints` (default 10000).
+
+It **runs** for a user within its schedule when the conditions match. Local assignment then takes
+`b`, the bucket of `<id>:<bucketing id>` as above. The user is enrolled when `b <
+allocationBasisPoints`, in the first arm (arms with weight 0 skipped) whose cumulative weight is
+above `b × totalWeight / allocationBasisPoints` (integer arithmetic). One bucket decides both, so
+raising the allocation only adds users. A client may take the arm from another assigner instead (a
+remote configuration service); an arm id the experiment doesn't list counts as no answer.
+
+An arm with a design for a contract makes a slot of that contract that names no design draw that
+design, when it has a template for the slot; otherwise the slot selects as usual (§5.2). The first
+time an arm shapes what a slot draws, the client emits one `Exposure` event for that experiment and
+arm. Exposure, not assignment, is what an analysis counts.
 
 ## Conformance
 
@@ -331,6 +356,7 @@ left unrewritten, which the host ignores.
 | `binding.json` | §4.1: a contract and datasets, and the bindings or the sorted names of the problems |
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
+| `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
 
 The Kotlin client writes them (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`)
 and fails when its answers drift from them; every other implementation must run them in its own

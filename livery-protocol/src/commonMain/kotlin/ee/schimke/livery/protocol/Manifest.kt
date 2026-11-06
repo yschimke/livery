@@ -38,6 +38,8 @@ data class Manifest(
   val templates: List<TemplateEntry> = emptyList(),
   val themes: List<ThemePack> = emptyList(),
   val placements: List<PlacementRule> = emptyList(),
+  /** A/B tests over designs and placements (PROTOCOL.md §8.1). */
+  val experiments: List<Experiment> = emptyList(),
   /** Images and fonts that templates need, content addressed. */
   val assets: List<AssetEntry> = emptyList(),
   /** How remote images in datasets are fetched; null means only hosts the app allowlists. */

@@ -1,6 +1,9 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.Arm
+import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.ImageProxy
 import ee.schimke.livery.protocol.ImageRef
@@ -122,6 +125,36 @@ class ConformanceTest {
       c.copy(expect = got?.sha256)
     }
     check("selection.json", json.encodeToJsonElement(SelectionFixture.serializer(), SelectionFixture(m, cases)))
+  }
+
+  // --- experiments ----------------------------------------------------------------------------
+
+  @Serializable data class ExperimentCase(
+    val name: String, val experiment: String, val bucketingId: String,
+    val nowEpochMs: Long = 1_000, val segments: Set<String> = emptySet(), val expect: String?,
+  )
+  @Serializable data class ExperimentFixture(val experiments: List<Experiment>, val cases: List<ExperimentCase>)
+
+  @Test fun experiments() {
+    val experiments = listOf(
+      Experiment("even", listOf(Arm("a"), Arm("b"))),
+      Experiment("weighted", listOf(Arm("control", 3), Arm("treatment", 1), Arm("off", 0))),
+      Experiment("tenth", listOf(Arm("a"), Arm("b")), allocationBasisPoints = 1_000),
+      Experiment("scheduled", listOf(Arm("a")), startEpochMs = 500, endEpochMs = 2_000),
+      Experiment("beta", listOf(Arm("a"), Arm("b")), conditions = Conditions(segments = setOf("beta"))),
+    )
+    val cases = buildList {
+      for (e in listOf("even", "weighted", "tenth")) for (i in 0 until 12) add(ExperimentCase("$e user-$i", e, "user-$i", expect = null))
+      add(ExperimentCase("before the start", "scheduled", "user-1", nowEpochMs = 400, expect = null))
+      add(ExperimentCase("running", "scheduled", "user-1", expect = null))
+      add(ExperimentCase("at the end", "scheduled", "user-1", nowEpochMs = 2_000, expect = null))
+      add(ExperimentCase("outside the segment", "beta", "user-1", expect = null))
+      add(ExperimentCase("in the segment", "beta", "user-1", segments = setOf("beta"), expect = null))
+    }.map { c ->
+      val e = experiments.single { it.id == c.experiment }
+      c.copy(expect = LocalBucketing.assignNow(e, DecisionContext(c.nowEpochMs, "test", "en", 1, c.bucketingId, c.segments)))
+    }
+    check("experiments.json", json.encodeToJsonElement(ExperimentFixture.serializer(), ExperimentFixture(experiments, cases)))
   }
 
   // --- binding --------------------------------------------------------------------------------

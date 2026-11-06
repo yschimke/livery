@@ -122,6 +122,7 @@ private fun event(type: TemplateEvent.Type, plan: RenderPlan, host: LiveryHost) 
   feedItemId = plan.feedItem?.id,
   designId = plan.template.entry.designId,
   sha256 = plan.template.entry.sha256,
+  experiments = plan.experiments,
 )
 
 private const val VIEWABLE_FRACTION = 0.5f

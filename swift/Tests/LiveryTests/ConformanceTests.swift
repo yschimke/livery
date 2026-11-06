@@ -34,6 +34,22 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct ExperimentFixture: Decodable {
+    struct Case: Decodable { var name: String; var experiment: String; var bucketingId: String; var nowEpochMs: Int64?; var segments: Set<String>?; var expect: String? }
+    var experiments: [Experiment]
+    var cases: [Case]
+  }
+
+  func testExperiments() throws {
+    let f = try JSONDecoder().decode(ExperimentFixture.self, from: fixture("experiments.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let e = try XCTUnwrap(f.experiments.first { $0.id == c.experiment })
+      let ctx = DecisionContext(nowEpochMs: c.nowEpochMs ?? 1_000, platform: "test", locale: "en", appVersion: 1, bucketingId: c.bucketingId, segments: c.segments ?? [])
+      XCTAssertEqual(LocalBucketing.assignNow(e, ctx), c.expect, c.name)
+    }
+  }
+
   struct BindingFixture: Decodable {
     struct Expect: Decodable { var ok: [String: NamedValue]?; var problems: [String]? }
     struct Case: Decodable { var name: String; var data: [String: JSONValue]; var expect: Expect }

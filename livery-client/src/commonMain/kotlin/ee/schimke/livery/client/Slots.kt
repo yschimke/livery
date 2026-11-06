@@ -17,6 +17,8 @@ data class RenderPlan(
   val bindings: Bindings,
   val decision: Decision? = null,
   val feedItem: FeedItem? = null,
+  /** Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event. */
+  val experiments: Map<String, String> = decision?.experiments.orEmpty(),
 )
 
 sealed interface PlanResult {
@@ -32,14 +34,28 @@ fun interface EventSink {
 /**
  * Turns "what goes here" into a [RenderPlan] for the three ways data arrives: the app's own (live
  * content), a decision (ads, promotions), or a feed item. All three end at the same contract gate.
+ *
+ * With [experiments], a slot whose query names no design draws the design the user's experiment arm
+ * picks for the contract (PROTOCOL.md §8.1), and reports the exposure when it does.
  */
 class SlotPlanner(
   private val repository: TemplateRepository,
   private val events: EventSink,
   private val clock: Clock,
+  private val experiments: Experiments? = null,
 ) {
   /** App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change. */
   suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY): PlanResult {
+    val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
+    if (arm != null) {
+      // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
+      // user wasn't exposed to the arm here.
+      repository.resolve(query.copy(designId = arm.designId))?.takeIf { it.entry.designId == arm.designId }?.let { t ->
+        val planned = plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+        if (planned is PlanResult.Ready) experiments?.exposed(arm.experiment, arm.arm, clock.nowEpochMs(), designId = arm.designId)
+        return planned
+      }
+    }
     val t = repository.resolve(query) ?: return fallback(query, "no template", null)
     return plan(t, data, extra, null, null)
   }
@@ -60,19 +76,20 @@ class SlotPlanner(
     return plan(t, item.data, extra, null, item)
   }
 
-  private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?): PlanResult {
+  private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?, arms: Map<String, String> = emptyMap()): PlanResult {
     val contract = t.contract ?: return PlanResult.Fallback("contract ${t.entry.contract} unknown")
+    val experiments = d?.experiments.orEmpty() + arms
     return when (val b = ContractBinder.bind(contract, data)) {
-      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f))
+      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f, experiments))
       is BindResult.Invalid -> {
-        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, d?.decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }))
+        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, d?.decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }, experiments = experiments))
         PlanResult.Fallback("invalid data")
       }
     }
   }
 
   private fun fallback(q: TemplateQuery, reason: String, d: Decision?): PlanResult {
-    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, d?.decisionId, detail = "${q.contract}: $reason"))
+    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, d?.decisionId, detail = "${q.contract}: $reason", experiments = d?.experiments.orEmpty()))
     return PlanResult.Fallback(reason)
   }
 }
@@ -89,7 +106,7 @@ class ActionRouter(
 ) {
   suspend fun dispatch(plan: RenderPlan, action: String, args: Map<String, String>) {
     val spec = plan.contract.actions[action]
-    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action)
+    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments)
     if (spec == null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "undeclared action")); return }
     if (spec.kind == "open-url" && args["url"]?.let(urlAllowlist) != true) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "url not allowed")); return }
     val h = handlers[spec.kind] ?: run { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }

@@ -27,36 +27,92 @@ public actor MemoryFrequencyStore: FrequencyStore {
   public func record(_ ruleId: String, at: Int64) { log[ruleId, default: []].append(at) }
 }
 
+/// Who decides an experiment's arm: `LocalBucketing` by default, or a remote service. Return an arm id
+/// of the experiment, or nil when there's no answer; never wait on the network.
+public protocol ExperimentAssigner: Sendable {
+  func assign(_ experiment: Experiment, context: DecisionContext) async -> String?
+}
+
+/// Sticky, offline assignment (§8.1): `b = bucket(id, bucketingId)`; enrolled when
+/// `b < allocationBasisPoints`, in the arm whose cumulative weight covers `b × total / allocation`.
+public struct LocalBucketing: ExperimentAssigner {
+  public init() {}
+  public func assign(_ experiment: Experiment, context: DecisionContext) async -> String? { Self.assignNow(experiment, context) }
+
+  public static func assignNow(_ e: Experiment, _ c: DecisionContext) -> String? {
+    guard running(e, c) else { return nil }
+    let arms = e.arms.filter { $0.weight > 0 }
+    let total = arms.reduce(Int64(0)) { $0 + Int64($1.weight) }
+    let allocation = min(max(e.allocationBasisPoints, 0), 10_000)
+    guard total > 0, allocation > 0, let last = arms.last else { return nil }
+    let b = LocalRulesDecider.bucket(e.id, c.bucketingId)
+    guard b < allocation else { return nil }
+    let position = Int64(b) * total / Int64(allocation)
+    var upTo: Int64 = 0
+    for arm in arms {
+      upTo += Int64(arm.weight)
+      if position < upTo { return arm.id }
+    }
+    return last.id
+  }
+
+  public static func running(_ e: Experiment, _ c: DecisionContext) -> Bool {
+    if let s = e.startEpochMs, c.nowEpochMs < s { return false }
+    if let end = e.endEpochMs, c.nowEpochMs >= end { return false }
+    return e.conditions.matches(c)
+  }
+}
+
+extension Conditions {
+  public func matches(_ c: DecisionContext) -> Bool {
+    if !platforms.isEmpty && !platforms.contains(c.platform) { return false }
+    if !locales.isEmpty && !locales.contains(where: { c.locale == $0 || c.locale.hasPrefix("\($0)-") }) { return false }
+    if let v = minAppVersion, c.appVersion < v { return false }
+    if let v = maxAppVersion, c.appVersion > v { return false }
+    if !segments.isSubset(of: c.segments) { return false }
+    if !excludeSegments.isDisjoint(with: c.segments) { return false }
+    return true
+  }
+}
+
 /// The manifest's placement rules evaluated on the device (docs/PROTOCOL.md §8).
 public struct LocalRulesDecider: Sendable {
   public let frequency: FrequencyStore
-  public init(frequency: FrequencyStore = MemoryFrequencyStore()) { self.frequency = frequency }
+  public let experiments: ExperimentAssigner
+  public init(frequency: FrequencyStore = MemoryFrequencyStore(), experiments: ExperimentAssigner = LocalBucketing()) {
+    self.frequency = frequency; self.experiments = experiments
+  }
 
   public func decide(_ placement: String, in manifest: Manifest?, context c: DecisionContext) async -> Decision? {
     var eligible: [PlacementRule] = []
     for r in manifest?.placements ?? [] where r.placement == placement {
-      if await isEligible(r, c) { eligible.append(r) }
+      if await isEligible(r, c, manifest) { eligible.append(r) }
     }
     guard let rule = eligible.max(by: { a, b in a.priority != b.priority ? a.priority < b.priority : a.id > b.id }) else { return nil }
     return Decision(
       placement: placement, decisionId: "local:\(rule.id)", template: rule.template, data: rule.data,
-      tracking: rule.tracking, experiments: rule.rollout.map { [$0.experiment: $0.arm] } ?? [:])
+      tracking: rule.tracking, experiments: experimentsOf(rule))
+  }
+
+  private func experimentsOf(_ rule: PlacementRule) -> [String: String] {
+    var e: [String: String] = [:]
+    if let ro = rule.rollout { e[ro.experiment] = ro.arm }
+    if let a = rule.arm { e[a.experiment] = a.arm }
+    return e
   }
 
   public func recordImpression(_ d: Decision, at: Int64) async {
     if d.decisionId.hasPrefix("local:") { await frequency.record(String(d.decisionId.dropFirst(6)), at: at) }
   }
 
-  private func isEligible(_ r: PlacementRule, _ c: DecisionContext) async -> Bool {
+  private func isEligible(_ r: PlacementRule, _ c: DecisionContext, _ m: Manifest?) async -> Bool {
     if let s = r.startEpochMs, c.nowEpochMs < s { return false }
     if let e = r.endEpochMs, c.nowEpochMs >= e { return false }
-    let k = r.conditions
-    if !k.platforms.isEmpty && !k.platforms.contains(c.platform) { return false }
-    if !k.locales.isEmpty && !k.locales.contains(where: { c.locale == $0 || c.locale.hasPrefix("\($0)-") }) { return false }
-    if let v = k.minAppVersion, c.appVersion < v { return false }
-    if let v = k.maxAppVersion, c.appVersion > v { return false }
-    if !k.segments.isSubset(of: c.segments) { return false }
-    if !k.excludeSegments.isDisjoint(with: c.segments) { return false }
+    if !r.conditions.matches(c) { return false }
+    if let ref = r.arm {
+      guard let e = m?.experiments.first(where: { $0.id == ref.experiment }), LocalBucketing.running(e, c) else { return false }
+      if await experiments.assign(e, context: c) != ref.arm { return false }
+    }
     if let ro = r.rollout {
       let b = Self.bucket(ro.experiment, c.bucketingId)
       if !(b >= ro.fromBasisPoints && b < ro.toBasisPoints) { return false }
