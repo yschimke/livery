@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/yschimke/livery/compare/v0.2.0...v0.3.0) (2026-11-06)
+
+
+### Features
+
+* designs that aren't automatic, so a season's design draws only in its season ([#18](https://github.com/yschimke/livery/issues/18)) ([9182b9c](https://github.com/yschimke/livery/commit/9182b9cf01bd540868f3b9560e7c4b2748efd8af))
+* repository mode: seasons, a review report for pull requests, and reusable catalog workflows ([#17](https://github.com/yschimke/livery/issues/17)) ([2849894](https://github.com/yschimke/livery/commit/28498945d2434beb64d7a6ffef4d6f706fc2555c))
+* secondary screens: interstitials, dialogs, sheets and full screens, one level deep ([#15](https://github.com/yschimke/livery/issues/15)) ([1223f5b](https://github.com/yschimke/livery/commit/1223f5b5ba68c55855efc0fe09c60a157d6d94d1))
+
 ## [0.2.0](https://github.com/yschimke/livery/compare/v0.1.1...v0.2.0) (2026-11-06)
 
 
