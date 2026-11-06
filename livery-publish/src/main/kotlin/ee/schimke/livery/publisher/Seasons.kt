@@ -88,9 +88,14 @@ object Seasons {
           d.variant == Design.DEFAULT_VARIANT -> add("season ${s.id}: design $designId is the default variant, so it would show outside the season too; give it its own variant (\"variant\": \"${s.id}\")")
           else -> {
             val usual = designs.filter { it.contract == ref && it.variant == Design.DEFAULT_VARIANT && it.install == InstallPolicy.Always && !it.revoked }.map { it.id }.toSet()
-            val covered = templates.filter { it.designId in usual }.map { it.target }.toSet()
-            for (t in templates.filter { it.designId == designId }.map { it.target }.distinct()) {
-              if (t !in covered) add("season ${s.id}: design $designId has a ${t.surface}${t.container?.let { "/$it" } ?: ""} template no default Always design of $ref has, so it would show there outside the season too")
+            // A usual template covers a season's one only where selection would take it instead:
+            // the same target, needing no newer contract minor (an older app skips one that does).
+            fun covers(u: TemplateEntry, t: TemplateEntry) = u.target == t.target && u.requiresMinor <= t.requiresMinor
+            val theirs = templates.filter { it.designId in usual && !it.revoked }
+            for (t in templates.filter { it.designId == designId && !it.revoked }) {
+              if (theirs.none { covers(it, t) }) {
+                add("season ${s.id}: design $designId's ${t.target.surface}${t.target.container?.let { "/$it" } ?: ""} template (minor ${t.requiresMinor}) has no default Always template for that target needing no newer minor, so it could show outside the season")
+              }
             }
           }
         }

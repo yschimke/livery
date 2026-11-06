@@ -64,7 +64,18 @@ class RepositoryModeTest {
       write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
     }
     val p2 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(uncovered, Layout.Static) }.problems
-    assertTrue(p2.any { "has a launcher-widget template no default Always design of live/status-tile@1 has" in it }, p2.toString())
+    assertTrue(p2.any { "tile-retro's launcher-widget template" in it && "has no default Always template" in it }, p2.toString())
+
+    // The usual template needs a newer minor than the season's: an older app would skip it and
+    // fall through to the season's design all year.
+    val newerMinor = tree().apply {
+      retroAlways()
+      ContractEvolutionPublishTest.addMinor1To(this)
+      write("designs/tile-default/launcher.json", """{ "target": { "surface": "launcher-widget", "rcApiLevel": 7, "profiles": ["widgets"], "size": { "minWidthDp": 110, "maxWidthDp": 400, "minHeightDp": 40, "maxHeightDp": 400 } }, "reads": ["name","subtitle"], "emits": ["toggle"] }""")
+      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
+    }
+    val p3 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(newerMinor, Layout.Static) }.problems
+    assertTrue(p3.any { "tile-retro's launcher-widget template (minor 0" in it }, p3.toString())
   }
 
   @Test fun seasonsAreChecked() {
