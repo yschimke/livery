@@ -167,6 +167,7 @@ object LiveryCapture {
 class DesignFolder(val dir: File) {
   /** Writes `<name>.rc` and `<name>.json` for each template, and removes templates no longer captured. */
   fun write(templates: Map<String, CapturedTemplate>) {
+    requireNames(templates)
     dir.mkdirs()
     stale(templates).forEach { File(dir, it).delete() }
     for ((name, t) in templates) {
@@ -177,6 +178,7 @@ class DesignFolder(val dir: File) {
 
   /** What differs from the committed files; empty when they are current. */
   fun check(templates: Map<String, CapturedTemplate>): List<String> = buildList {
+    requireNames(templates)
     for ((name, t) in templates) {
       val rc = File(dir, "$name.rc")
       val json = File(dir, "$name.json")
@@ -190,6 +192,18 @@ class DesignFolder(val dir: File) {
       }
     }
     stale(templates).forEach { add("$it is no longer captured") }
+  }
+
+  private fun requireNames(templates: Map<String, CapturedTemplate>) {
+    for (name in templates.keys) {
+      require(NAME.matches(name)) { "template names are ${NAME.pattern}: '$name'" }
+      require(name !in RESERVED) { "'$name' is reserved in a design's folder (design.json, previews/, assets/)" }
+    }
+  }
+
+  private companion object {
+    val NAME = Regex("[a-z0-9][a-z0-9._-]{0,63}")
+    val RESERVED = setOf("design", "previews", "assets")
   }
 
   private fun stale(templates: Map<String, CapturedTemplate>): List<String> =

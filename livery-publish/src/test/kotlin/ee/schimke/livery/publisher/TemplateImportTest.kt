@@ -41,6 +41,10 @@ class TemplateImportTest {
     val src = tree()
     assertTrue("no design nope" in assertFailsWith<CatalogProblems> { TemplateImport.into(src, "nope", "x", tile, inApp) }.problems.single())
     assertFailsWith<CatalogProblems> { TemplateImport.into(src, "tile-retro", "../x", tile, inApp) }
+    val design = File(src, "designs/tile-retro/design.json").readText()
+    assertTrue("reserved" in assertFailsWith<CatalogProblems> { TemplateImport.into(src, "tile-retro", "design", tile, inApp) }.problems.single())
+    assertEquals(design, File(src, "designs/tile-retro/design.json").readText(), "design.json is untouched")
+    assertFalse(File(src, "designs/tile-retro/design.rc").exists())
   }
 
   @Test fun undoesAnImportTheCatalogRefuses() {

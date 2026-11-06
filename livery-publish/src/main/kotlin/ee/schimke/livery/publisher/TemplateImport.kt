@@ -18,10 +18,14 @@ object TemplateImport {
   /** A design's folder and template names: what a file name and a manifest id can both hold. */
   val NAME: Regex = Regex("[a-z0-9][a-z0-9._-]{0,63}")
 
+  /** Template names whose files would be a design folder's own: `design.json`, `previews/`, `assets/`. */
+  val RESERVED: Set<String> = setOf("design", "previews", "assets")
+
   data class Imported(val rc: File, val sidecar: File, val spec: TemplateSpec, val contract: String)
 
   fun into(src: File, designId: String, name: String, document: ByteArray, target: Target, source: Map<String, String> = emptyMap()): Imported {
     if (!NAME.matches(designId) || !NAME.matches(name)) throw CatalogProblems(listOf("design and template names are ${NAME.pattern}: '$designId/$name'"))
+    if (name in RESERVED) throw CatalogProblems(listOf("'$name' is reserved in a design's folder (${RESERVED.sorted()}): pick another template name"))
     val dir = File(src, "designs/$designId")
     val designFile = File(dir, "design.json")
     if (!designFile.isFile) throw CatalogProblems(listOf("no design $designId: create $designFile first (its id, contract, title and install policy)"))
@@ -45,7 +49,8 @@ object TemplateImport {
     sidecar.writeText(PRETTY.encodeToString(TemplateSpec.serializer(), spec) + "\n")
     try {
       CatalogBuilder().build(src, Layout.Static)
-    } catch (e: CatalogProblems) {
+    } catch (e: Exception) {
+      // Any failure, a refused catalog or a file that no longer decodes, leaves the tree as it was.
       restore(rc, before.first); restore(sidecar, before.second)
       throw e
     }

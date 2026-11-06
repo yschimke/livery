@@ -83,5 +83,9 @@ class LiveryCaptureTest {
     assertEquals(listOf("old.rc is no longer captured"), folder.check(templates))
     folder.write(templates)
     assertEquals(emptyList(), folder.check(templates))
+    // A template named like the design's own files is refused, never written over design.json.
+    assertFailsWith<IllegalArgumentException> { folder.write(mapOf("design" to templates.getValue("launcher"))) }
+    assertFailsWith<IllegalArgumentException> { folder.write(mapOf("../up" to templates.getValue("launcher"))) }
+    Unit
   }
 }
