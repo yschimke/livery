@@ -30,4 +30,6 @@ dependencies {
   compileOnly(libs.firebase.config)
   compileOnly(libs.firebase.firestore)
   implementation(libs.kotlinx.coroutines.play.services)
+
+  testImplementation(kotlin("test-junit"))
 }

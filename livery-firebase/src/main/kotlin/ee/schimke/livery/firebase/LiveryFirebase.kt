@@ -104,10 +104,19 @@ class FirestoreFrequencyBackend(
     }
 
   /** One document per record, so pushing again after a failure writes it once. */
-  private fun id(r: ImpressionRecord): String = "${r.device}-${r.atEpochMs}-${r.seq}-${r.ruleId}".replace('/', '_')
+  private fun id(r: ImpressionRecord): String = impressionDocumentId(r)
 
   private companion object {
     /** Firestore's limit on writes in one batch. */
     const val MAX_BATCH = 500
   }
+}
+
+/**
+ * An impression's Firestore document id: SHA-256 (hex) of its whole identity, length-prefixed so
+ * no two records share one (`promo/a` and `promo_a`, a device id with a `-`), and always a legal id.
+ */
+internal fun impressionDocumentId(r: ImpressionRecord): String {
+  val key = "${r.device.length}:${r.device}|${r.atEpochMs}|${r.seq}|${r.ruleId.length}:${r.ruleId}"
+  return java.security.MessageDigest.getInstance("SHA-256").digest(key.encodeToByteArray()).joinToString("") { "%02x".format(it) }
 }
