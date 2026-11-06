@@ -1,6 +1,9 @@
 package ee.schimke.livery.client
 
 import ee.schimke.livery.protocol.Manifest
+import ee.schimke.livery.protocol.NamedValue
+import ee.schimke.livery.protocol.PlacementRule
+import ee.schimke.livery.protocol.ThemePack
 import ee.schimke.livery.protocol.ManifestSignature
 import ee.schimke.livery.protocol.TemplateRef
 import kotlin.io.encoding.Base64
@@ -153,5 +156,20 @@ class RepositoryTest {
     })
     r.refresh()
     assertEquals(LoadedTemplate.Origin.Bundled, r.resolve(q)?.origin)
+  }
+
+  @Test fun placementsAndThemesComeFromTheBundledCatalogBeforeAnyDownload() = runTest {
+    val pack = ThemePack("dusk", "Dusk", "dark", mapOf("theme.primary" to NamedValue.Color(0xFF102030)))
+    val rule = PlacementRule("spring", "home.top", TemplateRef(designId = "default"), priority = 1)
+    val bundledManifest = Fx.manifest().copy(themes = listOf(pack), placements = listOf(rule))
+    val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled(bundledManifest) { null })
+    r.refresh()
+    assertEquals(null, r.manifest(), "nothing downloaded")
+    assertEquals(bundledManifest, r.current())
+    assertEquals(NamedValue.Color(0xFF102030), r.theme("dusk")?.values?.get("theme.primary"))
+    assertEquals(null, r.theme("dawn"))
+    val decision = LocalRulesDecider({ r.current() }, MemoryFrequencyStore())
+      .decide("home.top", DecisionContext(now, "android", "en", 1, "install"))
+    assertEquals("local:spring", decision?.decisionId)
   }
 }

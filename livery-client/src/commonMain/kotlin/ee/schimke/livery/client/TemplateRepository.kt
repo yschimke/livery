@@ -107,6 +107,20 @@ class TemplateRepository(
 
   suspend fun manifest(): Manifest? = stateLock.withLock { loadCachedLocked() }
 
+  /**
+   * The catalog slots draw from: the downloaded manifest while it is usable, else the bundled one.
+   * Placement rules, theme packs and the image proxy read this rather than [manifest], so a fresh
+   * install (nothing downloaded yet) or an offline one still has them, as selection already does.
+   */
+  suspend fun current(): Manifest? = usable() ?: bundled?.manifest
+
+  /**
+   * A theme pack's named values from [current], to pass as a slot's `extra` bindings (themes are
+   * pushed beside the data); null when the catalog has no pack [id].
+   */
+  suspend fun theme(id: String): Bindings? =
+    current()?.themes?.firstOrNull { it.id == id }?.let { Bindings(it.values) }
+
   private suspend fun loadCachedLocked(): Manifest? {
     current?.let { return it }
     val text = kv.get(k("manifest")) ?: return null

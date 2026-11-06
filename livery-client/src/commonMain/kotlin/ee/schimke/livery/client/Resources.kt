@@ -48,7 +48,7 @@ class ImageResolver(
     }
 
   private suspend fun remote(url: String, widthPx: Int, heightPx: Int, network: Boolean = true): ByteArray? {
-    val proxy = repository.manifest()?.imageProxy
+    val proxy = repository.current()?.imageProxy
     val target = remoteUrl(proxy, directHosts, url, widthPx, heightPx) ?: return null
     val key = crypto.sha256Hex(target.encodeToByteArray())
     cache.get(key)?.let { return it }
