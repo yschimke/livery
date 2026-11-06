@@ -2,7 +2,13 @@
 kotlin = "2.4.21"
 kotlinx-serialization = "1.12.0"
 kotlinx-coroutines = "1.11.0"
-compose-multiplatform = "1.13.0-beta02"
+# The *stable* Compose Multiplatform line: an app's Compose version is at least the one Livery is
+# compiled against, and an Android app that pins the androidx Compose BOM (as most do) gets a
+# NoSuchMethodError at runtime when Livery is built against a newer runtime than the BOM's. Move
+# this only when rc-players and the stable BOM have.
+compose-multiplatform = "1.12.2"
+# The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
+skiko = "0.150.2"
 rc-players = "2.22.0"
 agp = "9.5.0"
 ktor = "3.6.1"

@@ -212,7 +212,16 @@ class LiveryMcp(
       )
     }.getOrElse { throw ToolError("width_dp and height_dp must be 1 to 4096, density 1 to 4") }
     TemplateInspector.facts(bytes) ?: throw ToolError("not a Remote Compose document")
-    val png = TemplateRenderer.png(bytes, bindings, spec)
+    val png = try {
+      TemplateRenderer.png(bytes, bindings, spec)
+    } catch (e: Throwable) {
+      // The renderer is Skia: on a headless host its native library can fail to load (on Linux it
+      // links libGL, libfontconfig and libX11). Say so, so an agent can tell its user what to fix
+      // instead of retrying.
+      val link = generateSequence(e) { it.cause }.firstOrNull { it is UnsatisfiedLinkError } ?: throw e
+      throw ToolError("can't render on this host: Skia's native library didn't load (${link.message}). " +
+        "On Linux, install libGL and fontconfig (e.g. apt-get install libgl1 libfontconfig1) or put them on LD_LIBRARY_PATH.")
+    }
     return buildJsonObject {
       putJsonArray("content") {
         add(buildJsonObject { put("type", "image"); put("data", Base64.getEncoder().encodeToString(png)); put("mimeType", "image/png") })

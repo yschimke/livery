@@ -156,6 +156,15 @@ class LiveryMcpTest {
     }
   }
 
+  @Test fun anInternalErrorNamesTheExceptionWhenItHasNoMessage() {
+    val request = Json.parseToJsonElement("""{"jsonrpc":"2.0","id":7,"method":"tools/call"}""").jsonObject
+    val error = internalError(request, ExceptionInInitializerError())!!["error"]!!.jsonObject
+    assertEquals("ExceptionInInitializerError", error["message"]!!.jsonPrimitive.content)
+    val withMessage = internalError(request, IllegalStateException("boom"))!!["error"]!!.jsonObject
+    assertEquals("IllegalStateException: boom", withMessage["message"]!!.jsonPrimitive.content)
+    assertNull(internalError(Json.parseToJsonElement("""{"method":"x"}""").jsonObject, IllegalStateException()))
+  }
+
   @Test fun aDraftCannotReplaceTheDesignsMetadata() {
     val good = Json.parseToJsonElement("""{"target":{"surface":"in-app","rcApiLevel":8},"reads":["state","is_on"],"emits":["toggle"]}""").jsonObject
     val before = File(src, "designs/tile-retro/design.json").readText()
