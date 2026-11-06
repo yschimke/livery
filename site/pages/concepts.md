@@ -88,6 +88,12 @@ A **design** is a look for one contract (`banner-classic`, `banner-bold`). It ha
 The client picks, from what's on disk, the chosen design's richest template the player can draw
 with the tightest size fit; else the preferred variant's, else `default`'s.
 
+A **theme pack** (`themes/<id>.json`) is named values, usually `theme.*` colours, that a slot pushes
+beside its data: `repository.theme("dusk")` gives them as bindings to pass as `extra`. Changing a
+pack recolours every template that reads those names, with no new document. Theme packs and
+placement rules come from `repository.current()`: the downloaded catalog, or the bundled one before
+the first download.
+
 ## Install policies
 
 | Policy | Downloaded | Used for |

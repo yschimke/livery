@@ -12,11 +12,15 @@ kotlin {
   sourceSets {
     jvmMain.dependencies {
       api(project(":livery-compose"))
-      // Platform-neutral: Skia's natives for every desktop platform come with Compose's
-      // skiko-awt-runtime-all, so the published library (and livery-mcp's zip, built on Linux)
-      // renders on Linux, macOS and Windows. Never compose.desktop.currentOs here: it would publish
-      // the build machine's platform as everyone's.
+      // Platform-neutral: Skia's natives for every desktop platform, so the published library (and
+      // livery-mcp's zip, built on Linux) renders on Linux, macOS and Windows. Never
+      // compose.desktop.currentOs here: it would publish the build machine's platform as
+      // everyone's. Compose 1.13 brings them all as skiko-awt-runtime-all; on the stable 1.12 line
+      // they are listed per platform, at the skiko version Compose resolves.
       api(compose.desktop.common)
+      listOf("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64").forEach {
+        runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-$it:${libs.versions.skiko.get()}")
+      }
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))

@@ -36,7 +36,7 @@ build, not the app.
 ## 2. Decide and draw
 
 ```kotlin
-val decider = FirstDecider(listOf(myRemoteDecider, LocalRulesDecider({ repository.manifest() }, frequencyStore)))
+val decider = FirstDecider(listOf(myRemoteDecider, LocalRulesDecider({ repository.current() }, frequencyStore)))
 val context = DecisionContext(nowEpochMs = clock(), platform = "android", locale = "en-GB",
   appVersion = BuildConfig.VERSION_CODE.toLong(), bucketingId = installId, segments = userSegments)
 

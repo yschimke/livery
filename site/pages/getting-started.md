@@ -72,15 +72,14 @@ other hosts, see [Hosting](hosting.md).
 
 ## 5. Read it in the app
 
-**Kotlin (Android, desktop, iOS)**: depend on a checkout through a composite build:
+**Kotlin (Android, desktop, iOS)**: the libraries from step 1. Livery's Compose Multiplatform
+version is a floor for your app's, so check it matches the Compose (or androidx Compose BOM) you
+ship. To try unreleased changes, use a checkout through a composite build instead
+(`includeBuild("../livery")` and version `0.1.0-SNAPSHOT`).
 
-```kotlin
-// settings.gradle.kts
-includeBuild("../livery")
-// build.gradle.kts
-implementation("ee.schimke.composeai:livery-client:0.1.0-SNAPSHOT")
-implementation("ee.schimke.composeai:livery-compose:0.1.0-SNAPSHOT")
-```
+The repository below reads only the network. To also ship a copy in the app (first launch,
+offline), build the catalog into its assets with the `ee.schimke.composeai.livery.catalog` Gradle
+plugin and pass `bundled = AndroidBundled.fromAssets(context)`; see [Hosting](hosting.md).
 
 ```kotlin
 val inApp = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))

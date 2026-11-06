@@ -8,9 +8,20 @@
   "packageRules": [
     {
       "description": "Remote Compose alphas change the document format and creation APIs; review every bump.",
-      "matchPackageNames": ["androidx.compose.remote:**"],
+      "matchPackageNames": [
+        "androidx.compose.remote:**"
+      ],
       "groupName": "androidx-compose-remote",
       "automerge": false
+    },
+    {
+      "description": "Stay on stable Compose Multiplatform: an app gets at least Livery's Compose, and one on the stable androidx BOM crashes (NoSuchMethodError) if Livery is compiled against a newer runtime. See gradle/libs.versions.toml.",
+      "matchPackageNames": [
+        "org.jetbrains.compose",
+        "org.jetbrains.compose:**",
+        "org.jetbrains.compose.**"
+      ],
+      "allowedVersions": "!/-(alpha|beta|rc|dev)/"
     }
   ]
 }
