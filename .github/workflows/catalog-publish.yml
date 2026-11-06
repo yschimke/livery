@@ -150,9 +150,12 @@ jobs:
           # Content-addressed files only go up when missing, never replaced: the live manifest keeps
           # every file it names while this one lands, even if this upload fails half way.
           gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/have.txt"
-          find "$out" -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'manifest.sig.json' -printf '%f\n' \
-            | grep -vxF -f "$RUNNER_TEMP/have.txt" | sed "s|^|$out/|" | tr '\n' '\0' \
-            | xargs -0 -r gh release upload "$TAG" --repo "$REPO"
+          find "$out" -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'manifest.sig.json' -printf '%f\n' | sort > "$RUNNER_TEMP/built.txt"
+          # Nothing missing is fine (a change to rules, experiments or seasons only): grep exits 1 then.
+          grep -vxF -f "$RUNNER_TEMP/have.txt" "$RUNNER_TEMP/built.txt" > "$RUNNER_TEMP/missing.txt" || [ "$?" -eq 1 ]
+          if [ -s "$RUNNER_TEMP/missing.txt" ]; then
+            sed "s|^|$out/|" "$RUNNER_TEMP/missing.txt" | tr '\n' '\0' | xargs -0 gh release upload "$TAG" --repo "$REPO"
+          fi
           # The signature, then the manifest: an app that reads between the two finds a pair that
           # doesn't verify, keeps what it had, and tries again later.
           gh release upload "$TAG" "$out/manifest.sig.json" "$out/manifest.json" --repo "$REPO" --clobber

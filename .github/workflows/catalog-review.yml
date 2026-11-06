@@ -101,7 +101,8 @@ jobs:
         run: |
           marker='<!-- livery-review -->'
           body="$(printf '%s\n%s' "$marker" "$(cat "$RUNNER_TEMP/review.md")")"
-          id="$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)"
+          ids="$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id")"
+          id="${ids%%$'\n'*}"
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
           else
