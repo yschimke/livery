@@ -33,11 +33,18 @@ fun main(args: Array<String>) {
   }
 }
 
-/** A request the server itself failed on: an error response, never the end of the server. */
-private fun internalError(message: JsonObject, e: Throwable): JsonObject? {
+/**
+ * A request the server itself failed on: an error response, never the end of the server. The
+ * message names the exception (many have no message of their own), and the stack trace goes to
+ * stderr, which MCP clients keep as the server's log.
+ */
+internal fun internalError(message: JsonObject, e: Throwable): JsonObject? {
+  System.err.println("livery-mcp: ${message["method"]} failed")
+  e.printStackTrace()
   val id = message["id"] ?: return null
+  val text = listOfNotNull(e::class.simpleName ?: "internal error", e.message).joinToString(": ")
   return Json.parseToJsonElement(
-    """{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":${Json.encodeToString(String.serializer(), e.message ?: "internal error")}}}"""
+    """{"jsonrpc":"2.0","id":$id,"error":{"code":-32603,"message":${Json.encodeToString(String.serializer(), text)}}}"""
   ) as JsonObject
 }
 
