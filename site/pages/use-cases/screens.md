@@ -39,6 +39,7 @@ val repository = TemplateRepository(…, targets = listOf(inAppCaps) + LiveryScr
 val rules = LocalRulesDecider({ repository.current() }, frequency)   // the bundled catalog until one downloads
 val screens = LiveryScreens(planner, rules, { decisionContext() }, placements, caps, events, clock,
   appData = { placement, args -> if (placement == "promo.details") detailsFor(args["item"]) else null },
+  downloads = applicationScope,   // fetches, for next time, what a screen couldn't open without
 )
 val actions = ActionRouter(screens.handlers(dismissInline = { plan, _, _ -> hideBanner(plan) }) + myHandlers, allowlist, events, clock)
 val host = LiveryHost(repository, actions, events, clock)
@@ -66,7 +67,7 @@ A placement rule for a screen placement, with its presentation and a frequency c
 ```
 
 `maybeShow` shows it if its rules allow it now, the template is on the device, and no screen is
-already showing; showing it counts towards its cap. An experiment arm can hold it back for a
+already showing; showing it counts towards its cap. Two overlapping calls show it once. An experiment arm can hold it back for a
 control group (see [Analytics and experiments](../analytics-and-experiments.md)).
 
 ## A screen a template opens
