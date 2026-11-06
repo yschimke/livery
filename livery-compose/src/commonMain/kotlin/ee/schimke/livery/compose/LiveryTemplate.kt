@@ -81,6 +81,9 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   }
   val scope = rememberCoroutineScope()
   val tracker = remember(bytes, plan.decision?.decisionId, plan.feedItem?.id) { VisibilityTracker() }
+  // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
+  // Leave must name the old item, not the plan that replaced it.
+  SideEffect { tracker.plan = plan }
 
   // A template's fonts load before it draws, so text never reflows from a fallback face.
   val loader = typefaces ?: return
@@ -120,7 +123,8 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   DisposableEffect(tracker) {
     onDispose {
       val now = host.clock.nowEpochMs()
-      if (tracker.impressed) host.events.emit(event(TemplateEvent.Type.Leave, current, host).copy(durationMs = tracker.inViewMs(now)))
+      val left = tracker.plan
+      if (tracker.impressed && left != null) host.events.emit(event(TemplateEvent.Type.Leave, left, host).copy(durationMs = tracker.inViewMs(now)))
     }
   }
 }
@@ -131,6 +135,8 @@ internal class VisibilityTracker {
     private set
   var viewed = false
   var impressed = false
+  /** The plan of the item this tracker measures (its bindings may update; its item doesn't). */
+  var plan: RenderPlan? = null
   private var since: Long? = null
   private var totalMs = 0L
 
