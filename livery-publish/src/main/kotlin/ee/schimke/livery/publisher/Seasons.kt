@@ -5,6 +5,7 @@ import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.InstallPolicy
+import ee.schimke.livery.protocol.TemplateEntry
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -25,6 +26,9 @@ import kotlinx.serialization.Serializable
  * experiment with one arm ([ARM]) at full allocation (PROTOCOL.md §8.1), so any client that draws
  * design arms draws seasons, and analytics see it as `exp_<id>`. Seasons come before the
  * catalog's own experiments, so a season replaces a design under test while it runs.
+ *
+ * Its designs are `Always`, each with its own variant and a default design for every target it
+ * has, so outside the season automatic selection keeps drawing the usual design.
  *
  * [start] (inclusive) and [end] (exclusive) are a date (`2026-12-01`, midnight UTC) or an instant
  * with its offset (`2026-12-01T00:00:00+13:00`).
@@ -59,8 +63,11 @@ object Seasons {
     allocationBasisPoints = 10_000,
   )
 
-  /** Problems with [seasons] over [designs]: dates, designs, and two seasons over one contract at once. */
-  fun problems(seasons: List<Season>, designs: List<Design>): List<String> = buildList {
+  /**
+   * Problems with [seasons] over [designs] and their [templates]: dates, designs, two seasons over
+   * one contract at once, and a season's design that automatic selection could pick outside it.
+   */
+  fun problems(seasons: List<Season>, designs: List<Design>, templates: List<TemplateEntry>): List<String> = buildList {
     val ranges = mutableListOf<Triple<Season, Long, Long>>()
     for (s in seasons) {
       val start = runCatching { instant(s.start) }.onFailure { add("season ${s.id}: start ${it.message}") }.getOrNull()
@@ -76,6 +83,16 @@ object Seasons {
           d.contract != ref -> add("season ${s.id}: design $designId is for ${d.contract}, not $ref")
           // Automatic selection never picks a design nobody installed, so it would show to no one.
           d.install != InstallPolicy.Always -> add("season ${s.id}: design $designId is ${d.install}; a season's design must be Always, or it shows only to people who installed it")
+          // Out of season it must lose to the usual design: automatic selection prefers the
+          // `default` variant, and falls back to any variant only where no default design fits.
+          d.variant == Design.DEFAULT_VARIANT -> add("season ${s.id}: design $designId is the default variant, so it would show outside the season too; give it its own variant (\"variant\": \"${s.id}\")")
+          else -> {
+            val usual = designs.filter { it.contract == ref && it.variant == Design.DEFAULT_VARIANT && it.install == InstallPolicy.Always && !it.revoked }.map { it.id }.toSet()
+            val covered = templates.filter { it.designId in usual }.map { it.target }.toSet()
+            for (t in templates.filter { it.designId == designId }.map { it.target }.distinct()) {
+              if (t !in covered) add("season ${s.id}: design $designId has a ${t.surface}${t.container?.let { "/$it" } ?: ""} template no default Always design of $ref has, so it would show there outside the season too")
+            }
+          }
         }
       }
     }

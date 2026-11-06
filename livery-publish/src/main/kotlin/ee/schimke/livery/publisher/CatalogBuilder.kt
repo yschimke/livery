@@ -305,7 +305,7 @@ class CatalogBuilder(
       }
     }
 
-    problems += Seasons.problems(seasons, designs)
+    problems += Seasons.problems(seasons, designs, templates)
     // Seasons first: a season replaces a design under test while it runs.
     val experiments = seasons.mapNotNull { runCatching { Seasons.experiment(it) }.getOrNull() } + authored
     experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment or season ${it.key}" }

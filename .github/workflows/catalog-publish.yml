@@ -60,6 +60,11 @@ jobs:
   publish:
     name: Publish catalog
     runs-on: ubuntu-latest
+    # One publish at a time per repository and release: an older run never finishes after a newer
+    # one, and a queued run gives way to the newest (each builds the whole tree, so nothing is lost).
+    concurrency:
+      group: livery-catalog-publish-${{ github.repository }}-${{ inputs.tag || 'releases' }}
+      cancel-in-progress: false
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.build.outputs.tag }}
@@ -133,8 +138,22 @@ jobs:
           if ! gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
             gh release create "$TAG" --repo "$REPO" --title "Livery catalog" --notes "$notes" --latest=false --target "$SHA"
           fi
-          # Content-addressed files first; apps keep the manifest they have until the new one lands.
-          find "$out" -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'manifest.sig.json' -print0 \
-            | xargs -0 -r gh release upload "$TAG" --repo "$REPO" --clobber
+          # Never publish over a newer catalog: apps that took it would refuse this one as a rollback.
+          if gh release download "$TAG" --repo "$REPO" -p manifest.json -O "$RUNNER_TEMP/live.json" 2> /dev/null; then
+            live="$(jq -r .serial "$RUNNER_TEMP/live.json")"
+            next="$(jq -r .serial "$out/manifest.json")"
+            if [ "$next" -le "$live" ]; then
+              echo "::error::the release already has serial $live; this build is $next"
+              exit 1
+            fi
+          fi
+          # Content-addressed files only go up when missing, never replaced: the live manifest keeps
+          # every file it names while this one lands, even if this upload fails half way.
+          gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/have.txt"
+          find "$out" -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'manifest.sig.json' -printf '%f\n' \
+            | grep -vxF -f "$RUNNER_TEMP/have.txt" | sed "s|^|$out/|" | tr '\n' '\0' \
+            | xargs -0 -r gh release upload "$TAG" --repo "$REPO"
+          # The signature, then the manifest: an app that reads between the two finds a pair that
+          # doesn't verify, keeps what it had, and tries again later.
           gh release upload "$TAG" "$out/manifest.sig.json" "$out/manifest.json" --repo "$REPO" --clobber
           gh release edit "$TAG" --repo "$REPO" --notes "$notes"

@@ -76,7 +76,9 @@ jobs:
 | `tag` | publish | a rolling release tag (below); empty for a new `catalog-<run>` release marked latest |
 
 **Where it publishes.** With `tag`, every publish updates that one release: templates and images
-are content-addressed, so they go up beside the old ones, and the manifest and its signature last.
+are content-addressed, so only missing ones go up, beside the old ones, and the signature and
+manifest last. Publishes run one at a time per release, and one never replaces a newer catalog
+(a higher serial).
 Apps read it with `GitHubReleaseSource(owner, repo, tag = "catalog")`, and the repository's
 "latest" release stays the app's own, so the catalog can live in the app's repository. Without
 `tag`, each publish is a new release marked latest, for a repository that holds only the catalog
@@ -114,8 +116,9 @@ A season swaps the design a contract's slots draw, for everyone, between two dat
 - `start` is inclusive and `end` exclusive: a date (midnight UTC) or an instant with its offset
   (`2026-12-01T00:00:00+13:00`). `conditions` (platforms, locales, segments) narrow it.
 - The season's design must be `Always` (shipped to everyone), or it would show only to people who
-  installed it; `livery build` refuses otherwise, and refuses two seasons over one contract at
-  once.
+  installed it, and have its own `variant` (`"variant": "winter"`), with a default design for
+  every target it has, so outside the season automatic selection keeps drawing the usual design.
+  `livery build` refuses otherwise, and refuses two seasons over one contract at once.
 - A season is written into the manifest as a one-arm experiment at full allocation, so any client
   that draws experiment design arms draws seasons (give the slot's planner an `Experiments`), and
   analytics see it as `exp_<id>`. Seasons come before the catalog's own experiments: a season

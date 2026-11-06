@@ -34,6 +34,39 @@ class RepositoryModeTest {
     assertEquals(RESOURCES_LEVEL, m.minClient, "a season needs no newer client: design arms are older than it")
   }
 
+  @Test fun outsideItsSeasonTheUsualDesignDraws() {
+    val src = tree().apply {
+      retroAlways()
+      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
+    }
+    val m = CatalogBuilder(now = { 0 }).build(src, Layout.Static, serial = 1).manifest
+    // Plain automatic selection, as a client draws when no season or experiment is running: the
+    // season's design (its own variant) never wins over the usual default design.
+    val inApp = ee.schimke.livery.protocol.PlayerCapabilities("in-app", 7, setOf("androidx"))
+    val picked = ee.schimke.livery.client.TemplateSelector.select(m, ee.schimke.livery.client.TemplateQuery("live/status-tile@1", inApp)) { true }
+    assertEquals("tile-default", picked?.designId)
+  }
+
+  @Test fun aSeasonsDesignMustLoseOutsideTheSeason() {
+    val defaultVariant = tree().apply {
+      retroAlways()
+      write("designs/tile-retro/design.json", File(this, "designs/tile-retro/design.json").readText().replace("\"variant\": \"retro\"", "\"variant\": \"default\""))
+      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
+    }
+    val p1 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(defaultVariant, Layout.Static) }.problems
+    assertTrue(p1.any { "tile-retro is the default variant, so it would show outside the season too" in it }, p1.toString())
+
+    // A target only the season's design has would draw it there all year.
+    val uncovered = tree().apply {
+      retroAlways()
+      File(this, "designs/tile-default/launcher.json").delete()
+      File(this, "designs/tile-default/launcher.rc").delete()
+      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
+    }
+    val p2 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(uncovered, Layout.Static) }.problems
+    assertTrue(p2.any { "has a launcher-widget template no default Always design of live/status-tile@1 has" in it }, p2.toString())
+  }
+
   @Test fun seasonsAreChecked() {
     val src = tree().apply {
       write("seasons/a.json", """{ "id": "a_season", "start": "2026-12-01", "end": "2026-11-01", "designs": { "live/status-tile@1": "tile-retro" } }""")
