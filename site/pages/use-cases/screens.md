@@ -36,7 +36,7 @@ A screen's template is built for its presentation: its target's container is `sc
 val caps = { _: Presentation -> PlayerCapabilities(Surfaces.IN_APP, 7, setOf("androidx")) }
 // Screens open only from what is on the device: prefetch their templates with the slots'.
 val repository = TemplateRepository(…, targets = listOf(inAppCaps) + LiveryScreens.targets(placements, caps))
-val rules = LocalRulesDecider({ repository.manifest() }, frequency)
+val rules = LocalRulesDecider({ repository.current() }, frequency)   // the bundled catalog until one downloads
 val screens = LiveryScreens(planner, rules, { decisionContext() }, placements, caps, events, clock,
   appData = { placement, args -> if (placement == "promo.details") detailsFor(args["item"]) else null },
 )

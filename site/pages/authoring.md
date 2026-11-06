@@ -26,7 +26,7 @@ in CI, then a signed release (see [Getting started](getting-started.md)).
 
 ## In Compose code
 
-Add `livery-capture` (Android, from the release after 0.1.1) to the module that holds your
+Add `livery-capture` (Android, since 0.2.0) to the module that holds your
 template composables, and capture them from a Robolectric unit test:
 
 ```kotlin
