@@ -26,32 +26,16 @@ gh release create catalog-12 build/release/* --repo acme/app-templates
   own repository.
 - No CORS headers: fine for apps, not for browsers.
 
-**From CI**, on every merge to the catalog repository's `main`:
+**From CI**, on every merge to `main`: use Livery's reusable publish workflow, with its review
+workflow on pull requests (see [Repository mode](repository-mode.md)):
 
 ```yaml
-name: Publish catalog
-on: { push: { branches: [main] } }
-permissions: { contents: write }
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
-        with: { repository: yschimke/livery, path: livery }
-      - uses: actions/setup-java@v5
-        with: { distribution: temurin, java-version: 17 }
-      - run: cd livery && ./gradlew :livery-publish:installDist
-      - name: Build, sign and release
-        env:
-          LIVERY_KEY: ${{ secrets.LIVERY_SIGNING_KEY }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          printf '%s' "$LIVERY_KEY" > acme.key
-          tag="catalog-${{ github.run_number }}"
-          livery/livery-publish/build/install/livery/bin/livery build catalog build/release \
-            --github ${{ github.repository }} --tag "$tag" --key acme.key --key-id acme-1 --inspect
-          gh release create "$tag" build/release/* --title "$tag"
+    uses: yschimke/livery/.github/workflows/catalog-publish.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0, key-id: acme-1 }
+    secrets: { signing-key: '${{ secrets.LIVERY_SIGNING_KEY }}' }
+    permissions: { contents: write }
 ```
 
 `--inspect` decodes every `.rc` and refuses one that reads or emits anything its sidecar doesn't

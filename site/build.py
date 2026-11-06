@@ -24,7 +24,7 @@ NAV = [
     ("Use cases", ["use-cases/ads", "use-cases/promotions", "use-cases/screens", "use-cases/feeds", "use-cases/live-content",
                    "use-cases/launcher-widgets", "use-cases/wear-widgets",
                    "use-cases/notifications", "use-cases/web"]),
-    ("Running it", ["authoring", "hosting", "signing", "images-and-fonts", "analytics-and-experiments", "interaction-tracking", "ai-workflows", "platforms"]),
+    ("Running it", ["repository-mode", "authoring", "hosting", "signing", "images-and-fonts", "analytics-and-experiments", "interaction-tracking", "ai-workflows", "platforms"]),
     ("Reference", ["protocol"]),
 ]
 

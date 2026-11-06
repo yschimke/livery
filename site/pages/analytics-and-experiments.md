@@ -57,6 +57,8 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
   `tile_look: control`: the control group is exposed and counted like the other arms. Only
   experiments that name a design for a contract touch its slots; the first of those that enrols the
   user decides.
+- A season (`seasons/<id>.json`) is a design for everyone between two dates, written as a one-arm
+  experiment; see [Repository mode](repository-mode.md#seasonal-variants).
 - A placement rule can be limited to an arm, to test copy, timing or a different creative:
   `"arm": { "experiment": "promo_copy", "arm": "b" }`. A catalog with such a rule requires
   protocol level 4, so older clients, which would show it to everyone, keep their previous

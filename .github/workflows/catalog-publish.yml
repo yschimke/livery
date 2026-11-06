@@ -1,0 +1,140 @@
+name: Livery catalog publish
+
+# Reusable: publish a Livery catalog source tree from its repository (repository mode), signed,
+# as a GitHub release. Call it on pushes to the default branch, after catalog-review has gated the
+# pull request:
+#
+#   on: { push: { branches: [main], paths: ['catalog/**'] } }
+#   jobs:
+#     publish:
+#       uses: yschimke/livery/.github/workflows/catalog-publish.yml@v0.3.0
+#       with: { source: catalog, livery-version: 0.3.0, key-id: acme-1, tag: catalog }
+#       secrets: { signing-key: ${{ secrets.LIVERY_SIGNING_KEY }} }
+#       permissions: { contents: write }
+#
+# With `tag`, every publish updates that one release (a rolling tag): templates and images are
+# content-addressed, so they are uploaded beside the old ones, and the manifest and its signature
+# last. Apps read it with `GitHubReleaseSource(owner, repo, tag)`, and the repository's own
+# "latest" release stays the app's. Without `tag`, each publish is a new release
+# `catalog-<run>` marked latest, for a repository that holds only the catalog.
+on:
+  workflow_call:
+    inputs:
+      source:
+        type: string
+        default: catalog
+      livery-version:
+        type: string
+        default: ''
+      livery-artifact:
+        description: Instead of a release, a CLI install directory uploaded earlier in this run (Livery's own CI).
+        type: string
+        default: ''
+      inspect:
+        description: Decode every template and check it against its sidecar and contract (livery --inspect).
+        type: boolean
+        default: true
+      key-id:
+        description: The signing key's id, as apps trust it (TrustedKey).
+        type: string
+        required: true
+      tag:
+        description: A rolling release tag to update; empty for a new release per publish.
+        type: string
+        default: ''
+      dry-run:
+        description: Build and sign with a throwaway key, and release nothing (Livery's own CI).
+        type: boolean
+        default: false
+    secrets:
+      signing-key:
+        description: The private key from `livery keygen` (the .key file's contents).
+        required: false
+    outputs:
+      tag:
+        value: ${{ jobs.publish.outputs.tag }}
+
+# The caller grants the token's permissions (a called job can't widen them): contents: read and
+# pull-requests: write to review, contents: write to publish.
+jobs:
+  publish:
+    name: Publish catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - if: ${{ inputs.livery-artifact != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.livery-artifact }}
+          path: ${{ runner.temp }}/livery-cli
+      - name: Livery CLI
+        env:
+          VERSION: ${{ inputs.livery-version }}
+          ARTIFACT: ${{ inputs.livery-artifact }}
+        run: |
+          if [ -n "$ARTIFACT" ]; then
+            cli="$RUNNER_TEMP/livery-cli"
+          else
+            [ -n "$VERSION" ] || { echo "::error::set livery-version (or livery-artifact)"; exit 1; }
+            curl -fsSL -o "$RUNNER_TEMP/livery.zip" "https://github.com/yschimke/livery/releases/download/v$VERSION/livery-$VERSION.zip"
+            unzip -q "$RUNNER_TEMP/livery.zip" -d "$RUNNER_TEMP"
+            cli="$RUNNER_TEMP/livery-$VERSION"
+          fi
+          chmod +x "$cli/bin/livery"
+          echo "LIVERY=$cli/bin/livery" >> "$GITHUB_ENV"
+      - name: Build and sign
+        id: build
+        env:
+          SOURCE: ${{ inputs.source }}
+          KEY_ID: ${{ inputs.key-id }}
+          ROLLING: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          SIGNING_KEY: ${{ secrets.signing-key }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.run_number }}
+          INSPECT: ${{ inputs.inspect && '--inspect' || '' }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/livery"
+          trap 'rm -f "$key.key"' EXIT
+          if [ "$DRY_RUN" = true ]; then
+            (cd "$RUNNER_TEMP" && "$LIVERY" keygen livery > /dev/null)
+          else
+            [ -n "$SIGNING_KEY" ] || { echo "::error::the signing-key secret is not set"; exit 1; }
+            printf '%s\n' "$SIGNING_KEY" > "$key.key"
+          fi
+          tag="${ROLLING:-catalog-$RUN}"
+          "$LIVERY" build "$SOURCE" "$RUNNER_TEMP/release" --github "$REPO" --tag "$tag" --key "$key.key" --key-id "$KEY_ID" $INSPECT
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.build.outputs.tag }}
+          ROLLING: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          out="$RUNNER_TEMP/release"
+          notes="Livery catalog built from $SHA."
+          if [ -z "$ROLLING" ]; then
+            gh release create "$TAG" "$out"/* --repo "$REPO" --title "$TAG" --notes "$notes" --latest
+            exit 0
+          fi
+          if ! gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPO" --title "Livery catalog" --notes "$notes" --latest=false --target "$SHA"
+          fi
+          # Content-addressed files first; apps keep the manifest they have until the new one lands.
+          find "$out" -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'manifest.sig.json' -print0 \
+            | xargs -0 -r gh release upload "$TAG" --repo "$REPO" --clobber
+          gh release upload "$TAG" "$out/manifest.sig.json" "$out/manifest.json" --repo "$REPO" --clobber
+          gh release edit "$TAG" --repo "$REPO" --notes "$notes"
