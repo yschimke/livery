@@ -50,6 +50,23 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct ActionFixture: Decodable {
+    struct Expect: Decodable { var args: [String: String]?; var problem: String? }
+    struct Case: Decodable { var name: String; var action: String; var args: [String: String]; var expect: Expect }
+    var contract: Contract
+    var cases: [Case]
+  }
+
+  func testActions() throws {
+    let f = try JSONDecoder().decode(ActionFixture.self, from: fixture("actions.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let got = ActionGate.check(f.contract, c.action, c.args)
+      XCTAssertEqual(got.args, c.expect.args ?? [:], c.name)
+      XCTAssertEqual(got.problem, c.expect.problem, c.name)
+    }
+  }
+
   struct DesignArmFixture: Decodable {
     struct Expect: Decodable, Equatable { var experiment: String; var arm: String; var designId: String? }
     struct Case: Decodable { var name: String; var contract: String; var bucketingId: String; var expect: Expect? }

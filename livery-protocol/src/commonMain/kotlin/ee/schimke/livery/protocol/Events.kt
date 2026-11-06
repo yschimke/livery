@@ -16,6 +16,10 @@ data class TemplateEvent(
   val detail: String? = null,
   /** Experiment → arm for every experiment that shaped what drew (a decision's, a design's). */
   val experiments: Map<String, String> = emptyMap(),
+  /** An [Type.Action]'s arguments that its contract declares (PROTOCOL.md §7): never any other. */
+  val args: Map<String, String> = emptyMap(),
+  /** A [Type.Leave]'s time on screen: milliseconds at least half visible while it was shown. */
+  val durationMs: Long? = null,
 ) {
   @Serializable
   enum class Type {
@@ -30,5 +34,7 @@ data class TemplateEvent(
     Error,
     /** The user was shown an experiment's arm: what A/B analysis counts ([experiments] says which). */
     Exposure,
+    /** The template left the screen (or the slot showed something else); [durationMs] is how long it was in view. */
+    Leave,
   }
 }

@@ -194,6 +194,7 @@ and schedulers are per platform:
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
 | `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
+| `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android, optional | integrations, each with its SDK `compileOnly`: Datadog RUM actions and errors, Sentry breadcrumbs and slot tags, Amplitude events and arm properties. Interaction tracking is by contract action (`ActionGate`, PROTOCOL.md §7), not by the app's layout tree, which can't see inside a document |
 | `livery-capture` | Android | Compose authoring: `LiveryValues` (a contract's values as named Remote Compose values, refusing undeclared names and wrong types), `LiveryCapture.capture` per target, and `DesignFolder` to write or check a design's files from a unit test |
 | `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `livery ui-builder scaffold` (a contract as host inputs) and `import` (a design at a revision into the tree, with its `source`) as a `LiveryCommand`, and `ui_builder_scaffold` / `ui_builder_export` in `livery-mcp` as an `McpExtension` |
 
@@ -225,6 +226,24 @@ A document never fetches anything; every byte it draws comes through the client
 - **Players.** On Compose, `LiveryImageLoader` and `LiveryTypefaceLoader` plug into the player's
   image and typeface loaders; on iOS the same goes through the native player's resource and font
   resolvers.
+
+## Interaction tracking
+
+A template is one player node to the host app, so tools that find a tapped node in the app's
+layout tree can't see inside it. Livery tracks interactions by contract action instead: every
+emitted action passes `ActionGate` (declared, required arguments present, declared arguments of
+their type), its event carries only the declared arguments, and a `track` action, sent in the same
+tap as a template-local state change (`combinedAction(valueChange(…), hostAction(…))`), records an
+interaction that needs no app handler. Names come from the contract, so they hold across designs
+and experiment arms. Visibility is per rendered item: `Impression`, `Viewable` and `Leave` (time in
+view), with each item's node tagged `livery:<placement>:<design>` for tools that name nodes by tag.
+
+*Planned, in rc-players:* per-component visibility. The player reports only host actions today, so
+a host can't tell which part of one document scrolled into view. The proposal: a document marks a
+component with a name (as a host action is named), and the player reports when that component is
+at least a given fraction visible, as it reports a host action; Livery would declare such names in
+the contract (`views`) and emit them as events like actions. Until then, feeds use one template
+per item.
 
 ## Authoring and hosting are plugins
 

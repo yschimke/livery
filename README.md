@@ -42,6 +42,9 @@ Early. In this repository today:
 | `livery-launcher-widgets` | `LiveryLauncherWidgetProvider`: launcher AppWidgets (Android 16+) from Livery templates, on rc-players' `rc-widget-launcher` |
 | `livery-wear-widgets` | `LiveryWearWidget`: Glance Wear widgets from Livery templates, framed per container on rc-players' `rc-widget-core` |
 | `livery-firebase` | Firebase for analytics (`FirebaseAnalyticsSink`), A/B test arms (`RemoteConfigAssigner`) and frequency caps across devices (`FirestoreFrequencyBackend`); any other pipeline plugs into the same interfaces in `livery-client` |
+| `livery-datadog` | `DatadogRumEventSink`: template taps as Datadog RUM `TAP` actions, failures as RUM errors |
+| `livery-sentry` | `SentryBreadcrumbEventSink`: Livery events as Sentry breadcrumbs, and Sentry's tag on each slot |
+| `livery-amplitude` | `AmplitudeAnalyticsSink`: Livery events in Amplitude, arms as user properties |
 | `livery-notifications` | `LiveryNotifications`: notification bodies (Android 16+) from Livery templates, with taps through `LiveryNotificationReceiver` |
 | `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, `check` a change against what is published, and `import` a document from any authoring tool |
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |

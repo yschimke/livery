@@ -21,6 +21,12 @@ data class RenderPlan(
   val experiments: Map<String, String> = decision?.experiments.orEmpty(),
 )
 
+/**
+ * A stable tag for the node a plan draws in, for tools that name a tapped node by its tag (UI tests,
+ * Sentry, Datadog): `livery:<placement, or the contract>:<design>`. The same on every platform.
+ */
+val RenderPlan.slotTag: String get() = "livery:${decision?.placement ?: template.entry.contract}:${template.entry.designId}"
+
 sealed interface PlanResult {
   data class Ready(val plan: RenderPlan) : PlanResult
   /** Draw the app's native fallback (or nothing), and report why. */
@@ -102,8 +108,11 @@ class SlotPlanner(
 }
 
 /**
- * Routes a template's host action to a handler by the kind its contract declares. Unknown actions
- * and kinds are dropped and reported: a template can only reach what the app registered.
+ * Routes a template's host action to a handler by the kind its contract declares (PROTOCOL.md §7).
+ * [ActionGate] checks it first: undeclared actions, missing or ill-typed declared arguments, and
+ * URLs outside the allowlist are dropped and reported. A `track` action is recorded and needs no
+ * handler (one registered for `track` still runs). Every event carries only the declared
+ * arguments; a handler gets all of them.
  */
 class ActionRouter(
   private val handlers: Map<String, suspend (plan: RenderPlan, action: String, args: Map<String, String>) -> Unit>,
@@ -112,12 +121,14 @@ class ActionRouter(
   private val clock: Clock,
 ) {
   suspend fun dispatch(plan: RenderPlan, action: String, args: Map<String, String>) {
-    val spec = plan.contract.actions[action]
-    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments)
-    if (spec == null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "undeclared action")); return }
+    val check = ActionGate.check(plan.contract, action, args)
+    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
+    val spec = check.spec
+    if (spec == null || check.problem != null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = check.problem)); return }
     if (spec.kind == "open-url" && args["url"]?.let(urlAllowlist) != true) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "url not allowed")); return }
-    val h = handlers[spec.kind] ?: run { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }
+    val h = handlers[spec.kind]
+    if (h == null && !ActionGate.isTrackOnly(spec.kind)) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }
     events.emit(base)
-    h(plan, action, args)
+    h?.invoke(plan, action, args)
   }
 }

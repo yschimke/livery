@@ -4,6 +4,7 @@ import ee.schimke.livery.instantiate.TemplateInspector
 
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.protocol.AssetEntry
@@ -183,6 +184,7 @@ class CatalogBuilder(
 
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
     for (c in contracts) ContractEvolution.problems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
+    for (c in contracts) for ((n, a) in c.actions) ActionGate.declarationProblems(n, a).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     (config.minorPolicy.contracts.keys - contracts.map { it.ref }.toSet()).forEach { problems += "catalog.json minorPolicy: unknown contract $it" }
     // Every minor a catalog keeps of one major must be a minor change from the one before (PROTOCOL.md §4.3).
     for ((_, versions) in contracts.groupBy { it.ref }) {

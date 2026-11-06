@@ -10,19 +10,23 @@ in (`livery-firebase`); anything else plugs in through an interface.
 ## Analytics
 
 Every slot reports `TemplateEvent`s: `Impression`, `Viewable`, `Action`, `Dismiss`, `Fallback`,
-`Error` and `Exposure`, each with its placement, decision, design, template and the experiment
-arms that shaped it. `AnalyticsEventSink` turns them into flat events (`livery_impression`,
-`livery_action`, … with `placement`, `design_id`, `template`, `action`, `exp_<experiment>`
-parameters) that fit Firebase's and most pipelines' limits, and hands them to every
-`AnalyticsSink` you give it:
+`Error`, `Exposure` and `Leave`, each with its placement, decision, design, template and the
+experiment arms that shaped it. `AnalyticsEventSink` turns them into flat events
+(`livery_impression`, `livery_action`, … with `placement`, `design_id`, `template`, `action`,
+`arg_<name>`, `duration_ms`, `exp_<experiment>` parameters) that fit Firebase's and most
+pipelines' limits, and hands them to every `AnalyticsSink` you give it:
 
 ```kotlin
 val events = AnalyticsEventSink(
   FirebaseAnalyticsSink(Firebase.analytics),            // livery-firebase
-  AnalyticsSink { name, params -> amplitude.track(name, params) },  // or Segment, your warehouse, …
+  AmplitudeAnalyticsSink(amplitude),                    // livery-amplitude
+  AnalyticsSink { name, params -> segment.track(name, params) },  // or your warehouse, …
 )
 val planner = SlotPlanner(repository, events, clock)   // with experiments: see below
 ```
+
+What a tap reports, and the integrations for Datadog and Sentry, are on
+[Interaction tracking](interaction-tracking.md).
 
 A pipeline that throws doesn't stop the others. To also keep Livery's raw events (a debug log, a
 test probe), combine sinks with `eventSinks(events, EventSink { log(it) })`.

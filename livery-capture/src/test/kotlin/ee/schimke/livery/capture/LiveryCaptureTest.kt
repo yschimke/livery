@@ -2,11 +2,14 @@
 
 package ee.schimke.livery.capture
 
+import androidx.compose.remote.creation.compose.action.combinedAction
+import androidx.compose.remote.creation.compose.action.valueChange
 import androidx.compose.remote.creation.compose.layout.RemoteColumn
 import androidx.compose.remote.creation.compose.layout.RemoteText
 import androidx.compose.remote.creation.compose.modifier.RemoteModifier
 import androidx.compose.remote.creation.compose.modifier.clickable
 import androidx.compose.remote.creation.compose.modifier.fillMaxSize
+import androidx.compose.remote.creation.compose.state.rememberMutableRemoteBoolean
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Contract
@@ -36,7 +39,10 @@ class LiveryCaptureTest {
       "is_on" to InputSpec(ValueType.Bool),
       "theme.primary" to InputSpec(ValueType.Color, role = "primary"),
     ),
-    actions = mapOf("open" to ActionSpec("navigate")),
+    actions = mapOf(
+      "open" to ActionSpec("navigate"),
+      "expand" to ActionSpec("track", args = mapOf("section" to InputSpec(ValueType.String, required = true))),
+    ),
   )
   private val launcher = Target(Surfaces.LAUNCHER_WIDGET, 7, listOf("widgets"))
 
@@ -54,6 +60,27 @@ class LiveryCaptureTest {
     assertEquals(mapOf("tool" to "capture", "design" to "card"), t.source)
     assertEquals(emptyList(), TemplateInspector.typeProblems(t.bytes, contract), "the publisher's type check passes")
     assertTrue("\"reads\"" in t.sidecar() && "\"launcher-widget\"" in t.sidecar())
+  }
+
+  @Test fun oneTapChangesLocalStateAndTracksIt() = runBlocking {
+    val t = LiveryCapture.capture(RuntimeEnvironment.getApplication(), launcher, 200, 100) {
+      val v = LiveryValues(contract)
+      val expanded = rememberMutableRemoteBoolean(false)
+      RemoteColumn(RemoteModifier.fillMaxSize().clickable(combinedAction(valueChange(expanded, !expanded), v.action("expand", mapOf("section" to "specs"))))) {
+        RemoteText(v.string("title"))
+      }
+    }
+    assertEquals(listOf("expand"), t.emits, "the track action is in the document beside the state change")
+  }
+
+  @Test fun actionArgumentsAreChecked() {
+    assertEquals("demo/card@1 action 'expand' declares no arguments [note]", assertFailsWith<IllegalArgumentException> {
+      runBlocking { LiveryCapture.capture(RuntimeEnvironment.getApplication(), launcher, 200, 100) { LiveryValues(contract).action("expand", mapOf("section" to "a", "note" to "x")) } }
+    }.message)
+    assertEquals("demo/card@1 action 'expand': missing argument 'section'", assertFailsWith<IllegalArgumentException> {
+      runBlocking { LiveryCapture.capture(RuntimeEnvironment.getApplication(), launcher, 200, 100) { LiveryValues(contract).action("expand") } }
+    }.message)
+    Unit
   }
 
   @Test fun refusesWhatTheContractDoesntDeclare() {

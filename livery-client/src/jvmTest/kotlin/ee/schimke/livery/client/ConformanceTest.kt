@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Arm
 import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Contract
@@ -155,6 +156,38 @@ class ConformanceTest {
       c.copy(expect = LocalBucketing.assignNow(e, DecisionContext(c.nowEpochMs, "test", "en", 1, c.bucketingId, c.segments)))
     }
     check("experiments.json", json.encodeToJsonElement(ExperimentFixture.serializer(), ExperimentFixture(experiments, cases)))
+  }
+
+  @Serializable data class ActionExpect(val args: Map<String, String> = emptyMap(), val problem: String? = null)
+  @Serializable data class ActionCase(val name: String, val action: String, val args: Map<String, String>, val expect: ActionExpect?)
+  @Serializable data class ActionFixture(val contract: Contract, val cases: List<ActionCase>)
+
+  /** PROTOCOL.md §7: what an emitted action's event carries, or why it is dropped. */
+  @Test fun actions() {
+    val c = Contract(
+      "c/card", 1,
+      actions = mapOf(
+        "open" to ActionSpec("navigate", args = mapOf("route" to InputSpec(ValueType.String, required = true, maxLength = 20))),
+        "expand" to ActionSpec("track", args = mapOf("section" to InputSpec(ValueType.String), "index" to InputSpec(ValueType.Int, min = 0.0, max = 9.0))),
+        "rate" to ActionSpec("app:rate", args = mapOf("stars" to InputSpec(ValueType.Int, required = true, min = 1.0, max = 5.0), "liked" to InputSpec(ValueType.Bool), "at" to InputSpec(ValueType.Long), "score" to InputSpec(ValueType.Float, max = 1.0))),
+        "close" to ActionSpec("dismiss"),
+      ),
+    )
+    val cases = listOf(
+      ActionCase("declared arguments only", "open", mapOf("route" to "home", "secret" to "x"), null),
+      ActionCase("required argument missing", "open", emptyMap(), null),
+      ActionCase("too long", "open", mapOf("route" to "x".repeat(21)), null),
+      ActionCase("optional arguments left out", "expand", emptyMap(), null),
+      ActionCase("int in range", "expand", mapOf("index" to "9", "section" to "specs"), null),
+      ActionCase("int out of range", "expand", mapOf("index" to "10"), null),
+      ActionCase("not an int", "expand", mapOf("index" to "2.5"), null),
+      ActionCase("bool, long and float", "rate", mapOf("stars" to "5", "liked" to "true", "at" to "1793000000000", "score" to "0.5"), null),
+      ActionCase("not a bool", "rate", mapOf("stars" to "5", "liked" to "yes"), null),
+      ActionCase("float above max", "rate", mapOf("stars" to "5", "score" to "1.5"), null),
+      ActionCase("no arguments declared", "close", mapOf("value" to "x"), null),
+      ActionCase("undeclared action", "share", emptyMap(), null),
+    ).map { k -> ActionGate.check(c, k.action, k.args).let { k.copy(expect = ActionExpect(it.args, it.problem)) } }
+    check("actions.json", json.encodeToJsonElement(ActionFixture.serializer(), ActionFixture(c, cases)))
   }
 
   @Serializable data class DesignArmExpect(val experiment: String, val arm: String, val designId: String? = null)

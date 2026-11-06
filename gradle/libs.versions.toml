@@ -10,6 +10,9 @@ maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
 glance-wear = "1.0.0-alpha21"
 firebase-bom = "35.1.0"
+sentry = "8.62.0"
+datadog = "3.15.0"
+amplitude = "1.36.0"
 compose-remote = "1.0.0-alpha22"
 robolectric = "4.17"
 robolectric-sdk35 = "15-robolectric-13954326-i7"
@@ -23,6 +26,10 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-config = { module = "com.google.firebase:firebase-config" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore" }
+sentry = { module = "io.sentry:sentry", version.ref = "sentry" }
+sentry-compose = { module = "io.sentry:sentry-compose-android", version.ref = "sentry" }
+datadog-rum = { module = "com.datadoghq:dd-sdk-android-rum", version.ref = "datadog" }
+amplitude-android = { module = "com.amplitude:analytics-android", version.ref = "amplitude" }
 
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }

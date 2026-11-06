@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import ee.schimke.composeai.rcwidget.creation.rcWidgetHostAction
 import ee.schimke.composeai.rcwidget.launcher.widgetsProfile
+import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.instantiate.TemplateInspector
@@ -76,11 +77,22 @@ class LiveryValues(val contract: Contract) {
     return RemoteColor.createNamedRemoteColor(name, argb?.let { Color(it.toInt()) } ?: fallback, USER)
   }
 
-  /** A host action the contract declares, emitted on tap with its name as the payload. */
+  /**
+   * A host action the contract declares, emitted on tap. With [args], the payload is their JSON
+   * object; each must be an argument the action declares, of its type, with every required one
+   * given (the client checks the same, PROTOCOL.md §7). With none, the payload is the action's name.
+   *
+   * A `track` action reports an interaction that changes only the template's own state; combine it
+   * with the change: `clickable(combinedAction(valueChange(expanded, !expanded), v.action("expand")))`.
+   */
   @Composable
-  fun action(name: String): Action {
+  fun action(name: String, args: Map<String, String> = emptyMap()): Action {
     require(name in contract.actions) { "${contract.ref} declares no action '$name': ${contract.actions.keys.sorted()}" }
-    return rcWidgetHostAction(name = name, payload = name)
+    val undeclared = args.keys - contract.actions.getValue(name).args.keys
+    require(undeclared.isEmpty()) { "${contract.ref} action '$name' declares no arguments ${undeclared.sorted()}" }
+    ActionGate.check(contract, name, args).problem?.let { throw IllegalArgumentException("${contract.ref} action '$name': $it") }
+    val payload = if (args.isEmpty()) name else JSON_ARGS.encodeToString(JsonObject.serializer(), JsonObject(args.toSortedMap().mapValues { JsonPrimitive(it.value) }))
+    return rcWidgetHostAction(name = name, payload = payload)
   }
 
   private fun default(name: String, type: ValueType, countOk: Boolean = false, themeOk: Boolean = false): JsonElement? {
@@ -96,6 +108,7 @@ class LiveryValues(val contract: Contract) {
 
   private companion object {
     val USER = RemoteState.Domain.User
+    val JSON_ARGS = Json
   }
 }
 

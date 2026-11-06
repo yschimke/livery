@@ -732,7 +732,7 @@ public struct FeedPage: Codable, Equatable, Sendable {
 }
 
 public struct TemplateEvent: Codable, Equatable, Sendable {
-  public enum Kind: String, Codable, Sendable { case impression = "Impression", viewable = "Viewable", action = "Action", dismiss = "Dismiss", fallback = "Fallback", error = "Error", exposure = "Exposure" }
+  public enum Kind: String, Codable, Sendable { case impression = "Impression", viewable = "Viewable", action = "Action", dismiss = "Dismiss", fallback = "Fallback", error = "Error", exposure = "Exposure", leave = "Leave" }
   public var type: Kind
   public var atEpochMs: Int64
   public var placement: String?
@@ -744,14 +744,18 @@ public struct TemplateEvent: Codable, Equatable, Sendable {
   public var detail: String?
   /// Experiment → arm for every experiment that shaped what drew.
   public var experiments: [String: String]
+  /// An action's arguments that its contract declares (§7): never any other.
+  public var args: [String: String]
+  /// A `leave`'s time on screen: milliseconds at least half visible while it was shown.
+  public var durationMs: Int64?
 
-  public init(type: Kind, atEpochMs: Int64, placement: String? = nil, decisionId: String? = nil, feedItemId: String? = nil, designId: String? = nil, sha256: String? = nil, action: String? = nil, detail: String? = nil, experiments: [String: String] = [:]) {
+  public init(type: Kind, atEpochMs: Int64, placement: String? = nil, decisionId: String? = nil, feedItemId: String? = nil, designId: String? = nil, sha256: String? = nil, action: String? = nil, detail: String? = nil, experiments: [String: String] = [:], args: [String: String] = [:], durationMs: Int64? = nil) {
     self.type = type; self.atEpochMs = atEpochMs; self.placement = placement; self.decisionId = decisionId
     self.feedItemId = feedItemId; self.designId = designId; self.sha256 = sha256; self.action = action; self.detail = detail
-    self.experiments = experiments
+    self.experiments = experiments; self.args = args; self.durationMs = durationMs
   }
 
-  enum CodingKeys: String, CodingKey { case type, atEpochMs, placement, decisionId, feedItemId, designId, sha256, action, detail, experiments }
+  enum CodingKeys: String, CodingKey { case type, atEpochMs, placement, decisionId, feedItemId, designId, sha256, action, detail, experiments, args, durationMs }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     type = try c.decode(Kind.self, forKey: .type)
@@ -764,5 +768,7 @@ public struct TemplateEvent: Codable, Equatable, Sendable {
     action = try c.decodeIfPresent(String.self, forKey: .action)
     detail = try c.decodeIfPresent(String.self, forKey: .detail)
     experiments = try c.value(.experiments, [:])
+    args = try c.value(.args, [:])
+    durationMs = try c.decodeIfPresent(Int64.self, forKey: .durationMs)
   }
 }

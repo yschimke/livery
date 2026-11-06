@@ -107,6 +107,7 @@ final class RepositoryTests: XCTestCase {
     private var all: [TemplateEvent] = []
     func add(_ e: TemplateEvent) { lock.lock(); all.append(e); lock.unlock() }
     var exposures: [TemplateEvent] { lock.lock(); defer { lock.unlock() }; return all.filter { $0.type == .exposure } }
+    var events: [TemplateEvent] { lock.lock(); defer { lock.unlock() }; return all }
   }
 
   func testDesignArmsIncludingTheControl() async throws {
@@ -150,6 +151,27 @@ final class RepositoryTests: XCTestCase {
     let (skin, _) = await plan("skin")
     XCTAssertEqual(skin?.template.entry.designId, "skin")
     XCTAssertEqual(skin?.experiments, ["tile_look": "skin"])
+  }
+
+  func testTrackActionsNeedNoHandlerAndEventsCarryOnlyDeclaredArguments() async throws {
+    let json = """
+      {"id":"c/card","major":1,"actions":{"expand":{"kind":"track","args":{"section":{"type":"string"}}},"open":{"kind":"navigate"}}}
+      """
+    let contract = try JSONDecoder().decode(Contract.self, from: Data(json.utf8))
+    let entry = try JSONDecoder().decode(TemplateEntry.self, from: Data("""
+      {"sha256":"ab","bytes":1,"designId":"card","contract":"c/card@1","target":{"surface":"in-app","rcApiLevel":7}}
+      """.utf8))
+    let plan = RenderPlan(template: LoadedTemplate(entry: entry, design: nil, bytes: Data(), origin: .fresh, contract: contract, assets: []),
+      contract: contract, bindings: Bindings(), decision: nil, feedItem: nil, experiments: ["look": "b"])
+    let log = Log()
+    let router = ActionRouter(handlers: [:], urlAllowed: { _ in false }, events: { log.add($0) }, clock: { 5 })
+    await router.dispatch(plan, "expand", ["section": "specs", "note": "free text"])
+    await router.dispatch(plan, "open", [:])
+    XCTAssertEqual(log.events.map(\.type), [.action, .error])
+    XCTAssertEqual(log.events.first?.args, ["section": "specs"])
+    XCTAssertEqual(log.events.first?.experiments, ["look": "b"])
+    XCTAssertEqual(log.events.last?.detail, "no handler for navigate")
+    XCTAssertEqual(plan.slotTag, "livery:c/card@1:card")
   }
 
   func testActionArguments() {

@@ -17,6 +17,10 @@ extension RenderPlan {
   public var renderIdentity: String {
     "\(template.entry.sha256)|\(decision?.decisionId ?? "")|\(feedItem?.id ?? "")"
   }
+
+  /// A stable tag for the view a plan draws in, for UI tests and tap-tracking tools:
+  /// `livery:<placement, or the contract>:<design>`, the same as Kotlin's `slotTag`.
+  public var slotTag: String { "livery:\(decision?.placement ?? template.entry.contract):\(template.entry.designId)" }
 }
 
 public enum PlanResult: Sendable {
@@ -109,15 +113,21 @@ public struct ActionRouter: Sendable {
     self.handlers = handlers; self.urlAllowed = urlAllowed; self.events = events; self.clock = clock
   }
 
+  /// Checks the action (`ActionGate`), then routes it by its kind. A `track` action is recorded and
+  /// needs no handler; every event carries only the declared arguments, and a handler gets them all.
   public func dispatch(_ plan: RenderPlan, _ action: String, _ args: [String: String]) async {
+    let check = ActionGate.check(plan.contract, action, args)
     let base = TemplateEvent(type: .action, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decision?.decisionId,
-      feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, action: action, experiments: plan.experiments)
+      feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, action: action,
+      experiments: plan.experiments, args: check.args)
     func error(_ detail: String) { var e = base; e.type = .error; e.detail = detail; events(e) }
-    guard let spec = plan.contract.actions[action] else { return error("undeclared action") }
+    guard let spec = check.spec else { return error(check.problem ?? "undeclared action") }
+    if let p = check.problem { return error(p) }
     if spec.kind == ActionKinds.openURL && !(args["url"].map(urlAllowed) ?? false) { return error("url not allowed") }
-    guard let handler = handlers[spec.kind] else { return error("no handler for \(spec.kind)") }
+    let handler = handlers[spec.kind]
+    if handler == nil && spec.kind != ActionKinds.track { return error("no handler for \(spec.kind)") }
     events(base)
-    await handler(plan, action, args)
+    await handler?(plan, action, args)
   }
 
   /// PROTOCOL.md §7: a host named action's value as arguments: none, a JSON object of strings, or one value.
@@ -136,5 +146,50 @@ public struct ActionRouter: Sendable {
       }
     }
     return out
+  }
+}
+
+/// §7: an emitted action against its contract. `args` are the arguments the action declares,
+/// checked against their types, and the only ones an event ever carries; `problem` is why the
+/// action is dropped. The Swift counterpart of the Kotlin `ActionGate`, pinned by `conformance/actions.json`.
+public struct ActionCheck: Equatable, Sendable {
+  public var spec: ActionSpec?
+  public var args: [String: String]
+  public var problem: String?
+}
+
+public enum ActionGate {
+  public static func check(_ contract: Contract, _ action: String, _ args: [String: String]) -> ActionCheck {
+    guard let spec = contract.actions[action] else { return ActionCheck(spec: nil, args: [:], problem: "undeclared action") }
+    var declared: [String: String] = [:]
+    for name in spec.args.keys.sorted() {
+      let s = spec.args[name]!
+      guard let value = args[name] else {
+        if s.required { return ActionCheck(spec: spec, args: [:], problem: "missing argument '\(name)'") }
+        continue
+      }
+      if let p = problem(name, s, value) { return ActionCheck(spec: spec, args: [:], problem: p) }
+      declared[name] = value
+    }
+    return ActionCheck(spec: spec, args: declared, problem: nil)
+  }
+
+  private static func problem(_ name: String, _ s: InputSpec, _ value: String) -> String? {
+    func number(_ n: Double?, _ type: String) -> String? {
+      guard let n, n.isFinite else { return "argument '\(name)' is not \(type)" }
+      if let min = s.min, n < min { return "argument '\(name)' is below \(min)" }
+      if let max = s.max, n > max { return "argument '\(name)' is above \(max)" }
+      return nil
+    }
+    switch s.type {
+    case .string:
+      if let max = s.maxLength, value.utf16.count > max { return "argument '\(name)' is longer than \(max)" }
+      return nil
+    case .int: return number(Int32(value).map(Double.init), "an int")
+    case .long: return number(Int64(value).map(Double.init), "a long")
+    case .float: return number(Double(value), "a float")
+    case .bool: return value == "true" || value == "false" ? nil : "argument '\(name)' is not a bool"
+    case .color, .image: return "argument '\(name)' is \(s.type.rawValue), which an action can't carry"
+    }
   }
 }

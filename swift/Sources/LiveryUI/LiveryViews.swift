@@ -44,7 +44,9 @@ public struct PlayerInput {
 }
 
 /// Plays a `RenderPlan` with any Remote Compose player view (`player`), routing actions through
-/// `actions` and reporting Impression on first appearance and Viewable after a second on screen.
+/// `actions` and reporting Impression on first appearance, Viewable after a second on screen, and
+/// Leave, with the time at least half on screen, each time it disappears. Its accessibility
+/// identifier is `plan.slotTag`, so UI tests and tap-tracking tools name it by its slot.
 public struct LiveryTemplateView<Player: View>: View {
   let plan: RenderPlan
   let actions: ActionRouter
@@ -54,6 +56,8 @@ public struct LiveryTemplateView<Player: View>: View {
   @State private var impressed = false
   @State private var viewed = false
   @State private var appeared = false
+  @State private var visibleSince: Int64?
+  @State private var inViewMs: Int64 = 0
   @State private var fraction: CGFloat = 0
   private var visible: Bool { appeared && fraction >= 0.5 }
 
@@ -69,11 +73,21 @@ public struct LiveryTemplateView<Player: View>: View {
     })
     .background(GeometryReader { g in Color.clear.preference(key: VisibleFractionKey.self, value: visibleFraction(g)) })
     .onPreferenceChange(VisibleFractionKey.self) { fraction = $0 }
+    .accessibilityIdentifier(plan.slotTag)
+    .onChange(of: visible) { inView($0) }
     .onAppear {
       appeared = true
       if !impressed { impressed = true; events(event(.impression)) }
     }
-    .onDisappear { appeared = false }
+    .onDisappear {
+      appeared = false
+      inView(false)
+      // Leave: how long it was in view since it appeared, so repeated visits never count twice.
+      var e = event(.leave)
+      e.durationMs = inViewMs
+      inViewMs = 0
+      events(e)
+    }
     // Viewable (PROTOCOL.md §8): at least half on screen for an unbroken second. The task restarts
     // each time that becomes true and is cancelled when it stops, so a glimpse never counts.
     .task(id: visible) {
@@ -83,6 +97,11 @@ public struct LiveryTemplateView<Player: View>: View {
       viewed = true
       events(event(.viewable))
     }
+  }
+
+  private func inView(_ now: Bool) {
+    if now, visibleSince == nil { visibleSince = clock() }
+    if !now, let since = visibleSince { inViewMs += max(0, clock() - since); visibleSince = nil }
   }
 
   private func event(_ type: TemplateEvent.Kind) -> TemplateEvent {

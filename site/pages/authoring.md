@@ -79,6 +79,9 @@ class StatusTileTemplates {
   `tasks.withType<Test> { systemProperty("livery.capture.update", findProperty("livery.capture.update") ?: "false") }`.
 - Lists are `"<list>.<i>.<field>"` with `v.int("<list>.count")`; theme roles are `theme.*`
   colours the host fills.
+- `v.action(name, args)` sends the arguments the action declares, checked when you capture; a
+  `track` action reports a tap that only changes the template's own state, combined with it (see
+  [Interaction tracking](interaction-tracking.md)).
 
 ## In Compose UI Builder
 

@@ -298,6 +298,19 @@ drop, and report, an action its contract doesn't declare, one whose kind has no 
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
 `track`, `refresh`; anything else is the app's (`app:<kind>`).
 
+An action's `args` declare its arguments, each a `string`, `int`, `long`, `float` or `bool` with
+the input checks it carries (`required`, `maxLength`, `min`, `max`); a catalog declaring another type
+is refused. A client checks them in name order before routing: a required argument missing, or a
+declared one that isn't of its type or is out of its range, drops and reports the action. The
+action's event carries only the declared arguments that were given (`args`); one the contract
+doesn't declare still reaches the app's handler, but never an event, so an analytics pipeline only
+ever sees what the contract names.
+
+A `track` action needs no handler: the client records its `Action` event and does nothing else (a
+handler an app registers for `track` still runs). It reports an interaction that changes only the
+template's own state, combined with that change in one tap (`combinedAction(valueChange(…),
+hostAction(…))`).
+
 A host that dispatches only numeric host actions (a launcher widget's `RemoteViews` player) gets
 the template's named actions rewritten when it is instantiated: each becomes the numeric action
 whose id rc-players' `RcWidgetActionIds.register` gives the action's name, with the action's text
@@ -327,10 +340,13 @@ left unrewritten, which the host ignores.
 - A **feed page** is `feed`, `items` (each an `id`, a template reference, data and tracking),
   `next` and `ttlSeconds`.
 - **Events** are `Impression` (first frame drawn), `Viewable` (at least half on screen for one
-  second), `Action`, `Dismiss`, `Fallback`, `Error` and `Exposure` (§8.1), with the placement,
+  unbroken second), `Action` (with its declared `args`, §7), `Dismiss`, `Fallback`, `Error`,
+  `Exposure` (§8.1) and `Leave` (the template left the screen, or its slot showed another item;
+  `durationMs` is the time it was at least half on screen since it appeared), with the placement,
   decision, feed item, design and blob they concern, and `experiments`: the arm of every experiment
   that shaped what drew. A host that is only handed a document and never reports drawing it (a
-  launcher or Wear widget) emits no `Impression` or `Viewable`: publishing is not drawing.
+  launcher or Wear widget) emits no `Impression`, `Viewable` or `Leave`: publishing is not drawing.
+  Its taps are `Action` events like any other.
 
 ### 8.1 Experiments
 
@@ -372,6 +388,7 @@ the template. Exposure, not assignment, is what an analysis counts.
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
 | `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
+| `actions.json` | §7: a contract's actions and emitted arguments, and the arguments its event carries or why it is dropped |
 | `design-arms.json` | §8.1: experiments with design arms, and per contract and user the design arm (experiment, arm, design or none) or `null` |
 
 The Kotlin client writes them (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`)

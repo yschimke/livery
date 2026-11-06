@@ -13,9 +13,10 @@ fun interface AnalyticsSink {
 
 /**
  * The analytics shape of a [TemplateEvent]: `livery_impression`, `livery_viewable`,
- * `livery_action`, `livery_dismiss`, `livery_fallback`, `livery_error` and `livery_exposure`, with
- * `placement`, `decision_id`, `feed_item_id`, `design_id`, `template` (the first 12 hex of its
- * sha256), `action`, `detail`, and one `exp_<experiment>` per experiment arm. Names and values
+ * `livery_action`, `livery_dismiss`, `livery_fallback`, `livery_error`, `livery_exposure` and
+ * `livery_leave`, with `placement`, `decision_id`, `feed_item_id`, `design_id`, `template` (the
+ * first 12 hex of its sha256), `action`, `detail`, `duration_ms`, one `arg_<name>` per argument the
+ * contract declares for the action, and one `exp_<experiment>` per experiment arm. Names and values
  * stay inside the common limits (Firebase's: 40-character names, 100-character values, 25 params).
  */
 object AnalyticsEvents {
@@ -34,6 +35,11 @@ object AnalyticsEvents {
     e.sha256?.let { put("template", it.take(12)) }
     e.action?.let { put("action", it.take(MAX_VALUE)) }
     e.detail?.let { put("detail", it.take(MAX_VALUE)) }
+    e.durationMs?.let { put("duration_ms", it) }
+    for ((name, value) in e.args.toList().sortedBy { it.first }) {
+      if (size >= MAX_PARAMS) break
+      put(paramName("arg_$name"), value.take(MAX_VALUE))
+    }
     for ((experiment, arm) in e.experiments.toList().sortedBy { it.first }) {
       if (size >= MAX_PARAMS) break
       put(paramName("exp_$experiment"), arm.take(MAX_VALUE))
