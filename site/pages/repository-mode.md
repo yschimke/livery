@@ -115,10 +115,17 @@ A season swaps the design a contract's slots draw, for everyone, between two dat
 
 - `start` is inclusive and `end` exclusive: a date (midnight UTC) or an instant with its offset
   (`2026-12-01T00:00:00+13:00`). `conditions` (platforms, locales, segments) narrow it.
-- The season's design must be `Always` (shipped to everyone), or it would show only to people who
-  installed it, and have its own `variant` (`"variant": "winter"`), with a default design for
-  every target it has, so outside the season automatic selection keeps drawing the usual design.
-  `livery build` refuses otherwise, and refuses two seasons over one contract at once.
+- The season's design is `Always` (downloaded with the catalog, so the day it starts needs no
+  network) and `"automatic": false`, so ordinary selection never picks it, whatever else fits:
+  only the season draws it, and pickers don't offer it. `livery build` refuses a season whose
+  design isn't both, and two seasons over one contract at once. A catalog with such a design
+  requires protocol level 6 (clients from Livery 0.3).
+
+  ```json
+  // catalog/designs/tile-winter/design.json
+  { "id": "tile-winter", "contract": "live/status-tile@1", "title": "Winter",
+    "install": "Always", "automatic": false }
+  ```
 - A season is written into the manifest as a one-arm experiment at full allocation, so any client
   that draws experiment design arms draws seasons (give the slot's planner an `Experiments`), and
   analytics see it as `exp_<id>`. Seasons come before the catalog's own experiments: a season

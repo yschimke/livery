@@ -39,6 +39,14 @@
         "contract": "c/tile@1",
         "title": "Gone",
         "revoked": true
+      },
+      {
+        "id": "winter",
+        "contract": "c/tile@1",
+        "title": "Winter",
+        "variant": "winter",
+        "install": "Always",
+        "automatic": false
       }
     ],
     "templates": [
@@ -188,6 +196,19 @@
         }
       },
       {
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bytes": 50,
+        "designId": "winter",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
         "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
         "bytes": 900000,
         "designId": "builtin",
@@ -307,6 +328,51 @@
         "designId": "gone"
       },
       "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "a design that isn't automatic is never picked unasked",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "winter"
+      },
+      "expect": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "name": "not even when it is all that fits",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ],
+          "maxBytes": 80
+        }
+      },
+      "expect": null
+    },
+    {
+      "name": "a design that isn't automatic draws when named",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "winter"
+      },
+      "expect": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     },
     {
       "name": "tightest launcher fit",

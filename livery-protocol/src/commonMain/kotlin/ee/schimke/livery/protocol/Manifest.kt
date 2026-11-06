@@ -103,6 +103,12 @@ data class Design(
   val revoked: Boolean = false,
   /** How a client treats it: see [InstallPolicy]. */
   val install: InstallPolicy = InstallPolicy.OnDemand,
+  /**
+   * Whether automatic selection may pick it (PROTOCOL.md §5.2). False keeps it for when it is named
+   * (a chosen design, a decision) or an experiment or season arm picks it: a seasonal design, say,
+   * downloaded with the catalog but drawn only while its season runs.
+   */
+  val automatic: Boolean = true,
 ) {
   companion object {
     const val DEFAULT_VARIANT: String = "default"

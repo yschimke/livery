@@ -48,7 +48,8 @@ public enum TemplateSelector {
       }
     }
     if let id = query.designId, let e = best(candidates.filter { $0.designId == id }) { return e }
-    let auto = candidates.filter { designs[$0.designId].map(automatic) ?? false }
+    // A design that isn't automatic plays only when named (above) or picked by an arm.
+    let auto = candidates.filter { designs[$0.designId].map { $0.automatic && automatic($0) } ?? false }
     func byVariant(_ v: String) -> [TemplateEntry] { auto.filter { designs[$0.designId]?.variant == v } }
     if let v = query.variant, let e = best(byVariant(v)) { return e }
     if let e = best(byVariant(Design.defaultVariant)) { return e }

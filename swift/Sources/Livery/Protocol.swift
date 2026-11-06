@@ -117,8 +117,10 @@ public struct Design: Codable, Equatable, Sendable {
   public var revision: String?
   public var revoked: Bool
   public var install: InstallPolicy
+  /// Whether automatic selection may pick it (§5.2); false keeps it for a name or an arm.
+  public var automatic: Bool
 
-  enum CodingKeys: String, CodingKey { case id, contract, title, description, author, variant, tags, previews, forkedFrom, revision, revoked, install }
+  enum CodingKeys: String, CodingKey { case id, contract, title, description, author, variant, tags, previews, forkedFrom, revision, revoked, install, automatic }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     id = try c.decode(String.self, forKey: .id)
@@ -133,6 +135,7 @@ public struct Design: Codable, Equatable, Sendable {
     revision = try c.decodeIfPresent(String.self, forKey: .revision)
     revoked = try c.value(.revoked, false)
     install = try c.value(.install, .onDemand)
+    automatic = try c.value(.automatic, true)
   }
 }
 

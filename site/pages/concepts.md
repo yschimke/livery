@@ -105,6 +105,10 @@ the first download.
 A design nobody installed is never drawn by surprise. A **preview** downloads one template without
 installing it, so a picker can show it live.
 
+A design with `"automatic": false` is downloaded as its policy says but never picked by itself: it
+draws only when named, or when an experiment arm or a season picks it, and pickers don't offer it
+(see [Repository mode](repository-mode.md#seasonal-variants)).
+
 ## Data reaches a template three ways
 
 1. **Live push**: in-app players get values before the first frame, then each change.
