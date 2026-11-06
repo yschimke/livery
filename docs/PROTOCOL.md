@@ -349,7 +349,9 @@ client may take the arm from another assigner instead (a remote configuration se
 the experiment doesn't list counts as no answer.
 
 An arm with a design for a contract makes a slot of that contract that names no design draw that
-design, when it has a template for the slot; otherwise the slot selects as usual (§5.2). The first
+design, when it has a template for the slot and automatic selection may pick it (the design is
+`Always` or installed, §5.2: an arm never draws a skin nobody installed); otherwise the slot selects
+as usual. The first
 time a template an arm chose draws (its `Impression`, whether the arm picked its design or a rule
 for the arm decided it), the client emits one `Exposure` event for that experiment and arm. Planning
 is not exposure, and a host that reports no impressions reports exposure when it knows the user saw

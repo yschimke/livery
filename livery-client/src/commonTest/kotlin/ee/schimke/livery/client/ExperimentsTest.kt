@@ -72,7 +72,8 @@ class ExperimentsTest {
   )
 
   @Test fun anArmPicksTheDesignAndIsExposedOnceWhenItDraws() = runTest {
-    val m = Fx.manifest().copy(experiments = listOf(ab))
+    // The retro skin is shipped by default here: an arm only picks a design automatic selection may.
+    val m = Fx.manifest().let { m -> m.copy(experiments = listOf(ab), designs = m.designs.map { if (it.id == "tile-retro") it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always) else it }) }
     val events = mutableListOf<TemplateEvent>()
     val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 7))
     val data = JsonObject(mapOf("name" to kotlinx.serialization.json.JsonPrimitive("Hall")))
@@ -100,6 +101,19 @@ class ExperimentsTest {
 
     // A slot that names its design keeps it.
     assertEquals("tile-default", assertIs<PlanResult.Ready>(planner(experiments("retro")).forAppData(q.copy(designId = "tile-default"), data)).plan.template.entry.designId)
+  }
+
+  @Test fun anArmNeverPicksASkinNobodyInstalled() = runTest {
+    // tile-retro is OnRequest and not installed: the arm falls back to the usual choice, unexposed.
+    val m = Fx.manifest().copy(experiments = listOf(ab))
+    val events = mutableListOf<TemplateEvent>()
+    val e = Experiments({ m }, { ctx("u") }, { _, _ -> "retro" }, EventSink { events += it })
+    val q = TemplateQuery("live/status-tile@1", Fx.inApp.copy(maxRcApiLevel = 7))
+    val p = assertIs<PlanResult.Ready>(SlotPlanner(repo(m), e.sink, { 1_000 }, e).forAppData(q, JsonObject(mapOf("name" to kotlinx.serialization.json.JsonPrimitive("Hall"))))).plan
+    assertEquals("tile-default", p.template.entry.designId)
+    assertEquals(emptyMap(), p.experiments)
+    e.sink.emit(impression(p))
+    assertTrue(events.none { it.type == TemplateEvent.Type.Exposure })
   }
 
   @Test fun aDecisionFromAnArmsRuleIsExposedWhenItDraws() = runTest {

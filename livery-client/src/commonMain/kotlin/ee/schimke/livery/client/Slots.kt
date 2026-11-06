@@ -47,7 +47,8 @@ class SlotPlanner(
 ) {
   /** App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change. */
   suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY): PlanResult {
-    val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
+    // An arm's design is automatic selection: never a skin nobody installed (AGENTS.md).
+    val arm = if (query.designId == null) experiments?.designFor(query.contract)?.takeIf { repository.automaticallySelectable(it.designId) } else null
     if (arm != null) {
       // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
       // user wasn't exposed to the arm here.

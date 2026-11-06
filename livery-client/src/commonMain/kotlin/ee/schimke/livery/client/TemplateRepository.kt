@@ -209,6 +209,15 @@ class TemplateRepository(
     return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
+  /**
+   * Whether automatic selection may pick [designId]: live, and shipped by default (`Always`) or
+   * installed. An experiment's design arm is automatic selection, so it uses this too.
+   */
+  suspend fun automaticallySelectable(designId: String): Boolean {
+    val d = (usable() ?: bundled?.manifest)?.design(designId) ?: return false
+    return !d.revoked && (d.install == InstallPolicy.Always || designId in installedIds())
+  }
+
   /** The cached manifest while it may still be played: until [STALE_GRACE_MS] past its expiry. */
   private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 

@@ -46,7 +46,9 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
   (5000: half of them), each in one sticky arm in proportion to the arms' `weight`s. Raising the
   allocation only adds users; nobody changes arm.
 - An arm's `designs` pick the design a contract's slots draw when the app didn't choose one. Here,
-  enrolled users in `retro` see the retro tile everywhere it has a template.
+  enrolled users in `retro` see the retro tile everywhere it has a template. An arm picks only a
+  design automatic selection may: `Always`, or installed. Make a design you test `Always`, or it
+  plays only for people who installed it.
 - A placement rule can be limited to an arm, to test copy, timing or a different creative:
   `"arm": { "experiment": "promo_copy", "arm": "b" }`. A catalog with such a rule requires
   protocol level 4, so older clients, which would show it to everyone, keep their previous
