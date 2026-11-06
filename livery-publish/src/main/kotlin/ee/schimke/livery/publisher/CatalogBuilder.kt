@@ -42,6 +42,7 @@ import kotlinx.serialization.json.Json
  * fonts/fonts.json                  FontFile list: the catalog's typefaces and their licences
  * placements/<any>.json             PlacementRule (local growth rules)
  * experiments/<any>.json            Experiment (A/B tests over designs and placements)
+ * seasons/<any>.json                Season (a design for everyone while it runs), written as an experiment
  * themes/<any>.json                 ThemePack
  * ```
  */
@@ -153,7 +154,13 @@ class CatalogBuilder(
    */
   private val inspect: (bytes: ByteArray, spec: TemplateSpec, contract: Contract?) -> List<String> = { _, _, _ -> emptyList() },
 ) {
-  data class Output(val manifest: Manifest, val manifestBytes: ByteArray, val files: Map<String, ByteArray>)
+  data class Output(
+    val manifest: Manifest,
+    val manifestBytes: ByteArray,
+    val files: Map<String, ByteArray>,
+    /** The manifest experiments that are the tree's seasons. */
+    val seasons: Set<String> = emptySet(),
+  )
 
   fun build(src: File, layout: Layout, serial: Long? = null): Output {
     val problems = mutableListOf<String>()
@@ -161,7 +168,8 @@ class CatalogBuilder(
     val contracts = jsonFiles(File(src, "contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val themes = jsonFiles(File(src, "themes")).map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
     val placements = jsonFiles(File(src, "placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
-    val experiments = jsonFiles(File(src, "experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
+    val seasons = jsonFiles(File(src, "seasons")).map { json.decodeFromString(Season.serializer(), it.readText()) }
+    val authored = jsonFiles(File(src, "experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
     val files = linkedMapOf<String, ByteArray>()
     val (blobDir, previewDir) = when (layout) {
       Layout.Static -> "blobs/" to "previews/"
@@ -297,7 +305,10 @@ class CatalogBuilder(
       }
     }
 
-    experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment ${it.key}" }
+    problems += Seasons.problems(seasons, designs, templates)
+    // Seasons first: a season replaces a design under test while it runs.
+    val experiments = seasons.mapNotNull { runCatching { Seasons.experiment(it) }.getOrNull() } + authored
+    experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment or season ${it.key}" }
     for (e in experiments) {
       if (!EXPERIMENT_ID.matches(e.id)) problems += "experiment ${e.id}: an id is lowercase letters, digits and _, starting with a letter, at most 20 (it names analytics parameters and Remote Config keys as it is)"
       if (e.arms.none { it.weight > 0 }) problems += "experiment ${e.id}: no arm with a weight above 0"
@@ -354,7 +365,7 @@ class CatalogBuilder(
       imageProxy = config.imageProxy,
     )
     val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
-    return Output(manifest, bytes, files)
+    return Output(manifest, bytes, files, seasons.map { it.id }.toSet())
   }
 
   /**
@@ -371,7 +382,8 @@ class CatalogBuilder(
 
     /** The inspect hook `livery build --inspect` and agent drafts use: [TemplateInspector]. */
     val INSPECT: (ByteArray, TemplateSpec, Contract?) -> List<String> = { bytes, spec, contract ->
-      TemplateInspector.problems(bytes, spec.reads, spec.emits) + contract?.let { TemplateInspector.typeProblems(bytes, it) }.orEmpty()
+      // Both checks decode the document; one that doesn't decode is one problem, not two.
+      (TemplateInspector.problems(bytes, spec.reads, spec.emits) + contract?.let { TemplateInspector.typeProblems(bytes, it) }.orEmpty()).distinct()
     }
 
     private fun readsListValue(c: Contract, read: String): Boolean = c.lists.any { (name, list) ->

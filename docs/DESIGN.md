@@ -227,6 +227,16 @@ A document never fetches anything; every byte it draws comes through the client
   image and typeface loaders; on iOS the same goes through the native player's resource and font
   resolvers.
 
+## Repository mode
+
+A catalog can be run from a git repository alone: every change (templates, designs, placement
+rules, experiments, seasons) is a pull request. `catalog-review.yml`, a reusable workflow, runs
+`livery check --inspect --markdown` against the base and keeps one comment on the pull request up
+to date; `catalog-publish.yml` builds, signs and releases on merge, to a rolling release tag or a
+new release. Seasons (`seasons/*.json`) are a source-tree convenience the publisher writes as
+one-arm, full-allocation experiments, so they need no protocol change and play on any client that
+draws design arms.
+
 ## Secondary screens
 
 A presentation (`dialog`, `sheet`, `fullscreen`) is how a placement shows; a trigger is what opens

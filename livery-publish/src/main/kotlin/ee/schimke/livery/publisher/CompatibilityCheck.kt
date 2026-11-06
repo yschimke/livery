@@ -27,6 +27,12 @@ object CompatibilityCheck {
     val against: String,
     val contracts: List<ContractReport>,
     val templates: List<TemplateReport>,
+    /** The designs added, removed or changed (install policy, revocation, title…). */
+    val designs: List<RuleReport> = emptyList(),
+    /** The experiments and seasons added, removed or changed. */
+    val experiments: List<RuleReport> = emptyList(),
+    /** The placement rules added, removed or changed. */
+    val placements: List<RuleReport> = emptyList(),
     /** What fails the check. */
     val problems: List<String>,
     /** What a reviewer should look at, but doesn't fail it. */
@@ -34,6 +40,18 @@ object CompatibilityCheck {
   ) {
     val ok: Boolean get() = problems.isEmpty()
   }
+
+  /** An experiment, season or placement rule: what this change does to it. */
+  @Serializable
+  data class RuleReport(
+    val id: String,
+    /** `experiment`, `season` or a placement rule's placement. */
+    val kind: String,
+    /** `added`, `removed` or `changed`. */
+    val status: String,
+    /** One line per field that changed, or what an added one does. */
+    val changes: List<String> = emptyList(),
+  )
 
   @Serializable
   data class ContractReport(val contract: String, val fromMinor: Int?, val toMinor: Int?, val changes: List<String>, val breaking: Boolean)
@@ -79,7 +97,7 @@ object CompatibilityCheck {
     val new = try {
       (if (inspect) CatalogBuilder(now = { 0 }, inspect = CatalogBuilder.INSPECT) else CatalogBuilder(now = { 0 })).build(src, Layout.Static, serial = 0)
     } catch (e: CatalogProblems) {
-      return Report(against, emptyList(), emptyList(), e.problems, emptyList())
+      return Report(against, emptyList(), emptyList(), problems = e.problems, warnings = emptyList())
     }
     val before = old?.takeIf { File(it, "catalog.json").isFile }?.let {
       runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
@@ -94,7 +112,10 @@ object CompatibilityCheck {
     }
 
     val templates = templateReports(before, new, warnings)
-    return Report(against, contracts, templates, problems, warnings)
+    val experiments = experimentReports(before, new, warnings)
+    val placements = placementReports(before?.manifest, new.manifest)
+    val designs = designReports(before?.manifest, new.manifest)
+    return Report(against, contracts, templates, designs, experiments, placements, problems, warnings)
   }
 
   private fun contractReports(old: Manifest?, new: Manifest): List<ContractReport> {
@@ -156,6 +177,88 @@ object CompatibilityCheck {
         bytes = b.bytes, previousBytes = a?.bytes,
         values = values,
       )
+    }
+  }
+
+  private val JSON = kotlinx.serialization.json.Json { encodeDefaults = true }
+
+  private fun time(ms: Long?): String = ms?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "open"
+
+  /** The top-level fields that differ, as `field: old -> new`. */
+  private fun <T> fieldChanges(serializer: kotlinx.serialization.KSerializer<T>, a: T, b: T, skip: Set<String> = emptySet()): List<String> {
+    val x = JSON.encodeToJsonElement(serializer, a) as kotlinx.serialization.json.JsonObject
+    val y = JSON.encodeToJsonElement(serializer, b) as kotlinx.serialization.json.JsonObject
+    return (x.keys + y.keys).filter { it !in skip && x[it] != y[it] }.sorted().map { "$it: ${x[it] ?: "-"} -> ${y[it] ?: "-"}" }
+  }
+
+  private fun experimentReports(old: CatalogBuilder.Output?, new: CatalogBuilder.Output, warnings: MutableList<String>): List<RuleReport> {
+    val before = old?.manifest?.experiments.orEmpty().associateBy { it.id }
+    val after = new.manifest.experiments.associateBy { it.id }
+    fun kind(id: String) = if (id in new.seasons || old?.seasons.orEmpty().contains(id)) "season" else "experiment"
+    fun summary(e: ee.schimke.livery.protocol.Experiment): List<String> = buildList {
+      add("runs ${time(e.startEpochMs)} to ${time(e.endEpochMs)}")
+      if (kind(e.id) == "experiment") add("allocation ${e.allocationBasisPoints / 100.0}%")
+      for (arm in e.arms) add("arm ${arm.id} (weight ${arm.weight})" + if (arm.designs.isEmpty()) "" else ": " + arm.designs.entries.joinToString { "${it.key} -> ${it.value}" })
+      if (e.conditions != ee.schimke.livery.protocol.Conditions()) add("conditions ${JSON.encodeToJsonElement(ee.schimke.livery.protocol.Conditions.serializer(), e.conditions)}")
+    }
+    return (before.keys + after.keys).sorted().mapNotNull { id ->
+      val a = before[id]
+      val b = after[id]
+      val k = kind(id)
+      when {
+        a == null -> RuleReport(id, k, "added", summary(b!!))
+        b == null -> {
+          warnings += "$k $id: removed; its users go back to the usual designs and rules"
+          RuleReport(id, k, "removed")
+        }
+        a == b -> null
+        else -> {
+          if (k == "experiment") {
+            if (b.allocationBasisPoints < a.allocationBasisPoints) warnings += "experiment $id: allocation lowered (${a.allocationBasisPoints} -> ${b.allocationBasisPoints} basis points); some enrolled users leave the test"
+            val wa = a.arms.associate { it.id to it.weight }
+            val wb = b.arms.associate { it.id to it.weight }
+            if (wa != wb) warnings += "experiment $id: arms or weights changed ($wa -> $wb); users already enrolled can move between arms, so analyse it as a new test, or start one under a new id"
+          }
+          RuleReport(id, k, "changed", fieldChanges(ee.schimke.livery.protocol.Experiment.serializer(), a, b))
+        }
+      }
+    }
+  }
+
+  private fun designReports(old: Manifest?, new: Manifest): List<RuleReport> {
+    val before = old?.designs.orEmpty().associateBy { it.id }
+    val after = new.designs.associateBy { it.id }
+    return (before.keys + after.keys).sorted().mapNotNull { id ->
+      val a = before[id]
+      val b = after[id]
+      when {
+        a == null -> RuleReport(id, b!!.contract, "added", listOf("${b.install}: ${b.title}"))
+        b == null -> RuleReport(id, a.contract, "removed")
+        // Previews are rebuilt each time; they are pictures of the templates, reviewed there.
+        else -> fieldChanges(ee.schimke.livery.protocol.Design.serializer(), a, b, skip = setOf("previews")).takeIf { it.isNotEmpty() }?.let { RuleReport(id, b.contract, "changed", it) }
+      }
+    }
+  }
+
+  private fun placementReports(old: Manifest?, new: Manifest): List<RuleReport> {
+    val before = old?.placements.orEmpty().associateBy { it.id }
+    val after = new.placements.associateBy { it.id }
+    return (before.keys + after.keys).sorted().mapNotNull { id ->
+      val a = before[id]
+      val b = after[id]
+      when {
+        a == null -> RuleReport(id, b!!.placement, "added", listOf(
+          "draws ${b.template.designId ?: b.template.sha256} at priority ${b.priority}, ${time(b.startEpochMs)} to ${time(b.endEpochMs)}",
+        ) + listOfNotNull(
+          b.frequency?.let { "at most ${it.maxImpressions} per ${it.perSeconds}s" },
+          b.rollout?.let { "rollout ${it.experiment}/${it.arm} ${it.fromBasisPoints}..${it.toBasisPoints}" },
+          b.arm?.let { "only for ${it.experiment} arm ${it.arm}" },
+          b.presentation.takeIf { it != ee.schimke.livery.protocol.Presentation.Inline }?.let { "shown as ${it.name.lowercase()}" },
+        ))
+        b == null -> RuleReport(id, a.placement, "removed")
+        a == b -> null
+        else -> RuleReport(id, b.placement, "changed", fieldChanges(ee.schimke.livery.protocol.PlacementRule.serializer(), a, b))
+      }
     }
   }
 
@@ -248,7 +351,65 @@ object CompatibilityCheck {
     }
     val same = r.templates.count { it.status == "unchanged" }
     if (same > 0) appendLine("\n  $same template(s) unchanged")
+    for ((title, rules) in listOf("designs" to r.designs, "experiments and seasons" to r.experiments, "placement rules" to r.placements)) {
+      if (rules.isEmpty()) continue
+      appendLine("\n$title")
+      for (x in rules) {
+        appendLine("  ${x.status.padEnd(9)} ${x.kind} ${x.id}")
+        x.changes.forEach { appendLine("      $it") }
+      }
+    }
     if (r.warnings.isNotEmpty()) { appendLine("\nwarnings"); r.warnings.forEach { appendLine("  - $it") } }
     if (r.problems.isNotEmpty()) { appendLine("\nproblems"); r.problems.forEach { appendLine("  - $it") } }
+  }
+
+  /** The report for a pull request comment or a CI job summary. */
+  fun markdown(r: Report): String = buildString {
+    appendLine("### Livery check against `${r.against}`: ${if (r.ok) "compatible" else "**not compatible**"}")
+    appendLine()
+    if (r.problems.isNotEmpty()) {
+      appendLine("**Problems** (these fail the check)")
+      r.problems.forEach { appendLine("- ${it.replace("\n", " ")}") }
+      appendLine()
+    }
+    if (r.warnings.isNotEmpty()) {
+      appendLine("**For review**")
+      r.warnings.forEach { appendLine("- $it") }
+      appendLine()
+    }
+    val contracts = r.contracts.filter { it.changes.isNotEmpty() || it.fromMinor != it.toMinor }
+    if (contracts.isNotEmpty()) {
+      appendLine("**Contracts**")
+      for (c in contracts) {
+        appendLine("- `${c.contract}` minor ${c.fromMinor ?: "-"} -> ${c.toMinor ?: "-"}${if (c.breaking) " **breaking**" else ""}")
+        c.changes.forEach { appendLine("  - $it") }
+      }
+      appendLine()
+    }
+    val changed = r.templates.filter { it.status != "unchanged" }
+    if (changed.isNotEmpty()) {
+      appendLine("**Templates**")
+      appendLine()
+      appendLine("| | Design | Target | Reads | Emits | Minor | Bytes |")
+      appendLine("|---|---|---|---|---|---|---|")
+      for (t in changed) {
+        fun delta(add: List<String>, remove: List<String>) = (add.map { "+$it" } + remove.map { "-$it" }).joinToString(" ").ifEmpty { "" }
+        val minor = if (t.status == "removed") "" else "${t.requiresMinor}" + (t.previousRequiresMinor?.takeIf { it != t.requiresMinor }?.let { " (was $it)" } ?: "")
+        val bytes = if (t.status == "removed") "" else "${t.bytes}" + (t.previousBytes?.takeIf { it != t.bytes }?.let { " (was $it)" } ?: "")
+        appendLine("| ${t.status} | `${t.design}` | ${t.target} | ${delta(t.readsAdded, t.readsRemoved)} | ${delta(t.emitsAdded, t.emitsRemoved)} | $minor | $bytes |")
+      }
+      appendLine()
+    }
+    val same = r.templates.count { it.status == "unchanged" }
+    if (same > 0) { appendLine("$same template(s) unchanged."); appendLine() }
+    for ((title, rules) in listOf("Designs" to r.designs, "Experiments and seasons" to r.experiments, "Placement rules" to r.placements)) {
+      if (rules.isEmpty()) continue
+      appendLine("**$title**")
+      for (x in rules) {
+        appendLine("- ${x.status} ${x.kind} `${x.id}`")
+        x.changes.forEach { appendLine("  - ${it.replace("|", "\\|")}") }
+      }
+      appendLine()
+    }
   }
 }
