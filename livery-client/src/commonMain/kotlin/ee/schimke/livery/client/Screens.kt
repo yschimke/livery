@@ -5,10 +5,12 @@ import ee.schimke.livery.protocol.Decision
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Presentation
 import ee.schimke.livery.protocol.TemplateEvent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 
@@ -66,8 +68,11 @@ class PresentedScreen internal constructor(
  * SwiftUI), the top last.
  *
  * Opening a screen never waits on the network: it plans inside [CacheOnly], so a template or
- * asset not on the device means no screen (reported as a `Fallback`), and the download happens
- * afterwards for next time. Where a screen's data comes from, in order:
+ * asset not on the device means no screen, and what it would have downloaded is fetched in
+ * [downloads] for next time (skipped without one; the repository's refresh prefetches screen
+ * [targets] anyway). Overlapping requests can't stack screens: a screen commits only if the stack
+ * is still what it expected (empty for an interstitial or a slot's screen, exactly its parent for
+ * a screen's screen), else it is discarded. Where a screen's data comes from, in order:
  *
  * 1. the opening decision's `screens` for that action (an ad's detail screen ships with the ad);
  * 2. [appData] for the placement and the action's declared arguments (the app's own data);
@@ -87,6 +92,7 @@ class LiveryScreens(
   private val clock: Clock,
   private val appData: suspend (placement: String, args: Map<String, String>) -> JsonObject? = { _, _ -> null },
   private val frequency: LocalRulesDecider? = decider as? LocalRulesDecider,
+  private val downloads: CoroutineScope? = null,
 ) {
   private val placements = placements.associateBy { it.placement }
   private val shown = MutableStateFlow<List<PresentedScreen>>(emptyList())
@@ -185,11 +191,20 @@ class LiveryScreens(
     val contract = placements.getValue(placement).contract
     val query = TemplateQuery(contract, caps(presentation).copy(container = presentation.container))
     val cache = CacheOnly()
-    // A screen opens now or not at all; what it would have downloaded comes down afterwards.
+    // A screen opens now or not at all; what it would have downloaded comes down afterwards, off
+    // this path.
     val result = withContext(cache) { plan(query) }
-    if (cache.misses > 0) runCatching { cache.fetchMissed() }
+    if (cache.misses > 0) downloads?.launch { runCatching { cache.fetchMissed() } }
     val ready = result as? PlanResult.Ready ?: return false
-    shown.update { it + PresentedScreen(nextId++, placement, presentation, ready.plan, depth) }
+    val screen = PresentedScreen(nextId++, placement, presentation, ready.plan, depth)
+    // Commit only onto the stack this screen was planned for: nothing else opened meanwhile, and
+    // its parent is still showing.
+    while (true) {
+      val stack = shown.value
+      val expected = stack.size == depth - 1 && (depth == 1 || stack.last().plan === from)
+      if (!expected) return false
+      if (shown.compareAndSet(stack, stack + screen)) break
+    }
     decision?.let { frequency?.recordImpression(it, clock.nowEpochMs()) }
     return true
   }

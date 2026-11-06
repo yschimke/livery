@@ -210,9 +210,15 @@ final class RepositoryTests: XCTestCase {
     XCTAssertFalse(third, "no deeper")
     XCTAssertEqual(log.events.last?.detail, "a screen opened from a screen can't open another")
 
+    // The two screens draw the same template from the same app data: alike in content, yet each
+    // screen's actions are its own.
+    XCTAssertEqual(screens.stack[0].plan.template.entry.sha256, screens.stack[1].plan.template.entry.sha256)
+    XCTAssertEqual(screens.screen(of: screens.stack[1].plan)?.depth, 2)
     let router = ActionRouter(handlers: screens.handlers(), urlAllowed: { _ in false }, events: { log.add($0) })
+    await router.dispatch(screens.stack[1].plan, "close", [:])
+    XCTAssertEqual(screens.stack.count, 1, "the top screen's close closes only it")
     await router.dispatch(screens.stack[0].plan, "close", [:])
-    XCTAssertTrue(screens.stack.isEmpty, "closing a screen closes the one it opened")
+    XCTAssertTrue(screens.stack.isEmpty)
     XCTAssertEqual(log.events.filter { $0.type == .dismiss }.map(\.detail), ["action", "action"])
   }
 

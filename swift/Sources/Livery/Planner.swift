@@ -9,6 +9,9 @@ public struct RenderPlan: Sendable {
   public var feedItem: FeedItem?
   /// Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event.
   public var experiments: [String: String] = [:]
+  /// The `PresentedScreen` this plan is drawn in, set by `LiveryScreens`: which screen an action
+  /// came from, however alike two screens' contents are. Nil in a slot.
+  public var screenId: Int64? = nil
 }
 
 extension RenderPlan {

@@ -47,7 +47,8 @@ public struct PresentedScreen: Identifiable, Sendable {
 
 /// The app's secondary screens (§8.2), the Swift counterpart of the Kotlin `LiveryScreens`:
 /// interstitials at the app's own moments (`maybeShow`) and screens a template's `present` action
-/// opens (`present`), at most two deep. Opening one never waits on the network (`CacheOnly`). Data
+/// opens (`present`), at most two deep. Opening one never waits on the network (`CacheOnly`), and
+/// a screen commits only onto the stack it was planned for (empty, or exactly its parent). Data
 /// comes from the opening decision's `screens`, then `appData`, then `decide`. `onChange` hands the
 /// stack to the UI (`LiveryScreensModel` in LiveryUI).
 public final class LiveryScreens: @unchecked Sendable {
@@ -105,8 +106,7 @@ public final class LiveryScreens: @unchecked Sendable {
     guard let spec = from.contract.actions[action], spec.kind == ActionKinds.present, let target = spec.placement else {
       return refuse(action, from.decision, "\(action) doesn't name a screen placement")
     }
-    let current = stack
-    let depth = (current.firstIndex { $0.plan.renderIdentity == from.renderIdentity }.map { $0 + 1 } ?? 0) + 1
+    let depth = (screen(of: from)?.depth ?? 0) + 1
     if let d = from.decision, let screen = d.screens[action] {
       let decision = Decision(placement: target, decisionId: "\(d.decisionId)>\(action)", template: screen.template, data: screen.data,
         tracking: d.tracking, experiments: d.experiments, presentation: screen.presentation)
@@ -137,7 +137,10 @@ public final class LiveryScreens: @unchecked Sendable {
   }
 
   /// The screen `plan` is drawn in, if it is one.
-  public func screen(of plan: RenderPlan) -> PresentedScreen? { stack.first { $0.plan.renderIdentity == plan.renderIdentity } }
+  public func screen(of plan: RenderPlan) -> PresentedScreen? {
+    guard let id = plan.screenId else { return nil }
+    return stack.first { $0.id == id }
+  }
 
   /// Handlers for an `ActionRouter`: `present`, and `dismiss`, which closes the screen it was tapped
   /// in, or calls `dismissInline` for a slot's template.
@@ -161,8 +164,13 @@ public final class LiveryScreens: @unchecked Sendable {
     let query = TemplateQuery(contract: spec.contract, caps: c)
     // A screen opens now or not at all: nothing downloads while the user waits.
     let result = await CacheOnly.$active.withValue(true) { await plan(query) }
-    guard case .ready(let ready) = result else { return false }
+    guard case .ready(var ready) = result else { return false }
     lock.lock()
+    // Commit only onto the stack this screen was planned for: nothing else opened meanwhile, and
+    // its parent is still showing. Anything else is discarded, uncounted.
+    let expected = screens.count == depth - 1 && (depth == 1 || (from?.screenId != nil && screens.last?.id == from?.screenId))
+    guard expected else { lock.unlock(); return false }
+    ready.screenId = nextId
     screens.append(PresentedScreen(id: nextId, placement: placement, presentation: presentation, plan: ready, depth: depth))
     nextId += 1
     let now = screens

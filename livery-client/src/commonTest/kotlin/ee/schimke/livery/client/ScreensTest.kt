@@ -22,7 +22,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -155,6 +159,62 @@ class ScreensTest {
     val slot = assertIs<PlanResult.Ready>(planner.forDecision(TemplateQuery("promo/card@1", caps), Decision("home.top", "d2", TemplateRef(designId = "card-look")))).plan
     router.dispatch(slot, "close", emptyMap())
     assertEquals(listOf("close"), inline, "a slot's dismiss is the app's")
+  }
+
+  @Test fun overlappingInterstitialsShowOnce() = runTest {
+    val m = manifest()
+    val gate = CompletableDeferred<Unit>()
+    val events = mutableListOf<TemplateEvent>()
+    val planner = SlotPlanner(repo(m), EventSink { events += it }, { 1_000 })
+    val frequency = MemoryFrequencyStore()
+    val rules = LocalRulesDecider({ m }, frequency)
+    val slow = Decider { p, c -> gate.await(); rules.decide(p, c) }
+    val screens = LiveryScreens(planner, slow, { ctx }, placements, { caps }, EventSink { events += it }, { 1_000 }, frequency = rules)
+    val a = async { screens.maybeShow("app.launch") }
+    val b = async { screens.maybeShow("app.launch") }
+    yield()
+    gate.complete(Unit)
+    assertEquals(setOf(true, false), setOf(a.await(), b.await()))
+    assertEquals(1, screens.stack.value.size)
+    assertEquals(1, frequency.impressions("launch-promo", 0), "only the one that showed counts")
+  }
+
+  @Test fun aScreenWhoseParentClosedWhilePlanningIsDiscarded() = runTest {
+    val gate = CompletableDeferred<Unit>()
+    val (screens, _, _) = setup(appData = { placement, _ -> if (placement == "promo.more") { gate.await(); JsonObject(emptyMap()) } else null })
+    assertTrue(screens.maybeShow("app.launch"))
+    val parent = screens.stack.value.single()
+    val child = async { screens.present(parent.plan, "more", emptyMap()) }
+    yield()
+    screens.dismiss(parent, "system")
+    gate.complete(Unit)
+    assertFalse(child.await())
+    assertEquals(emptyList(), screens.stack.value)
+  }
+
+  @Test fun aMissingTemplateDoesntWaitForItsDownload() = runTest {
+    // A downloaded catalog lists the screen's template, but its blob isn't on the device, and the
+    // network never answers for it.
+    val m = manifest(listOf(launch.copy(template = TemplateRef(designId = "missing-look")))).let { it.copy(templates = it.templates.filter { t -> t.target.container != null }) }
+    val manifestBytes = kotlinx.serialization.json.Json.encodeToString(Manifest.serializer(), m).encodeToByteArray()
+    val started = CompletableDeferred<Unit>()
+    val r = TemplateRepository(
+      StaticSource("https://cdn.example/c"),
+      { url, _ ->
+        when {
+          url.endsWith("/manifest.json") -> FetchResult.Ok(manifestBytes, null)
+          "/blobs/" in url -> { started.complete(Unit); awaitCancellation() }
+          else -> FetchResult.Failed(404, "no $url")
+        }
+      },
+      FakeCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, listOf(Fx.inApp),
+    )
+    r.refresh()
+    val planner = SlotPlanner(r, EventSink { }, { 1_000 })
+    val screens = LiveryScreens(planner, LocalRulesDecider({ r.current() }, MemoryFrequencyStore()), { ctx }, placements, { caps }, EventSink { }, { 1_000 }, downloads = backgroundScope)
+    assertFalse(screens.maybeShow("app.launch"), "answers from the device, without waiting for a network that never replies")
+    started.await()
+    assertEquals(emptyList(), screens.stack.value)
   }
 
   @Test fun screenTargetsArePrefetched() {
