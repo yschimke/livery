@@ -118,8 +118,8 @@ public actor TemplateRepository {
   }
 
   /// The catalog slots draw from: the downloaded manifest while it is usable, else the bundled one.
-  /// Placement rules, theme packs and the image proxy read this rather than `manifest()`, so a
-  /// fresh or offline install still has them, as selection already does.
+  /// Placement rules and theme packs read this rather than `manifest()`, so a fresh or offline
+  /// install still has them, as selection already does.
   public func current() async -> Manifest? {
     if let m = await usable() { return m }
     return bundled?.manifest

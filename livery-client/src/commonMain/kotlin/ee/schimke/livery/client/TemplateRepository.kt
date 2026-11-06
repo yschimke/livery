@@ -109,8 +109,8 @@ class TemplateRepository(
 
   /**
    * The catalog slots draw from: the downloaded manifest while it is usable, else the bundled one.
-   * Placement rules, theme packs and the image proxy read this rather than [manifest], so a fresh
-   * install (nothing downloaded yet) or an offline one still has them, as selection already does.
+   * Placement rules and theme packs read this rather than [manifest], so a fresh install (nothing
+   * downloaded yet) or an offline one still has them, as selection already does.
    */
   suspend fun current(): Manifest? = usable() ?: bundled?.manifest
 
