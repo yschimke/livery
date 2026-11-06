@@ -10,10 +10,12 @@ public struct TemplateQuery: Sendable, Equatable {
   public var variant: String?
   public var theme: String?
   public var tags: [String: String]
+  /// The contract minor the app implements; templates needing a newer one are skipped. Nil accepts any.
+  public var minor: Int?
 
-  public init(contract: String, caps: PlayerCapabilities, widthDp: Int? = nil, heightDp: Int? = nil, designId: String? = nil, variant: String? = nil, theme: String? = nil, tags: [String: String] = [:]) {
+  public init(contract: String, caps: PlayerCapabilities, widthDp: Int? = nil, heightDp: Int? = nil, designId: String? = nil, variant: String? = nil, theme: String? = nil, tags: [String: String] = [:], minor: Int? = nil) {
     self.contract = contract; self.caps = caps; self.widthDp = widthDp; self.heightDp = heightDp
-    self.designId = designId; self.variant = variant; self.theme = theme; self.tags = tags
+    self.designId = designId; self.variant = variant; self.theme = theme; self.tags = tags; self.minor = minor
   }
 }
 
@@ -22,7 +24,9 @@ public enum TemplateSelector {
   /// §5.1: whether `t` may play for `query`. Exact references pass this same check.
   public static func eligible(_ manifest: Manifest, _ t: TemplateEntry, _ query: TemplateQuery) -> Bool {
     guard let design = manifest.designs.first(where: { $0.id == t.designId && !$0.revoked && $0.contract == query.contract }) else { return false }
-    return !t.revoked && t.contract == query.contract && t.bytes <= query.caps.maxBytes
+    return !t.revoked && t.contract == query.contract
+      && (query.minor.map { t.requiresMinor <= $0 } ?? true)
+      && t.bytes <= query.caps.maxBytes
       && t.target.themeFits(query.caps, wanted: query.theme)
       && t.target.fits(query.caps, widthDp: query.widthDp, heightDp: query.heightDp)
       && query.tags.allSatisfy { t.tags[$0.key] == $0.value || design.tags[$0.key] == $0.value }

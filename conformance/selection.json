@@ -7,7 +7,8 @@
     "contracts": [
       {
         "id": "c/tile",
-        "major": 1
+        "major": 1,
+        "minor": 2
       }
     ],
     "designs": [
@@ -147,6 +148,20 @@
         }
       },
       {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bytes": 100,
+        "designId": "compact",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "requiresMinor": 2
+      },
+      {
         "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
         "bytes": 100,
         "designId": "skin",
@@ -215,7 +230,7 @@
         },
         "designId": "compact"
       },
-      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+      "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {
       "name": "preferred variant",
@@ -230,7 +245,7 @@
         },
         "variant": "compact"
       },
-      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+      "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {
       "name": "uninstalled skin is never automatic",
@@ -397,7 +412,7 @@
           "style": "flat"
         }
       },
-      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+      "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {
       "name": "other contract major",
@@ -412,6 +427,53 @@
         }
       },
       "expect": null
+    },
+    {
+      "name": "app on the contract's minor gets the newer template",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "compact",
+        "minor": 2
+      },
+      "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "app on an older minor gets the older template",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "compact",
+        "minor": 1
+      },
+      "expect": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "name": "no minor accepts any",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "compact"
+      },
+      "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
   ]
 }

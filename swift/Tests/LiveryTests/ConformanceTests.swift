@@ -15,6 +15,7 @@ final class ConformanceTests: XCTestCase {
     struct Query: Decodable {
       var contract: String; var caps: PlayerCapabilities; var widthDp: Int?; var heightDp: Int?
       var designId: String?; var variant: String?; var theme: String?; var tags: [String: String]?
+      var minor: Int?
     }
     struct Case: Decodable { var name: String; var query: Query; var installed: [String]?; var expect: String? }
     var manifest: Manifest
@@ -27,7 +28,7 @@ final class ConformanceTests: XCTestCase {
     for c in f.cases {
       let installed = Set(c.installed ?? [])
       let q = TemplateQuery(contract: c.query.contract, caps: c.query.caps, widthDp: c.query.widthDp, heightDp: c.query.heightDp,
-        designId: c.query.designId, variant: c.query.variant, theme: c.query.theme, tags: c.query.tags ?? [:])
+        designId: c.query.designId, variant: c.query.variant, theme: c.query.theme, tags: c.query.tags ?? [:], minor: c.query.minor)
       let got = TemplateSelector.select(f.manifest, q) { $0.install == .always || installed.contains($0.id) }
       XCTAssertEqual(got?.sha256, c.expect, c.name)
     }

@@ -7,7 +7,7 @@ order: 2
 
 A contract is the interface between a template and the app that plays it. Templates bind
 `id@major`; a later minor may only add optional inputs and actions, so every template of a major
-keeps working.
+keeps working (see [Versions within a major](#versions-within-a-major)).
 
 ```json
 {
@@ -27,6 +27,50 @@ keeps working.
 - Lists flatten to `tags.count`, `tags.0.label`, … because Remote Compose named values are flat.
 - Data that doesn't fit is **refused, not dropped**: an unknown key, a wrong type, an over-long
   string. The same check runs in the app, the publisher, decision servers and agent tools.
+
+### Versions within a major
+
+Apps already installed keep the contract minor they were built with, so a new minor may only add
+what an old app can ignore, and each addition says when it arrived with `since`:
+
+```json
+{ "id": "promo/banner", "major": 1, "minor": 2,
+  "inputs":  { "subtitle": { "type": "string", "since": 2 } },
+  "actions": { "share": { "kind": "app:share", "since": 2 } } }
+```
+
+| Change | Within the major (new minor) | Needs a new major |
+| --- | --- | --- |
+| Add an optional input, list, list field or action, with `since` | ✓ | |
+| Loosen a limit (`maxLength`, `min`/`max`, a list's `max`) | ✓ | |
+| Change a description, an example or a default | ✓ | |
+| Add a required input, or make one required | | ✓ |
+| Remove an input or action; change a type, an action's `kind` or `args` | | ✓ |
+| Tighten a limit | | ✓ |
+
+The publisher refuses a catalog that breaks these rules. It also gives every template a
+`requiresMinor`: the newest `since` among what it reads and emits. An app says which minor it
+implements, and is never offered a template that needs a newer one; an older version of the same
+design plays instead:
+
+```kotlin
+TemplateQuery("promo/banner@1", caps, minor = 1)   // or slot.query("promo/banner@1", minor = 1)
+```
+
+Leave `minor` out to accept any. Before a change ships, `livery check` compares the catalog with
+the version already published (see [Hosting](hosting.md#checking-a-change)).
+
+Apps on a Livery client from before minors (protocol level 2) don't filter this way: they may get
+a template whose new input they don't fill (it draws its own default) or whose new action they
+can't route (the button does nothing). Decide per catalog, or per contract, in `catalog.json`:
+
+```json
+"minorPolicy": { "default": "lenient", "contracts": { "promo/banner@1": "strict" } }
+```
+
+**Lenient** (the default) lets those clients keep updating. **Strict** raises the manifest's
+`minClient` to 3 as soon as a template of that contract needs a newer minor, so those clients
+refuse the update and keep the templates they had.
 
 ## Designs, templates and targets
 

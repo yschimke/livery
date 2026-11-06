@@ -4,6 +4,7 @@ import ee.schimke.livery.instantiate.TemplateInspector
 
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
@@ -47,7 +48,34 @@ data class CatalogConfig(
   val minClient: Int = 0,
   /** How remote images in datasets are fetched (PROTOCOL.md §6.2); written into the manifest. */
   val imageProxy: ImageProxy? = null,
+  /** What clients that don't know contract minors get (PROTOCOL.md §4.3). */
+  val minorPolicy: MinorPolicy = MinorPolicy(),
 )
+
+/**
+ * Whether clients below protocol level 3, which ignore `requiresMinor`, may play templates that
+ * need a newer contract minor than their app implements (PROTOCOL.md §4.3), for the whole catalog
+ * ([default]) or per contract (`id@major` → mode):
+ *
+ * ```
+ * "minorPolicy": { "default": "lenient", "contracts": { "cadence/headphone-controls@1": "strict" } }
+ * ```
+ */
+@Serializable
+data class MinorPolicy(
+  val default: Mode = Mode.Lenient,
+  val contracts: Map<String, Mode> = emptyMap(),
+) {
+  @Serializable
+  enum class Mode {
+    /** Older clients play them: an input their app doesn't fill draws its default; an unknown action does nothing. */
+    @kotlinx.serialization.SerialName("lenient") Lenient,
+    /** The manifest requires level 3, so older clients refuse it and keep the templates they had. */
+    @kotlinx.serialization.SerialName("strict") Strict,
+  }
+
+  fun modeFor(contract: String): Mode = contracts[contract] ?: default
+}
 
 /** The sidecar beside each `.rc`: what it was built for. */
 @Serializable
@@ -87,6 +115,9 @@ sealed interface Layout {
 /** The protocol level that added resources (PROTOCOL.md §2.1). */
 const val RESOURCES_LEVEL: Int = 2
 
+/** The protocol level that added contract minors: a strict [MinorPolicy] requires it. */
+const val MINORS_LEVEL: Int = 3
+
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
 /**
@@ -97,8 +128,11 @@ class CatalogProblems(val problems: List<String>) : Exception(problems.joinToStr
 class CatalogBuilder(
   private val json: Json = Json { prettyPrint = true; ignoreUnknownKeys = false; encodeDefaults = false },
   private val now: () -> Long = System::currentTimeMillis,
-  /** Optional deep check of a document (op profile, size, named values it reads); returns problems. */
-  private val inspect: (bytes: ByteArray, spec: TemplateSpec) -> List<String> = { _, _ -> emptyList() },
+  /**
+   * Optional deep check of a document (op profile, size, the named values it reads and their types
+   * against its [Contract], when the design's contract exists); returns problems.
+   */
+  private val inspect: (bytes: ByteArray, spec: TemplateSpec, contract: Contract?) -> List<String> = { _, _, _ -> emptyList() },
 ) {
   data class Output(val manifest: Manifest, val manifestBytes: ByteArray, val files: Map<String, ByteArray>)
 
@@ -135,6 +169,16 @@ class CatalogBuilder(
       }
 
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
+    for (c in contracts) ContractEvolution.problems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
+    (config.minorPolicy.contracts.keys - contracts.map { it.ref }.toSet()).forEach { problems += "catalog.json minorPolicy: unknown contract $it" }
+    // Every minor a catalog keeps of one major must be a minor change from the one before (PROTOCOL.md §4.3).
+    for ((_, versions) in contracts.groupBy { it.ref }) {
+      versions.sortedBy { it.minor }.zipWithNext { old, new ->
+        ContractEvolution.compare(old, new).filter { it.breaking }.forEach {
+          problems += "contract ${new.ref}: ${old.minor} -> ${new.minor} is not a minor change: ${it.path} ${it.message}"
+        }
+      }
+    }
     for (c in contracts) for ((name, example) in c.examples) {
       (ContractBinder.bind(c, example) as? BindResult.Invalid)?.let { problems += "contract ${c.ref} example '$name': ${it.problems}" }
     }
@@ -174,7 +218,7 @@ class CatalogBuilder(
         if (!specFile.isFile) { problems += "${design.id}/${rc.name}: no ${specFile.name} sidecar"; continue }
         val spec = json.decodeFromString(TemplateSpec.serializer(), specFile.readText())
         val bytes = rc.readBytes()
-        inspect(bytes, spec).forEach { problems += "${design.id}/${rc.name}: $it" }
+        inspect(bytes, spec, contract(design.contract)).forEach { problems += "${design.id}/${rc.name}: $it" }
         contract(design.contract)?.let { c ->
           val undeclared = spec.reads.filterNot { r -> declares(c, r) }
           if (undeclared.isNotEmpty()) problems += "${design.id}/${rc.name}: reads values outside ${c.ref}: $undeclared"
@@ -195,6 +239,7 @@ class CatalogBuilder(
         templates += TemplateEntry(
           sha, bytes.size.toLong(), design.id, design.contract, spec.target, spec.tags,
           reads = spec.reads, emits = spec.emits,
+          requiresMinor = contract(design.contract)?.let { ContractEvolution.requiresMinor(it, spec.reads, spec.emits) } ?: 0,
           assets = (images + fontAssets).map { it.sha256 }.distinct(), fonts = spec.fonts,
           source = spec.source,
         )
@@ -222,8 +267,13 @@ class CatalogBuilder(
       generatedAtEpochMs = t,
       expiresAtEpochMs = t + config.expiresInDays * 86_400_000,
       ttlSeconds = config.ttlSeconds,
-      // A template that needs assets must not reach a client that would play it without them.
-      minClient = maxOf(config.minClient, if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0),
+      // A template that needs assets must not reach a client that would play it without them; one
+      // that needs a newer minor reaches a client that ignores minors only if the policy allows it.
+      minClient = maxOf(
+        config.minClient,
+        if (templates.any { it.assets.isNotEmpty() }) RESOURCES_LEVEL else 0,
+        if (templates.any { it.requiresMinor > 0 && config.minorPolicy.modeFor(it.contract) == MinorPolicy.Mode.Strict }) MINORS_LEVEL else 0,
+      ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",
       contracts = contracts,
@@ -251,7 +301,9 @@ class CatalogBuilder(
     fun declares(c: Contract, read: String): Boolean = read in c.inputs || readsListValue(c, read) || read.startsWith("theme.")
 
     /** The inspect hook `livery build --inspect` and agent drafts use: [TemplateInspector]. */
-    val INSPECT: (ByteArray, TemplateSpec) -> List<String> = { bytes, spec -> TemplateInspector.problems(bytes, spec.reads, spec.emits) }
+    val INSPECT: (ByteArray, TemplateSpec, Contract?) -> List<String> = { bytes, spec, contract ->
+      TemplateInspector.problems(bytes, spec.reads, spec.emits) + contract?.let { TemplateInspector.typeProblems(bytes, it) }.orEmpty()
+    }
 
     private fun readsListValue(c: Contract, read: String): Boolean = c.lists.any { (name, list) ->
     if (read == "$name.count") return@any true

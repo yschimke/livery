@@ -203,4 +203,22 @@ class LiveryMcpTest {
     val r = call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to first)
     assertFalse(r.isError(), r.toString())
   }
+
+  @Test fun checksCompatibilityAgainstHead() {
+    fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
+      .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
+    git("init", "-q"); git("add", "."); git("commit", "-qm", "catalog")
+    val same = call("check_compatibility").body().jsonObject
+    assertEquals("true", same["ok"]!!.jsonPrimitive.content, same.toString())
+
+    val contract = File(src, "contracts/status-tile.json")
+    contract.writeText(contract.readText().replace("\"maxLength\": 40", "\"maxLength\": 20"))
+    val broken = call("check_compatibility", "against" to "HEAD").body().jsonObject
+    assertEquals("false", broken["ok"]!!.jsonPrimitive.content)
+    assertTrue("maxLength tightened" in broken["problems"].toString(), broken.toString())
+    assertTrue(call("check_compatibility", "against" to "--output=/tmp/x").isError(), "an option is never a revision")
+
+    val v = call("validate_template", "contract" to "live/status-tile@1", "rc_base64" to tileB64).body().jsonObject
+    assertEquals(0, v["requiresMinor"]!!.jsonPrimitive.content.toInt())
+  }
 }

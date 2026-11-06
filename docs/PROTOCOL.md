@@ -1,4 +1,4 @@
-# Livery protocol, level 2
+# Livery protocol, level 3
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 2 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 3 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -56,14 +56,20 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 **Levels.** Level 1 is this document without §6 and the `assets`, `assetBase`, `imageProxy` and
 `TemplateEntry.assets` / `fonts` fields. Level 2 added them. A level-1 client would ignore them and
 hand out templates without their resources, so a publisher must set `minClient` to at least 2 for
-a catalog in which any template lists `assets`. A client must reject a manifest whose `minClient`
-is above its level and keep using what it had (§3.3).
+a catalog in which any template lists `assets`. Level 3 added contract minors (`since`,
+`requiresMinor`, and the query's `minor` in §5.1). A level-2 client ignores `requiresMinor`, as a
+level-3 query without a `minor` does: an input its app doesn't fill draws the template's own
+default, and an action it can't route does nothing. Whether that is acceptable is the publisher's
+policy (§4.3): a strict catalog sets `minClient` to at least 3 when a template of a strict contract
+has a `requiresMinor` above 0, so older clients keep what they had. A client must reject a
+manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
 
 A template entry is one document for one target: `sha256`, `bytes`, `designId`, `contract`
 (`id@major`), `target`, `tags`, `previews`, `revoked`, `reads` (the named values it reads),
-`emits` (the actions it may emit), `assets` (hashes of the images and fonts it needs), `fonts`
+`emits` (the actions it may emit), `requiresMinor` (the lowest contract minor an app must implement
+to play it, §4.3; 0 when absent), `assets` (hashes of the images and fonts it needs), `fonts`
 (the families it names) and `source` (a free-form string map of where the document came from, such
 as `tool`, `design`, `revision` and `commit`, for tracing a version; clients never read it to
 decide anything).
@@ -129,10 +135,13 @@ everything.
 
 A contract is `id`, `major`, `minor`, `inputs` (name → `InputSpec`), `lists` (name → `ListSpec`),
 `actions` (name → `ActionSpec`), `examples` (name → dataset) and `dataSource` (`App`, `Decision` or
-`Feed`). Templates bind `id@major`; a later minor may only add optional inputs, lists and actions.
+`Feed`). Templates bind `id@major`; a later minor may only add optional inputs, lists and actions
+(§4.3).
 
 `InputSpec`: `type` (`string`, `int`, `long`, `float`, `bool`, `color`, `image`), `required`,
-`default`, `maxLength`, `min`, `max`, `role`, `description`.
+`default`, `maxLength`, `min`, `max`, `role`, `description`, `since`. `ListSpec`: `item` (field →
+`InputSpec`), `max`, `description`, `since`. `ActionSpec`: `kind`, `args`, `description`, `since`.
+`since` is the contract minor that added the input, list or action; 0 when absent.
 
 ### 4.1 Binding a dataset
 
@@ -159,13 +168,44 @@ A template reads its data as Remote Compose named values in the `USER` domain, u
 names above. Theme roles are `theme.<role>`. A publisher must refuse a template whose `reads` names
 a value its contract cannot produce.
 
+### 4.3 Evolution
+
+Within one major, a contract changes only in ways every template and data producer of that major
+survives. A new minor may:
+
+- add an optional input, list, list field, action or action argument, with `since` set to the new
+  minor;
+- loosen a limit (raise `maxLength` or a list's `max`, widen `min`/`max`), when every template still
+  draws at the new limit;
+- change descriptions, examples and defaults.
+
+Anything else needs a new major: removing an input, list, field, action or action argument;
+changing a type or an action's `kind`; adding a required input or argument, or making an optional
+one required; and tightening a limit, since producers (an action's arguments are produced by
+templates) already send values the old limit allowed. A publisher must
+refuse a catalog that holds two versions of one major whose difference is not a minor change, or an
+input, list or action whose `since` is above its contract's `minor`, or whose `since` is above 0
+while it is `required`.
+
+A template's `requiresMinor` is the highest `since` among the inputs, list fields and actions it
+`reads` and `emits` (a list value takes the higher of its list's and its field's; theme roles count
+as 0). The publisher computes it, so a template that reads a newer input never reaches an app that
+doesn't fill it, and one that emits a newer action never reaches an app that can't route it.
+
+Clients below level 3 don't filter by minor (§2.1). A publisher decides, per catalog and per
+contract, whether that is acceptable: **lenient** (the default) leaves `minClient` as it is, and
+**strict** raises it to 3 when any template of the contract has a `requiresMinor` above 0, so a
+pre-minor client refuses the manifest and keeps the templates it had.
+
 ## 5. Selection
 
 ### 5.1 Eligibility
 
 A template entry is eligible for a query (contract, player capabilities, optional width and height
-in dp, optional design, variant, theme and tags) when all of these hold: its contract equals the
-query's; its design exists, is not revoked and has that contract; the entry is not revoked; its
+in dp, optional design, variant, theme and tags, and optionally the contract `minor` the app
+implements) when all of these hold: its contract equals the query's; its design exists, is not
+revoked and has that contract; the entry is not revoked; with a `minor` in the query, its
+`requiresMinor` is at most that minor; its
 `bytes` fit the player's budget; its `rcApiLevel` is at most the player's; the player supports
 every profile it lists; the surfaces are equal; the containers are equal; the size range covers
 the requested width and height where given; for a `host` theme the player accepts `host`, and for
