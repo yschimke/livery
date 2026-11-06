@@ -56,7 +56,8 @@ object TemplateSelector {
       ).firstOrNull()
 
     query.designId?.let { id -> best(candidates.filter { it.designId == id })?.let { return it } }
-    val auto = candidates.filter { automatic(liveDesigns.getValue(it.designId)) }
+    // A design that isn't automatic plays only when named (above) or picked by an arm.
+    val auto = candidates.filter { liveDesigns.getValue(it.designId).let { d -> d.automatic && automatic(d) } }
     val byVariant = { v: String -> auto.filter { liveDesigns.getValue(it.designId).variant == v } }
     query.variant?.let { v -> best(byVariant(v))?.let { return it } }
     best(byVariant(Design.DEFAULT_VARIANT))?.let { return it }

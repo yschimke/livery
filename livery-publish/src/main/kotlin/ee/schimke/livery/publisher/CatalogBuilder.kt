@@ -131,6 +131,9 @@ const val EXPERIMENTS_LEVEL: Int = 4
 /** The protocol level that added secondary screens (PROTOCOL.md §8.2): `present` actions, screen rules. */
 const val PRESENTATION_LEVEL: Int = 5
 
+/** The protocol level that added designs that aren't automatic (PROTOCOL.md §5.2): an older client would pick them. */
+const val AUTOMATIC_LEVEL: Int = 6
+
 /**
  * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
  * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
@@ -305,7 +308,7 @@ class CatalogBuilder(
       }
     }
 
-    problems += Seasons.problems(seasons, designs, templates)
+    problems += Seasons.problems(seasons, designs)
     // Seasons first: a season replaces a design under test while it runs.
     val experiments = seasons.mapNotNull { runCatching { Seasons.experiment(it) }.getOrNull() } + authored
     experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment or season ${it.key}" }
@@ -351,6 +354,8 @@ class CatalogBuilder(
         // placement's rule nowhere it means.
         if (placements.any { it.presentation != Presentation.Inline || it.screens.isNotEmpty() } ||
           contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.PRESENT } }) PRESENTATION_LEVEL else 0,
+        // An older client ignores `automatic` and would draw such a design (a season's) all year.
+        if (designs.any { !it.automatic }) AUTOMATIC_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",

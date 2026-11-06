@@ -77,8 +77,9 @@ public actor TemplateRepository {
 
   /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy); level 3 added
   /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments; level 5
-  /// added secondary screens (`present` actions, screen rules, §8.2).
-  public static let protocolLevel = 5
+  /// added secondary screens (`present` actions, screen rules, §8.2); level 6 added designs that
+  /// aren't automatic (§5.2).
+  public static let protocolLevel = 6
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 
@@ -266,7 +267,8 @@ public actor TemplateRepository {
     guard let m = await manifest() ?? bundled?.manifest else { return [] }
     let installed = await installedIds()
     let have = await blobs.keys()
-    return m.designs.filter { $0.contract == contract && !$0.revoked }.map { d in
+    // A design that isn't automatic (a season's) is drawn by an arm, never chosen in a picker.
+    return m.designs.filter { $0.contract == contract && !$0.revoked && $0.automatic }.map { d in
       let needed = entries(m, d.id)
       let assets = Dictionary(needed.flatMap { m.assets(for: $0) }.map { ($0.sha256, $0) }, uniquingKeysWith: { a, _ in a }).values
       let previews = (d.previews + needed.flatMap(\.previews)).reduce(into: [Preview]()) { acc, p in if !acc.contains(where: { $0.sha256 == p.sha256 }) { acc.append(p) } }

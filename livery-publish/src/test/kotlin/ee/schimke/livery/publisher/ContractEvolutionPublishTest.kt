@@ -13,11 +13,6 @@ class ContractEvolutionPublishTest {
 
   private fun tree(): File = Files.createTempDirectory("evolution").toFile().also { sample.copyRecursively(it) }
 
-  companion object {
-    /** Minor 1 of the sample's tile contract in [src], as [addMinor1] writes it with its defaults. */
-    fun addMinor1To(src: File) = ContractEvolutionPublishTest().run { src.addMinor1() }
-  }
-
   /** Minor 1 of the sample's tile contract: it adds an optional `subtitle` input and a `share` action. */
   private fun File.addMinor1(subtitle: String = """{ "type": "string", "since": 1 }""", share: String = """{ "kind": "app:share", "since": 1 }""") {
     val v0 = File(this, "contracts/status-tile.json").readText()

@@ -234,8 +234,8 @@ rules, experiments, seasons) is a pull request. `catalog-review.yml`, a reusable
 `livery check --inspect --markdown` against the base and keeps one comment on the pull request up
 to date; `catalog-publish.yml` builds, signs and releases on merge, to a rolling release tag or a
 new release. Seasons (`seasons/*.json`) are a source-tree convenience the publisher writes as
-one-arm, full-allocation experiments, so they need no protocol change and play on any client that
-draws design arms.
+one-arm, full-allocation experiments over designs marked `"automatic": false` (protocol level 6),
+which automatic selection never picks, so a season's design draws only while its season runs.
 
 ## Secondary screens
 

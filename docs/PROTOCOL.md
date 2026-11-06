@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 5 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 6 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -68,8 +68,10 @@ so a publisher must set `minClient` to at least 4 for a catalog in which any pla
 `arm`. Design arms need no level: a client that ignores them draws what the control arm does. Level
 5 added secondary screens (§8.2): a level-4 client would drop every `present` tap and never show a
 screen placement's rules, so a publisher must set `minClient` to at least 5 for a catalog with a
-`present` action or a placement rule with a `presentation` or `screens`. A client must reject a
-manifest whose `minClient` is above its level and keep using what it had (§3.3).
+`present` action or a placement rule with a `presentation` or `screens`. Level 6 added designs
+that aren't automatic (§2.3): a level-5 client would pick one like any other, so a publisher must
+set `minClient` to at least 6 for a catalog with a design whose `automatic` is false. A client must
+reject a manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
 
@@ -90,14 +92,18 @@ container such as `wear:small`, or none).
 ### 2.3 Designs
 
 A design is one look for one contract: `id`, `contract`, `title`, `description`, `author`,
-`variant` (`default` if absent), `tags`, `previews`, `forkedFrom`, `revision`, `revoked` and
-`install`:
+`variant` (`default` if absent), `tags`, `previews`, `forkedFrom`, `revision`, `revoked`,
+`install` and `automatic` (`true` if absent):
 
 | `install` | A client downloads it | Automatic selection may pick it |
 | --- | --- | --- |
 | `Always` | on every refresh, for every target it serves | yes |
 | `OnRequest` | only once the app or person installs it | only once installed |
 | `OnDemand` | when a decision, feed item or slot first needs it | yes |
+
+A design whose `automatic` is false is downloaded as its `install` says, but automatic selection
+(§5.2) never picks it: it draws only when named (a chosen design, a decision) or picked by an
+experiment arm (§8.1), as a season's design is. Design pickers don't offer it.
 
 ## 3. Signing and trust
 
@@ -227,8 +233,8 @@ with a missing minimum taken as 0 and a missing maximum as 100000), then the low
 query picks:
 
 1. the best entry of the requested design, if any; else
-2. among **automatic** designs, those that are `Always` or installed, the best entry of the
-   requested variant, then of `default`, then of any.
+2. among **automatic** designs, those whose `automatic` isn't false and that are `Always` or
+   installed, the best entry of the requested variant, then of `default`, then of any.
 
 A client must choose only among entries whose blob and assets it has on disk when it draws
 without the network. A design that is requested but not available falls back to the automatic

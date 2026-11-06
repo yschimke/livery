@@ -15,12 +15,15 @@ class RepositoryModeTest {
 
   private fun File.write(path: String, text: String) = File(this, path).apply { parentFile.mkdirs() }.writeText(text)
 
-  /** tile-retro shipped by default, so a season can draw it. */
+  /** tile-retro shipped to everyone but drawn only by a season. */
+  private fun File.retroSeasonal() = write("designs/tile-retro/design.json", File(this, "designs/tile-retro/design.json").readText().replace("\"OnRequest\"", "\"Always\", \"automatic\": false"))
+
+  /** tile-retro shipped to everyone and automatic, as an experiment arm's design may be. */
   private fun File.retroAlways() = write("designs/tile-retro/design.json", File(this, "designs/tile-retro/design.json").readText().replace("OnRequest", "Always"))
 
   @Test fun aSeasonShipsAsAFullAllocationExperimentAheadOfTheOthers() {
     val src = tree().apply {
-      retroAlways()
+      retroSeasonal()
       write("experiments/tile_look.json", """{ "id": "tile_look", "arms": [ { "id": "control" }, { "id": "retro", "designs": { "live/status-tile@1": "tile-retro" } } ] }""")
       write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07T00:00:00+13:00", "designs": { "live/status-tile@1": "tile-retro" } }""")
     }
@@ -31,51 +34,36 @@ class RepositoryModeTest {
     assertEquals(listOf(Seasons.ARM), winter.arms.map { it.id })
     assertEquals(1_796_083_200_000, winter.startEpochMs, "midnight UTC")
     assertEquals(1_799_233_200_000, winter.endEpochMs, "the offset is honoured")
-    assertEquals(RESOURCES_LEVEL, m.minClient, "a season needs no newer client: design arms are older than it")
+    assertEquals(AUTOMATIC_LEVEL, m.minClient, "an older client would draw the season's design all year")
   }
 
   @Test fun outsideItsSeasonTheUsualDesignDraws() {
     val src = tree().apply {
-      retroAlways()
+      retroSeasonal()
       write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
     }
     val m = CatalogBuilder(now = { 0 }).build(src, Layout.Static, serial = 1).manifest
     // Plain automatic selection, as a client draws when no season or experiment is running: the
     // season's design (its own variant) never wins over the usual default design.
     val inApp = ee.schimke.livery.protocol.PlayerCapabilities("in-app", 7, setOf("androidx"))
-    val picked = ee.schimke.livery.client.TemplateSelector.select(m, ee.schimke.livery.client.TemplateQuery("live/status-tile@1", inApp)) { true }
-    assertEquals("tile-default", picked?.designId)
+    fun pick(caps: ee.schimke.livery.protocol.PlayerCapabilities, variant: String? = null) =
+      ee.schimke.livery.client.TemplateSelector.select(m, ee.schimke.livery.client.TemplateQuery("live/status-tile@1", caps, variant = variant)) { true }?.designId
+    assertEquals("tile-default", pick(inApp))
+    assertEquals("tile-default", pick(inApp, variant = "retro"), "not even when its variant is asked for")
+    // A budget only the season's (small) template fits: nothing draws, never the season's design.
+    val retro = m.templates.first { it.designId == "tile-retro" }
+    assertEquals(null, pick(inApp.copy(maxBytes = retro.bytes)))
+    // The season's arm names it, and then it draws.
+    assertEquals("tile-retro", ee.schimke.livery.client.TemplateSelector.select(m, ee.schimke.livery.client.TemplateQuery("live/status-tile@1", inApp, designId = "tile-retro")) { true }?.designId)
   }
 
-  @Test fun aSeasonsDesignMustLoseOutsideTheSeason() {
-    val defaultVariant = tree().apply {
+  @Test fun aSeasonsDesignMustNotBeAutomatic() {
+    val src = tree().apply {
       retroAlways()
-      write("designs/tile-retro/design.json", File(this, "designs/tile-retro/design.json").readText().replace("\"variant\": \"retro\"", "\"variant\": \"default\""))
       write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
     }
-    val p1 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(defaultVariant, Layout.Static) }.problems
-    assertTrue(p1.any { "tile-retro is the default variant, so it would show outside the season too" in it }, p1.toString())
-
-    // A target only the season's design has would draw it there all year.
-    val uncovered = tree().apply {
-      retroAlways()
-      File(this, "designs/tile-default/launcher.json").delete()
-      File(this, "designs/tile-default/launcher.rc").delete()
-      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
-    }
-    val p2 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(uncovered, Layout.Static) }.problems
-    assertTrue(p2.any { "tile-retro's launcher-widget template" in it && "has no default Always template" in it }, p2.toString())
-
-    // The usual template needs a newer minor than the season's: an older app would skip it and
-    // fall through to the season's design all year.
-    val newerMinor = tree().apply {
-      retroAlways()
-      ContractEvolutionPublishTest.addMinor1To(this)
-      write("designs/tile-default/launcher.json", """{ "target": { "surface": "launcher-widget", "rcApiLevel": 7, "profiles": ["widgets"], "size": { "minWidthDp": 110, "maxWidthDp": 400, "minHeightDp": 40, "maxHeightDp": 400 } }, "reads": ["name","subtitle"], "emits": ["toggle"] }""")
-      write("seasons/winter.json", """{ "id": "winter_2026", "start": "2026-12-01", "end": "2027-01-07", "designs": { "live/status-tile@1": "tile-retro" } }""")
-    }
-    val p3 = assertFailsWith<CatalogProblems> { CatalogBuilder().build(newerMinor, Layout.Static) }.problems
-    assertTrue(p3.any { "tile-retro's launcher-widget template (minor 0" in it }, p3.toString())
+    val problems = assertFailsWith<CatalogProblems> { CatalogBuilder().build(src, Layout.Static) }.problems
+    assertEquals(listOf("season winter_2026: design tile-retro is automatic, so it would show outside the season too; set \"automatic\": false on it"), problems)
   }
 
   @Test fun seasonsAreChecked() {
@@ -89,6 +77,7 @@ class RepositoryModeTest {
     assertTrue(problems.any { "a_season: ends (2026-11-01) before it starts" in it }, problems.toString())
     assertTrue(problems.any { "b_season: design tile-retro is OnRequest; a season's design must be Always" in it }, problems.toString())
     assertTrue(problems.any { "c_season: unknown design nope" in it }, problems.toString())
+    assertTrue(problems.any { "c_season: design tile-default is automatic" in it }, problems.toString())
     assertTrue(problems.any { "seasons b_season and c_season overlap for [live/status-tile@1]" in it }, problems.toString())
     assertTrue(problems.any { "d_season: start 'soon' is neither a date" in it }, problems.toString())
     assertTrue(problems.any { "d_season: names no design" in it }, problems.toString())
@@ -96,7 +85,7 @@ class RepositoryModeTest {
 
   @Test fun theReviewReportShowsExperimentSeasonAndRuleChanges() {
     val before = tree().apply {
-      retroAlways()
+      retroSeasonal()
       write("experiments/tile_look.json", """{ "id": "tile_look", "allocationBasisPoints": 5000, "arms": [ { "id": "control" }, { "id": "retro", "designs": { "live/status-tile@1": "tile-retro" } } ] }""")
     }
     val after = Files.createTempDirectory("after").toFile().also { before.copyRecursively(it) }.apply {

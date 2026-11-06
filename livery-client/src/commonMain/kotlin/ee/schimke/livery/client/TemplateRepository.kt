@@ -280,7 +280,8 @@ class TemplateRepository(
     val m = manifest() ?: bundled?.manifest ?: return emptyList()
     val installed = installedIds()
     val have = blobs.keys()
-    return m.designs.filter { it.contract == contract && !it.revoked }.map { d ->
+    // A design that isn't automatic (a season's) is drawn by an arm, never chosen in a picker.
+    return m.designs.filter { it.contract == contract && !it.revoked && it.automatic }.map { d ->
       val needed = entriesForTargets(m, d.id)
       DesignSummary(
         design = d,
@@ -406,8 +407,9 @@ class TemplateRepository(
      * (`requiresMinor`, `TemplateQuery.minor`): a catalog whose minor policy is strict requires it.
      * Level 4 added experiments: a catalog with placement rules limited to an arm requires it.
      * Level 5 added secondary screens: a catalog with `present` actions or screen rules requires it.
+     * Level 6 added designs that aren't automatic: a catalog with one requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 5
+    const val PROTOCOL_LEVEL: Int = 6
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

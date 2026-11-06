@@ -81,6 +81,8 @@ class ConformanceTest {
         Design("compact", "c/tile@1", "Compact", variant = "compact", install = InstallPolicy.Always, tags = mapOf("style" to "flat")),
         Design("skin", "c/tile@1", "Skin", install = InstallPolicy.OnRequest),
         Design("gone", "c/tile@1", "Gone", revoked = true),
+        // Shipped to everyone, but drawn only when named or picked by an arm (a season).
+        Design("winter", "c/tile@1", "Winter", variant = "winter", install = InstallPolicy.Always, automatic = false),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -94,6 +96,8 @@ class ConformanceTest {
         t('a', "compact", inApp(8), requiresMinor = 2),
         t('8', "skin", inApp(9)),
         t('9', "gone", inApp(8)),
+        // The smallest template, and the only one at level 9 besides the skin's.
+        t('b', "winter", inApp(9), bytes = 50),
         // Sorts first on a tie, so only the byte budget keeps it out.
         t('0', "builtin", inApp(8), bytes = 900_000),
       ),
@@ -110,6 +114,9 @@ class ConformanceTest {
       SelectionCase("installed skin is eligible; the built-in still wins a tie (choosing applies it)", q(app8.copy(maxRcApiLevel = 9)), installed = listOf("skin"), expect = null),
       SelectionCase("skin chosen explicitly", q(app8.copy(maxRcApiLevel = 9)).copy(designId = "skin"), expect = null),
       SelectionCase("revoked design falls back", q(app8).copy(designId = "gone"), expect = null),
+      SelectionCase("a design that isn't automatic is never picked unasked", q(app8.copy(maxRcApiLevel = 9)).copy(variant = "winter"), expect = null),
+      SelectionCase("not even when it is all that fits", q(app8.copy(maxRcApiLevel = 9, maxBytes = 80)), expect = null),
+      SelectionCase("a design that isn't automatic draws when named", q(app8.copy(maxRcApiLevel = 9)).copy(designId = "winter"), expect = null),
       SelectionCase("tightest launcher fit", q(launcher).copy(widthDp = 150, heightDp = 100), expect = null),
       SelectionCase("launcher size not covered", q(launcher).copy(widthDp = 500, heightDp = 100), expect = null),
       SelectionCase("wear container and baked theme", q(wear), expect = null),
