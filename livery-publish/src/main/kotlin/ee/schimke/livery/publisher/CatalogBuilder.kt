@@ -5,6 +5,9 @@ import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ActionGate
+import ee.schimke.livery.protocol.ActionKinds
+import ee.schimke.livery.protocol.Presentation
+import ee.schimke.livery.protocol.ScreenValues
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.protocol.AssetEntry
@@ -124,6 +127,9 @@ const val MINORS_LEVEL: Int = 3
 /** The protocol level that added experiments: a placement rule limited to an arm requires it. */
 const val EXPERIMENTS_LEVEL: Int = 4
 
+/** The protocol level that added secondary screens (PROTOCOL.md §8.2): `present` actions, screen rules. */
+const val PRESENTATION_LEVEL: Int = 5
+
 /**
  * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
  * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
@@ -185,6 +191,11 @@ class CatalogBuilder(
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
     for (c in contracts) ContractEvolution.problems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     for (c in contracts) for ((n, a) in c.actions) ActionGate.declarationProblems(n, a).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
+    // PROTOCOL.md §8.2: a `present` action names the screen placement it opens; nothing else does.
+    for (c in contracts) for ((n, a) in c.actions) when {
+      a.kind == ActionKinds.PRESENT && a.placement.isNullOrBlank() -> problems += "contract ${c.ref}.${c.minor}: action $n is `present` but names no placement"
+      a.kind != ActionKinds.PRESENT && a.placement != null -> problems += "contract ${c.ref}.${c.minor}: action $n names a placement but isn't `present`"
+    }
     (config.minorPolicy.contracts.keys - contracts.map { it.ref }.toSet()).forEach { problems += "catalog.json minorPolicy: unknown contract $it" }
     // Every minor a catalog keeps of one major must be a minor change from the one before (PROTOCOL.md §4.3).
     for ((_, versions) in contracts.groupBy { it.ref }) {
@@ -239,6 +250,11 @@ class CatalogBuilder(
           if (undeclared.isNotEmpty()) problems += "${design.id}/${rc.name}: reads values outside ${c.ref}: $undeclared"
           val actions = spec.emits.filterNot { it in c.actions }
           if (actions.isNotEmpty()) problems += "${design.id}/${rc.name}: emits undeclared actions $actions"
+          // A screen must always be closable from the template (PROTOCOL.md §8.2), besides the
+          // host's own back and scrim.
+          if (Presentation.ofContainer(spec.target.container) != null && c.actions.values.none { it.kind == ActionKinds.DISMISS }) {
+            problems += "${design.id}/${rc.name}: a ${spec.target.container} template's contract ${c.ref} declares no dismiss action"
+          }
         }
         val sha = JavaCrypto.sha256HexBlocking(bytes)
         files["$blobDir$sha.rc"] = bytes
@@ -270,6 +286,15 @@ class CatalogBuilder(
       val c = contract(p.template.contract ?: design?.contract ?: "")
       if (c == null) problems += "placement ${p.id}: no contract to check its data against"
       else (ContractBinder.bind(c, p.data) as? BindResult.Invalid)?.let { problems += "placement ${p.id}: ${it.problems}" }
+      for ((action, screen) in p.screens) {
+        val spec = c?.actions?.get(action)
+        if (spec?.kind != ActionKinds.PRESENT) problems += "placement ${p.id}: screen $action isn't a `present` action of its contract"
+        val sd = screen.template.designId?.let { id -> designs.firstOrNull { it.id == id } }
+        if (screen.template.designId != null && sd == null) problems += "placement ${p.id}: screen $action: unknown design ${screen.template.designId}"
+        val sc = contract(screen.template.contract ?: sd?.contract ?: "")
+        if (sc == null) problems += "placement ${p.id}: screen $action: no contract to check its data against"
+        else (ContractBinder.bind(sc, screen.data) as? BindResult.Invalid)?.let { problems += "placement ${p.id}: screen $action: ${it.problems}" }
+      }
     }
 
     experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment ${it.key}" }
@@ -311,6 +336,10 @@ class CatalogBuilder(
         if (templates.any { it.requiresMinor > 0 && config.minorPolicy.modeFor(it.contract) == MinorPolicy.Mode.Strict }) MINORS_LEVEL else 0,
         // An older client ignores `arm` and would show an arm's rule to everyone.
         if (placements.any { it.arm != null }) EXPERIMENTS_LEVEL else 0,
+        // An older client can't open screens: it would drop every `present` tap and show a screen
+        // placement's rule nowhere it means.
+        if (placements.any { it.presentation != Presentation.Inline || it.screens.isNotEmpty() } ||
+          contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.PRESENT } }) PRESENTATION_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",
@@ -337,7 +366,8 @@ class CatalogBuilder(
 
   companion object {
     /** Whether [read] is a value a template may read under [c]: an input, a list value or a theme role. */
-    fun declares(c: Contract, read: String): Boolean = read in c.inputs || readsListValue(c, read) || read.startsWith("theme.")
+    /** Whether [c] lets a template read [read]: an input, a list value, a theme role, or a value the host writes (a screen's insets). */
+    fun declares(c: Contract, read: String): Boolean = read in c.inputs || readsListValue(c, read) || read.startsWith("theme.") || read in ScreenValues.NAMES
 
     /** The inspect hook `livery build --inspect` and agent drafts use: [TemplateInspector]. */
     val INSPECT: (ByteArray, TemplateSpec, Contract?) -> List<String> = { bytes, spec, contract ->

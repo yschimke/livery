@@ -1,0 +1,95 @@
+{
+  "placements": [
+    {
+      "placement": "app.launch",
+      "contract": "c/promo@1",
+      "allows": [
+        "fullscreen"
+      ],
+      "default": "fullscreen"
+    },
+    {
+      "placement": "promo.details",
+      "contract": "c/details@1",
+      "allows": [
+        "sheet",
+        "fullscreen"
+      ],
+      "default": "sheet"
+    },
+    {
+      "placement": "help",
+      "contract": "c/help@1",
+      "allows": [
+        "dialog",
+        "sheet"
+      ],
+      "default": "dialog"
+    }
+  ],
+  "cases": [
+    {
+      "name": "none asked takes the default",
+      "placement": "promo.details",
+      "requested": "inline",
+      "depth": 1,
+      "expect": {
+        "presentation": "sheet"
+      }
+    },
+    {
+      "name": "an allowed presentation",
+      "placement": "promo.details",
+      "requested": "fullscreen",
+      "depth": 1,
+      "expect": {
+        "presentation": "fullscreen"
+      }
+    },
+    {
+      "name": "one not allowed",
+      "placement": "app.launch",
+      "requested": "sheet",
+      "depth": 1,
+      "expect": {
+        "problem": "sheet isn't allowed for app.launch"
+      }
+    },
+    {
+      "name": "a dialog default",
+      "placement": "help",
+      "requested": "inline",
+      "depth": 1,
+      "expect": {
+        "presentation": "dialog"
+      }
+    },
+    {
+      "name": "one level deeper",
+      "placement": "help",
+      "requested": "sheet",
+      "depth": 2,
+      "expect": {
+        "presentation": "sheet"
+      }
+    },
+    {
+      "name": "no deeper",
+      "placement": "help",
+      "requested": "sheet",
+      "depth": 3,
+      "expect": {
+        "problem": "a screen opened from a screen can't open another"
+      }
+    },
+    {
+      "name": "not a screen placement",
+      "placement": "home.top",
+      "requested": "sheet",
+      "depth": 1,
+      "expect": {
+        "problem": "home.top isn't a screen placement"
+      }
+    }
+  ]
+}

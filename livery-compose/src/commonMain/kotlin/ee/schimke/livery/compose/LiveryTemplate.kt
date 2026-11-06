@@ -25,6 +25,7 @@ import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.composeai.rcplayer.runtime.RcPlayerEvent
 import ee.schimke.livery.client.ActionRouter
+import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.ImageResolver
@@ -64,10 +65,11 @@ class LiveryHost(
  * half on screen when it leaves composition or the slot shows another item.
  */
 @Composable
-fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier) {
+fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier, extra: Bindings = Bindings.EMPTY) {
   val bytes = plan.template.bytes
   val current by rememberUpdatedState(plan)
-  val pushed = plan.bindings.toPlayerValues()
+  // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.
+  val pushed = (plan.bindings + extra).toPlayerValues()
   val values = remember(bytes) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
   SideEffect {
     values.keys.toList().filter { it !in pushed }.forEach(values::remove)

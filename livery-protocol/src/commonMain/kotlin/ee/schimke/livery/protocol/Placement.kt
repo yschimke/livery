@@ -1,5 +1,6 @@
 package ee.schimke.livery.protocol
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -41,7 +42,58 @@ data class Decision(
   val tracking: Tracking = Tracking(),
   /** Experiment arms this decision belongs to, for analytics. */
   val experiments: Map<String, String> = emptyMap(),
+  /** How a screen placement shows it (PROTOCOL.md §8.2); [Presentation.Inline] leaves it to the placement. */
+  val presentation: Presentation = Presentation.Inline,
+  /** The screens its `present` actions open, by action name, so opening one never waits on the network. */
+  val screens: Map<String, Screen> = emptyMap(),
 )
+
+/**
+ * How a placement's template is shown (PROTOCOL.md §8.2): in a slot ([Inline]), or as a secondary
+ * screen. A screen's template is built for it: its target's container is [container].
+ */
+@Serializable
+enum class Presentation {
+  @SerialName("inline") Inline,
+  @SerialName("dialog") Dialog,
+  @SerialName("sheet") Sheet,
+  @SerialName("fullscreen") Fullscreen;
+
+  /** The `Target.container` of a template for this presentation (`screen:dialog`, …); null inline. */
+  val container: String? get() = when (this) {
+    Inline -> null
+    Dialog -> "screen:dialog"
+    Sheet -> "screen:sheet"
+    Fullscreen -> "screen:fullscreen"
+  }
+
+  companion object {
+    /** The presentation a `screen:*` container is for, or null. */
+    fun ofContainer(container: String?): Presentation? = entries.firstOrNull { it != Inline && it.container == container }
+  }
+}
+
+/** A secondary screen a decision ships with: what a `present` action opens (PROTOCOL.md §8.2). */
+@Serializable
+data class Screen(
+  val template: TemplateRef,
+  val data: JsonObject = JsonObject(emptyMap()),
+  /** [Presentation.Inline] leaves it to the placement's default. */
+  val presentation: Presentation = Presentation.Inline,
+)
+
+/**
+ * Named values a host writes into a screen's template (PROTOCOL.md §8.2): the safe-area insets in
+ * dp, so a full-screen template lays out around cut-outs and system bars. Never data: a contract
+ * needn't declare them.
+ */
+object ScreenValues {
+  const val INSET_TOP: String = "livery.inset.top"
+  const val INSET_BOTTOM: String = "livery.inset.bottom"
+  const val INSET_START: String = "livery.inset.start"
+  const val INSET_END: String = "livery.inset.end"
+  val NAMES: Set<String> = setOf(INSET_TOP, INSET_BOTTOM, INSET_START, INSET_END)
+}
 
 /**
  * A client-side rule for a placement, shipped in the manifest, for growth features that must work
@@ -62,6 +114,10 @@ data class PlacementRule(
   val tracking: Tracking = Tracking(),
   /** Only for users assigned this arm of a manifest [Experiment] (PROTOCOL.md §8.1). */
   val arm: ArmRef? = null,
+  /** For a screen placement, how its decision shows (PROTOCOL.md §8.2). */
+  val presentation: Presentation = Presentation.Inline,
+  /** The screens its template's `present` actions open, by action name. */
+  val screens: Map<String, Screen> = emptyMap(),
 )
 
 @Serializable

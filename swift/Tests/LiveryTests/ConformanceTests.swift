@@ -67,6 +67,25 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct ScreenFixture: Decodable {
+    struct Placement: Decodable { var placement: String; var contract: String; var allows: [Presentation]; var `default`: Presentation }
+    struct Expect: Decodable { var presentation: Presentation?; var problem: String? }
+    struct Case: Decodable { var name: String; var placement: String; var requested: Presentation; var depth: Int; var expect: Expect }
+    var placements: [Placement]
+    var cases: [Case]
+  }
+
+  func testScreens() throws {
+    let f = try JSONDecoder().decode(ScreenFixture.self, from: fixture("screens.json"))
+    let placements = f.placements.map { ScreenPlacement(placement: $0.placement, contract: $0.contract, allows: Set($0.allows), default: $0.default) }
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let got = ScreenRules.presentation(placements.first { $0.placement == c.placement }, name: c.placement, requested: c.requested, depth: c.depth)
+      XCTAssertEqual(got.presentation, c.expect.presentation, c.name)
+      XCTAssertEqual(got.problem, c.expect.problem, c.name)
+    }
+  }
+
   struct DesignArmFixture: Decodable {
     struct Expect: Decodable, Equatable { var experiment: String; var arm: String; var designId: String? }
     struct Case: Decodable { var name: String; var contract: String; var bucketingId: String; var expect: Expect? }

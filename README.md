@@ -36,7 +36,7 @@ Early. In this repository today:
 | --- | --- |
 | `livery-protocol` | Kotlin Multiplatform wire types: manifest, contracts, designs, templates, targets, resources, themes, placements, decisions, feeds, events. Normative spec: [docs/PROTOCOL.md](docs/PROTOCOL.md) |
 | `livery-client` | Kotlin Multiplatform client (JVM, Android, iOS, Wasm): sources, signing and trust, cache, selection, install, preview, images and fonts, decisions, feeds, actions, events; HTTP on Ktor (OkHttp, Darwin, `fetch`) |
-| `livery-compose` | Compose Multiplatform: `LiveryTemplate`, `LiverySlot`, design pickers, over rc-players' Compose player |
+| `livery-compose` | Compose Multiplatform: `LiveryTemplate`, `LiverySlot`, design pickers, over rc-players' Compose player; `LiveryScreenHost` draws secondary screens (dialogs, sheets, full screens, interstitials) |
 | `Livery`, `LiveryUI` (Swift) | native SwiftPM package (`Package.swift` at the root): `URLSession`, CryptoKit, SwiftUI views over any player; an adapter for rc-players' native Swift player |
 | `livery-instantiate` | writes a slot's values, images and numeric taps into a template for hosts that only play bytes (launcher and Wear widgets, snapshots), on rc-players' `rc-widget-core` |
 | `livery-launcher-widgets` | `LiveryLauncherWidgetProvider`: launcher AppWidgets (Android 16+) from Livery templates, on rc-players' `rc-widget-launcher` |

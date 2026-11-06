@@ -15,6 +15,7 @@ import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.ManifestSignature
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.PlayerCapabilities
+import ee.schimke.livery.protocol.Presentation
 import ee.schimke.livery.protocol.SizeRange
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
@@ -188,6 +189,34 @@ class ConformanceTest {
       ActionCase("undeclared action", "share", emptyMap(), null),
     ).map { k -> ActionGate.check(c, k.action, k.args).let { k.copy(expect = ActionExpect(it.args, it.problem)) } }
     check("actions.json", json.encodeToJsonElement(ActionFixture.serializer(), ActionFixture(c, cases)))
+  }
+
+  @Serializable data class ScreenPlacementJson(val placement: String, val contract: String, val allows: List<Presentation>, val default: Presentation)
+  @Serializable data class ScreenCase(val name: String, val placement: String, val requested: Presentation, val depth: Int, val expect: ScreenExpect?)
+  @Serializable data class ScreenExpect(val presentation: Presentation? = null, val problem: String? = null)
+  @Serializable data class ScreenFixture(val placements: List<ScreenPlacementJson>, val cases: List<ScreenCase>)
+
+  /** PROTOCOL.md §8.2: how a screen shows, or why it doesn't. */
+  @Test fun screens() {
+    val placements = listOf(
+      ScreenPlacement("app.launch", "c/promo@1", setOf(Presentation.Fullscreen)),
+      ScreenPlacement("promo.details", "c/details@1", setOf(Presentation.Sheet, Presentation.Fullscreen)),
+      ScreenPlacement("help", "c/help@1", setOf(Presentation.Dialog, Presentation.Sheet), default = Presentation.Dialog),
+    )
+    val cases = listOf(
+      ScreenCase("none asked takes the default", "promo.details", Presentation.Inline, 1, null),
+      ScreenCase("an allowed presentation", "promo.details", Presentation.Fullscreen, 1, null),
+      ScreenCase("one not allowed", "app.launch", Presentation.Sheet, 1, null),
+      ScreenCase("a dialog default", "help", Presentation.Inline, 1, null),
+      ScreenCase("one level deeper", "help", Presentation.Sheet, 2, null),
+      ScreenCase("no deeper", "help", Presentation.Sheet, 3, null),
+      ScreenCase("not a screen placement", "home.top", Presentation.Sheet, 1, null),
+    ).map { c ->
+      val o = ScreenRules.presentation(placements.firstOrNull { it.placement == c.placement }, c.placement, c.requested, c.depth)
+      c.copy(expect = ScreenExpect(o.presentation, o.problem))
+    }
+    val json = placements.map { ScreenPlacementJson(it.placement, it.contract, it.allows.toList(), it.default) }
+    check("screens.json", this.json.encodeToJsonElement(ScreenFixture.serializer(), ScreenFixture(json, cases)))
   }
 
   @Serializable data class DesignArmExpect(val experiment: String, val arm: String, val designId: String? = null)

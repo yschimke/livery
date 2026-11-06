@@ -56,6 +56,8 @@ class LocalRulesDecider(
       data = rule.data,
       tracking = rule.tracking,
       experiments = listOfNotNull(rule.rollout?.let { it.experiment to it.arm }, rule.arm?.let { it.experiment to it.arm }).toMap(),
+      presentation = rule.presentation,
+      screens = rule.screens,
     )
   }
 

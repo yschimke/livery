@@ -402,14 +402,17 @@ public struct ActionSpec: Codable, Equatable, Sendable {
   public var description: String?
   /// The contract minor that added this action.
   public var since: Int
+  /// For a `present` action, the screen placement it opens (§8.2).
+  public var placement: String?
 
-  enum CodingKeys: String, CodingKey { case kind, args, description, since }
+  enum CodingKeys: String, CodingKey { case kind, args, description, since, placement }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     kind = try c.decode(String.self, forKey: .kind)
     args = try c.value(.args, [:])
     description = try c.decodeIfPresent(String.self, forKey: .description)
     since = try c.value(.since, 0)
+    placement = try c.decodeIfPresent(String.self, forKey: .placement)
   }
 }
 
@@ -419,6 +422,7 @@ public enum ActionKinds {
   public static let dismiss = "dismiss"
   public static let track = "track"
   public static let refresh = "refresh"
+  public static let present = "present"
 }
 
 /// A typed named value; JSON `{"type": "<kind>", …}` as kotlinx.serialization writes it.
@@ -558,13 +562,18 @@ public struct Decision: Codable, Equatable, Sendable {
   public var ttlSeconds: Int64
   public var tracking: Tracking
   public var experiments: [String: String]
+  /// How a screen placement shows it (§8.2); `.inline` leaves it to the placement.
+  public var presentation: Presentation
+  /// The screens its `present` actions open, by action name.
+  public var screens: [String: Screen]
 
-  public init(placement: String, decisionId: String, template: TemplateRef, data: [String: JSONValue] = [:], ttlSeconds: Int64 = 300, tracking: Tracking = Tracking(), experiments: [String: String] = [:]) {
+  public init(placement: String, decisionId: String, template: TemplateRef, data: [String: JSONValue] = [:], ttlSeconds: Int64 = 300, tracking: Tracking = Tracking(), experiments: [String: String] = [:], presentation: Presentation = .inline, screens: [String: Screen] = [:]) {
     self.placement = placement; self.decisionId = decisionId; self.template = template; self.data = data
     self.ttlSeconds = ttlSeconds; self.tracking = tracking; self.experiments = experiments
+    self.presentation = presentation; self.screens = screens
   }
 
-  enum CodingKeys: String, CodingKey { case placement, decisionId, template, data, ttlSeconds, tracking, experiments }
+  enum CodingKeys: String, CodingKey { case placement, decisionId, template, data, ttlSeconds, tracking, experiments, presentation, screens }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     placement = try c.decode(String.self, forKey: .placement)
@@ -574,7 +583,45 @@ public struct Decision: Codable, Equatable, Sendable {
     ttlSeconds = try c.value(.ttlSeconds, 300)
     tracking = try c.value(.tracking, Tracking())
     experiments = try c.value(.experiments, [:])
+    presentation = try c.value(.presentation, .inline)
+    screens = try c.value(.screens, [:])
   }
+}
+
+/// How a placement's template is shown (§8.2): in a slot, or as a secondary screen whose template's
+/// target container is `container`.
+public enum Presentation: String, Codable, Sendable, CaseIterable {
+  case inline, dialog, sheet, fullscreen
+
+  /// The `Target.container` of a template for this presentation; nil inline.
+  public var container: String? { self == .inline ? nil : "screen:\(rawValue)" }
+}
+
+/// A secondary screen a decision ships with: what a `present` action opens (§8.2).
+public struct Screen: Codable, Equatable, Sendable {
+  public var template: TemplateRef
+  public var data: [String: JSONValue]
+  public var presentation: Presentation
+
+  public init(template: TemplateRef, data: [String: JSONValue] = [:], presentation: Presentation = .inline) {
+    self.template = template; self.data = data; self.presentation = presentation
+  }
+
+  enum CodingKeys: String, CodingKey { case template, data, presentation }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    template = try c.decode(TemplateRef.self, forKey: .template)
+    data = try c.value(.data, [:])
+    presentation = try c.value(.presentation, .inline)
+  }
+}
+
+/// Named values a host writes into a screen's template (§8.2): safe-area insets in points.
+public enum ScreenValues {
+  public static let insetTop = "livery.inset.top"
+  public static let insetBottom = "livery.inset.bottom"
+  public static let insetStart = "livery.inset.start"
+  public static let insetEnd = "livery.inset.end"
 }
 
 public struct Conditions: Codable, Equatable, Sendable {
@@ -631,8 +678,12 @@ public struct PlacementRule: Codable, Equatable, Sendable {
   public var tracking: Tracking
   /// Only for users assigned this arm of a manifest experiment (§8.1).
   public var arm: ArmRef?
+  /// For a screen placement, how its decision shows (§8.2).
+  public var presentation: Presentation
+  /// The screens its template's `present` actions open, by action name.
+  public var screens: [String: Screen]
 
-  enum CodingKeys: String, CodingKey { case id, placement, template, data, priority, startEpochMs, endEpochMs, conditions, rollout, frequency, tracking, arm }
+  enum CodingKeys: String, CodingKey { case id, placement, template, data, priority, startEpochMs, endEpochMs, conditions, rollout, frequency, tracking, arm, presentation, screens }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     id = try c.decode(String.self, forKey: .id)
@@ -647,6 +698,8 @@ public struct PlacementRule: Codable, Equatable, Sendable {
     frequency = try c.decodeIfPresent(FrequencyCap.self, forKey: .frequency)
     tracking = try c.value(.tracking, Tracking())
     arm = try c.decodeIfPresent(ArmRef.self, forKey: .arm)
+    presentation = try c.value(.presentation, .inline)
+    screens = try c.value(.screens, [:])
   }
 }
 

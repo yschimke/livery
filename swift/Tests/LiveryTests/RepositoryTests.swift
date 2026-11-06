@@ -174,6 +174,54 @@ final class RepositoryTests: XCTestCase {
     XCTAssertEqual(plan.slotTag, "livery:c/card@1:card")
   }
 
+  func testScreensOpenFromADecisionOneLevelDeep() async throws {
+    let card = blob("card"), full = blob("full")
+    let json = """
+      {"catalog":"t","serial":1,"generatedAtEpochMs":0,"expiresAtEpochMs":9000000000000,
+       "contracts":[{"id":"c/card","major":1,"actions":{"details":{"kind":"present","placement":"promo.details"},"close":{"kind":"dismiss"}}},
+                    {"id":"c/details","major":1,"inputs":{"title":{"type":"string"}},"actions":{"more":{"kind":"present","placement":"promo.details"},"close":{"kind":"dismiss"}}}],
+       "designs":[{"id":"card","contract":"c/card@1","title":"Card","install":"Always"},
+                  {"id":"details","contract":"c/details@1","title":"Details","install":"Always"}],
+       "templates":[{"sha256":"\(Hashing.sha256Hex(card))","bytes":\(card.count),"designId":"card","contract":"c/card@1","target":{"surface":"in-app","rcApiLevel":7}},
+                    {"sha256":"\(Hashing.sha256Hex(full))","bytes":\(full.count),"designId":"details","contract":"c/details@1","target":{"surface":"in-app","rcApiLevel":7,"container":"screen:fullscreen"}}]}
+      """
+    let files = ["manifest.json": Data(json.utf8), "blobs/\(Hashing.sha256Hex(card)).rc": card, "blobs/\(Hashing.sha256Hex(full)).rc": full]
+    let placements = [ScreenPlacement(placement: "promo.details", contract: "c/details@1", allows: [.fullscreen])]
+    // Screens open only from what is on the device, so the repository prefetches for their targets too.
+    let repo = TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: Host(files: files), trust: .allowUnsigned,
+      blobs: MemoryBlobStore(), kv: MemoryKeyValueStore(), clock: { 1_000 }, targets: [caps] + LiveryScreens.targets(placements) { _ in self.caps })
+    _ = await repo.refresh()
+    let log = Log()
+    let planner = SlotPlanner(repository: repo, events: { log.add($0) }, clock: { 1_000 })
+    let screens = LiveryScreens(planner: planner, placements: placements,
+      caps: { _ in self.caps }, context: { DecisionContext(nowEpochMs: 1_000, locale: "en", appVersion: 1, bucketingId: "u") },
+      decide: { _, _ in nil }, appData: { _, _ in ["title": .string("More")] })
+    let ad = Decision(placement: "home.top", decisionId: "d1", template: TemplateRef(designId: "card"),
+      screens: ["details": Screen(template: TemplateRef(designId: "details"), data: ["title": .string("Sale")])])
+    guard case .ready(let slot) = await planner.forDecision(TemplateQuery(contract: "c/card@1", caps: caps), ad) else { return XCTFail("no slot") }
+
+    let opened = await screens.present(slot, "details", [:])
+    XCTAssertTrue(opened)
+    XCTAssertEqual(screens.stack.first?.plan.decision?.decisionId, "d1>details")
+    XCTAssertEqual(screens.stack.first?.presentation, .fullscreen)
+    let second = await screens.present(screens.stack[0].plan, "more", [:])
+    XCTAssertTrue(second, "one level more")
+    let third = await screens.present(screens.stack[1].plan, "more", [:])
+    XCTAssertFalse(third, "no deeper")
+    XCTAssertEqual(log.events.last?.detail, "a screen opened from a screen can't open another")
+
+    // The two screens draw the same template from the same app data: alike in content, yet each
+    // screen's actions are its own.
+    XCTAssertEqual(screens.stack[0].plan.template.entry.sha256, screens.stack[1].plan.template.entry.sha256)
+    XCTAssertEqual(screens.screen(of: screens.stack[1].plan)?.depth, 2)
+    let router = ActionRouter(handlers: screens.handlers(), urlAllowed: { _ in false }, events: { log.add($0) })
+    await router.dispatch(screens.stack[1].plan, "close", [:])
+    XCTAssertEqual(screens.stack.count, 1, "the top screen's close closes only it")
+    await router.dispatch(screens.stack[0].plan, "close", [:])
+    XCTAssertTrue(screens.stack.isEmpty)
+    XCTAssertEqual(log.events.filter { $0.type == .dismiss }.map(\.detail), ["action", "action"])
+  }
+
   func testActionArguments() {
     XCTAssertEqual(ActionRouter.arguments(fromText: nil), [:])
     XCTAssertEqual(ActionRouter.arguments(fromText: #"{"route":"/premium"}"#), ["route": "/premium"])
