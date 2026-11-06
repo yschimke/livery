@@ -157,6 +157,30 @@ class ConformanceTest {
     check("experiments.json", json.encodeToJsonElement(ExperimentFixture.serializer(), ExperimentFixture(experiments, cases)))
   }
 
+  @Serializable data class DesignArmExpect(val experiment: String, val arm: String, val designId: String? = null)
+  @Serializable data class DesignArmCase(val name: String, val contract: String, val bucketingId: String, val expect: DesignArmExpect?)
+  @Serializable data class DesignArmFixture(val experiments: List<Experiment>, val cases: List<DesignArmCase>)
+
+  @Test fun designArms() {
+    val experiments = listOf(
+      // Names no design: never a design arm, though it comes first.
+      Experiment("copy", listOf(Arm("a"), Arm("b"))),
+      Experiment("tile_look", listOf(Arm("control"), Arm("retro", designs = mapOf("c/tile@1" to "tile-retro"))), allocationBasisPoints = 5_000),
+      Experiment("banner_look", listOf(Arm("bold", designs = mapOf("c/banner@1" to "banner-bold")), Arm("classic", designs = mapOf("c/banner@1" to "banner-classic"))), allocationBasisPoints = 5_000),
+      // A later experiment over the tile decides only for users tile_look leaves out.
+      Experiment("tile_late", listOf(Arm("late", designs = mapOf("c/tile@1" to "tile-late")))),
+    )
+    val cases = buildList {
+      for (c in listOf("c/tile@1", "c/banner@1")) for (i in 0 until 24) add(DesignArmCase("$c user-$i", c, "user-$i", null))
+      add(DesignArmCase("no experiment over the contract", "c/feed@1", "user-0", null))
+    }.map { c ->
+      val ctx = DecisionContext(1_000, "test", "en", 1, c.bucketingId)
+      val got = kotlinx.coroutines.runBlocking { designArm(experiments, c.contract, ctx) { LocalBucketing.assignNow(it, ctx) } }
+      c.copy(expect = got?.let { DesignArmExpect(it.experiment, it.arm, it.designId) })
+    }
+    check("design-arms.json", json.encodeToJsonElement(DesignArmFixture.serializer(), DesignArmFixture(experiments, cases)))
+  }
+
   // --- binding --------------------------------------------------------------------------------
 
   @Test fun binding() {

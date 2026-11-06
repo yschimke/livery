@@ -7,6 +7,8 @@ public struct RenderPlan: Sendable {
   public var bindings: Bindings
   public var decision: Decision?
   public var feedItem: FeedItem?
+  /// Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event.
+  public var experiments: [String: String] = [:]
 }
 
 extension RenderPlan {
@@ -26,16 +28,36 @@ public typealias EventSink = @Sendable (TemplateEvent) -> Void
 
 /// The three ways data reaches a template (the app's own, a decision, a feed item), all through
 /// one contract gate: the Swift counterpart of the Kotlin `SlotPlanner`.
+///
+/// With `experiments`, a slot whose query names no design draws the design the user's arm picks for
+/// the contract (§8.1); an arm that picks none (a control) draws the usual choice. Either way the
+/// plan carries the arm, and its exposure is reported when it draws, through `Experiments.sink`.
 public struct SlotPlanner: Sendable {
   public let repository: TemplateRepository
   public let events: EventSink
   public let clock: @Sendable () -> Int64
+  public let experiments: Experiments?
 
-  public init(repository: TemplateRepository, events: @escaping EventSink = { _ in }, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
-    self.repository = repository; self.events = events; self.clock = clock
+  public init(repository: TemplateRepository, events: @escaping EventSink = { _ in }, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }, experiments: Experiments? = nil) {
+    self.repository = repository; self.events = events; self.clock = clock; self.experiments = experiments
   }
 
   public func forAppData(_ query: TemplateQuery, data: [String: JSONValue], extra: Bindings = Bindings()) async -> PlanResult {
+    if query.designId == nil, let experiments, let arm = await experiments.designFor(query.contract) {
+      let tag = [arm.experiment: arm.arm]
+      guard let design = arm.designId else {
+        // An arm without a design (a control) draws the usual choice, tagged with its arm.
+        guard let t = await repository.resolve(query) else { return fallback(query, "no template", nil) }
+        return plan(t, data, extra, nil, nil, tag)
+      }
+      // An arm's design is automatic selection: never a skin nobody installed. Without a template
+      // for this slot the usual choice draws, and the user wasn't exposed to the arm here.
+      if await repository.automaticallySelectable(design) {
+        var q = query
+        q.designId = design
+        if let t = await repository.resolve(q), t.entry.designId == design { return plan(t, data, extra, nil, nil, tag) }
+      }
+    }
     guard let t = await repository.resolve(query) else { return fallback(query, "no template", nil) }
     return plan(t, data, extra, nil, nil)
   }
@@ -56,19 +78,20 @@ public struct SlotPlanner: Sendable {
     return plan(t, item.data, extra, nil, item)
   }
 
-  private func plan(_ t: LoadedTemplate, _ data: [String: JSONValue], _ extra: Bindings, _ d: Decision?, _ f: FeedItem?) -> PlanResult {
+  private func plan(_ t: LoadedTemplate, _ data: [String: JSONValue], _ extra: Bindings, _ d: Decision?, _ f: FeedItem?, _ arms: [String: String] = [:]) -> PlanResult {
     guard let contract = t.contract else { return .fallback("contract \(t.entry.contract) unknown") }
+    let experiments = (d?.experiments ?? [:]).merging(arms) { _, arm in arm }
     switch ContractBinder.bind(contract, data) {
-    case .ok(let b): return .ready(RenderPlan(template: t, contract: contract, bindings: b + extra, decision: d, feedItem: f))
+    case .ok(let b): return .ready(RenderPlan(template: t, contract: contract, bindings: b + extra, decision: d, feedItem: f, experiments: experiments))
     case .invalid(let problems):
       events(TemplateEvent(type: .error, atEpochMs: clock(), placement: d?.placement, decisionId: d?.decisionId, feedItemId: f?.id,
-        designId: t.entry.designId, sha256: t.entry.sha256, detail: problems.map { "\($0.name): \($0.message)" }.joined(separator: ", ")))
+        designId: t.entry.designId, sha256: t.entry.sha256, detail: problems.map { "\($0.name): \($0.message)" }.joined(separator: ", "), experiments: experiments))
       return .fallback("invalid data")
     }
   }
 
   private func fallback(_ q: TemplateQuery, _ reason: String, _ d: Decision?) -> PlanResult {
-    events(TemplateEvent(type: .fallback, atEpochMs: clock(), placement: d?.placement, decisionId: d?.decisionId, detail: "\(q.contract): \(reason)"))
+    events(TemplateEvent(type: .fallback, atEpochMs: clock(), placement: d?.placement, decisionId: d?.decisionId, detail: "\(q.contract): \(reason)", experiments: d?.experiments ?? [:]))
     return .fallback(reason)
   }
 }
@@ -88,7 +111,7 @@ public struct ActionRouter: Sendable {
 
   public func dispatch(_ plan: RenderPlan, _ action: String, _ args: [String: String]) async {
     let base = TemplateEvent(type: .action, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decision?.decisionId,
-      feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, action: action)
+      feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, action: action, experiments: plan.experiments)
     func error(_ detail: String) { var e = base; e.type = .error; e.detail = detail; events(e) }
     guard let spec = plan.contract.actions[action] else { return error("undeclared action") }
     if spec.kind == ActionKinds.openURL && !(args["url"].map(urlAllowed) ?? false) { return error("url not allowed") }

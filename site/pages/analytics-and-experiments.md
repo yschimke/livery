@@ -49,6 +49,10 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
   enrolled users in `retro` see the retro tile everywhere it has a template. An arm picks only a
   design automatic selection may: `Always`, or installed. Make a design you test `Always`, or it
   plays only for people who installed it.
+- `control` names no design, so its users draw the usual choice, and their plans still carry
+  `tile_look: control`: the control group is exposed and counted like the other arms. Only
+  experiments that name a design for a contract touch its slots; the first of those that enrols the
+  user decides.
 - A placement rule can be limited to an arm, to test copy, timing or a different creative:
   `"arm": { "experiment": "promo_copy", "arm": "b" }`. A catalog with such a rule requires
   protocol level 4, so older clients, which would show it to everyone, keep their previous
@@ -106,6 +110,7 @@ A cap is at most one sync out of date. With Firestore, store impressions under
 
 ## Planned
 
-- The Swift package decodes experiments, assigns arms (`LocalBucketing`, the same arms as Kotlin by
-  the conformance fixture) and applies arms to placement rules. Design arms in its planner,
-  analytics sinks and synced frequency caps are still to come.
+- The Swift package decodes experiments, assigns arms (`LocalBucketing`), applies arms to placement
+  rules and draws design arms (`Experiments`, `SlotPlanner(…, experiments:)`, with the same arms
+  and designs as Kotlin by the conformance fixtures). Analytics sinks and synced frequency caps are
+  still to come.

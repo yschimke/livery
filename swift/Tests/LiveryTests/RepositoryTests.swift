@@ -14,7 +14,7 @@ final class RepositoryTests: XCTestCase {
 
   private func blob(_ s: String) -> Data { Data("rc:\(s)".utf8) }
 
-  private func manifestJSON(serial: Int) -> (Data, [String: Data]) {
+  private func manifestJSON(serial: Int, experiments: String = "[]") -> (Data, [String: Data]) {
     let a = blob("a"), b = blob("b")
     let json = """
       {"catalog":"t","serial":\(serial),"generatedAtEpochMs":0,"expiresAtEpochMs":9000000000000,
@@ -22,7 +22,8 @@ final class RepositoryTests: XCTestCase {
        "designs":[{"id":"builtin","contract":"c/tile@1","title":"Built-in","install":"Always"},
                   {"id":"skin","contract":"c/tile@1","title":"Skin","install":"OnRequest"}],
        "templates":[{"sha256":"\(Hashing.sha256Hex(a))","bytes":\(a.count),"designId":"builtin","contract":"c/tile@1","target":{"surface":"in-app","rcApiLevel":7}},
-                    {"sha256":"\(Hashing.sha256Hex(b))","bytes":\(b.count),"designId":"skin","contract":"c/tile@1","target":{"surface":"in-app","rcApiLevel":7}}]}
+                    {"sha256":"\(Hashing.sha256Hex(b))","bytes":\(b.count),"designId":"skin","contract":"c/tile@1","target":{"surface":"in-app","rcApiLevel":7}}],
+       "experiments":\(experiments)}
       """
     return (Data(json.utf8), ["blobs/\(Hashing.sha256Hex(a)).rc": a, "blobs/\(Hashing.sha256Hex(b)).rc": b])
   }
@@ -94,6 +95,61 @@ final class RepositoryTests: XCTestCase {
     XCTAssertNotNil(first)
     XCTAssertEqual(first?.renderIdentity, again?.renderIdentity, "the same item keeps its identity across renders")
     XCTAssertNotEqual(first?.renderIdentity, second?.renderIdentity, "a new decision in the slot is a new item")
+  }
+
+  struct Fixed: ExperimentAssigner {
+    let arm: String
+    func assign(_ experiment: Experiment, context: DecisionContext) async -> String? { arm }
+  }
+
+  final class Log: @unchecked Sendable {
+    private let lock = NSLock()
+    private var all: [TemplateEvent] = []
+    func add(_ e: TemplateEvent) { lock.lock(); all.append(e); lock.unlock() }
+    var exposures: [TemplateEvent] { lock.lock(); defer { lock.unlock() }; return all.filter { $0.type == .exposure } }
+  }
+
+  func testDesignArmsIncludingTheControl() async throws {
+    let (m, blobs) = manifestJSON(serial: 1, experiments: """
+      [{"id":"tile_look","arms":[{"id":"control"},{"id":"skin","designs":{"c/tile@1":"skin"}}]}]
+      """)
+    var files = blobs
+    files["manifest.json"] = m
+    let repo = TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: Host(files: files), trust: .allowUnsigned,
+      blobs: MemoryBlobStore(), kv: MemoryKeyValueStore(), clock: { 1_000 }, targets: [caps])
+    _ = await repo.refresh()
+    let q = TemplateQuery(contract: "c/tile@1", caps: caps)
+    let data: [String: JSONValue] = ["name": .string("Hall")]
+    func plan(_ arm: String, _ log: Log = Log()) async -> (RenderPlan?, Experiments) {
+      let e = Experiments(manifest: { await repo.manifest() },
+        context: { DecisionContext(nowEpochMs: 1_000, locale: "en", appVersion: 1, bucketingId: "u") },
+        assigner: Fixed(arm: arm), events: { log.add($0) })
+      if case .ready(let p) = await SlotPlanner(repository: repo, events: e.sink, experiments: e).forAppData(q, data: data) { return (p, e) }
+      return (nil, e)
+    }
+
+    // The skin is OnRequest and not installed: its arm draws the built-in, untagged.
+    let (notInstalled, _) = await plan("skin")
+    XCTAssertEqual(notInstalled?.template.entry.designId, "builtin")
+    XCTAssertEqual(notInstalled?.experiments, [:])
+
+    // The control picks no design: the built-in, tagged, and exposed once when it draws.
+    let log = Log()
+    let (control, e) = await plan("control", log)
+    XCTAssertEqual(control?.template.entry.designId, "builtin")
+    XCTAssertEqual(control?.experiments, ["tile_look": "control"])
+    XCTAssertTrue(log.exposures.isEmpty, "planning isn't seeing")
+    let impression = TemplateEvent(type: .impression, atEpochMs: 1_000, designId: "builtin", experiments: control?.experiments ?? [:])
+    e.sink(impression)
+    e.sink(impression)
+    XCTAssertEqual(log.exposures.map(\.experiments), [["tile_look": "control"]])
+
+    // Installed, the skin's arm draws it, tagged.
+    let installed = await repo.install("skin")
+    XCTAssertTrue(installed)
+    let (skin, _) = await plan("skin")
+    XCTAssertEqual(skin?.template.entry.designId, "skin")
+    XCTAssertEqual(skin?.experiments, ["tile_look": "skin"])
   }
 
   func testActionArguments() {

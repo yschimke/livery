@@ -100,17 +100,12 @@ class Experiments(
   }
 
   /**
-   * The design [contract] (`id@major`) draws for this user, from the first running experiment whose
-   * arm picks one, or null to select as usual. [DesignArm.experiment] and [DesignArm.arm] go on the
-   * plan so every event carries them.
+   * The user's design arm for [contract] (`id@major`), or null to select as usual: see [designArm].
+   * [DesignArm.experiment] and [DesignArm.arm] go on the plan so every event carries them.
    */
   suspend fun designFor(contract: String): DesignArm? {
     val ctx = context()
-    for (e in manifest()?.experiments.orEmpty()) {
-      val arm = armOf(e, ctx) ?: continue
-      arm.designs[contract]?.let { return DesignArm(e.id, arm.id, it) }
-    }
-    return null
+    return designArm(manifest()?.experiments.orEmpty(), contract, ctx) { e -> armOf(e, ctx)?.id }
   }
 
   /** Reports the exposure once per experiment and arm for this [Experiments]. */
@@ -131,7 +126,32 @@ class Experiments(
   }
 }
 
-data class DesignArm(val experiment: String, val arm: String, val designId: String)
+/**
+ * A user's arm of an experiment over a contract's design. [designId] is the design the arm picks,
+ * or null for an arm that picks none (a control): that user draws the usual choice, and still
+ * carries the arm, so an analysis has its control group.
+ */
+data class DesignArm(val experiment: String, val arm: String, val designId: String?)
+
+/**
+ * PROTOCOL.md §8.1: the design arm for a slot of [contract]. Only experiments with an arm that
+ * names a design for [contract] apply; the first of those, in manifest order, that is running and
+ * gives the user an arm ([assign]) decides. Pinned with Swift by `conformance/design-arms.json`.
+ */
+suspend fun designArm(
+  experiments: List<Experiment>,
+  contract: String,
+  context: DecisionContext,
+  assign: suspend (Experiment) -> String?,
+): DesignArm? {
+  for (e in experiments) {
+    if (e.arms.none { contract in it.designs } || !LocalBucketing.running(e, context)) continue
+    val id = runCatching { assign(e) }.getOrNull() ?: continue
+    val arm = e.arms.firstOrNull { it.id == id } ?: continue
+    return DesignArm(e.id, arm.id, arm.designs[contract])
+  }
+  return null
+}
 
 /** Whether [context] matches these conditions: platform, locale, app version and segments. */
 fun Conditions.matches(context: DecisionContext): Boolean {

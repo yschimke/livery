@@ -91,13 +91,21 @@ class ExperimentsTest {
     assertEquals(mapOf("tile-look" to "retro"), events.single { it.type == TemplateEvent.Type.Exposure }.experiments)
     assertEquals(2, events.count { it.type == TemplateEvent.Type.Impression }, "every event still passes through")
 
-    // The control arm picks no design: the usual choice, and its plan carries no arm.
+    // The control arm picks no design: the usual choice, carrying its arm, so the analysis has a
+    // control group exposed the same way.
     events.clear()
     val control = experiments("control")
     val c = assertIs<PlanResult.Ready>(planner(control).forAppData(q, data)).plan
     assertEquals("tile-default", c.template.entry.designId)
-    control.sink.emit(impression(c))
+    assertEquals(mapOf("tile-look" to "control"), c.experiments)
     assertTrue(events.none { it.type == TemplateEvent.Type.Exposure })
+    control.sink.emit(impression(c))
+    assertEquals(mapOf("tile-look" to "control"), events.single { it.type == TemplateEvent.Type.Exposure }.experiments)
+
+    // An experiment over another contract doesn't touch this slot.
+    val other = Experiment("banner-look", listOf(Arm("a", designs = mapOf("promo/banner@1" to "banner-bold"))))
+    val unrelated = Experiments({ m.copy(experiments = listOf(other)) }, { ctx("u") }, { _, _ -> "a" })
+    assertEquals(emptyMap(), assertIs<PlanResult.Ready>(SlotPlanner(repo(m), unrelated.sink, { 1_000 }, unrelated).forAppData(q, data)).plan.experiments)
 
     // A slot that names its design keeps it.
     assertEquals("tile-default", assertIs<PlanResult.Ready>(planner(experiments("retro")).forAppData(q.copy(designId = "tile-default"), data)).plan.template.entry.designId)

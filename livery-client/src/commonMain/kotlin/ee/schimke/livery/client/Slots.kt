@@ -36,8 +36,9 @@ fun interface EventSink {
  * content), a decision (ads, promotions), or a feed item. All three end at the same contract gate.
  *
  * With [experiments], a slot whose query names no design draws the design the user's experiment arm
- * picks for the contract (PROTOCOL.md §8.1). The plan carries the arm; its exposure is reported when
- * it draws, through [Experiments.sink].
+ * picks for the contract (PROTOCOL.md §8.1); an arm that picks none (a control) draws the usual
+ * choice. Either way the plan carries the arm, and its exposure is reported when it draws, through
+ * [Experiments.sink].
  */
 class SlotPlanner(
   private val repository: TemplateRepository,
@@ -47,12 +48,18 @@ class SlotPlanner(
 ) {
   /** App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change. */
   suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY): PlanResult {
+    val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
+    val design = arm?.designId
+    if (arm != null && design == null) {
+      // An arm without a design (a control) draws the usual choice, tagged with its arm.
+      val t = repository.resolve(query) ?: return fallback(query, "no template", null)
+      return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+    }
     // An arm's design is automatic selection: never a skin nobody installed (AGENTS.md).
-    val arm = if (query.designId == null) experiments?.designFor(query.contract)?.takeIf { repository.automaticallySelectable(it.designId) } else null
-    if (arm != null) {
+    if (arm != null && design != null && repository.automaticallySelectable(design)) {
       // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
       // user wasn't exposed to the arm here.
-      repository.resolve(query.copy(designId = arm.designId))?.takeIf { it.entry.designId == arm.designId }?.let { t ->
+      repository.resolve(query.copy(designId = design))?.takeIf { it.entry.designId == design }?.let { t ->
         return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
       }
     }

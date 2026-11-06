@@ -127,3 +127,85 @@ public struct LocalRulesDecider: Sendable {
     return Int(h % 10_000)
   }
 }
+
+/// A user's arm of an experiment over a contract's design (§8.1). `designId` is nil for an arm that
+/// picks none (a control): that user draws the usual choice and still carries the arm, so an
+/// analysis has its control group.
+public struct DesignArm: Equatable, Sendable {
+  public var experiment: String
+  public var arm: String
+  public var designId: String?
+
+  public init(experiment: String, arm: String, designId: String? = nil) {
+    self.experiment = experiment; self.arm = arm; self.designId = designId
+  }
+
+  /// §8.1: only experiments with an arm that names a design for `contract` apply; the first of
+  /// those, in manifest order, that is running and gives the user an arm (`assign`) decides.
+  /// Pinned with Kotlin by `conformance/design-arms.json`.
+  public static func choose(_ experiments: [Experiment], contract: String, context: DecisionContext,
+                            assign: (Experiment) async -> String?) async -> DesignArm? {
+    for e in experiments {
+      guard e.arms.contains(where: { $0.designs[contract] != nil }), LocalBucketing.running(e, context) else { continue }
+      guard let id = await assign(e), let arm = e.arms.first(where: { $0.id == id }) else { continue }
+      return DesignArm(experiment: e.id, arm: arm.id, designId: arm.designs[contract])
+    }
+    return nil
+  }
+}
+
+/// The manifest's experiments for one app (the Swift counterpart of the Kotlin `Experiments`): the
+/// user's arm, the design arm a contract's slot draws, and one `Exposure` per experiment and arm the
+/// first time it shapes what draws. Give views `sink` as their event sink so an `Impression` carrying
+/// an arm reports it; a host that reports no impressions calls `exposed` when the user saw the plan.
+public final class Experiments: @unchecked Sendable {
+  private let manifest: @Sendable () async -> Manifest?
+  private let context: @Sendable () async -> DecisionContext
+  private let assigner: ExperimentAssigner
+  private let events: EventSink
+  private let lock = NSLock()
+  private var seen: Set<String> = []
+
+  public init(manifest: @escaping @Sendable () async -> Manifest?, context: @escaping @Sendable () async -> DecisionContext,
+              assigner: ExperimentAssigner = LocalBucketing(), events: @escaping EventSink = { _ in }) {
+    self.manifest = manifest; self.context = context; self.assigner = assigner; self.events = events
+  }
+
+  /// The user's arm of `experimentId`, or nil when it isn't running for them.
+  public func arm(_ experimentId: String) async -> String? {
+    guard let e = await manifest()?.experiments.first(where: { $0.id == experimentId }) else { return nil }
+    return await armOf(e, await context())
+  }
+
+  /// The user's design arm for `contract` (`id@major`), or nil to select as usual.
+  public func designFor(_ contract: String) async -> DesignArm? {
+    let ctx = await context()
+    let experiments = await manifest()?.experiments ?? []
+    return await DesignArm.choose(experiments, contract: contract, context: ctx) { await self.armOf($0, ctx) }
+  }
+
+  /// Passes every event on, adding one `Exposure` the first time an arm's template draws.
+  public var sink: EventSink {
+    { [self] e in
+      events(e)
+      guard e.type == .impression else { return }
+      for (experiment, arm) in e.experiments.sorted(by: { $0.key < $1.key }) {
+        exposed(experiment, arm: arm, atEpochMs: e.atEpochMs, placement: e.placement, designId: e.designId)
+      }
+    }
+  }
+
+  /// Reports the exposure once per experiment and arm for this `Experiments`.
+  public func exposed(_ experiment: String, arm: String, atEpochMs: Int64, placement: String? = nil, designId: String? = nil) {
+    lock.lock()
+    let fresh = seen.insert("\(experiment)\u{0}\(arm)").inserted
+    lock.unlock()
+    guard fresh else { return }
+    events(TemplateEvent(type: .exposure, atEpochMs: atEpochMs, placement: placement, designId: designId, experiments: [experiment: arm]))
+  }
+
+  private func armOf(_ e: Experiment, _ ctx: DecisionContext) async -> String? {
+    guard LocalBucketing.running(e, ctx), let id = await assigner.assign(e, context: ctx), e.arms.contains(where: { $0.id == id }) else { return nil }
+    return id
+  }
+}

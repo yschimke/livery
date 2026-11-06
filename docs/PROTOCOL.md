@@ -348,10 +348,14 @@ independent, so raising the allocation only adds users and an enrolled user keep
 client may take the arm from another assigner instead (a remote configuration service); an arm id
 the experiment doesn't list counts as no answer.
 
-An arm with a design for a contract makes a slot of that contract that names no design draw that
-design, when it has a template for the slot and automatic selection may pick it (the design is
-`Always` or installed, §5.2: an arm never draws a skin nobody installed); otherwise the slot selects
-as usual. The first
+A slot of a contract that names no design takes its design arm from the experiments with an arm
+that names a design for that contract: the first of them, in manifest order, that is running and
+gives the user an arm. Experiments that name no design for the contract don't touch the slot. With
+an arm that names a design, the slot draws that design, when it has a template for the slot and
+automatic selection may pick it (the design is `Always` or installed, §5.2: an arm never draws a
+skin nobody installed); otherwise it selects as usual and carries no arm. With an arm that names
+none (a control), it selects as usual and carries the arm, so the control group is exposed the
+same way as the others. The first
 time a template an arm chose draws (its `Impression`, whether the arm picked its design or a rule
 for the arm decided it), the client emits one `Exposure` event for that experiment and arm. Planning
 is not exposure, and a host that reports no impressions reports exposure when it knows the user saw
@@ -368,6 +372,7 @@ the template. Exposure, not assignment, is what an analysis counts.
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
 | `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
+| `design-arms.json` | §8.1: experiments with design arms, and per contract and user the design arm (experiment, arm, design or none) or `null` |
 
 The Kotlin client writes them (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`)
 and fails when its answers drift from them; every other implementation must run them in its own

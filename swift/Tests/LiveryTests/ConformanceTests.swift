@@ -50,6 +50,23 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct DesignArmFixture: Decodable {
+    struct Expect: Decodable, Equatable { var experiment: String; var arm: String; var designId: String? }
+    struct Case: Decodable { var name: String; var contract: String; var bucketingId: String; var expect: Expect? }
+    var experiments: [Experiment]
+    var cases: [Case]
+  }
+
+  func testDesignArms() async throws {
+    let f = try JSONDecoder().decode(DesignArmFixture.self, from: fixture("design-arms.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let ctx = DecisionContext(nowEpochMs: 1_000, platform: "test", locale: "en", appVersion: 1, bucketingId: c.bucketingId)
+      let got = await DesignArm.choose(f.experiments, contract: c.contract, context: ctx) { LocalBucketing.assignNow($0, ctx) }
+      XCTAssertEqual(got.map { DesignArmFixture.Expect(experiment: $0.experiment, arm: $0.arm, designId: $0.designId) }, c.expect, c.name)
+    }
+  }
+
   struct BindingFixture: Decodable {
     struct Expect: Decodable { var ok: [String: NamedValue]?; var problems: [String]? }
     struct Case: Decodable { var name: String; var data: [String: JSONValue]; var expect: Expect }

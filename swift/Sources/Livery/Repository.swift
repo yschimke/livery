@@ -217,6 +217,16 @@ public actor TemplateRepository {
     return loaded(b.manifest, e, bytes, .bundled)
   }
 
+  /// Whether automatic selection may pick `designId` (§5.2): not revoked, and `Always` or installed.
+  /// An experiment's design arm is automatic selection, so it uses this too.
+  public func automaticallySelectable(_ designId: String) async -> Bool {
+    let m: Manifest?
+    if let u = await usable() { m = u } else { m = bundled?.manifest }
+    guard let d = m?.design(designId), !d.revoked else { return false }
+    if d.install == .always { return true }
+    return await installedIds().contains(designId)
+  }
+
   /// A decision's or feed item's reference (§5.3): an exact `sha256` plays exactly or not at all.
   public func ensure(_ ref: TemplateRef, _ query: TemplateQuery) async -> LoadedTemplate? {
     let m = await usable()
