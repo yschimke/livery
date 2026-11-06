@@ -227,6 +227,18 @@ A document never fetches anything; every byte it draws comes through the client
   image and typeface loaders; on iOS the same goes through the native player's resource and font
   resolvers.
 
+## Secondary screens
+
+A presentation (`dialog`, `sheet`, `fullscreen`) is how a placement shows; a trigger is what opens
+it: the app's moment (an interstitial, `LiveryScreens.maybeShow`) or a template's `present`
+action. The app lists its screen placements with the presentations each allows, so a catalog or
+server never chooses more than the app permits (`ScreenRules`, pinned by `conformance/screens.json`).
+A screen's template is built for it (`Target.container` `screen:*`, closable by its own `dismiss`)
+and gets the window's insets as host values. Screens open from the device only (`CacheOnly`): an
+opened screen's data ships in the opening decision's `screens`, or comes from the app or the
+placement's rules. One level: a screen may open one more, no deeper, so back stays predictable.
+`LiveryScreenHost` (Compose) and `.liveryScreens` (SwiftUI) draw the stack.
+
 ## Interaction tracking
 
 A template is one player node to the host app, so tools that find a tapped node in the app's

@@ -9,6 +9,7 @@ import ee.schimke.composeai.rcwidget.RcHostActionRewrites
 import ee.schimke.composeai.rcwidget.RcWearContainer
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.protocol.ScreenValues
 import ee.schimke.livery.protocol.ValueType
 
 /** What a document really reads and emits, read from its operations rather than its sidecar. */
@@ -33,8 +34,8 @@ data class TemplateFacts(
  * document itself.
  */
 object TemplateInspector {
-  /** Named values a host writes into a document itself (a Wear container's frame), never data. */
-  val HOST_NAMES: Set<String> = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR
+  /** Named values a host writes into a document itself (a Wear container's frame, a screen's insets), never data. */
+  val HOST_NAMES: Set<String> = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR + ScreenValues.NAMES
 
   /** The document's facts, or null when the bytes aren't a Remote Compose document. */
   fun facts(template: ByteArray): TemplateFacts? = runCatching {

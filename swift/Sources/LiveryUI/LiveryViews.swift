@@ -53,6 +53,8 @@ public struct LiveryTemplateView<Player: View>: View {
   let events: EventSink
   let clock: @Sendable () -> Int64
   let player: (PlayerInput) -> Player
+  /// Values the host writes (a screen's insets), pushed with the data.
+  let extra: Bindings
   @State private var impressed = false
   @State private var viewed = false
   @State private var appeared = false
@@ -61,12 +63,12 @@ public struct LiveryTemplateView<Player: View>: View {
   @State private var fraction: CGFloat = 0
   private var visible: Bool { appeared && fraction >= 0.5 }
 
-  public init(plan: RenderPlan, actions: ActionRouter, events: @escaping EventSink, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }, @ViewBuilder player: @escaping (PlayerInput) -> Player) {
-    self.plan = plan; self.actions = actions; self.events = events; self.clock = clock; self.player = player
+  public init(plan: RenderPlan, actions: ActionRouter, events: @escaping EventSink, clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }, extra: Bindings = Bindings(), @ViewBuilder player: @escaping (PlayerInput) -> Player) {
+    self.plan = plan; self.actions = actions; self.events = events; self.clock = clock; self.extra = extra; self.player = player
   }
 
   public var body: some View {
-    player(PlayerInput(document: plan.template.bytes, values: plan.bindings.playerValues, template: plan.template) { name, value in
+    player(PlayerInput(document: plan.template.bytes, values: (plan.bindings + extra).playerValues, template: plan.template) { name, value in
       guard let args = ActionRouter.arguments(fromText: value) else { return }
       let plan = plan, actions = actions
       Task { await actions.dispatch(plan, name, args) }

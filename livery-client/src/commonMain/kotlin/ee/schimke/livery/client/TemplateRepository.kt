@@ -391,8 +391,9 @@ class TemplateRepository(
      * without them, so catalogs that use them require level 2. Level 3 added contract minors
      * (`requiresMinor`, `TemplateQuery.minor`): a catalog whose minor policy is strict requires it.
      * Level 4 added experiments: a catalog with placement rules limited to an arm requires it.
+     * Level 5 added secondary screens: a catalog with `present` actions or screen rules requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 4
+    const val PROTOCOL_LEVEL: Int = 5
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

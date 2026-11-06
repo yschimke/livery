@@ -76,8 +76,9 @@ public actor TemplateRepository {
   }
 
   /// PROTOCOL.md §2.1: level 2 added resources (assets, fonts, the image proxy); level 3 added
-  /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments.
-  public static let protocolLevel = 4
+  /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments; level 5
+  /// added secondary screens (`present` actions, screen rules, §8.2).
+  public static let protocolLevel = 5
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 
@@ -329,6 +330,11 @@ public actor TemplateRepository {
 
   /// The template's bytes once it and all its assets are on disk, downloading what is missing.
   private func obtain(_ m: Manifest, _ e: TemplateEntry) async -> Data? {
+    // Inside `CacheOnly.$active.withValue(true)`, only what is on the device: nothing downloads.
+    if CacheOnly.active {
+      for sha in e.assets where await blobs.get(sha) == nil { return nil }
+      return await blobs.get(e.sha256)
+    }
     for sha in e.assets {
       if await blobs.get(sha) != nil { continue }
       guard let a = m.asset(sha) else { return nil }
@@ -353,4 +359,11 @@ public actor TemplateRepository {
   private func putSet(_ name: String, _ value: Set<String>) async {
     if let data = try? JSONEncoder().encode(value.sorted()) { await kv.put(k(name), String(decoding: data, as: UTF8.self)) }
   }
+}
+
+/// Marks work that must not wait on the network (a secondary screen opening, §8.2): inside
+/// `CacheOnly.$active.withValue(true) { … }`, `ensure` (and so `SlotPlanner.forDecision`) plays only
+/// templates already on the device. The Swift counterpart of the Kotlin `CacheOnly`.
+public enum CacheOnly {
+  @TaskLocal public static var active = false
 }

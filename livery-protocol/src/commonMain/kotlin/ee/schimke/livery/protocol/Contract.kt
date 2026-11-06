@@ -105,6 +105,8 @@ data class ActionSpec(
   val description: String? = null,
   /** The contract minor that added this action: an app below it can't route it. */
   val since: Int = 0,
+  /** For a `present` action, the screen placement it opens (PROTOCOL.md §8.2). */
+  val placement: String? = null,
 )
 
 /** Built-in action kinds every client understands; anything else needs an app handler. */
@@ -118,6 +120,8 @@ object ActionKinds {
   const val TRACK: String = "track"
   /** Re-run the decision or reload the feed item. */
   const val REFRESH: String = "refresh"
+  /** Open the secondary screen its [ActionSpec.placement] names (PROTOCOL.md §8.2). */
+  const val PRESENT: String = "present"
 }
 
 /** A typed named value as pushed into a player. */

@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 4 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 5 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -65,8 +65,10 @@ policy (§4.3): a strict catalog sets `minClient` to at least 3 when a template 
 has a `requiresMinor` above 0, so older clients keep what they had. Level 4 added experiments
 (§8.1). A level-3 client ignores a placement rule's `arm` and would show an arm's rule to everyone,
 so a publisher must set `minClient` to at least 4 for a catalog in which any placement rule has an
-`arm`. Design arms need no level: a client that ignores them draws what the control arm does. A
-client must reject a
+`arm`. Design arms need no level: a client that ignores them draws what the control arm does. Level
+5 added secondary screens (§8.2): a level-4 client would drop every `present` tap and never show a
+screen placement's rules, so a publisher must set `minClient` to at least 5 for a catalog with a
+`present` action or a placement rule with a `presentation` or `screens`. A client must reject a
 manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
@@ -296,7 +298,9 @@ value is either nothing, a JSON object whose values are all strings (the argumen
 value or number (passed as the argument `value`). Anything else is not an action. A client must
 drop, and report, an action its contract doesn't declare, one whose kind has no handler, and an
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
-`track`, `refresh`; anything else is the app's (`app:<kind>`).
+`track`, `refresh`, `present` (opens the screen placement its `placement` names, §8.2); anything
+else is the app's (`app:<kind>`). A publisher must refuse a `present` action without a `placement`,
+and a `placement` on any other kind.
 
 An action's `args` declare its arguments, each a `string`, `int`, `long`, `float` or `bool` with
 the input checks it carries (`required`, `maxLength`, `min`, `max`); a catalog declaring another type
@@ -377,6 +381,43 @@ for the arm decided it), the client emits one `Exposure` event for that experime
 is not exposure, and a host that reports no impressions reports exposure when it knows the user saw
 the template. Exposure, not assignment, is what an analysis counts.
 
+### 8.2 Secondary screens
+
+A **screen placement** is one the app shows as a secondary screen, not in a slot. The app declares
+each: its contract, the presentations it allows and its default. A presentation is `dialog`
+(centred over a scrim, at the template's size), `sheet` (along the bottom, full width) or
+`fullscreen`; `inline` is a slot's, never a screen's. A decision or placement rule for a screen
+placement may ask for one (`presentation`, `inline` meaning none asked); the client uses the
+placement's default when none is asked, and refuses, reporting a `Fallback`, one the app doesn't
+allow, so a catalog or server can never show a full screen where the app allows only a sheet. A
+screen's template is built for its presentation: its target's container is `screen:dialog`,
+`screen:sheet` or `screen:fullscreen`, and a publisher must refuse such a template whose contract
+declares no `dismiss` action, so every screen can be closed from itself.
+
+A screen opens two ways, both on the device and never waiting on the network (it draws from what
+is downloaded, or not at all, reporting a `Fallback`; a client may then download it for next time):
+
+- **The app's moment** (an interstitial): the app asks whether a screen placement has something to
+  show now. Its rules decide, with their schedule, conditions, arms and frequency cap; a rule's
+  decision counts as an impression for its cap when it shows. Nothing shows while a screen is
+  already showing.
+- **A `present` action** (§7): its `placement` names the screen placement it opens. Its data comes,
+  in order, from the opening decision's `screens` entry for that action (`template`, `data`,
+  `presentation`), which becomes the screen's decision with `decisionId`
+  `<opening decisionId>><action>` and the opener's tracking and experiments; from the app's own
+  data for the placement and the action's declared arguments; or from the placement's rules.
+
+Depth: a screen opened by the app or from a slot is at depth 1; a screen at depth 1 may open one at
+depth 2; a screen at depth 2 can't open another (the `present` is dropped and reported as a
+`Fallback`). Closing a screen closes the one it opened. Each close is a `Dismiss` with `detail`
+`action` (the template's `dismiss`), `system` (back, a swipe, a scrim tap) or `replaced`; a
+template's `dismiss` in a screen closes that screen, and in a slot is the app's. A screen is a
+slot otherwise: `Impression`, `Viewable`, `Action` and `Leave` as §8.
+
+The host writes `livery.inset.top`, `livery.inset.bottom`, `livery.inset.start` and
+`livery.inset.end` (floats, dp) into a screen's template, the safe-area insets of the window it
+draws in; a contract needn't declare them, and a template may read them.
+
 ## Conformance
 
 `conformance/` holds inputs and the reference answers:
@@ -389,6 +430,7 @@ the template. Exposure, not assignment, is what an analysis counts.
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
 | `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
 | `actions.json` | §7: a contract's actions and emitted arguments, and the arguments its event carries or why it is dropped |
+| `screens.json` | §8.2: screen placements, a requested presentation and depth, and the presentation used or why the screen is refused |
 | `design-arms.json` | §8.1: experiments with design arms, and per contract and user the design arm (experiment, arm, design or none) or `null` |
 
 The Kotlin client writes them (`./gradlew :livery-client:jvmTest -Plivery.conformance.update=true`)

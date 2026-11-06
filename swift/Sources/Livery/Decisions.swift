@@ -90,7 +90,7 @@ public struct LocalRulesDecider: Sendable {
     guard let rule = eligible.max(by: { a, b in a.priority != b.priority ? a.priority < b.priority : a.id > b.id }) else { return nil }
     return Decision(
       placement: placement, decisionId: "local:\(rule.id)", template: rule.template, data: rule.data,
-      tracking: rule.tracking, experiments: experimentsOf(rule))
+      tracking: rule.tracking, experiments: experimentsOf(rule), presentation: rule.presentation, screens: rule.screens)
   }
 
   private func experimentsOf(_ rule: PlacementRule) -> [String: String] {
