@@ -32,7 +32,7 @@ test probe), combine sinks with `eventSinks(events, EventSink { log(it) })`.
 Experiments live in the catalog, in `experiments/<any>.json`, and ship in the manifest:
 
 ```json
-{ "id": "tile-look", "allocationBasisPoints": 5000,
+{ "id": "tile_look", "allocationBasisPoints": 5000,
   "conditions": { "platforms": ["android"] },
   "arms": [
     { "id": "control" },
@@ -40,13 +40,15 @@ Experiments live in the catalog, in `experiments/<any>.json`, and ship in the ma
   ] }
 ```
 
+- An experiment's `id` is lowercase letters, digits and `_` (at most 20): it becomes the
+  `exp_<id>` analytics parameter and the `livery_exp_<id>` Remote Config key as it is.
 - Users who match the conditions during the schedule are enrolled at `allocationBasisPoints`
   (5000: half of them), each in one sticky arm in proportion to the arms' `weight`s. Raising the
   allocation only adds users; nobody changes arm.
 - An arm's `designs` pick the design a contract's slots draw when the app didn't choose one. Here,
   enrolled users in `retro` see the retro tile everywhere it has a template.
 - A placement rule can be limited to an arm, to test copy, timing or a different creative:
-  `"arm": { "experiment": "promo-copy", "arm": "b" }`. A catalog with such a rule requires
+  `"arm": { "experiment": "promo_copy", "arm": "b" }`. A catalog with such a rule requires
   protocol level 4, so older clients, which would show it to everyone, keep their previous
   catalog. Design arms don't: an older client simply draws what the control arm does.
 - The first time a template an arm chose actually draws (its `Impression`), Livery emits one

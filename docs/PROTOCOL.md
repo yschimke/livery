@@ -334,7 +334,9 @@ left unrewritten, which the host ignores.
 
 ### 8.1 Experiments
 
-An experiment is `id`, `arms` (each an `id`, a `weight`, default 1, and `designs`: contract
+An experiment is `id` (lowercase letters, digits and `_`, starting with a letter, at most 20, so it
+names analytics parameters and remote configuration keys unchanged and two experiments never share
+one), `arms` (each an `id`, a `weight`, default 1, and `designs`: contract
 `id@major` → design id), a schedule (`startEpochMs` inclusive, `endEpochMs` exclusive),
 `conditions` as for placement rules, and `allocationBasisPoints` (default 10000).
 

@@ -123,6 +123,13 @@ const val MINORS_LEVEL: Int = 3
 /** The protocol level that added experiments: a placement rule limited to an arm requires it. */
 const val EXPERIMENTS_LEVEL: Int = 4
 
+/**
+ * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
+ * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
+ * never share a key.
+ */
+val EXPERIMENT_ID: Regex = Regex("[a-z][a-z0-9_]{0,19}")
+
 class CatalogProblems(val problems: List<String>) : Exception(problems.joinToString("\n", prefix = "catalog has ${problems.size} problem(s):\n"))
 
 /**
@@ -265,6 +272,7 @@ class CatalogBuilder(
 
     experiments.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate experiment ${it.key}" }
     for (e in experiments) {
+      if (!EXPERIMENT_ID.matches(e.id)) problems += "experiment ${e.id}: an id is lowercase letters, digits and _, starting with a letter, at most 20 (it names analytics parameters and Remote Config keys as it is)"
       if (e.arms.none { it.weight > 0 }) problems += "experiment ${e.id}: no arm with a weight above 0"
       if (e.arms.any { it.weight < 0 }) problems += "experiment ${e.id}: a negative weight"
       if (e.allocationBasisPoints !in 0..10_000) problems += "experiment ${e.id}: allocationBasisPoints ${e.allocationBasisPoints} is outside 0..10000"
