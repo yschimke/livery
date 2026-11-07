@@ -18,6 +18,8 @@ kotlin {
     commonMain.dependencies {
       api(project(":livery-catalog"))
       api(project(":livery-instantiate"))
+      // a2ui_component_schema and validate_a2ui: contracts in A2UI's terms, and an agent's messages checked.
+      api(project(":livery-a2ui"))
       api(libs.kotlinx.serialization.json)
     }
     commonTest.dependencies {

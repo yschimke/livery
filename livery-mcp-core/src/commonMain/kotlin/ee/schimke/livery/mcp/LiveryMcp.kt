@@ -2,6 +2,8 @@
 
 package ee.schimke.livery.mcp
 
+import ee.schimke.livery.a2ui.LiveryA2ui
+import ee.schimke.livery.a2ui.LiveryA2uiMessages
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ContractEvolution
@@ -107,6 +109,8 @@ class LiveryMcp(
       "publish_preview" -> previewOut?.let { text(publishPreview(it, args)) } ?: failed("no preview output: start the server with --preview-out <dir>")
       "list_history" -> text(listHistory(args))
       "check_compatibility" -> text(checkCompatibility(args))
+      "a2ui_component_schema" -> text(a2uiSchema(args))
+      "validate_a2ui" -> text(validateA2ui(args))
       else -> extensions.firstOrNull { e -> e.tools.any { (it["name"] as? JsonPrimitive)?.content == name } }
         ?.call(name, args, this) ?: failed("unknown tool $name")
     }
@@ -341,6 +345,26 @@ class LiveryMcp(
     }
   }
 
+  /** One contract as an A2UI component's schema, or every contract as an A2UI catalog. */
+  private fun a2uiSchema(args: JsonObject): JsonElement {
+    val ref = args.strOrNull("contract") ?: return LiveryA2ui.catalogSchema(args.strOrNull("catalog_id") ?: "livery", tree.contracts())
+    val spec = LiveryA2ui.component(contract(ref))
+    return buildJsonObject { put("component", spec.name); put("contract", ref); put("schema", spec.schema()) }
+  }
+
+  /** An agent's A2UI messages against the catalog's contracts and designs ([LiveryA2uiMessages]). */
+  private fun validateA2ui(args: JsonObject): JsonElement {
+    val message = args["message"] ?: throw ToolError("missing argument 'message'")
+    val designs = tree.designs().groupBy({ it.design.contract }, { it.design.id }).mapValues { it.value.toSet() }
+    val problems = LiveryA2uiMessages.validate(message, tree.contracts(), args["data_model"], designs)
+    return buildJsonObject {
+      put("ok", problems.isEmpty())
+      putJsonArray("problems") {
+        for (p in problems) add(buildJsonObject { put("component", p.component); p.property?.let { put("property", it) }; put("message", p.message) })
+      }
+    }
+  }
+
   /** The commits that changed a design's templates, newest first, from git. */
   private suspend fun listHistory(args: JsonObject): JsonElement {
     val history = history ?: throw ToolError("the catalog isn't a git checkout: no history")
@@ -421,7 +445,9 @@ class LiveryMcp(
         "first (it reads the document itself), then render_preview with the contract's examples (and " +
         "dark=true) to look at it as a person would, check_compatibility to see what it changes for apps " +
         "already installed, then submit_draft when the server accepts writes. " +
-        "Drafts are unsigned; a person reviews them, and production catalogs are signed by CI, never by you."
+        "Drafts are unsigned; a person reviews them, and production catalogs are signed by CI, never by you. " +
+        "Placing a template in an A2UI response: a2ui_component_schema gives the components, and " +
+        "validate_a2ui checks your message (with the data model) before you send it."
   }
 }
 

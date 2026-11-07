@@ -48,6 +48,8 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-
 | `build_preview` (`--preview-out`) | an unsigned catalog for a preview channel; the catalog's own channel is refused |
 | `publish_preview` (`--preview-out`) | one document on its own, as an unsigned catalog of one design, checked against its contract |
 | `list_history` | a design's templates' versions from the catalog's git log; `render_preview` with `revision` draws one |
+| `a2ui_component_schema` | the catalog's contracts as A2UI components: one component's JSON schema, or the whole A2UI catalog to prompt with |
+| `validate_a2ui` | an A2UI message (or several) checked before it is sent: each Livery component's properties, actions, template and design, and its values through the contract gate (bindings too, given `data_model`) |
 | `check_compatibility` | the catalog against a git revision (default `HEAD`) or another tree, as `livery check` does: contract changes marked compatible or breaking, and per template what it reads and emits, the minor it requires and which values only its own default covers |
 | `ui_builder_export` (`--ui-builder`) | a Compose UI Builder design at a revision, as a document with its `source` |
 | `ui_builder_scaffold` (`--ui-builder`) | a contract as UI Builder host inputs, to add to a design before laying it out |
