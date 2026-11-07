@@ -3,7 +3,10 @@ package ee.schimke.livery.review
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.protocol.Contract
+import ee.schimke.livery.publisher.CatalogBuilder
+import ee.schimke.livery.publisher.CatalogProblems
 import ee.schimke.livery.publisher.KeptExamples
+import ee.schimke.livery.publisher.Layout
 import ee.schimke.livery.publisher.LiveryCommand
 import ee.schimke.livery.render.RenderSpec
 import ee.schimke.livery.render.TemplateRenderer
@@ -57,7 +60,7 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
     val density = opt("--density")?.toFloatOrNull() ?: 2f
     val out = File(opt("--out") ?: "${template.nameWithoutExtension}.png")
     val verdict = when (val surface = opt("--surface") ?: "compose") {
-      "compose" -> compose(template, contract, data, RenderSpec(w, h, density), out)
+      "compose" -> compose(template, contract, data, RenderSpec(w, h, density), out, catalog)
       "launcher-widget" -> widget(template, contractFile, data, w, h, density, out, catalog)
       else -> return fail("--surface is compose or launcher-widget, not $surface")
     }
@@ -69,13 +72,24 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
     }
   }
 
-  private fun compose(template: File, contract: Contract, data: JsonObject, spec: RenderSpec, out: File): String {
+  private fun compose(template: File, contract: Contract, data: JsonObject, spec: RenderSpec, out: File, catalog: File?): String {
     val bindings = when (val b = ContractBinder.bind(contract, data)) {
       is BindResult.Ok -> b.bindings
       is BindResult.Invalid -> return "failed: the data doesn't bind to ${contract.ref}: ${b.problems.map { "${it.name}: ${it.message}" }}"
     }
+    val bytes = template.readBytes()
+    // With --catalog, the catalog's images and the template's fonts, as the app loads them from a
+    // downloaded catalog; without, the player's defaults (placeholders, system fonts).
+    val built = catalog?.let {
+      runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
+        .getOrElse { e -> return "error: --catalog $it doesn't build: ${(e as? CatalogProblems)?.problems ?: e.message}" }
+    }
+    val sha = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    val entry = built?.manifest?.templates?.firstOrNull { it.sha256 == sha }
     return try {
-      out.writeBytes(TemplateRenderer.png(template.readBytes(), bindings, spec))
+      val images = built?.let { CatalogImages(it, bindings) } ?: ee.schimke.composeai.rcplayer.compose.RcImageLoader.Default
+      val fonts = if (built != null && entry != null) CatalogFonts.forTemplate(built, entry) else ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader.Default
+      out.writeBytes(TemplateRenderer.png(bytes, bindings, spec, images, fonts))
       "played: $out"
     } catch (e: Throwable) {
       "failed: ${generateSequence(e) { it.cause }.take(3).joinToString(", caused by ") { "${it.javaClass.simpleName}: ${it.message}" }}"
@@ -97,9 +111,14 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
       "-Dlivery.play.data=${dataFile.absolutePath}", "-Dlivery.play.width=$w", "-Dlivery.play.height=$h",
       "-Dlivery.play.density=$density", "-Dlivery.play.out=${out.absolutePath}", "-Dlivery.play.result=${result.absolutePath}",
     ) + listOfNotNull(catalog?.let { "-Dlivery.play.catalog=${it.absolutePath}" }) + "ee.schimke.livery.verify.WidgetPlay"
-    val process = ProcessBuilder(command).redirectErrorStream(true).start()
-    val log = process.inputStream.bufferedReader().readText()
-    if (!process.waitFor(10, TimeUnit.MINUTES)) { process.destroyForcibly(); return "error: the widget player didn't finish" }
+    // The child's output goes to a file, so a hung player can't block the timed wait on a pipe.
+    val logFile = File.createTempFile("livery-play", ".log").apply { deleteOnExit() }
+    val process = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(logFile).start()
+    if (!process.waitFor(10, TimeUnit.MINUTES)) {
+      process.destroyForcibly().waitFor(30, TimeUnit.SECONDS)
+      return "error: the widget player didn't finish in 10 minutes"
+    }
+    val log = logFile.readText()
     return when {
       result.isFile && result.readText().startsWith("played") -> "played: $out"
       result.isFile -> result.readText().trim()

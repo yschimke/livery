@@ -35,6 +35,13 @@ class PlayCommandTest {
     assertEquals(0, play("$catalog/designs/tile-default/in-app.rc", "--contract", "$catalog/contracts/status-tile.json", "--catalog", catalog.path, "--example", label, "--out", File(out, "k.png").path))
   }
 
+  @Test fun withACatalogItPlaysAndACatalogThatDoesntBuildIsAnError() {
+    // --catalog builds the catalog for its images and fonts; one that does not build is an error (2).
+    assertEquals(0, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", sample.path, "--example", "on", "--out", File(out, "c.png").path))
+    val broken = Files.createTempDirectory("broken").toFile().also { File(it, "catalog.json").writeText("{") }
+    assertEquals(2, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", broken.path, "--example", "on", "--out", File(out, "d.png").path))
+  }
+
   @Test fun anUnknownSurfaceIsAUsageError() {
     assertEquals(64, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--surface", "toaster"))
   }
