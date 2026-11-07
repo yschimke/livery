@@ -1,5 +1,6 @@
 package ee.schimke.livery.gradle
 
+import ee.schimke.livery.publisher.build
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.publisher.CatalogBuilder
 import ee.schimke.livery.publisher.CatalogProblems

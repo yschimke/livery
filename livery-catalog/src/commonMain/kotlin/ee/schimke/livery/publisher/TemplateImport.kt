@@ -4,7 +4,6 @@ import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Target
-import java.io.File
 import kotlinx.serialization.json.Json
 
 /**
@@ -21,13 +20,13 @@ object TemplateImport {
   /** Template names whose files would be a design folder's own: `design.json`, `previews/`, `assets/`. */
   val RESERVED: Set<String> = setOf("design", "previews", "assets")
 
-  data class Imported(val rc: File, val sidecar: File, val spec: TemplateSpec, val contract: String)
+  data class Imported(val rc: SourceFile, val sidecar: SourceFile, val spec: TemplateSpec, val contract: String)
 
-  fun into(src: File, designId: String, name: String, document: ByteArray, target: Target, source: Map<String, String> = emptyMap()): Imported {
+  fun into(src: SourceFile, designId: String, name: String, document: ByteArray, target: Target, source: Map<String, String> = emptyMap()): Imported {
     if (!NAME.matches(designId) || !NAME.matches(name)) throw CatalogProblems(listOf("design and template names are ${NAME.pattern}: '$designId/$name'"))
     if (name in RESERVED) throw CatalogProblems(listOf("'$name' is reserved in a design's folder (${RESERVED.sorted()}): pick another template name"))
-    val dir = File(src, "designs/$designId")
-    val designFile = File(dir, "design.json")
+    val dir = src.resolve("designs").resolve(designId)
+    val designFile = dir.resolve("design.json")
     if (!designFile.isFile) throw CatalogProblems(listOf("no design $designId: create $designFile first (its id, contract, title and install policy)"))
     val design = JSON.decodeFromString(Design.serializer(), designFile.readText())
     val contract = contract(src, design.contract)
@@ -42,8 +41,8 @@ object TemplateImport {
     if (problems.isNotEmpty()) throw CatalogProblems(problems.map { "$designId/$name: $it" })
 
     val spec = TemplateSpec(target, reads = facts.declaredReads.sorted(), emits = facts.emits.sorted(), source = source)
-    val rc = File(dir, "$name.rc")
-    val sidecar = File(dir, "$name.json")
+    val rc = dir.resolve("$name.rc")
+    val sidecar = dir.resolve("$name.json")
     val before = rc.takeIf { it.isFile }?.readBytes() to sidecar.takeIf { it.isFile }?.readBytes()
     rc.writeBytes(document)
     sidecar.writeText(PRETTY.encodeToString(TemplateSpec.serializer(), spec) + "\n")
@@ -58,13 +57,13 @@ object TemplateImport {
   }
 
   /** The newest minor of [ref] (`id@major`) in [src]'s `contracts/`. */
-  fun contract(src: File, ref: String): Contract =
-    File(src, "contracts").listFiles().orEmpty().filter { it.extension == "json" }
+  fun contract(src: SourceFile, ref: String): Contract =
+    src.resolve("contracts").listFiles().orEmpty().filter { it.extension == "json" }
       .map { JSON.decodeFromString(Contract.serializer(), it.readText()) }
       .filter { it.ref == ref }.maxByOrNull { it.minor }
       ?: throw CatalogProblems(listOf("no contract $ref in $src/contracts"))
 
-  private fun restore(f: File, bytes: ByteArray?) { if (bytes == null) f.delete() else f.writeBytes(bytes) }
+  private fun restore(f: SourceFile, bytes: ByteArray?) { if (bytes == null) f.delete() else f.writeBytes(bytes) }
 
   private val JSON = Json { ignoreUnknownKeys = false }
   private val PRETTY = Json { prettyPrint = true; encodeDefaults = false }

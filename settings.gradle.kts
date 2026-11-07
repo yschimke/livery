@@ -22,6 +22,7 @@ dependencyResolutionManagement {
 
 include(":livery-protocol")
 include(":livery-client")
+include(":livery-catalog")
 include(":livery-publish")
 include(":livery-compose")
 include(":livery-a2ui")

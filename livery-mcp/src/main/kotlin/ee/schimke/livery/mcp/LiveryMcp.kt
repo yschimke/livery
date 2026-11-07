@@ -1,5 +1,8 @@
 package ee.schimke.livery.mcp
 
+import ee.schimke.livery.publisher.build
+import ee.schimke.livery.publisher.check
+import ee.schimke.livery.publisher.write
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ContractEvolution

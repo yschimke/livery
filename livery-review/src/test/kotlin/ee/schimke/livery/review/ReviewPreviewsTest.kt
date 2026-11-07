@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import ee.schimke.livery.publisher.compareTrees
 import ee.schimke.livery.publisher.CompatibilityCheck
 import java.io.File
 import java.nio.file.Files

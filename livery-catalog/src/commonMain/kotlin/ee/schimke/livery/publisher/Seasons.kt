@@ -5,10 +5,6 @@ import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.InstallPolicy
-import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import kotlinx.serialization.Serializable
 
 /**
@@ -49,10 +45,27 @@ object Seasons {
   const val ARM: String = "on"
 
   /** Epoch ms of a season's [Season.start] or [Season.end]. */
-  fun instant(text: String): Long = runCatching { LocalDate.parse(text).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
-    .recoverCatching { OffsetDateTime.parse(text).toInstant().toEpochMilli() }
-    .recoverCatching { Instant.parse(text).toEpochMilli() }
-    .getOrElse { throw IllegalArgumentException("'$text' is neither a date (2026-12-01) nor an instant with an offset (2026-12-01T00:00:00Z)") }
+  @OptIn(kotlin.time.ExperimentalTime::class)
+  fun instant(text: String): Long = (date(text) ?: runCatching { kotlin.time.Instant.parse(text).toEpochMilliseconds() }.getOrNull())
+    ?: run { throw IllegalArgumentException("'$text' is neither a date (2026-12-01) nor an instant with an offset (2026-12-01T00:00:00Z)") }
+
+  /** Epoch ms of midnight UTC on a calendar date `YYYY-MM-DD`, or null when [text] isn't a real one. */
+  private fun date(text: String): Long? {
+    val m = DATE.matchEntire(text) ?: return null
+    val (y, mo, d) = m.destructured.toList().map { it.toInt() }
+    val leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    val days = intArrayOf(31, if (leap) 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    if (mo !in 1..12 || d !in 1..days[mo - 1]) return null
+    // Days from 1970-01-01 to y-mo-d in the proleptic Gregorian calendar (Hinnant's days_from_civil).
+    val yy = if (mo <= 2) y - 1 else y
+    val era = (if (yy >= 0) yy else yy - 399) / 400
+    val yoe = yy - era * 400
+    val doy = (153 * (if (mo > 2) mo - 3 else mo + 9) + 2) / 5 + d - 1
+    val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    return (era * 146097L + doe - 719468) * 86_400_000L
+  }
+
+  private val DATE = Regex("""(\d{4})-(\d{2})-(\d{2})""")
 
   fun experiment(s: Season): Experiment = Experiment(
     id = s.id,
