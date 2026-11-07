@@ -2,9 +2,14 @@
 
 Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit renderer
 (`@a2ui/lit`). An agent places a component per contract and sends its data. The page then picks a
-reviewed, signed template for it, binds the data through the contract, and plays the template in
-rc-players' Remote Compose web player. Actions in the template become A2UI events, or are written
+reviewed, signed template for it, binds the data through the contract, and plays the template on a
+canvas in the page with the TypeScript Remote Compose player. A data change sets named values on the
+playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
+
+**Known gaps.** On Livery's sample templates the TypeScript player doesn't yet draw surface
+backgrounds or rounded shapes, overlaps a column's children, and doesn't fire taps. Its fixes come
+next (docs/A2UI.md).
 
 The work is done by Livery's own Kotlin client compiled to Wasm (`livery-web`), which this package
 ships in `dist/livery-web/`. That covers selection, trust, binding, instantiation and the action
@@ -24,7 +29,6 @@ const session = await LiverySession.open({
 });
 const { catalog } = await liveryCatalog(session, {
   catalogId: 'https://example.com/a2ui/catalog/v1',   // what the client advertises
-  playerUrl: '/rc-player/index.html',                 // @yschimke/remote-compose-player-cmp's dist/
   onAppAction: (kind, action, args) => { /* navigate, … */ },
   onProblem: (component, message) => { /* tell the agent */ },
 });
@@ -37,12 +41,9 @@ at publish time.
 
 ### Serving
 
-The page serves three things:
-
-- **The player:** `@yschimke/remote-compose-player-cmp`'s `dist/`, with `.wasm` sent as
-  `application/wasm`.
-- **This package's `dist/livery-web/`:** it is fetched beside `dist/livery.js`.
-- **The catalog:** its `manifest.json` and blobs.
+The page serves this package's `dist/livery-web/` (fetched beside `dist/livery.js`, `.wasm` as
+`application/wasm`) and the catalog (its `manifest.json` and blobs). The player is in the bundle:
+`vendor/remote-compose-player.mjs` (vendor/PROVENANCE.md).
 
 The module's glue imports `@js-joda/core`, a dependency of this package. A bundler resolves it; a
 page without one uses an import map.
@@ -69,7 +70,7 @@ npm test                                                    # headless Chromium 
 `npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
 checks four things:
 
-- both templates play;
-- the banner draws its surface and text;
-- an action reaches the agent with only its declared arguments;
-- a `set` writes the data model, and a data-model update redraws the component.
+- both templates draw on a canvas in the page, with no iframe;
+- an action reaches the agent with only its declared arguments, and a `set` writes the data model;
+- a data change sets values on the playing document without reloading it, and redraws it;
+- a second catalog's components keep their own session.

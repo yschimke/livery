@@ -273,7 +273,7 @@ action kind.
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` | CLI | `a2ui_component_schema(contract)` and `validate_a2ui(message)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
-| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId, playerUrl})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, playing `livery-web`'s bytes in rc-players' Wasm player (`@yschimke/remote-compose-player-cmp`) |
+| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player and setting named values live (see the gaps below) |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -294,15 +294,22 @@ moves with it, as a2ui-catalog does.
 *Built*: [`web/a2ui`](../web/a2ui) (`@livery/a2ui`) over [`livery-web`](../livery-web), checked in
 headless Chromium by CI (`web` job).
 
-![The sample catalog's promo banner and quantity row in an A2UI surface, in headless Chromium](images/a2ui-web.png) There is no TypeScript port: the web runs Kotlin's own
+![The sample catalog in an A2UI surface, drawn in the page by the TypeScript player, with its known gaps](images/a2ui-web.png) There is no TypeScript port: the web runs Kotlin's own
 selection, trust, binding, instantiation and action gate, compiled to Wasm, so it can't drift from
 the other clients and needs no fixture of its own beyond the ones Kotlin already passes.
 
-- **Drawing.** rc-players' Wasm player in an iframe, over its documented `postMessage` contract
-  (`rc-player-load` with bytes, `rc-player-state`, `cp-rc-host-named-action`). Its named values
-  are set only when the page loads, so instead `livery-web` writes the values into the document
-  (`TemplateInstantiator`, as for widget hosts) and the player swaps documents in place, keeping
-  its Wasm module. A data-model change is a new document.
+- **Drawing.** The TypeScript Remote Compose player (vendored from rc-players, `web/a2ui/vendor`)
+  on a canvas in the component itself: no iframe. A document is loaded once and its named values
+  are set on it while it plays (`createHostApi`), so a data-model change moves values and never
+  reloads the document, as `LiveryTemplate` does on Compose. Only what that player can't set live
+  is written into the document (`TemplateInstantiator`): bound images (`livery:value/<input>`) and
+  `long` values; a change to one of those is a new document.
+- **Known gaps of that player** on these templates (checked on a bare page, without Livery): it
+  draws no surface backgrounds or rounded shapes, overlaps a Column's children, and doesn't fire a
+  click modifier's host named action, so a tap doesn't reach the agent yet. Livery's side of a tap
+  (the gate, the agent's event, a `set` into the data model) is tested by delivering the action as
+  the player's callback would. Next: fix the player, then (optionally) an in-page embed of the
+  Compose Multiplatform player for the same pixels as Android.
 - **The component.** One `A2uiLitElement` per contract, registered with
   `basicCatalog.derive({catalogId, components: [...basic, ...livery]})`. Inputs and lists come
   resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
@@ -430,8 +437,9 @@ What the prototype taught, and what it doesn't do yet:
    inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
    `query` form with `livery-server`'s decision endpoint.
 6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
-   a Lit component per contract over rc-players' web player (above). Still to do: React and
-   Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
+   a Lit component per contract, drawing in the page with the TypeScript player and live named
+   values (above). Still to do: the TypeScript player's gaps on these templates, React and Angular
+   wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
 
 ## Open questions
 

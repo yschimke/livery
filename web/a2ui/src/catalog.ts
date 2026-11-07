@@ -224,6 +224,15 @@ class LiveryElement extends A2uiLitElement {
       if (previous !== undefined) session.release(previous);
     }
 
+    /**
+     * A host named action, exactly as the player's callback delivers one. @internal For tests: the
+     * TypeScript player doesn't fire these templates' taps yet (docs/A2UI.md), so the browser test
+     * delivers the action the document would send.
+     */
+    liveryHostAction(a: NamedAction): Promise<void> {
+      return this.onAction(a);
+    }
+
     private async onAction(a: NamedAction): Promise<void> {
       const api = this.livery;
       if (this.render_ === undefined || !api) return;
