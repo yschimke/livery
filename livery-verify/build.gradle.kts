@@ -32,6 +32,10 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.serialization.json)
 
+  // WidgetPlay (`livery play`'s widget runner) runs Robolectric itself; an app's tests bring their own.
+  compileOnly(libs.robolectric)
+  compileOnly("junit:junit:4.13.2")
+
   testImplementation(kotlin("test-junit"))
   testImplementation(libs.robolectric)
 }
