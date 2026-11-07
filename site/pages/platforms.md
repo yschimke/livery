@@ -9,6 +9,7 @@ order: 24
 | `livery-compose` | Android, desktop, iOS, Wasm (Compose Multiplatform) | Available |
 | `livery-instantiate` | Android, JVM, iOS, Wasm | Available |
 | `livery-launcher-widgets` | Android 16+ | Available; not yet device-tested in CI |
+| `livery-verify` | Robolectric (Android 16, Java 21) | Available: launcher widgets on Android 16's own player |
 | `Livery`, `LiveryUI` (Swift package) | iOS 15, macOS 12, watchOS 8, tvOS 15 | Available; CI on macOS |
 | `livery-publish` (`livery` CLI) | JVM | Available |
 | `livery-gradle-plugin` (`ee.schimke.composeai.livery.catalog`) | Gradle, Android apps | Available |
