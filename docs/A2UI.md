@@ -272,7 +272,8 @@ action kind.
 | `livery-a2ui-compose` | Android (AndroidX `androidx.a2ui`), desktop and Wasm (`ee.schimke.a2uicmp` port) | **Renders.** `LiveryA2uiComponents(host, contracts)`: one `A2uiComponent` per contract over `LiveryTemplate`; `liveryA2uiCatalog(basic, host)` to combine with the Material basic catalog |
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` | CLI | `a2ui_component_schema(contract)` and `validate_a2ui(message)`, for an agent authoring an A2UI response against a catalog |
-| `@livery/a2ui` | browsers | **Renders on the web.** A custom component for A2UI's web renderers wrapping `<livery-template>` from `@livery/web`; needs the TypeScript port (roadmap 4) |
+| `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
+| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -290,24 +291,52 @@ moves with it, as a2ui-catalog does.
 
 ### The web
 
-Two routes, in order:
+*Built*: [`web/a2ui`](../web/a2ui) (`@livery/a2ui`) over [`livery-web`](../livery-web), checked in
+headless Chromium by CI (`web` job).
 
-1. **Now, with nothing new:** a Compose/Wasm page hosting the whole A2UI surface (the port's
-   `material3-a2ui` plus `livery-a2ui-compose`), as a2ui-catalog's own `a2ui-desktop` does on the
-   desktop. Correct but heavy, and it doesn't drop into a Lit, Angular or React app.
-2. **Native:** the TypeScript client (`@livery/web`, roadmap 4) with rc-players' TypeScript player
-   behind a `<livery-template>` element, and `@livery/a2ui` registering one custom component per
-   contract with the web renderer. Its binding and selection are held to Kotlin's by the existing
-   conformance fixtures, plus the A2UI one below.
+![The sample catalog in an A2UI surface, drawn in the page by the TypeScript player](images/a2ui-web.png) There is no TypeScript port: the web runs Kotlin's own
+selection, trust, binding, instantiation and action gate, compiled to Wasm, so it can't drift from
+the other clients and needs no fixture of its own beyond the ones Kotlin already passes.
 
-A2UI's web renderers share `@a2ui/web_core` (`MessageProcessor`, `Catalog`, `DataContext`), and
-`basicCatalog.derive({catalogId, components, functions})` builds "basic plus ours" directly. A
-custom component there is an API object (a name and a Zod schema) plus an implementation per
-renderer: `createComponentImplementation(Api, …)` in `@a2ui/react` (which injects a setter such as
-`setUsername` for a two-way property), a subclass of `A2uiLitElement` in `@a2ui/lit`, a
-`CatalogComponent` in `@a2ui/angular`. So `@livery/a2ui` is one core that generates the API objects
-from contracts (the same projection as `livery-a2ui`, checked by the same fixture) and three thin
-wrappers around `<livery-template>`, one per renderer.
+- **Drawing.** The TypeScript Remote Compose player (vendored from rc-players, `web/a2ui/vendor`)
+  on a canvas in the component itself: no iframe. A document is loaded once and its named values
+  are set on it while it plays (`createHostApi`), so a data-model change moves values and never
+  reloads the document, as `LiveryTemplate` does on Compose. Only what that player can't set live
+  is written into the document (`TemplateInstantiator`): bound images (`livery:value/<input>`) and
+  `long` values; a change to one of those is a new document.
+- **Each player implements the Remote Compose spec.** No player defines it, AndroidX's included:
+  that one is a useful reference to compare against, and it can be wrong too. Two places where the
+  TypeScript player didn't follow the spec are fixed in rc-players' copy of it
+  ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829), vendored here until it
+  merges). First, a layout's spacing and a corner radius may be a variable reference, which Compose
+  writes for dp over the density. The player read it as a plain float (`NaN`), so templates had no
+  surfaces and no touch areas. Second, it skipped the definitions inside a click, so a button whose
+  action name another click defined fired nothing until that one was tapped. The browser test taps
+  the drawn buttons.
+- **The component.** One `A2uiLitElement` per contract, registered with
+  `basicCatalog.derive({catalogId, components: [...basic, ...livery]})`. Inputs and lists come
+  resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
+  read as the agent wrote them. A `set` writes through `dataContext.set(path, value)`; an agent's
+  action goes out through `dispatchAction` with the template's checked arguments in its context.
+- **Images.** Rendering never waits on the network: a render uses only images already on the
+  device, and one that misses answers *waiting*; the element fetches them (`fetchImages`, off the
+  render path) and renders again, as widget hosts do with `CachedImages`. One fetch serves every
+  component waiting in the session. If an image can't be fetched, the component can't draw.
+- **When it can't draw.** The agent hears why (`onProblem`). A chosen design that can't load, or
+  whose image can't be fetched, falls back to the automatic choice, never to nothing. The agent's
+  own `template` document is never replaced, so it, and an automatic choice that can't draw either,
+  show the page's `fallback`.
+- **Theme.** Each role (`primary`, `surface`, `onSurface`, …) from `--livery-<role>`, else A2UI's
+  own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
+  components beside it.
+- **Size.** The width the element gets selects the design (and redraws on a resize); the height
+  is `--livery-a2ui-height`, until the height rule below.
+
+A2UI's web renderers share `@a2ui/web_core` (`MessageProcessor`, `Catalog`, `DataContext`). A
+custom component is an API object (a name, a tag and a Zod schema) plus an implementation per
+renderer: a subclass of `A2uiLitElement` in `@a2ui/lit` (built), `createComponentImplementation(Api,
+…)` in `@a2ui/react` and a `CatalogComponent` in `@a2ui/angular` (*planned*: the same API objects
+over the same session).
 
 On the wire, a client action is `{name, surfaceId, sourceComponentId, timestamp, context}`, so a
 Livery action arrives at the agent with `sourceComponentId` naming the Livery component and the
@@ -415,7 +444,9 @@ What the prototype taught, and what it doesn't do yet:
    `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
    inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
    `query` form with `livery-server`'s decision endpoint.
-6. `@livery/a2ui`, after the TypeScript port.
+6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
+   a Lit component per contract, drawing in the page with the TypeScript player and live named
+   values (above). Still to do: React and Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
 
 ## Open questions
 
