@@ -1,4 +1,4 @@
-# Livery protocol, level 7
+# Livery protocol, level 8
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 7 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 8 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -73,7 +73,10 @@ that aren't automatic (§2.3): a level-5 client would pick one like any other, s
 set `minClient` to at least 6 for a catalog with a design whose `automatic` is false. Level 7 added
 `set` actions (§7.1): a level-6 client has no handler for the kind and would drop every one, so a
 template's own controls would do nothing; a publisher must set `minClient` to at least 7 for a
-catalog with a `set` action. A client must
+catalog with a `set` action. Level 8 gates templates on risky features (§3.5, §5.1): a level-7
+client ignores `features` and would play a template's shader wherever it plays the template, so a
+publisher must set `minClient` to at least 8 for a catalog in which any template lists `features`.
+A client must
 reject a manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
@@ -82,7 +85,8 @@ A template entry is one document for one target: `sha256`, `bytes`, `designId`, 
 (`id@major`), `target`, `tags`, `previews`, `revoked`, `reads` (the named values it reads),
 `emits` (the actions it may emit), `requiresMinor` (the lowest contract minor an app must implement
 to play it, §4.3; 0 when absent), `assets` (hashes of the images and fonts it needs), `fonts`
-(the families it names) and `source` (a free-form string map of where the document came from, such
+(the families it names), `features` (the risky features its operations use, §3.5, read from the
+document by the publisher, never from a sidecar) and `source` (a free-form string map of where the document came from, such
 as `tool`, `design`, `revision` and `commit`, for tracing a version; clients never read it to
 decide anything).
 
@@ -183,6 +187,11 @@ document may use only the features the app opted into for signed documents, none
 A client that can't decode documents must refuse every unsigned one, and every signed one unless
 its app allows every risky feature.
 
+A catalog template is held to the same features through selection: the publisher records the ones
+its document uses in its entry's `features`, and it is eligible only for a player that allows each
+(§5.1). A signed catalog may therefore ship a shader design, and it draws only in apps, and only on
+surfaces, that opted into `shaders`; everywhere else selection picks another design.
+
 ## 4. Contracts and data
 
 A contract is `id`, `major`, `minor`, `inputs` (name → `InputSpec`), `lists` (name → `ListSpec`),
@@ -259,7 +268,8 @@ in dp, optional design, variant, theme and tags, and optionally the contract `mi
 implements) when all of these hold: its contract equals the query's; its design exists, is not
 revoked and has that contract; the entry is not revoked; with a `minor` in the query, its
 `requiresMinor` is at most that minor; its
-`bytes` fit the player's budget; its `rcApiLevel` is at most the player's; the player supports
+`bytes` fit the player's budget; the player allows every risky feature in its `features` (the
+player's `features`, none by default); its `rcApiLevel` is at most the player's; the player supports
 every profile it lists; the surfaces are equal; the containers are equal; the size range covers
 the requested width and height where given; for a `host` theme the player accepts `host`, and for
 a baked theme it equals the requested theme, or, with none requested, is one the player accepts;
@@ -492,7 +502,7 @@ draws in; a contract needn't declare them, and a template may read them.
 
 | File | Checks |
 | --- | --- |
-| `selection.json` | §5: a manifest and queries (with installed designs), and the `sha256` chosen or `null` |
+| `selection.json` | §5: a manifest and queries (with installed designs and the player's allowed `features`), and the `sha256` chosen or `null` |
 | `binding.json` | §4.1: a contract and datasets, and the bindings or the sorted names of the problems |
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |

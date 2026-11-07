@@ -153,6 +153,12 @@ data class TemplateEntry(
   /** Font families the document names; each is a catalog font asset, `google:<family>`, or a system family. */
   val fonts: List<String> = emptyList(),
   /**
+   * The risky features its operations use (`shaders`, `haptics`, `sound`, `particles`,
+   * `embedded-images`, `embedded-fonts`, `wake`), as the publisher decoded them (PROTOCOL.md
+   * §3.5): it plays only for a player that allows every one (§5.1).
+   */
+  val features: List<String> = emptyList(),
+  /**
    * Where the document came from, for people and agents tracing a version: e.g. `tool`
    * (`ui-builder`, `capture`, an agent), the tool's `design` id and `revision`, a `commit`. Free-form;
    * never read by clients for decisions.

@@ -79,7 +79,7 @@ public actor TemplateRepository {
   /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments; level 5
   /// added secondary screens (`present` actions, screen rules, §8.2); level 6 added designs that
   /// aren't automatic (§5.2).
-  public static let protocolLevel = 7
+  public static let protocolLevel = 8
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 

@@ -409,10 +409,11 @@ What the prototype taught, and what it doesn't do yet:
 5. Documents named by the message. *Done for `inline`*: template signatures (PROTOCOL.md §3.4,
    `livery sign-template`, Kotlin and Swift, `conformance/template-signing.json`), and
    `DocumentAdmission` with risky features and the agent-bytes policy (§3.5, `InlineDocumentsA2uiTest`).
-   Still to do: `sha256` (+ `url`) against the trusted manifests, the `query` form with
-   `livery-server`'s decision endpoint, and holding **catalog** templates to risky features too
-   (the publisher records a template's features in the manifest, and selection skips one whose
-   features the player doesn't allow: a protocol level of its own).
+   Catalog templates are held to the same features (*done*, protocol level 8): the publisher
+   records each template's `features`, and selection skips one the player's
+   `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
+   inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
+   `query` form with `livery-server`'s decision endpoint.
 6. `@livery/a2ui`, after the TypeScript port.
 
 ## Open questions

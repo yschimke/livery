@@ -68,8 +68,8 @@ class ConformanceTest {
   )
   @Serializable data class SelectionFixture(val manifest: Manifest, val cases: List<SelectionCase>)
 
-  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap(), requiresMinor: Int = 0) =
-    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked, requiresMinor = requiresMinor)
+  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap(), requiresMinor: Int = 0, features: List<String> = emptyList()) =
+    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked, requiresMinor = requiresMinor, features = features)
 
   @Test fun selection() {
     val inApp = { level: Int -> Target(Surfaces.IN_APP, level, listOf("androidx")) }
@@ -83,6 +83,8 @@ class ConformanceTest {
         Design("gone", "c/tile@1", "Gone", revoked = true),
         // Shipped to everyone, but drawn only when named or picked by an arm (a season).
         Design("winter", "c/tile@1", "Winter", variant = "winter", install = InstallPolicy.Always, automatic = false),
+        // Its only template uses a shader (§5.1): it plays only where the player allows shaders.
+        Design("fx", "c/tile@1", "Effects", variant = "fx", install = InstallPolicy.Always),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -100,6 +102,7 @@ class ConformanceTest {
         t('b', "winter", inApp(9), bytes = 50),
         // Sorts first on a tie, so only the byte budget keeps it out.
         t('0', "builtin", inApp(8), bytes = 900_000),
+        t('f', "fx", inApp(8), features = listOf("shaders")),
       ),
     )
     val app8 = PlayerCapabilities(Surfaces.IN_APP, 8, setOf("androidx"))
@@ -127,6 +130,9 @@ class ConformanceTest {
       SelectionCase("app on the contract's minor gets the newer template", q(app8).copy(variant = "compact", minor = 2), expect = null),
       SelectionCase("app on an older minor gets the older template", q(app8).copy(variant = "compact", minor = 1), expect = null),
       SelectionCase("no minor accepts any", q(app8).copy(variant = "compact"), expect = null),
+      SelectionCase("a risky feature the player doesn't allow: the design falls back", q(app8).copy(designId = "fx"), expect = null),
+      SelectionCase("the player allows that feature", q(app8.copy(features = setOf("shaders"))).copy(designId = "fx"), expect = null),
+      SelectionCase("allowing another feature isn't enough", q(app8.copy(features = setOf("haptics"))).copy(designId = "fx"), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
       val qq = c.query

@@ -68,6 +68,11 @@ data class PlayerCapabilities(
   val container: String? = null,
   /** The largest document this host accepts (a launcher widget's budget is small). */
   val maxBytes: Long = Long.MAX_VALUE,
+  /**
+   * The risky features (PROTOCOL.md §3.5) the app allows a catalog template to use here: none by
+   * default, so a template with a shader plays only where the app opted into `shaders`.
+   */
+  val features: Set<String> = emptySet(),
 )
 
 /** Surface, level, profiles, container and size; theme is matched by the selector. */

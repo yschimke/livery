@@ -58,6 +58,11 @@ checks the document against its contract, and plays a signed one only if it uses
 An unsigned document plays only under the app's unsigned-document policy, and never with a risky
 feature (PROTOCOL.md §3.5).
 
+Catalog templates are held to the same features. `livery build` records the ones a document uses
+in its manifest entry (`features`, and the catalog then needs protocol level 8), and selection
+skips a template whose features the player doesn't allow, `PlayerCapabilities.features`, empty by
+default, so a shader design draws only where an app opted into `shaders`.
+
 ## Rotation
 
 Ship the new public key in an app release alongside the old one, then sign with the new key once

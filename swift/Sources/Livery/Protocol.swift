@@ -154,10 +154,12 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
   public var emits: [String]
   public var assets: [String]
   public var fonts: [String]
+  /// The risky features the document uses (§3.5); it plays only where the player allows each (§5.1).
+  public var features: [String]
   /// Where the document came from (tool, design, revision, commit); never read for decisions.
   public var source: [String: String]
 
-  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, requiresMinor, emits, assets, fonts, source }
+  enum CodingKeys: String, CodingKey { case sha256, bytes, designId, contract, target, tags, previews, revoked, reads, requiresMinor, emits, assets, fonts, features, source }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     sha256 = try c.decode(String.self, forKey: .sha256)
@@ -173,6 +175,7 @@ public struct TemplateEntry: Codable, Equatable, Sendable {
     emits = try c.value(.emits, [])
     assets = try c.value(.assets, [])
     fonts = try c.value(.fonts, [])
+    features = try c.value(.features, [])
     source = try c.value(.source, [:])
   }
 }
@@ -259,13 +262,15 @@ public struct PlayerCapabilities: Codable, Equatable, Sendable {
   public var themes: Set<String>
   public var container: String?
   public var maxBytes: Int64
+  /// The risky features (§3.5) the app allows a catalog template to use here: none by default.
+  public var features: Set<String>
 
-  public init(surface: String, maxRcApiLevel: Int, profiles: Set<String>, livePush: Bool = true, themes: Set<String> = [Target.themeHost], container: String? = nil, maxBytes: Int64 = .max) {
+  public init(surface: String, maxRcApiLevel: Int, profiles: Set<String>, livePush: Bool = true, themes: Set<String> = [Target.themeHost], container: String? = nil, maxBytes: Int64 = .max, features: Set<String> = []) {
     self.surface = surface; self.maxRcApiLevel = maxRcApiLevel; self.profiles = profiles; self.livePush = livePush
-    self.themes = themes; self.container = container; self.maxBytes = maxBytes
+    self.themes = themes; self.container = container; self.maxBytes = maxBytes; self.features = features
   }
 
-  enum CodingKeys: String, CodingKey { case surface, maxRcApiLevel, profiles, livePush, themes, container, maxBytes }
+  enum CodingKeys: String, CodingKey { case surface, maxRcApiLevel, profiles, livePush, themes, container, maxBytes, features }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     surface = try c.decode(String.self, forKey: .surface)
@@ -275,6 +280,7 @@ public struct PlayerCapabilities: Codable, Equatable, Sendable {
     themes = try c.value(.themes, [Target.themeHost])
     container = try c.decodeIfPresent(String.self, forKey: .container)
     maxBytes = try c.value(.maxBytes, Int64.max)
+    features = try c.value(.features, [])
   }
 }
 
