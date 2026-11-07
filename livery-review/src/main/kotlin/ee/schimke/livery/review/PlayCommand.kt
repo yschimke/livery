@@ -28,7 +28,10 @@ import kotlinx.serialization.json.jsonObject
  *   own widget player under Robolectric, in a Java 21 JVM with this release's Android classes
  *   (`lib/android-play`). Fails when the player disables itself, as a home screen would show it.
  */
-class PlayCommand(private val env: Map<String, String> = System.getenv()) : LiveryCommand {
+class PlayCommand : LiveryCommand {
+  /** The environment `run` was given: LIVERY_JAVA, JAVA_HOME, LIVERY_CACHE, LIVERY_ANDROID_PLAY. */
+  private var env: Map<String, String> = System.getenv()
+
   override val name: String = "play"
 
   override val usage: String = """
@@ -43,6 +46,7 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
 """
 
   override fun run(args: List<String>, env: Map<String, String>): Int {
+    this.env = env
     fun opt(name: String) = args.indexOf(name).takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
     fun fail(message: String): Int { System.err.println(message); return 64 }
     val template = File(args.firstOrNull()?.takeUnless { it.startsWith("--") } ?: return fail(usage))
@@ -113,7 +117,12 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
     ) + listOfNotNull(catalog?.let { "-Dlivery.play.catalog=${it.absolutePath}" }) + "ee.schimke.livery.verify.WidgetPlay"
     // The child's output goes to a file, so a hung player can't block the timed wait on a pipe.
     val logFile = File.createTempFile("livery-play", ".log").apply { deleteOnExit() }
-    val process = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(logFile).start()
+    val process = try {
+      ProcessBuilder(command).redirectErrorStream(true).redirectOutput(logFile).start()
+    } catch (e: java.io.IOException) {
+      // Not the template's failure: exit 2, never the 1 a crash gets.
+      return "error: couldn't start the widget player's Java ($java): ${e.message}"
+    }
     if (!process.waitFor(10, TimeUnit.MINUTES)) {
       process.destroyForcibly().waitFor(30, TimeUnit.SECONDS)
       return "error: the widget player didn't finish in 10 minutes"
@@ -127,9 +136,9 @@ class PlayCommand(private val env: Map<String, String> = System.getenv()) : Live
     }
   }
 
-  /** `lib/android-play` beside the jar this class is in. */
+  /** `lib/android-play` beside the jar this class is in, or LIVERY_ANDROID_PLAY. */
   private fun androidPlayDir(): File? =
-    runCatching { File(PlayCommand::class.java.protectionDomain.codeSource.location.toURI()).parentFile.resolve("android-play") }
+    env["LIVERY_ANDROID_PLAY"]?.let(::File)?.takeIf { it.isDirectory } ?: runCatching { File(PlayCommand::class.java.protectionDomain.codeSource.location.toURI()).parentFile.resolve("android-play") }
       .getOrNull()?.takeIf { it.isDirectory }
 
   private fun javaExecutable(): String =

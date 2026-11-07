@@ -10,7 +10,7 @@ class PlayCommandTest {
   private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
   private val out = Files.createTempDirectory("play").toFile()
 
-  private fun play(vararg args: String) = PlayCommand().run(args.toList(), emptyMap())
+  private fun play(vararg args: String, env: Map<String, String> = emptyMap()) = PlayCommand().run(args.toList(), env)
 
   @Test fun aTemplatePlaysWithAnExample() {
     val png = File(out, "on.png")
@@ -40,6 +40,21 @@ class PlayCommandTest {
     assertEquals(0, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", sample.path, "--example", "on", "--out", File(out, "c.png").path))
     val broken = Files.createTempDirectory("broken").toFile().also { File(it, "catalog.json").writeText("{") }
     assertEquals(2, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", broken.path, "--example", "on", "--out", File(out, "d.png").path))
+  }
+
+  @Test fun aJavaThatWontStartIsAnErrorNotAFailure() {
+    // Everything the widget player needs is there except a Java that runs: exit 2, not 1.
+    val lib = Files.createTempDirectory("android-play").toFile()
+    val cache = Files.createTempDirectory("cache").toFile()
+    File(cache, "robolectric").mkdirs()
+    val sdk = java.util.Properties().apply { PlayCommandTest::class.java.getResourceAsStream("/livery-play.properties")!!.use(::load) }.getProperty("robolectric.sdk36")
+    File(cache, "robolectric/android-all-instrumented-$sdk.jar").writeText("")
+    val code = play(
+      "$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--example", "on",
+      "--surface", "launcher-widget", "--out", File(out, "w.png").path,
+      env = mapOf("LIVERY_ANDROID_PLAY" to lib.path, "LIVERY_CACHE" to cache.path, "LIVERY_JAVA" to "/no/such/java"),
+    )
+    assertEquals(2, code)
   }
 
   @Test fun anUnknownSurfaceIsAUsageError() {
