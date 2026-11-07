@@ -27,9 +27,11 @@ class ReviewPreviewsTest {
     assertNull(tile.failure)
     assertEquals(listOf("on", "off", "unavailable"), tile.shots.map { it.example })
     for (shot in tile.shots) {
-      assertEquals("https://example.test/tile-default-${shot.example}-after.png", shot.after)
-      assertEquals("https://example.test/tile-default-${shot.example}-before.png", shot.before)
-      val (a, b) = listOf("after", "before").map { File(out, "tile-default-${shot.example}-$it.png").readBytes() }
+      val after = shot.after!!.removePrefix("https://example.test/")
+      val before = shot.before!!.removePrefix("https://example.test/")
+      assertTrue(after.startsWith("tile-default.${shot.example}.") && after.endsWith(".after.png"), after)
+      assertEquals(after.removeSuffix(".after.png") + ".before.png", before)
+      val (a, b) = listOf(after, before).map { File(out, it).readBytes() }
       assertTrue(a.isNotEmpty() && b.isNotEmpty())
       assertEquals(a.contentEquals(b), shot.unchanged)
     }
@@ -37,7 +39,7 @@ class ReviewPreviewsTest {
     val md = CompatibilityCheck.markdown(c.report, previews)
     assertTrue("**Previews**" in md, md)
     assertTrue(("| before |" in md && "| after |" in md) || "| unchanged |" in md, md)
-    assertTrue("<img src=\"https://example.test/tile-default-on-" in md, md)
+    assertTrue("<img src=\"https://example.test/tile-default.on." in md, md)
   }
 
   @Test fun aNewCatalogIsDrawnAfterOnly() {
@@ -50,6 +52,28 @@ class ReviewPreviewsTest {
     assertTrue(tile.shots.isNotEmpty() && tile.shots.all { it.before == null && it.after != null }, tile.toString())
     // The other designs' templates are placeholders: said, not drawn.
     assertTrue(previews.filter { it.design != "tile-default" }.all { it.failure == "no template is a Remote Compose document" }, previews.toString())
+  }
+
+  @Test fun namesNeverCollide() {
+    val c = CompatibilityCheck.compareTrees(sample, temp("empty"), "nothing")
+    val files = ReviewPreviews(temp("previews")).render(c).flatMap { p -> p.shots.mapNotNull { it.after } }
+    assertEquals(files.size, files.toSet().size)
+  }
+
+  @Test fun aRemovedSizeIsDrawnFromTheOldTree() {
+    // Only the old tree has a template covering the size asked for: its before is still drawn.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    val old = temp("old").also { sample.copyRecursively(it) }
+    File(old, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"minWidthDp\": 500 }"))
+    }
+    File(tree, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"maxWidthDp\": 499 }"))
+    }
+    val c = CompatibilityCheck.compareTrees(tree, old, "main")
+    val tile = ReviewPreviews(temp("previews"), size = 600 to 200).render(c).single { it.design == "tile-default" }
+    assertNull(tile.failure, tile.toString())
+    assertTrue(tile.shots.all { it.before != null && it.after == null }, tile.toString())
   }
 
   @Test fun anUnchangedTreeDrawsNothing() {

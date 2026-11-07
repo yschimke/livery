@@ -39,7 +39,8 @@ class ReviewPreviews(
   private fun preview(design: String, before: CatalogBuilder.Output?, after: CatalogBuilder.Output?): DesignPreview {
     val now = after?.let { documents(it, design) }.orEmpty()
     val was = before?.let { documents(it, design) }.orEmpty()
-    val chosen = pick(now.ifEmpty { was }) ?: return DesignPreview(design, "", 0, 0, emptyList(),
+    // A size only the old tree covers (a variant this change removes) still draws its before.
+    val chosen = pick(now) ?: pick(was) ?: return DesignPreview(design, "", 0, 0, emptyList(),
       if (size != null) "no template covers ${size.first}×${size.second} dp" else "no template is a Remote Compose document")
     val (w, h) = size ?: (chosen.target.size.minWidthDp?.takeIf { it > 0 } ?: DEFAULT_W) to (chosen.target.size.minHeightDp?.takeIf { it > 0 } ?: DEFAULT_H)
     fun same(list: List<TemplateEntry>) = list.firstOrNull { it.target == chosen.target } ?: list.firstOrNull { it.target.size.covers(w, h) && it.target.surface == chosen.target.surface }
@@ -93,7 +94,16 @@ class ReviewPreviews(
   private fun contract(output: CatalogBuilder.Output, t: TemplateEntry): Contract? =
     output.manifest.contracts.filter { it.ref == t.contract }.maxByOrNull { it.minor }
 
-  private fun file(design: String, example: String, side: String) = "${safe(design)}-${safe(example)}-$side.png"
+  /**
+   * Readable, and unique per design and example: `-` can't separate two names that may hold it
+   * (design `a-b` with example `c`, design `a` with example `b-c`), and [safe] folds characters
+   * together, so a short hash of the exact pair follows them.
+   */
+  private fun file(design: String, example: String, side: String): String {
+    val id = java.security.MessageDigest.getInstance("SHA-256").digest("$design\u0000$example".toByteArray())
+      .take(4).joinToString("") { "%02x".format(it) }
+    return "${safe(design)}.${safe(example)}.$id.$side.png"
+  }
 
   private fun url(design: String, example: String, side: String) = imageBase + file(design, example, side)
 
