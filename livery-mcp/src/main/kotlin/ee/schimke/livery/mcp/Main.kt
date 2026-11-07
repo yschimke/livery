@@ -2,6 +2,7 @@ package ee.schimke.livery.mcp
 
 import java.io.File
 import kotlin.system.exitProcess
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -27,7 +28,7 @@ fun main(args: Array<String>) {
     if (line.isBlank()) continue
     val message = runCatching { json.parseToJsonElement(line) as? JsonObject }.getOrNull()
     val response = message?.let { m ->
-      runCatching { mcp.handle(m) }.getOrElse { e -> internalError(m, e) }
+      runCatching { runBlocking { mcp.handle(m) } }.getOrElse { e -> internalError(m, e) }
     } ?: if (message == null) PARSE_ERROR else continue
     stdout.write(json.encodeToString(JsonElement.serializer(), response)); stdout.newLine(); stdout.flush()
   }

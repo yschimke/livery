@@ -41,14 +41,14 @@ object UiBuilderScaffold {
           put("persistence", "host")
         })
       }
-      for ((name, spec) in contract.inputs.toSortedMap()) {
+      for ((name, spec) in contract.inputs.entries.sortedBy { it.key }) {
         if (name.startsWith("theme.") || spec.role != null) { skipped += "$name (theme role)"; continue }
         add(name, spec)
       }
-      for ((list, spec) in contract.lists.toSortedMap()) {
+      for ((list, spec) in contract.lists.entries.sortedBy { it.key }) {
         add("$list.count", InputSpec(ValueType.Int))
         repeat((items ?: spec.max).coerceIn(0, spec.max)) { i ->
-          for ((field, f) in spec.item.toSortedMap()) add("$list.$i.$field", f)
+          for ((field, f) in spec.item.entries.sortedBy { it.key }) add("$list.$i.$field", f)
         }
       }
     }

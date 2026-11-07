@@ -1,5 +1,6 @@
 package ee.schimke.livery.mcp
 
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
@@ -30,11 +31,11 @@ class InMemoryMcpTest {
   }
   private val mcp = LiveryMcp(SourceTree(fs, root), writable = true, previewOut = "/previews".toPath())
 
-  private fun call(name: String, args: String = "{}") = mcp.call(name, Json.parseToJsonElement(args).jsonObject)
+  private suspend fun call(name: String, args: String = "{}") = mcp.call(name, Json.parseToJsonElement(args).jsonObject)
   private fun JsonObject.isError() = this["isError"]?.jsonPrimitive?.content == "true"
   private fun JsonObject.text() = this["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
-  @Test fun readsTheTree() {
+  @Test fun readsTheTree() = runBlocking<Unit> {
     assertTrue("promo/banner@1" in call("list_contracts").text())
     assertTrue("tile-default" in call("list_designs", """{"contract":"live/status-tile@1"}""").text())
     val contract = Json.parseToJsonElement(call("get_contract", """{"contract":"promo/banner@1"}""").text()).jsonObject
@@ -43,7 +44,7 @@ class InMemoryMcpTest {
     assertEquals(JsonPrimitive(true), bound["ok"], bound.toString())
   }
 
-  @Test fun writesDraftsAndPreviewsIntoTheFileSystem() {
+  @Test fun writesDraftsAndPreviewsIntoTheFileSystem() = runBlocking<Unit> {
     val tile = fs.read(root / "designs/tile-default/in-app.rc") { readByteArray() }
     val sidecar = """{"target":{"surface":"in-app","rcApiLevel":8,"profiles":["androidx"]},"reads":["state","is_on"],"emits":["toggle"]}"""
     val draft = call("submit_draft", """{"design":"tile-retro","template":"in-app-v8","rc_base64":"${Base64.Default.encode(tile)}","sidecar":$sidecar}""")
@@ -54,7 +55,7 @@ class InMemoryMcpTest {
     assertTrue(fs.exists("/previews/pr-1/manifest.json".toPath()))
   }
 
-  @Test fun saysWhatThisHostCannotDo() {
+  @Test fun saysWhatThisHostCannotDo() = runBlocking<Unit> {
     val render = call("render_preview", """{"design":"tile-default","template":"in-app"}""")
     assertTrue(render.isError() && "can't render" in render.text(), render.text())
     val history = call("list_history", """{"design":"tile-default"}""")

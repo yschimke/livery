@@ -1,5 +1,6 @@
 package ee.schimke.livery.uibuilder
 
+import kotlinx.coroutines.runBlocking
 import ee.schimke.livery.mcp.local
 import ee.schimke.livery.mcp.load
 import com.sun.net.httpserver.HttpServer
@@ -41,7 +42,7 @@ class UiBuilderExtensionTest {
 
   private fun JsonObject.text() = this["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
-  @Test fun exportsADesignWithItsRevision() {
+  @Test fun exportsADesignWithItsRevision() = runBlocking<Unit> {
     val mcp = LiveryMcp.local(File("../samples/catalog"), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "secret"))))
     val r = mcp.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"))))
     val body = Json.parseToJsonElement(r.text()).jsonObject
@@ -55,7 +56,7 @@ class UiBuilderExtensionTest {
     assertTrue("\"ok\": true" in v.text())
   }
 
-  @Test fun aRevisionIsAskedForAndFailuresAreToolErrors() {
+  @Test fun aRevisionIsAskedForAndFailuresAreToolErrors() = runBlocking<Unit> {
     val ext = UiBuilderExtension(UiBuilderClient(url, "secret"))
     ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"), "revision" to JsonPrimitive(7))), LiveryMcp.local(File(".")))
     assertTrue(seen.last().endsWith("&revision=7"))
@@ -65,7 +66,7 @@ class UiBuilderExtensionTest {
     assertEquals("true", bad["isError"]!!.jsonPrimitive.content)
   }
 
-  @Test fun onlyWhenConfigured() {
+  @Test fun onlyWhenConfigured() = runBlocking<Unit> {
     assertNull(UiBuilderExtension.Factory().create(listOf("catalog"), emptyMap()))
     val loaded = McpExtension.load(listOf("catalog", "--ui-builder", url), mapOf("UI_BUILDER_TOKEN" to "secret"))
     assertEquals(listOf(UiBuilderExtension.TOOL, UiBuilderExtension.SCAFFOLD), loaded.flatMap { it.tools }.map { it["name"]!!.jsonPrimitive.content }, "found by ServiceLoader")

@@ -6,6 +6,8 @@ import ee.schimke.livery.publisher.check
 import ee.schimke.livery.render.RenderSpec
 import ee.schimke.livery.render.TemplateRenderer
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 
@@ -14,7 +16,7 @@ import okio.Path.Companion.toOkioPath
  * and reads the catalog's git history and earlier revisions with the `git` command.
  */
 object JvmMcpHost : McpHost {
-  override fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray = try {
+  override suspend fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray = withContext(Dispatchers.IO) { try {
     TemplateRenderer.png(template, bindings, RenderSpec(spec.widthDp, spec.heightDp, spec.density, spec.dark))
   } catch (e: Throwable) {
     // Skia: on a headless host its native library can fail to load (on Linux it links libGL,
@@ -22,15 +24,15 @@ object JvmMcpHost : McpHost {
     val link = generateSequence(e) { it.cause }.firstOrNull { it is UnsatisfiedLinkError } ?: throw e
     throw HostUnavailable("can't render on this host: Skia's native library didn't load (${link.message}). " +
       "On Linux, install libGL and fontconfig (e.g. apt-get install libgl1 libfontconfig1) or put them on LD_LIBRARY_PATH.")
-  }
+  } }
 
   override fun history(tree: SourceTree): CatalogHistory? =
     tree.takeIf { it.fileSystem === FileSystem.SYSTEM }?.let { GitHistory(it.root.toFile()) }?.takeIf { it.available }
 
-  override fun check(tree: SourceTree, against: String, inspect: Boolean): CompatibilityCheck.Report {
+  override suspend fun check(tree: SourceTree, against: String, inspect: Boolean): CompatibilityCheck.Report = withContext(Dispatchers.IO) {
     // Another tree on disk, or a revision of the catalog's repository (`livery check` does both).
     if (!File(against).isDirectory && history(tree) == null) throw HostUnavailable("the catalog isn't a git checkout: pass another source tree as 'against'")
-    return CompatibilityCheck.check(tree.root.toFile(), against, inspect)
+    CompatibilityCheck.check(tree.root.toFile(), against, inspect)
   }
 }
 

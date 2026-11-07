@@ -30,7 +30,14 @@ application {
 
 // Optional commands (LiveryCommand), shipped in the CLI's distribution but not in this library's
 // dependencies: `livery ui-builder …`, and `livery review` (which brings the renderer).
-val cliExtensions: Configuration by configurations.creating { isCanBeConsumed = false }
+// JVM runtime attributes: livery-uibuilder is multiplatform, and these select its JVM variant.
+val cliExtensions: Configuration by configurations.creating {
+  isCanBeConsumed = false
+  attributes {
+    attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+    attribute(org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.attribute, org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.jvm)
+  }
+}
 dependencies {
   cliExtensions(project(":livery-uibuilder"))
   cliExtensions(project(":livery-review"))

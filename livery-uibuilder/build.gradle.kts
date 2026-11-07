@@ -1,20 +1,41 @@
 plugins {
-  alias(libs.plugins.kotlin.jvm)
+  alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.kotlin.serialization)
 }
 
-// Optional: Compose UI Builder as one authoring tool among others. It exports a UI Builder design
-// (at a revision) as a Remote Compose document with its provenance; Livery's own tools then gate,
-// render and publish it like any other document. It plugs into both CLIs at run time (`livery
-// ui-builder …` as a LiveryCommand, `livery-mcp --ui-builder` as an McpExtension), which put their
-// own code on its class path, so neither depends on it.
-kotlin { jvmToolchain(17) }
+// Compose UI Builder as one authoring tool. Common: the contract as host inputs
+// (UiBuilderScaffold), the export API over Ktor (UiBuilderClient) and the MCP tools
+// (UiBuilderExtension), so a browser or IDE serving livery-mcp-core can offer them. JVM: the
+// `livery ui-builder` command and the service files livery and livery-mcp find them by.
+kotlin {
+  jvmToolchain(17)
+  jvm()
+  @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class) wasmJs { browser { testTask { enabled = false } } }
+  iosArm64()
+  iosSimulatorArm64()
 
-dependencies {
-  compileOnly(project(":livery-mcp"))
-  compileOnly(project(":livery-publish"))
-  implementation(libs.kotlinx.serialization.json)
-  testImplementation(project(":livery-mcp"))
-  testImplementation(project(":livery-publish"))
-  testImplementation(kotlin("test"))
+  sourceSets {
+    commonMain.dependencies {
+      implementation(project(":livery-mcp-core"))
+      implementation(libs.ktor.client.core)
+      implementation(libs.kotlinx.serialization.json)
+    }
+    jvmMain.dependencies {
+      // LiveryCommand: the CLI that loads this module brings livery-publish itself.
+      compileOnly(project(":livery-publish"))
+      implementation(libs.ktor.client.okhttp)
+    }
+    wasmJsMain.dependencies { implementation(libs.ktor.client.js) }
+    iosMain.dependencies { implementation(libs.ktor.client.darwin) }
+    commonTest.dependencies {
+      implementation(kotlin("test"))
+      implementation(libs.ktor.client.mock)
+      implementation(libs.kotlinx.coroutines.test)
+    }
+    jvmTest.dependencies {
+      implementation(project(":livery-mcp"))
+      implementation(project(":livery-publish"))
+      implementation(kotlin("test"))
+    }
+  }
 }

@@ -1,5 +1,6 @@
 package ee.schimke.livery.uibuilder
 
+import kotlinx.coroutines.runBlocking
 import ee.schimke.livery.mcp.local
 import com.sun.net.httpserver.HttpServer
 import ee.schimke.livery.mcp.LiveryMcp
@@ -39,7 +40,7 @@ class UiBuilderAuthoringTest {
 
   @AfterTest fun stop() = server.stop(0)
 
-  @Test fun hostInputsAreTheContractsNamesAndDefaults() {
+  @Test fun hostInputsAreTheContractsNamesAndDefaults() = runBlocking<Unit> {
     val contract = Contract(
       "demo/list", 1,
       inputs = mapOf(
@@ -63,14 +64,14 @@ class UiBuilderAuthoringTest {
     assertEquals(4 * 2 + 1 + 3, UiBuilderScaffold.hostInputs(contract).stateVariables.size, "every item by default")
   }
 
-  @Test fun theMcpToolScaffoldsACatalogContract() {
+  @Test fun theMcpToolScaffoldsACatalogContract() = runBlocking<Unit> {
     val mcp = LiveryMcp.local(sample, extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "t"))))
     val r = mcp.call(UiBuilderExtension.SCAFFOLD, JsonObject(mapOf("contract" to JsonPrimitive("live/status-tile@1"))))
     val body = Json.parseToJsonElement(r["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content).jsonObject
     assertEquals(setOf("available", "is_on", "level", "name", "state"), body["stateVariables"]!!.jsonObject.keys)
   }
 
-  @Test fun importsAnExportIntoTheCatalogWithItsSource() {
+  @Test fun importsAnExportIntoTheCatalogWithItsSource() = runBlocking<Unit> {
     val src = Files.createTempDirectory("catalog").toFile().also { sample.copyRecursively(it) }
     val cmd = LiveryCommand.installed().single { it.name == "ui-builder" }
     val target = """{"surface":"in-app","rcApiLevel":7}"""

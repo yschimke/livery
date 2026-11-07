@@ -84,20 +84,22 @@ revision and submit it again; `list_history` shows each step. Without an agent, 
 ## Embedding the server
 
 The tools themselves are `livery-mcp-core` (Kotlin Multiplatform: JVM, iOS, Wasm), with no
-transport: `LiveryMcp.handle` takes one JSON-RPC message and returns its response. It reads the
+transport: `LiveryMcp.handle` takes one JSON-RPC message and returns its response, as a `suspend`
+function, so a host or an extension can wait on the network. It reads the
 catalog through an Okio `FileSystem`, so an IDE plugin, a browser or an agent's own process can
 serve a tree from disk or from memory:
 
 ```kotlin
 val mcp = LiveryMcp(SourceTree(fileSystem, "/catalog".toPath()), writable = true, previewOut = "/previews".toPath())
-val response = mcp.handle(request)   // null for a notification
+val response = mcp.handle(request)   // suspend; null for a notification
 ```
 
 What only some hosts can do comes through `McpHost`: `render` (a PNG of a template), `history`
 (the catalog's commits) and `check` against a git revision. Without one, those tools say this
 host can't, and `check_compatibility` compares against another tree on the same file system.
 On the JVM, `LiveryMcp.local(dir)` serves a directory with `JvmMcpHost` (Skia renders, `git`),
-as the `livery-mcp` CLI does.
+as the `livery-mcp` CLI does. Extensions are common code too: `UiBuilderExtension` exports over
+Ktor wherever the server runs, passed in `extensions`.
 
 ## 2. Repository + CI (start here)
 

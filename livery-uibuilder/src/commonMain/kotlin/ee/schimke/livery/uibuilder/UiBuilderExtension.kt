@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalEncodingApi::class)
+
 package ee.schimke.livery.uibuilder
 
 import ee.schimke.livery.mcp.LiveryMcp
 import ee.schimke.livery.mcp.McpExtension
-import java.util.Base64
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -52,7 +56,7 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
     }
   })
 
-  override fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject =
+  override suspend fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject =
     if (name == SCAFFOLD) scaffold(args, server) else export(args)
 
   private fun scaffold(args: JsonObject, server: LiveryMcp): JsonObject = try {
@@ -64,6 +68,8 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
       putJsonArray("skipped") { r.skipped.forEach { add(it) } }
       put("next", "add stateVariables to the UI Builder design, bind controls to them, then ui_builder_export it")
     }.toString())
+  } catch (e: CancellationException) {
+    throw e
   } catch (e: Exception) {
     text(e.message ?: "scaffold failed", error = true)
   }
@@ -73,7 +79,7 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
     if (error) put("isError", true)
   }
 
-  private fun export(args: JsonObject): JsonObject = try {
+  private suspend fun export(args: JsonObject): JsonObject = try {
     val design = (args["ui_design"] as? JsonPrimitive)?.contentOrNull ?: error("missing argument 'ui_design'")
     val e = client.export(design, (args["revision"] as? JsonPrimitive)?.longOrNull)
     buildJsonObject {
@@ -81,7 +87,7 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
         add(buildJsonObject {
           put("type", "text")
           put("text", buildJsonObject {
-            put("rc_base64", Base64.getEncoder().encodeToString(e.bytes)); put("bytes", e.bytes.size)
+            put("rc_base64", Base64.Default.encode(e.bytes)); put("bytes", e.bytes.size)
             putJsonObject("source") {
               put("tool", "ui-builder"); put("design", design); e.revision?.let { put("revision", it.toString()) }; put("url", e.url)
             }
@@ -90,6 +96,8 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
         })
       }
     }
+  } catch (e: CancellationException) {
+    throw e
   } catch (e: Exception) {
     buildJsonObject {
       putJsonArray("content") { add(buildJsonObject { put("type", "text"); put("text", e.message ?: "export failed") }) }

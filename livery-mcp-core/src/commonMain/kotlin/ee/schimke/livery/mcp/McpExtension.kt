@@ -17,7 +17,7 @@ interface McpExtension {
   val tools: List<JsonObject>
 
   /** A call to one of [tools], as MCP content; [server] reaches Livery's own tools. */
-  fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject
+  suspend fun call(name: String, args: JsonObject, server: LiveryMcp): JsonObject
 
   fun interface Factory {
     /** The extension for these command-line [args] and [env], or null when it isn't configured. */

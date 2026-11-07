@@ -24,7 +24,7 @@ order: 24
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android | Available since 0.2.0; not yet tested against live projects |
 | `livery-capture` | Android (unit tests, Robolectric) | Available since 0.2.0 |
 | Secondary screens (`LiveryScreens`, `LiveryScreenHost`, `.liveryScreens`) | Kotlin, Compose, SwiftUI | Available from the release after 0.2.0; not yet device-tested |
-| `livery-uibuilder` | JVM | Available (optional: `livery ui-builder` commands and `livery-mcp` tools) |
+| `livery-uibuilder` | JVM, iOS, Wasm (the CLI commands on the JVM) | Available (optional: `livery ui-builder` commands and `livery-mcp` tools) |
 | `livery-server` | JVM | Planned |
 
 ## Kotlin

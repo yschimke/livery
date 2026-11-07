@@ -7,6 +7,7 @@ import ee.schimke.livery.publisher.LiveryCommand
 import ee.schimke.livery.publisher.TemplateImport
 import ee.schimke.livery.protocol.Target
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -49,7 +50,7 @@ class UiBuilderCommand(private val clientFor: (url: String, token: String) -> Ui
           val target = Json.decodeFromString(Target.serializer(), opt("--target") ?: return fail(usage))
           val api = opt("--api") ?: return fail(usage)
           val token = env["UI_BUILDER_TOKEN"] ?: return fail("ui-builder import needs UI_BUILDER_TOKEN in the environment")
-          val e = clientFor(api, token).export(design, opt("--revision")?.toLong())
+          val e = runBlocking { clientFor(api, token).export(design, opt("--revision")?.toLong()) }
           val source = buildMap {
             put("tool", "ui-builder"); put("design", design); e.revision?.let { put("revision", it.toString()) }; put("url", e.url)
           }
