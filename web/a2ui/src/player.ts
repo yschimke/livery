@@ -25,7 +25,7 @@ export class RcCanvasPlayer {
     this.handle = createPlayer(container, {});
     this.handle.canvas.style.display = 'block';
     this.host = createHostApi(this.handle.player);
-    this.host.onAction('*', (value, name) => onAction({ name, valueType: valueTypeOf(value), value }));
+    this.host.onAction('*', (value, name) => onAction({ name: name.replace(/^USER:/, ''), valueType: valueTypeOf(value), value }));
   }
 
   /**
@@ -41,10 +41,14 @@ export class RcCanvasPlayer {
       this.stats.loads++;
       this.resize(widthPx, heightPx, density);
     }
+    // A document's variables are in Remote Compose's `USER:` domain; set each by the name it declares.
+    const declared = this.host.variables();
     for (const [name, value] of Object.entries(values)) {
       const text = JSON.stringify(value);
       if (this.values.get(name) === text) continue;
-      this.host.set(name, value);
+      const as = `USER:${name}` in declared ? `USER:${name}` : name;
+      if (!(as in declared)) continue; // the document doesn't read it
+      this.host.set(as, value);
       this.values.set(name, text);
       this.stats.sets++;
     }

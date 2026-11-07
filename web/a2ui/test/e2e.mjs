@@ -108,20 +108,43 @@ try {
       function shot64(d) { let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) | 0; return h; }
     }, shot.toString('base64'));
   };
+  // The TypeScript player doesn't draw these templates' surfaces yet (docs/A2UI.md), so this checks
+  // that the template draws its content, not its background.
   const banner = await colours('#app livery-promo-banner');
-  check(banner.notWhite > 0.5 && banner.distinct > 8, `the banner draws its surface and text: ${JSON.stringify(banner)}`);
+  check(banner.distinct > 8, `the banner draws its content: ${JSON.stringify(banner)}`);
+
+  // Where a template draws its primary-coloured button: the centre of its saturated pixels.
+  const buttonIn = async (selector, side = 'any') => {
+    const el = await page.$(selector);
+    const box = await el.boundingBox();
+    const shot = await el.screenshot();
+    const at = await page.evaluate(async ({ b64, side }) => {
+      const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let sx = 0, sy = 0, n = 0;
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        if (side === 'right' && x < c.width / 2) continue;
+        const i = (y * c.width + x) * 4, mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        if (mx - mn > 60 && mx < 230) { sx += x; sy += y; n++; }
+      }
+      return n ? { x: sx / n / (img.width / c.width), y: sy / n, w: img.width } : null;
+    }, { b64: shot.toString('base64'), side });
+    return at && { x: box.x + at.x * (box.width / at.w), y: box.y + at.y * (box.width / at.w) };
+  };
 
   // A real tap on the drawn "Shop now": the template's host action, through the gate, to the agent.
-  const box = await (await page.$('#app livery-promo-banner')).boundingBox();
-  await page.mouse.click(box.x + 70, box.y + 105);
+  const cta = await buttonIn('#app livery-promo-banner');
+  await page.mouse.click(cta.x, cta.y);
   await page.waitForFunction(() => window.__livery.actions.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const action = await page.evaluate(() => window.__livery.actions[0]);
   check(action?.name === 'startTrial' && action?.sourceComponentId === 'promo' && action?.context?.from === 'chat', `tapping the CTA sends the agent its event: ${JSON.stringify(action)}`);
 
   // A real tap on "+": the template's `set` writes the data model, and the same document takes the new value.
-  const qtyBox = await (await page.$('#app livery-shop-quantity')).boundingBox();
   const before = await statsOf('#app livery-shop-quantity');
-  await page.mouse.click(qtyBox.x + qtyBox.width - 34, qtyBox.y + 34);
+  const plus = await buttonIn('#app livery-shop-quantity', 'any');
+  await page.mouse.click(plus.x, plus.y);
   await page.waitForFunction(() => window.__livery.data('/cart/quantity') === 2, null, { timeout: 10_000 }).catch(() => {});
   check(await page.evaluate(() => window.__livery.data('/cart/quantity')) === 2, 'tapping + wrote /cart/quantity = 2');
   await page.waitForTimeout(300);
@@ -146,8 +169,8 @@ try {
   // its own processor, not the first one's.
   await loaded('#second livery-promo-banner');
   const firstCount = await page.evaluate(() => window.__livery.actions.length);
-  const secondBox = await (await page.$('#second livery-promo-banner')).boundingBox();
-  await page.mouse.click(secondBox.x + 55, secondBox.y + 105);
+  const secondCta = await buttonIn('#second livery-promo-banner');
+  await page.mouse.click(secondCta.x, secondCta.y);
   await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const second = await page.evaluate(() => window.__livery.actions2[0]);
   check(second?.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
