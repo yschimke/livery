@@ -9,11 +9,12 @@ import okio.Path.Companion.toPath
 /**
  * What the platform running [LiveryMcp] adds to its tools: what only some hosts can do. Every
  * default is "this host can't": the tools say so to the agent rather than fail. `livery-mcp`'s
- * JVM host renders with Skia and reads git.
+ * JVM host renders with Skia and reads git; a browser's might render in a worker or read a
+ * repository's history over an API, hence `suspend`.
  */
 interface McpHost {
   /** [template] with [bindings] as a PNG; null, or [HostUnavailable] with a reason, when this host can't render. */
-  fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray? = null
+  suspend fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray? = null
 
   /** [tree]'s version history, or null when it has none (not a git checkout, or no git here). */
   fun history(tree: SourceTree): CatalogHistory? = null
@@ -22,7 +23,7 @@ interface McpHost {
    * [tree] against [against]: another source tree on the same file system by default; a host
    * with git also takes a revision of the tree's repository.
    */
-  fun check(tree: SourceTree, against: String, inspect: Boolean): CompatibilityCheck.Report {
+  suspend fun check(tree: SourceTree, against: String, inspect: Boolean): CompatibilityCheck.Report {
     val other = against.toPath()
     require(tree.fileSystem.targetMetadataOrNull(other)?.isDirectory == true) {
       "'$against' is not a source tree, and this host has no git history to read a revision from"
@@ -50,8 +51,8 @@ interface CatalogHistory {
   data class Change(val commit: String, val dateEpochSeconds: Long, val author: String, val subject: String)
 
   /** Commits that changed [file] (newest first), following renames. */
-  fun log(file: Path, limit: Int = 20): List<Change>
+  suspend fun log(file: Path, limit: Int = 20): List<Change>
 
   /** [file]'s bytes at [revision], or null when it didn't exist then. */
-  fun show(file: Path, revision: String): ByteArray?
+  suspend fun show(file: Path, revision: String): ByteArray?
 }

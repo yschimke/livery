@@ -1,6 +1,8 @@
 package ee.schimke.livery.mcp
 
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okio.Path
 import java.util.concurrent.TimeUnit
 
@@ -14,18 +16,21 @@ class GitHistory(private val root: File) : CatalogHistory {
   /** Whether [root] is inside a git work tree. */
   val available: Boolean by lazy { git("rev-parse", "--is-inside-work-tree")?.trim() == "true" }
 
-  override fun log(file: Path, limit: Int): List<CatalogHistory.Change> =
+  override suspend fun log(file: Path, limit: Int): List<CatalogHistory.Change> = withContext(Dispatchers.IO) {
     git("log", "--follow", "-n", limit.coerceIn(1, 100).toString(), "--format=%H%x1f%ct%x1f%an%x1f%s", "--", ":(top)${rel(file)}")
       ?.lines()?.filter { it.isNotBlank() }?.mapNotNull { line ->
         val p = line.split('\u001f')
         if (p.size < 4) null else CatalogHistory.Change(p[0], p[1].toLongOrNull() ?: 0, p[2], p[3])
       }.orEmpty()
+  }
 
   /**
    * [file]'s bytes at [revision], or null when it didn't exist then. A commit [log] listed from
    * before a rename is read under the name the file had then.
    */
-  override fun show(file: Path, revision: String): ByteArray? {
+  override suspend fun show(file: Path, revision: String): ByteArray? = withContext(Dispatchers.IO) { showBlocking(file, revision) }
+
+  private fun showBlocking(file: Path, revision: String): ByteArray? {
     require(REVISION.matches(revision)) { "bad revision '$revision'" }
     val commit = git("rev-parse", "--verify", "--quiet", "$revision^{commit}")?.trim() ?: return null
     return gitBytes("show", "$commit:${pathAt(file, commit) ?: rel(file)}")

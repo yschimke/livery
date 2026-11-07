@@ -33,6 +33,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import ee.schimke.livery.publisher.targetMetadataOrNull
+import kotlin.coroutines.cancellation.CancellationException
 import okio.Path
 
 /**
@@ -46,7 +47,8 @@ import okio.Path
  *
  * Transport-free: [handle] takes one JSON-RPC message and returns its response (null for a
  * notification), so stdio (`livery-mcp`), an HTTP endpoint or a browser can share it. [host] adds
- * what only some platforms can do: renders, git history, checks against a revision.
+ * what only some platforms can do: renders, git history, checks against a revision. Calls
+ * `suspend`, so a host or an extension may wait on the network (a browser can't block).
  */
 class LiveryMcp(
   /** The catalog source tree its tools read (and an extension may read too). */
@@ -61,7 +63,7 @@ class LiveryMcp(
   private val fs = tree.fileSystem
   private val history: CatalogHistory? by lazy { host.history(tree) }
 
-  fun handle(message: JsonObject): JsonObject? {
+  suspend fun handle(message: JsonObject): JsonObject? {
     val id = message["id"] ?: return null
     fun result(value: JsonElement) = buildJsonObject { put("jsonrpc", "2.0"); put("id", id); put("result", value) }
     fun error(code: Int, reason: String) = buildJsonObject {
@@ -92,7 +94,7 @@ class LiveryMcp(
   }
 
   /** One tool call, as MCP content: a tool's own failure is a result with `isError`, never a crash. */
-  fun call(name: String, args: JsonObject): JsonObject = try {
+  suspend fun call(name: String, args: JsonObject): JsonObject = try {
     when (name) {
       "list_contracts" -> text(listContracts())
       "get_contract" -> text(json.encodeToJsonElement(Contract.serializer(), contract(args.str("contract"))))
@@ -118,6 +120,8 @@ class LiveryMcp(
     failed("invalid JSON in the catalog or the arguments: ${e.message}")
   } catch (e: IllegalArgumentException) {
     failed(e.message ?: "invalid arguments")
+  } catch (e: CancellationException) {
+    throw e
   } catch (e: Exception) {
     // A tool's failure is the tool's result: it never takes the server down.
     failed("$name failed: ${e.message ?: e::class.simpleName}")
@@ -190,7 +194,7 @@ class LiveryMcp(
     }
   }
 
-  private fun renderPreview(args: JsonObject): JsonObject {
+  private suspend fun renderPreview(args: JsonObject): JsonObject {
     val (bytes, c) = when {
       args.strOrNull("rc_base64") != null -> args.bytes("rc_base64") to contract(args.str("contract"))
       else -> {
@@ -329,7 +333,7 @@ class LiveryMcp(
    * The catalog against an earlier version of itself ([CompatibilityCheck]): a git revision of its
    * repository (HEAD by default: what this working tree changes) or another source tree.
    */
-  private fun checkCompatibility(args: JsonObject): JsonElement {
+  private suspend fun checkCompatibility(args: JsonObject): JsonElement {
     val against = args.strOrNull("against") ?: "HEAD"
     val report = host.check(tree, against, inspect = args.boolOrNull("inspect") ?: false)
     return json.encodeToJsonElement(CompatibilityCheck.Report.serializer(), report).let { r ->
@@ -338,7 +342,7 @@ class LiveryMcp(
   }
 
   /** The commits that changed a design's templates, newest first, from git. */
-  private fun listHistory(args: JsonObject): JsonElement {
+  private suspend fun listHistory(args: JsonObject): JsonElement {
     val history = history ?: throw ToolError("the catalog isn't a git checkout: no history")
     val d = tree.design(args.str("design")) ?: throw ToolError("unknown design ${args.str("design")}")
     val only = args.strOrNull("template")

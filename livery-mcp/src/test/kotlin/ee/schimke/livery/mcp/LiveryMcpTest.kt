@@ -1,5 +1,6 @@
 package ee.schimke.livery.mcp
 
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Files
 import java.util.Base64
@@ -35,12 +36,12 @@ class LiveryMcpTest {
     }))
   ).jsonObject
 
-  private fun call(name: String, vararg a: Pair<String, Any>) = mcp.call(name, args(*a))
+  private suspend fun call(name: String, vararg a: Pair<String, Any>) = mcp.call(name, args(*a))
   private fun JsonObject.isError() = this["isError"]?.jsonPrimitive?.content == "true"
   private fun JsonObject.text() = this["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
   private fun JsonObject.body() = Json.parseToJsonElement(text())
 
-  @Test fun speaksMcp() {
+  @Test fun speaksMcp() = runBlocking<Unit> {
     val init = mcp.handle(buildJsonObject { put("jsonrpc", "2.0"); put("id", 1); put("method", "initialize") })!!
     assertEquals(LiveryMcp.PROTOCOL_VERSION, init["result"]!!.jsonObject["protocolVersion"]!!.jsonPrimitive.content)
     assertNull(mcp.handle(buildJsonObject { put("jsonrpc", "2.0"); put("method", "notifications/initialized") }))
@@ -52,7 +53,7 @@ class LiveryMcpTest {
     assertTrue(LiveryMcp.local(src).call("submit_draft", JsonObject(emptyMap())).isError())
   }
 
-  @Test fun contractsAndDesigns() {
+  @Test fun contractsAndDesigns() = runBlocking<Unit> {
     val contracts = (call("list_contracts").body() as JsonArray).map { it.jsonObject["contract"]!!.jsonPrimitive.content }
     assertTrue("promo/banner@1" in contracts && "live/status-tile@1" in contracts)
     assertTrue(call("get_contract", "contract" to "promo/banner@1").text().contains("\"headline\""))
@@ -62,7 +63,7 @@ class LiveryMcpTest {
   }
 
   /** A linked template is listed at its document's size, as java.io.File reported it. */
-  @Test fun linkedTemplatesReportTheirDocumentsSize() {
+  @Test fun linkedTemplatesReportTheirDocumentsSize() = runBlocking<Unit> {
     // The link replaces the template inside this test's own copy of the sample; its target is a copy too.
     val target = Files.createTempFile("tile", ".rc").toFile().apply { writeBytes(tile); deleteOnExit() }
     val rc = File(src, "designs/tile-default/in-app.rc").apply { delete() }
@@ -73,7 +74,7 @@ class LiveryMcpTest {
     assertEquals(tile.size.toLong(), inApp["bytes"]!!.jsonPrimitive.content.toLong())
   }
 
-  @Test fun dataIsBoundOrRefused() {
+  @Test fun dataIsBoundOrRefused() = runBlocking<Unit> {
     val ok = call("validate_data", "contract" to "promo/banner@1", "data" to args("headline" to "Hi", "cta" to "Go")).body().jsonObject
     assertEquals("true", ok["ok"]!!.jsonPrimitive.content)
     val bad = call("validate_data", "contract" to "promo/banner@1", "data" to args("headline" to "x".repeat(41))).body().jsonObject
@@ -81,7 +82,7 @@ class LiveryMcpTest {
     assertTrue(bad["problems"].toString().contains("headline") && bad["problems"].toString().contains("cta"))
   }
 
-  @Test fun theDocumentIsReadNotItsSidecar() {
+  @Test fun theDocumentIsReadNotItsSidecar() = runBlocking<Unit> {
     val v = call("validate_template", "contract" to "live/status-tile@1", "rc_base64" to tileB64).body().jsonObject
     assertEquals("true", v["ok"]!!.jsonPrimitive.content)
     assertEquals(listOf("is_on", "state"), v["reads"]!!.jsonArray.map { it.jsonPrimitive.content })
@@ -91,7 +92,7 @@ class LiveryMcpTest {
     assertTrue(call("validate_template", "contract" to "promo/banner@1", "rc_base64" to "bm90IHJj").text().contains("not a Remote Compose"))
   }
 
-  @Test fun rendersAPreview() {
+  @Test fun rendersAPreview() = runBlocking<Unit> {
     val r = call("render_preview", "design" to "tile-default", "template" to "in-app", "example" to "on", "width_dp" to 200, "height_dp" to 100)
     assertFalse(r.isError(), r.toString())
     val image = r["content"]!!.jsonArray.first().jsonObject
@@ -101,7 +102,7 @@ class LiveryMcpTest {
     assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", "data" to args("state" to "On")).isError(), "data that doesn't bind isn't rendered")
   }
 
-  @Test fun draftsPassTheGateOrAreNotWritten() {
+  @Test fun draftsPassTheGateOrAreNotWritten() = runBlocking<Unit> {
     val sidecar = args("target" to args("surface" to "in-app", "rcApiLevel" to 7), "reads" to JsonObject(emptyMap()))
     val good = Json.parseToJsonElement("""{"target":{"surface":"in-app","rcApiLevel":8,"profiles":["androidx"]},"reads":["state","is_on"],"emits":["toggle"]}""").jsonObject
     val ok = call("submit_draft", "design" to "tile-retro", "template" to "in-app-v8", "rc_base64" to tileB64, "sidecar" to good).body().jsonObject
@@ -126,7 +127,7 @@ class LiveryMcpTest {
     assertTrue(call("submit_draft", "design" to "brand-new", "template" to "in-app", "rc_base64" to tileB64, "sidecar" to good).isError(), "a new design needs its design.json")
   }
 
-  @Test fun previewsAreUnsignedAndNeverTheProductionChannel() {
+  @Test fun previewsAreUnsignedAndNeverTheProductionChannel() = runBlocking<Unit> {
     assertTrue(call("build_preview", "channel" to "main").isError())
     val ok = call("build_preview", "channel" to "pr-12").body().jsonObject
     assertEquals("false", ok["signed"]!!.jsonPrimitive.content)
@@ -135,7 +136,7 @@ class LiveryMcpTest {
     assertFalse(File(out, "pr-12/manifest.sig.json").exists())
   }
 
-  @Test fun publishesOneDocumentAsAPreview() {
+  @Test fun publishesOneDocumentAsAPreview() = runBlocking<Unit> {
     val r = call("publish_preview", "contract" to "live/status-tile@1", "rc_base64" to tileB64, "source" to args("tool" to "agent")).body().jsonObject
     assertEquals("true", r["ok"]!!.jsonPrimitive.content, r.toString())
     val channel = r["channel"]!!.jsonPrimitive.content
@@ -144,7 +145,7 @@ class LiveryMcpTest {
     assertTrue(call("publish_preview", "contract" to "promo/banner@1", "rc_base64" to tileB64).isError(), "checked against its contract")
   }
 
-  @Test fun historyFromGit() {
+  @Test fun historyFromGit() = runBlocking<Unit> {
     fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
       .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
     git("init", "-q"); git("add", "."); git("commit", "-qm", "first tile")
@@ -162,13 +163,13 @@ class LiveryMcpTest {
     assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", "revision" to "--output=/tmp/x").isError())
   }
 
-  @Test fun badArgumentsAreToolErrorsNotACrash() {
+  @Test fun badArgumentsAreToolErrorsNotACrash() = runBlocking<Unit> {
     for (bad in listOf("width_dp" to 0, "height_dp" to 4097, "density" to 5)) {
       assertTrue(call("render_preview", "design" to "tile-default", "template" to "in-app", bad).isError(), "$bad")
     }
   }
 
-  @Test fun anInternalErrorNamesTheExceptionWhenItHasNoMessage() {
+  @Test fun anInternalErrorNamesTheExceptionWhenItHasNoMessage() = runBlocking<Unit> {
     val request = Json.parseToJsonElement("""{"jsonrpc":"2.0","id":7,"method":"tools/call"}""").jsonObject
     val error = internalError(request, ExceptionInInitializerError())!!["error"]!!.jsonObject
     assertEquals("ExceptionInInitializerError", error["message"]!!.jsonPrimitive.content)
@@ -177,14 +178,14 @@ class LiveryMcpTest {
     assertNull(internalError(Json.parseToJsonElement("""{"method":"x"}""").jsonObject, IllegalStateException()))
   }
 
-  @Test fun aDraftCannotReplaceTheDesignsMetadata() {
+  @Test fun aDraftCannotReplaceTheDesignsMetadata() = runBlocking<Unit> {
     val good = Json.parseToJsonElement("""{"target":{"surface":"in-app","rcApiLevel":8},"reads":["state","is_on"],"emits":["toggle"]}""").jsonObject
     val before = File(src, "designs/tile-retro/design.json").readText()
     assertTrue(call("submit_draft", "design" to "tile-retro", "template" to "design", "rc_base64" to tileB64, "sidecar" to good).isError())
     assertEquals(before, File(src, "designs/tile-retro/design.json").readText())
   }
 
-  @Test fun hostWrittenNamesAreNotInTheSuggestedSidecar() {
+  @Test fun hostWrittenNamesAreNotInTheSuggestedSidecar() = runBlocking<Unit> {
     // The tile with one of its values renamed to a Wear container name, which the host writes.
     val doc = ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec.decode(tile, ee.schimke.composeai.rcplayer.protocol.RcWireLimits())
     val wear = doc.copy(operations = doc.operations.map { op ->
@@ -197,7 +198,7 @@ class LiveryMcpTest {
     assertFalse(call("publish_preview", "contract" to "live/status-tile@1", "rc_base64" to b64).isError(), "and a preview of it builds")
   }
 
-  @Test fun historyWhenTheCatalogIsASubdirectoryOfTheCheckout() {
+  @Test fun historyWhenTheCatalogIsASubdirectoryOfTheCheckout() = runBlocking<Unit> {
     val repo = Files.createTempDirectory("repo").toFile()
     val catalog = File(repo, "catalogs/main").also { File("../samples/catalog").copyRecursively(it) }
     fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", repo.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
@@ -210,7 +211,7 @@ class LiveryMcpTest {
     assertFalse(sub.call("render_preview", args("design" to "tile-default", "template" to "in-app", "revision" to first)).isError())
   }
 
-  @Test fun anOlderRevisionRendersUnderTheNameItHadThen() {
+  @Test fun anOlderRevisionRendersUnderTheNameItHadThen() = runBlocking<Unit> {
     fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
       .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
     val dir = File(src, "designs/tile-default")
@@ -225,7 +226,7 @@ class LiveryMcpTest {
     assertFalse(r.isError(), r.toString())
   }
 
-  @Test fun checksCompatibilityAgainstHead() {
+  @Test fun checksCompatibilityAgainstHead() = runBlocking<Unit> {
     fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", src.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
       .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
     git("init", "-q"); git("add", "."); git("commit", "-qm", "catalog")
