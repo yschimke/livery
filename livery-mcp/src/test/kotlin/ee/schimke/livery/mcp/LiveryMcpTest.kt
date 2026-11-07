@@ -61,6 +61,18 @@ class LiveryMcpTest {
     assertTrue("tile-default" in designs && "banner-classic" !in designs)
   }
 
+  /** A linked template is listed at its document's size, as java.io.File reported it. */
+  @Test fun linkedTemplatesReportTheirDocumentsSize() {
+    // The link replaces the template inside this test's own copy of the sample; its target is a copy too.
+    val target = Files.createTempFile("tile", ".rc").toFile().apply { writeBytes(tile); deleteOnExit() }
+    val rc = File(src, "designs/tile-default/in-app.rc").apply { delete() }
+    Files.createSymbolicLink(rc.toPath(), target.toPath())
+    val design = (call("list_designs", "contract" to "live/status-tile@1").body() as JsonArray)
+      .map { it.jsonObject }.single { it["design"]!!.jsonObject["id"]!!.jsonPrimitive.content == "tile-default" }
+    val inApp = design["templates"]!!.jsonArray.map { it.jsonObject }.single { it["name"]!!.jsonPrimitive.content == "in-app" }
+    assertEquals(tile.size.toLong(), inApp["bytes"]!!.jsonPrimitive.content.toLong())
+  }
+
   @Test fun dataIsBoundOrRefused() {
     val ok = call("validate_data", "contract" to "promo/banner@1", "data" to args("headline" to "Hi", "cta" to "Go")).body().jsonObject
     assertEquals("true", ok["ok"]!!.jsonPrimitive.content)

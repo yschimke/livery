@@ -32,6 +32,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import ee.schimke.livery.publisher.targetMetadataOrNull
 import okio.Path
 
 /**
@@ -140,7 +141,7 @@ class LiveryMcp(
       put("design", json.encodeToJsonElement(Design.serializer(), d.design))
       putJsonArray("templates") {
         for (t in d.templates) add(buildJsonObject {
-          put("name", t.name); put("bytes", fs.metadataOrNull(t.rc)?.size ?: tree.readBytes(t.rc).size.toLong())
+          put("name", t.name); put("bytes", fs.targetMetadataOrNull(t.rc)?.size ?: tree.readBytes(t.rc).size.toLong())
           put("target", json.encodeToJsonElement(ee.schimke.livery.protocol.Target.serializer(), t.spec.target))
           putJsonArray("reads") { t.spec.reads.forEach { add(it) } }
           putJsonArray("emits") { t.spec.emits.forEach { add(it) } }
