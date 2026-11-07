@@ -215,7 +215,7 @@ class LiveryScreens(
   }
 
   private fun event(type: TemplateEvent.Type, p: RenderPlan, placement: String, detail: String?) = TemplateEvent(
-    type, clock.nowEpochMs(), p.decision?.placement ?: placement, p.decision?.decisionId, p.feedItem?.id,
+    type, clock.nowEpochMs(), p.decision?.placement ?: placement, p.decisionId, p.feedItem?.id,
     p.template.entry.designId, p.template.entry.sha256, detail = detail, experiments = p.experiments,
   )
 }

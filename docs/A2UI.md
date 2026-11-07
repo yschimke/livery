@@ -227,7 +227,10 @@ be declared by the contract, with its declared arguments of their types), then:
 So the agent wires only what it cares about, and a design's `dismiss` or `track` works with no
 agent wiring at all. Every action, wired or not, is an `Action` event on the app's `EventSink`, with
 `Impression`, `Viewable` and `Leave` as for any template; the event's `decisionId` is
-`a2ui:<surfaceId>/<componentId>`, so analytics can tell agent-placed templates from the app's own.
+`a2ui:<surfaceId>/<componentId>`, so analytics can tell agent-placed templates from the app's own
+(`RenderPlan.decisionId`; *built* on the web, where A2UI gives the component both ids. A2UI's
+Compose runtime keeps them private to `A2uiComponentScopeImpl`, so on Compose the event has none
+yet).
 
 ### Writing back: two-way binding
 
@@ -326,6 +329,9 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   whose image can't be fetched, falls back to the automatic choice, never to nothing. The agent's
   own `template` document is never replaced, so it, and an automatic choice that can't draw either,
   show the page's `fallback`.
+- **Events.** Every event of a component carries `decisionId` `a2ui:<surfaceId>/<componentId>`,
+  from `componentModel.id` and `dataContext.surface.id`; the page reads them with
+  `session.events()`.
 - **Theme.** Each role (`primary`, `surface`, `onSurface`, …) from `--livery-<role>`, else A2UI's
   own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
   components beside it.
@@ -421,7 +427,8 @@ What the prototype taught, and what it doesn't do yet:
 - **Semantics come through.** The player's text is in Compose semantics, so a UI test taps the CTA
   by its label inside the A2UI surface.
 - **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
-  conformance fixture; events carry no `a2ui:<surface>/<component>` decision id; the
+  conformance fixture; events carry no `a2ui:<surface>/<component>` decision id (A2UI's `A2uiComponentScope` exposes
+  neither id; the web has it); the
   `createSurface` theme isn't read (theme roles come from the host's Material colours); no
   `template` forms other than the design preference, or height rules beyond the template's own.
 

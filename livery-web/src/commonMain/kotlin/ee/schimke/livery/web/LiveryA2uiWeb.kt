@@ -71,7 +71,12 @@ class LiveryA2uiWeb(
   private val appKinds: Set<String> = emptySet(),
 ) {
   /** The size and theme a render is for. */
-  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap())
+  /**
+   * The space A2UI gives the component, and [decisionId]: what its events carry, by convention
+   * `a2ui:<surfaceId>/<componentId>` (docs/A2UI.md), so analytics can tell agent-placed templates
+   * from the app's own.
+   */
+  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null)
 
   sealed interface Rendered {
     /**
@@ -143,7 +148,7 @@ class LiveryA2uiWeb(
     val dataset = JsonObject(LiveryA2ui.dataset(contract, props.mapValues { it.value }) + LiveryA2ui.themeValues(contract, space.themeArgb))
     val wiring = (props[LiveryA2ui.ACTIONS] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonObject)?.let { k to it } }.toMap()
     val plan = when (val p = plan(contract, props, dataset, space)) {
-      is RenderPlan -> p
+      is RenderPlan -> if (space.decisionId != null && p.decision == null) p.copy(decisionId = space.decisionId) else p
       else -> return Rendered.Fallback("$name (${contract.ref}): $p")
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
@@ -313,7 +318,7 @@ class LiveryA2uiWeb(
     type = type,
     atEpochMs = clock.nowEpochMs(),
     placement = plan.decision?.placement,
-    decisionId = plan.decision?.decisionId,
+    decisionId = plan.decisionId,
     feedItemId = plan.feedItem?.id,
     designId = plan.template.entry.designId,
     sha256 = plan.template.entry.sha256,

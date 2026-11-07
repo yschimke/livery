@@ -155,6 +155,11 @@ try {
   await page.waitForFunction(() => window.__livery.actions.length > 1, null, { timeout: 10_000 }).catch(() => {});
   const undeclared = await page.evaluate(() => window.__livery.actions[1]);
   check(undeclared?.context?.route === '/premium' && !('extra' in (undeclared?.context ?? {})), `nothing undeclared reaches the agent: ${JSON.stringify(undeclared)}`);
+  // Livery's own events say where the agent placed the template: a2ui:<surfaceId>/<componentId>.
+  const events = await page.evaluate(() => window.__livery.events());
+  const promo = events.filter((e) => e.designId && e.decisionId === 'a2ui:chat-1/promo');
+  check(promo.some((e) => e.type === 'Impression') && promo.some((e) => e.type === 'Action' && e.action === 'cta'),
+    `events carry the A2UI decision id: ${JSON.stringify(events.map((e) => [e.type, e.decisionId, e.action]))}`);
 
   // A real tap on "+": the template's `set` writes the data model, and the same document takes the new value.
   const before = await statsOf('#app livery-shop-quantity');

@@ -112,6 +112,15 @@ class LiveryA2uiWebTest {
     assertEquals(TemplateEvent.Type.Action, events.last().type)
   }
 
+  @Test fun itsEventsCarryWhereTheAgentPlacedIt() = runTest {
+    val web = web()
+    val r = web.render("PromoBanner", promo, LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/promo")) as LiveryA2uiWeb.Rendered.Ready
+    web.shown(r.id)
+    web.action(r.id, "cta", "string", """{"route":"/premium"}""")
+    assertEquals(listOf(TemplateEvent.Type.Impression, TemplateEvent.Type.Action), events.takeLast(2).map { it.type })
+    assertTrue(events.takeLast(2).all { it.decisionId == "a2ui:chat-1/promo" }, events.toString())
+  }
+
   @Test fun anUnwiredActionGoesToThePageOrIsDropped() = runTest {
     val web = web()
     val r = web.render("PromoBanner", JsonObject(promo - "actions")) as LiveryA2uiWeb.Rendered.Ready

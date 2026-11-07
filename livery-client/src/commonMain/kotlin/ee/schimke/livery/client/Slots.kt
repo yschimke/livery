@@ -19,6 +19,11 @@ data class RenderPlan(
   val feedItem: FeedItem? = null,
   /** Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event. */
   val experiments: Map<String, String> = decision?.experiments.orEmpty(),
+  /**
+   * The id every event of this plan carries: the decision's, or where the template was placed when
+   * no decision placed it (an A2UI component's `a2ui:<surfaceId>/<componentId>`).
+   */
+  val decisionId: String? = decision?.decisionId,
 )
 
 /**
@@ -122,7 +127,7 @@ class ActionRouter(
 ) {
   suspend fun dispatch(plan: RenderPlan, action: String, args: Map<String, String>) {
     val check = ActionGate.check(plan.contract, action, args)
-    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
+    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
     val spec = check.spec
     if (spec == null || check.problem != null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = check.problem)); return }
     if (spec.kind == "open-url" && args["url"]?.let(urlAllowlist) != true) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "url not allowed")); return }

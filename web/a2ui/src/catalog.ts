@@ -188,6 +188,13 @@ class LiveryElement extends A2uiLitElement {
       return out;
     }
 
+    /** `a2ui:<surfaceId>/<componentId>`: on every event of this component, so analytics can tell agent-placed templates from the app's own. */
+    private decisionId(): string | undefined {
+      const component = this.context?.componentModel.id;
+      const surface = this.context?.dataContext.surface?.id;
+      return component && surface ? `a2ui:${surface}/${component}` : undefined;
+    }
+
     private async sync(): Promise<void> {
       const api = this.livery;
       if (!api || !this.context) return;
@@ -201,7 +208,7 @@ class LiveryElement extends A2uiLitElement {
       if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
       if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
-      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this) };
+      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this), decisionId: this.decisionId() };
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
       this.request = request;

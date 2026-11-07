@@ -82,7 +82,7 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     value = runCatching { LiveryTypefaceLoader.forTemplate(plan.template, host.repository, host.fallbackTypefaces) }.getOrDefault(host.fallbackTypefaces)
   }
   val scope = rememberCoroutineScope()
-  val tracker = remember(bytes, plan.decision?.decisionId, plan.feedItem?.id) { VisibilityTracker() }
+  val tracker = remember(bytes, plan.decisionId, plan.feedItem?.id) { VisibilityTracker() }
   // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
   // Leave must name the old item, not the plan that replaced it.
   SideEffect { tracker.plan = plan }
@@ -155,7 +155,7 @@ private fun event(type: TemplateEvent.Type, plan: RenderPlan, host: LiveryHost) 
   type = type,
   atEpochMs = host.clock.nowEpochMs(),
   placement = plan.decision?.placement,
-  decisionId = plan.decision?.decisionId,
+  decisionId = plan.decisionId,
   feedItemId = plan.feedItem?.id,
   designId = plan.template.entry.designId,
   sha256 = plan.template.entry.sha256,
