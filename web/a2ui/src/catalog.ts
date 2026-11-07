@@ -10,13 +10,11 @@ import {
 import { css, html, nothing, type PropertyValues } from 'lit';
 import { z } from 'zod';
 import type { LiveryComponentSpec, LiveryPropertySpec, LiverySession, Rendered, Routed } from './livery.js';
-import { RcFramePlayer, type NamedAction } from './player.js';
+import { RcCanvasPlayer, type NamedAction } from './player.js';
 
 export interface LiveryCatalogOptions {
   /** The catalog id the client advertises: basic components plus one per Livery contract. */
   catalogId: string;
-  /** The rc-players web player's `index.html` (`@yschimke/remote-compose-player-cmp`'s `dist/`), served by the page. */
-  playerUrl: string;
   /** The catalog to extend; A2UI's basic catalog by default. */
   base?: Catalog<any, any>;
   /** An action of a kind the page handles (`navigate`, `dismiss`, `app:…`) that the agent didn't wire. */
@@ -110,17 +108,24 @@ const DYNAMIC = new Set(['DynamicString', 'DynamicNumber', 'DynamicBoolean', 'Dy
 class LiveryElement extends A2uiLitElement {
     static styles = css`
       :host { display: block; width: 100%; height: var(--livery-a2ui-height, 200px); }
-      .frame { width: 100%; height: 100%; }
+      .player { width: 100%; height: 100%; overflow: hidden; }
     `;
 
-    private player?: RcFramePlayer;
-    private playerUrl?: string;
+    private player?: RcCanvasPlayer;
+    /** The player's canvas lives here, across renders: Lit never re-creates it. */
+    private readonly box: HTMLDivElement = Object.assign(document.createElement('div'), { className: 'player' });
     private render_?: number;
     private request = '';
     private fallback?: string;
     private sequence = 0;
+    private shownKey?: string;
     private resize?: ResizeObserver;
     private widthDp = 0;
+
+    /** Documents this element's player loaded and values it set: a data change sets values, never reloads. */
+    get liveryStats(): { loads: number; sets: number } | undefined {
+      return this.player?.stats;
+    }
 
     /** This element's catalog entry: the session, spec and options of the catalog it was rendered from. */
     private get livery(): LiveryComponentApi | undefined {
@@ -133,6 +138,8 @@ class LiveryElement extends A2uiLitElement {
       super.connectedCallback();
       // A new width can choose another design: render again when it changes by more than a little.
       this.resize = new ResizeObserver(() => {
+        this.player?.resize(this.clientWidth, this.clientHeight, window.devicePixelRatio || 1);
+        // A new width can choose another design: render again when it changes by more than a little.
         const w = Math.round(this.clientWidth);
         if (Math.abs(w - this.widthDp) > 8) { this.widthDp = w; this.request = ''; this.requestUpdate(); }
       });
@@ -146,6 +153,8 @@ class LiveryElement extends A2uiLitElement {
       this.render_ = undefined;
       this.player?.dispose();
       this.player = undefined;
+      this.shownKey = undefined;
+      this.request = '';
     }
 
     protected updated(changed: PropertyValues): void {
@@ -156,7 +165,7 @@ class LiveryElement extends A2uiLitElement {
     render() {
       const api = this.livery;
       if (this.fallback !== undefined) return html`${(api && api.options.fallback?.(api.spec, this.fallback)) ?? nothing}`;
-      return html`<div class="frame">${this.player?.frame}</div>`;
+      return html`${this.box}`;
     }
 
     /** The props Livery renders from: inputs and lists as A2UI resolved them, the rest as the agent wrote them. */
@@ -175,15 +184,11 @@ class LiveryElement extends A2uiLitElement {
       const api = this.livery;
       if (!api || !this.context) return;
       const { session, spec, options } = api;
-      // One player per element, kept across renders; a new one only if the catalog's player changes.
-      if (!this.player || this.playerUrl !== options.playerUrl) {
-        this.player?.dispose();
-        this.playerUrl = options.playerUrl;
-        this.player = new RcFramePlayer(options.playerUrl, (a) => void this.onAction(a));
-        this.requestUpdate();
-      }
+      // One player per element, for as long as the element lives: its document stays and values move.
+      this.player ??= new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
       const props = this.props(spec);
-      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, density: window.devicePixelRatio || 1, theme: themeOf(this) };
+      const density = window.devicePixelRatio || 1;
+      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this) };
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
       this.request = request;
@@ -203,14 +208,18 @@ class LiveryElement extends A2uiLitElement {
       }
       const wasFallback = this.fallback !== undefined;
       this.fallback = undefined;
-      if (wasFallback) this.requestUpdate();
+      if (wasFallback) { this.requestUpdate(); await this.updateComplete; }
       const previous = this.render_;
       this.render_ = r.render;
       try {
-        await this.player.load(r.bytes);
-        session.shown(r.render);
+        const first = previous === undefined;
+        await this.player.show(r.documentKey, r.document, r.values, this.clientWidth, this.clientHeight, density);
+        // An impression per document shown, as LiveryTemplate reports after its first frame.
+        if (first || this.shownKey !== r.documentKey) session.shown(r.render);
+        this.shownKey = r.documentKey;
       } catch (e) {
         options.onProblem?.(spec.name, `the player could not play ${r.design}: ${(e as Error).message}`);
+        this.player.forget();
       }
       if (previous !== undefined) session.release(previous);
     }

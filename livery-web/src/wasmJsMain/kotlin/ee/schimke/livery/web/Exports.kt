@@ -47,7 +47,7 @@ internal data class WebConfig(
   val keys: List<Key> = emptyList(),
   /** Accept an unsigned catalog: a development build only. */
   val unsigned: Boolean = false,
-  val capabilities: PlayerCapabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"), livePush = false),
+  val capabilities: PlayerCapabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx")),
   /** Documents an agent sends with a message: refused unless set. */
   val agentBytes: AgentBytes? = null,
   /** Risky features a signed inline document may use (`shaders`, …). */
@@ -142,7 +142,9 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = asyn
 
 /**
  * Renders component [name] with its resolved [props] (JSON) in [space] (`{widthDp, heightDp,
- * density, theme: {role: "#AARRGGBB"}}`): `{ok: true, render, bytes (base64), design, sha256}`,
+ * density, theme: {role: "#AARRGGBB"}}`): `{ok: true, render, document (base64), documentKey,
+ * values: {name: value}, design, sha256}` (load the document only when its key changes; otherwise
+ * set the values),
  * `{ok: false, reason}`, or `{ok: false, waiting: true, reason}` when an image isn't on the device
  * yet: call [liveryFetchImages], then render again.
  */
@@ -153,7 +155,8 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
   val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme))
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
-      put("ok", true); put("render", r.id); put("bytes", Base64.encode(r.bytes)); put("design", r.designId); put("sha256", r.sha256)
+      put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
+      put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
     }
     is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason) }
     is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason) }

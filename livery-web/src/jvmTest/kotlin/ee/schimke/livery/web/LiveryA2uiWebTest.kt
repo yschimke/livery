@@ -12,7 +12,6 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.instantiate.AgentBytesPolicy
 import ee.schimke.livery.instantiate.DocumentAdmission
-import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.RedirectingFetcher
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
@@ -70,15 +69,27 @@ class LiveryA2uiWebTest {
     assertTrue(listOf("PromoBanner", "SocialPoll", "ShopQuantity").all { it in names }, names.toString())
   }
 
-  @Test fun rendersTheValuesIntoTheDocument() = runTest {
+  @Test fun aDataChangeKeepsTheDocumentAndChangesItsValues() = runTest {
     val web = web()
-    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", promo, LiveryA2uiWeb.Space(widthDp = 360)))
-    // The values are baked in: the document still decodes, and no longer reads the headline as a named value.
-    val facts = assertNotNull(TemplateInspector.facts(r.bytes))
-    assertTrue("headline" !in facts.declaredReads, facts.declaredReads.toString())
-    web.shown(r.id)
+    val qty = props("""{"name":"Socks","price":"£4","quantity":1}""")
+    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", qty, LiveryA2uiWeb.Space(widthDp = 360)))
+    // The template as published, its values beside it: the player keeps the document and sets them.
+    assertEquals(built.files.entries.first { it.key.contains(r.sha256) }.value.toList(), r.document.toList())
+    assertEquals(JsonPrimitive("Socks"), r.values["name"])
+    assertEquals(JsonPrimitive(1), r.values["quantity"])
+    val again = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", JsonObject(qty + ("quantity" to JsonPrimitive(3))), LiveryA2uiWeb.Space(widthDp = 360)))
+    assertEquals(r.documentKey, again.documentKey, "the same document: only a value changed")
+    assertEquals(JsonPrimitive(3), again.values["quantity"])
+    web.shown(again.id)
     assertEquals(TemplateEvent.Type.Impression, events.last().type)
-    assertEquals(r.designId, events.last().designId)
+    assertEquals(again.designId, events.last().designId)
+  }
+
+  @Test fun coloursAndBooleansAreSetAsThePlayerTakesThem() = runTest {
+    val r = web().render("LiveStatusTile", props("""{"name":"Lamp","state":"On","is_on":true}"""), LiveryA2uiWeb.Space(themeArgb = mapOf("primary" to 0xFF6750A4L)))
+    val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(r, r.toString())
+    assertEquals(JsonPrimitive(1), ready.values["is_on"])
+    assertEquals(JsonPrimitive("#FF6750A4"), ready.values["theme.primary"])
   }
 
   @Test fun dataThatDoesNotBindFallsBack() = runTest {
@@ -160,7 +171,9 @@ class LiveryA2uiWebTest {
     assertEquals(emptyList(), fetched, "rendering never waits on the network")
     assertTrue(web.fetchImages())
     assertEquals(1, fetched.size)
-    assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", props, LiveryA2uiWeb.Space(widthDp = 360)), "the image is on the device now")
+    val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", props, LiveryA2uiWeb.Space(widthDp = 360)), "the image is on the device now")
+    assertTrue("hero" !in ready.values, "an image is written into the document, never set as a value")
+    assertTrue("hero" in ready.documentKey, "so a new image is a new document")
     assertEquals(1, fetched.size, "and the second render used it from there")
     assertEquals(false, web.fetchImages(), "nothing left to fetch")
   }

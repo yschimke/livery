@@ -1,6 +1,7 @@
-// End-to-end in headless Chromium: build the page, serve it with a sample catalog and the web
-// player, and check that Livery components draw, that a template's action reaches the agent with
-// its checked arguments, and that a `set` writes the data model back and redraws.
+// End-to-end in headless Chromium: build the page, serve it with a sample catalog, and check that
+// Livery components draw in the page (no iframe), that tapping a template sends the agent its
+// event, that a `set` writes the data model back, and that data changes set values on the playing
+// document instead of reloading it.
 //
 //   ./gradlew :livery-web:webDist :livery-publish:installDist && npm run build && npm test
 import { build } from 'esbuild';
@@ -28,9 +29,8 @@ const cli = join(repo, 'livery-publish/build/install/livery/bin/livery');
 if (!existsSync(cli)) throw new Error('run ./gradlew :livery-publish:installDist first');
 execFileSync(cli, ['build', src, join(site, 'catalog')], { stdio: 'inherit' });
 
-// rc-players' web player, and this package's Wasm module beside the page.
+// This package's Wasm module beside the page.
 const require = createRequire(import.meta.url);
-cpSync(join(root, 'node_modules/@yschimke/remote-compose-player-cmp/dist'), join(site, 'player'), { recursive: true });
 cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: true });
 
 // The page, bundled; @js-joda/core (imported by the Wasm module's glue) through an import map.
@@ -69,60 +69,88 @@ try {
   const components = await page.evaluate(() => window.__livery.components);
   check(components.includes('PromoBanner') && components.includes('ShopQuantity'), `components advertised: ${components}`);
 
-  // Each Livery component's player reaches `ready` with its document.
-  const frameOf = async (tag) => {
-    const handle = await page.waitForSelector(`#app ${tag} iframe`, { state: "attached", timeout: 60_000 });
-    const frame = await handle.contentFrame();
-    await frame.waitForFunction(() => document.documentElement.dataset.rcPlayerState === 'ready', null, { timeout: 60_000 });
-    return frame;
-  };
-  const promo = await frameOf('livery-promo-banner');
-  const qty = await frameOf('livery-shop-quantity');
-  check(true, 'both templates play in the web player');
+  // Each Livery component draws on a canvas in the page itself: no iframe.
+  const statsOf = (selector) => page.evaluate((sel) => {
+    const find = (root) => {
+      const hit = root.querySelector(sel); if (hit) return hit;
+      for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; }
+      return null;
+    };
+    const el = find(document);
+    return el ? { ...el.liveryStats, iframes: el.shadowRoot.querySelectorAll('iframe').length, canvases: el.shadowRoot.querySelectorAll('canvas').length } : null;
+  }, selector);
+  const loaded = (selector) => page.waitForFunction((sel) => {
+    const find = (root) => {
+      const hit = root.querySelector(sel); if (hit) return hit;
+      for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; }
+      return null;
+    };
+    return (find(document)?.liveryStats?.loads ?? 0) > 0;
+  }, selector, { timeout: 60_000 });
+  await loaded('#app livery-promo-banner');
+  await loaded('#app livery-shop-quantity');
+  const promoStats = await statsOf('#app livery-promo-banner');
+  check(promoStats.iframes === 0 && promoStats.canvases === 1, `drawn on a canvas in the page, no iframe: ${JSON.stringify(promoStats)}`);
+  await page.waitForTimeout(300);
   if (out) { mkdirSync(out, { recursive: true }); await page.screenshot({ path: join(out, 'a2ui-web.png') }); }
-  // Drawn, not just loaded: the banner has its surface and its text (a page with no theme once drew it transparent).
-  const shot = await (await page.$('livery-promo-banner')).screenshot();
-  const colours = await page.evaluate(async (b64) => {
-    const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
-    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-    const d = g.getImageData(0, 0, c.width, c.height).data;
-    let notWhite = 0; const seen = new Set();
-    for (let i = 0; i < d.length; i += 4) { if (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245) notWhite++; seen.add((d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4)); }
-    return { notWhite: notWhite / (d.length / 4), distinct: seen.size };
-  }, shot.toString('base64'));
-  check(colours.notWhite > 0.5 && colours.distinct > 8, `the banner draws its surface and text: ${JSON.stringify(colours)}`);
-  await page.waitForFunction(() => window.__livery.events().some((e) => e.type === 'Impression') || true);
 
-  // A template's host action, as the player reports it, goes to the agent with its checked arguments.
-  await promo.evaluate(() => window.parent.postMessage({ type: 'cp-rc-host-named-action', name: 'cta', valueType: 'string', value: '{"route":"/premium","extra":"x"}' }, '*'));
-  await page.waitForFunction(() => window.__livery.actions.length > 0, null, { timeout: 10_000 });
+  // Drawn, not just loaded: the banner has its surface and its text.
+  const colours = async (selector) => {
+    const shot = await (await page.$(selector)).screenshot();
+    return page.evaluate(async (b64) => {
+      const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let notWhite = 0; const seen = new Set();
+      for (let i = 0; i < d.length; i += 4) { if (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245) notWhite++; seen.add((d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4)); }
+      return { notWhite: notWhite / (d.length / 4), distinct: seen.size, hash: shot64(d) };
+      function shot64(d) { let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) | 0; return h; }
+    }, shot.toString('base64'));
+  };
+  const banner = await colours('#app livery-promo-banner');
+  check(banner.notWhite > 0.5 && banner.distinct > 8, `the banner draws its surface and text: ${JSON.stringify(banner)}`);
+
+  // A real tap on the drawn "Shop now": the template's host action, through the gate, to the agent.
+  const box = await (await page.$('#app livery-promo-banner')).boundingBox();
+  await page.mouse.click(box.x + 70, box.y + 105);
+  await page.waitForFunction(() => window.__livery.actions.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const action = await page.evaluate(() => window.__livery.actions[0]);
-  check(action.name === 'startTrial' && action.sourceComponentId === 'promo', `the agent's event: ${JSON.stringify(action)}`);
-  check(action.context.route === '/premium' && action.context.from === 'chat' && !('extra' in action.context), 'with the declared argument, the agent context, and nothing undeclared');
+  check(action?.name === 'startTrial' && action?.sourceComponentId === 'promo' && action?.context?.from === 'chat', `tapping the CTA sends the agent its event: ${JSON.stringify(action)}`);
 
-  // A `set` writes the input's data-model path, which redraws the component.
-  await qty.evaluate(() => window.parent.postMessage({ type: 'cp-rc-host-named-action', name: 'setQuantity', valueType: 'int', value: 3 }, '*'));
-  await page.waitForFunction(() => window.__livery.data('/cart/quantity') === 3, null, { timeout: 10_000 });
-  check(true, 'setQuantity wrote /cart/quantity = 3');
-  await qty.waitForFunction(() => document.documentElement.dataset.rcPlayerState === 'ready', null, { timeout: 30_000 });
+  // A real tap on "+": the template's `set` writes the data model, and the same document takes the new value.
+  const qtyBox = await (await page.$('#app livery-shop-quantity')).boundingBox();
+  const before = await statsOf('#app livery-shop-quantity');
+  await page.mouse.click(qtyBox.x + qtyBox.width - 34, qtyBox.y + 34);
+  await page.waitForFunction(() => window.__livery.data('/cart/quantity') === 2, null, { timeout: 10_000 }).catch(() => {});
+  check(await page.evaluate(() => window.__livery.data('/cart/quantity')) === 2, 'tapping + wrote /cart/quantity = 2');
+  await page.waitForTimeout(300);
+  const after = await statsOf('#app livery-shop-quantity');
+  check(after.loads === before.loads && after.sets > before.sets, `and the document stayed, its value set: ${JSON.stringify({ before, after })}`);
 
-  // The agent changes the data: the banner draws the new headline (a new document, swapped in place).
-  const before = await page.evaluate(() => window.__livery.events().length);
+  // The agent changes the data: the banner's headline moves, in the same document.
+  const promoBefore = await statsOf('#app livery-promo-banner');
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/offer/title', value: 'Summer sale' } }]));
-  await page.waitForFunction(() => window.__livery.events().some((e) => e.type === 'Impression'), null, { timeout: 30_000 });
-  check(true, `a data-model update redraws (${before} earlier events drained)`);
+  await page.waitForFunction((n) => {
+    const find = (root) => { const hit = root.querySelector('#app livery-promo-banner'); if (hit) return hit; for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; } return null; };
+    return (find(document)?.liveryStats?.sets ?? 0) > n;
+  }, promoBefore.sets, { timeout: 10_000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  const promoAfter = await statsOf('#app livery-promo-banner');
+  const redrawn = await colours('#app livery-promo-banner');
+  check(promoAfter.loads === promoBefore.loads && promoAfter.sets > promoBefore.sets && redrawn.hash !== banner.hash,
+    `a data-model update sets the headline on the playing document, which redraws: ${JSON.stringify({ promoBefore, promoAfter })}`);
+  if (out) await page.screenshot({ path: join(out, 'a2ui-web-updated.png') });
 
   // A second catalog with the same component names draws with its own session, and its actions reach
   // its own processor, not the first one's.
-  const secondHandle = await page.waitForSelector('#second livery-promo-banner iframe', { state: 'attached', timeout: 60_000 });
-  const secondFrame = await secondHandle.contentFrame();
-  await secondFrame.waitForFunction(() => document.documentElement.dataset.rcPlayerState === 'ready', null, { timeout: 60_000 });
+  await loaded('#second livery-promo-banner');
   const firstCount = await page.evaluate(() => window.__livery.actions.length);
-  await secondFrame.evaluate(() => window.parent.postMessage({ type: 'cp-rc-host-named-action', name: 'cta', valueType: 'string', value: '{"route":"/b"}' }, '*'));
-  await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 });
+  const secondBox = await (await page.$('#second livery-promo-banner')).boundingBox();
+  await page.mouse.click(secondBox.x + 55, secondBox.y + 105);
+  await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const second = await page.evaluate(() => window.__livery.actions2[0]);
-  check(second.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
+  check(second?.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);

@@ -49,7 +49,17 @@ export interface LiverySpace {
 }
 
 export type Rendered =
-  | { ok: true; render: number; bytes: Uint8Array; design: string; sha256: string }
+  | {
+      ok: true;
+      render: number;
+      /** The document to play; load it only when [documentKey] changes, otherwise set [values]. */
+      document: Uint8Array;
+      documentKey: string;
+      /** Its named values: strings, numbers (booleans as 1 or 0), colours as `#AARRGGBB`. */
+      values: Record<string, string | number>;
+      design: string;
+      sha256: string;
+    }
   | { ok: false; reason: string; waiting?: boolean };
 
 export type Routed =
@@ -104,7 +114,7 @@ export class LiverySession {
 
   async render(name: string, props: Record<string, unknown>, space: LiverySpace = {}): Promise<Rendered> {
     const r = JSON.parse(String(await this.lib.liveryRender(this.id, name, JSON.stringify(props), JSON.stringify(space))));
-    return r.ok ? { ...r, bytes: base64ToBytes(r.bytes) } : r;
+    return r.ok ? { ...r, document: base64ToBytes(r.document) } : r;
   }
 
   /** Fetches the images a render was waiting for (`waiting: true`), off the render path; true when all arrived. */

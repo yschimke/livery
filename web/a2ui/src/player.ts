@@ -1,75 +1,74 @@
-/**
- * rc-players' Wasm Remote Compose player in an iframe, over its documented `postMessage`
- * contract (RC_PLAYER_EMBED.md): hello until it answers, then `rc-player-load` with bytes; it
- * reports `rc-player-state` and each host named action. The frame is kept across loads, so a new
- * document is a swap, not a fresh Wasm module.
- */
+import { createHostApi, createPlayer } from '../vendor/remote-compose-player.mjs';
+import type { HostApi, HostValue, RcPlayerHandle } from '../vendor/remote-compose-player.mjs';
+
+/** A host named action the document sent: its name and value, as the player reported them. */
 export interface NamedAction {
   name: string;
-  valueType: 'none' | 'string' | 'int' | 'float' | 'float-array';
+  valueType: 'none' | 'string' | 'int' | 'float';
   value: unknown;
 }
 
-export class RcFramePlayer {
-  readonly frame: HTMLIFrameElement;
-  private hello?: ReturnType<typeof setInterval>;
-  private ready: Promise<void>;
-  private resolveReady!: () => void;
-  private nextId = 1;
-  private pending = new Map<string, { resolve: () => void; reject: (e: Error) => void }>();
-  private readonly onMessage = (e: MessageEvent) => this.message(e);
+/**
+ * The TypeScript Remote Compose player on a canvas in [container], in the page itself. A document
+ * is loaded once; its named values are set on it while it plays, so a data change moves the values
+ * and never reloads the document (Remote Compose's model, as `LiveryTemplate` does on Compose).
+ */
+export class RcCanvasPlayer {
+  private readonly handle: RcPlayerHandle;
+  private readonly host: HostApi;
+  private key?: string;
+  private values = new Map<string, string>();
+  /** Documents loaded and values set, for tests and debugging. */
+  readonly stats = { loads: 0, sets: 0 };
 
-  constructor(playerUrl: string, private readonly onAction: (a: NamedAction) => void) {
-    this.frame = document.createElement('iframe');
-    this.frame.title = 'Livery template';
-    this.frame.style.border = '0';
-    this.frame.style.width = '100%';
-    this.frame.style.height = '100%';
-    this.frame.style.display = 'block';
-    this.frame.src = playerUrl;
-    this.ready = new Promise((resolve) => (this.resolveReady = resolve));
-    window.addEventListener('message', this.onMessage);
-    // The player listens only once its Wasm module runs: say hello until it answers.
-    this.hello = setInterval(() => this.post({ type: 'rc-player-hello', id: 'livery-hello' }), 100);
+  constructor(container: HTMLElement, onAction: (a: NamedAction) => void) {
+    this.handle = createPlayer(container, {});
+    this.handle.canvas.style.display = 'block';
+    this.host = createHostApi(this.handle.player);
+    this.host.onAction('*', (value, name) => onAction({ name, valueType: valueTypeOf(value), value }));
   }
 
-  /** Plays [bytes]; resolves when the document is on screen. Last one wins: a superseded load never resolves. */
-  async load(bytes: Uint8Array): Promise<void> {
-    await this.ready;
-    const id = `livery-${this.nextId++}`;
-    const done = new Promise<void>((resolve, reject) => this.pending.set(id, { resolve, reject }));
-    // A copy, transferred: the caller keeps its own bytes.
-    const copy = bytes.slice().buffer;
-    this.frame.contentWindow?.postMessage({ type: 'rc-player-load', id, bytes: copy }, '*', [copy]);
-    return done;
+  /**
+   * Shows [documentKey]'s document with [values]: loads [document] only when the key differs from
+   * the one playing, then sets each value that changed.
+   */
+  async show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
+    if (documentKey !== this.key) {
+      this.handle.player.setDensity(density);
+      await this.handle.loadFromArrayBuffer(document.slice().buffer);
+      this.key = documentKey;
+      this.values.clear();
+      this.stats.loads++;
+      this.resize(widthPx, heightPx, density);
+    }
+    for (const [name, value] of Object.entries(values)) {
+      const text = JSON.stringify(value);
+      if (this.values.get(name) === text) continue;
+      this.host.set(name, value);
+      this.values.set(name, text);
+      this.stats.sets++;
+    }
+  }
+
+  /** The canvas at [widthPx] × [heightPx] CSS pixels. */
+  resize(widthPx: number, heightPx: number, density: number): void {
+    if (widthPx > 0 && heightPx > 0) this.handle.resize(Math.round(widthPx * density), Math.round(heightPx * density));
+  }
+
+  /** Forgets the document playing, so the next [show] loads its document again. */
+  forget(): void {
+    this.key = undefined;
+    this.values.clear();
   }
 
   dispose(): void {
-    if (this.hello) clearInterval(this.hello);
-    window.removeEventListener('message', this.onMessage);
-    this.pending.clear();
+    this.host.dispose();
+    this.handle.destroy();
   }
+}
 
-  private post(message: unknown) {
-    this.frame.contentWindow?.postMessage(message, '*');
-  }
-
-  private message(e: MessageEvent) {
-    if (e.source !== this.frame.contentWindow) return;
-    const m = e.data as Record<string, unknown> | string;
-    if (typeof m !== 'object' || m === null) return;
-    if (m.type === 'rc-player-hello') {
-      if (this.hello) clearInterval(this.hello);
-      this.hello = undefined;
-      this.resolveReady();
-    } else if (m.type === 'rc-player-state' && typeof m.id === 'string') {
-      const p = this.pending.get(m.id);
-      if (!p) return;
-      this.pending.delete(m.id);
-      if (m.state === 'ready') p.resolve();
-      else p.reject(new Error(String(m.error ?? 'the player could not play the document')));
-    } else if (m.type === 'cp-rc-host-named-action' && typeof m.name === 'string') {
-      this.onAction({ name: m.name, valueType: m.valueType as NamedAction['valueType'], value: m.value });
-    }
-  }
+function valueTypeOf(value: unknown): NamedAction['valueType'] {
+  if (value === undefined || value === null) return 'none';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'float';
+  return 'string';
 }

@@ -12,7 +12,6 @@ const app: unknown[] = [];
 const session = await LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'] });
 const { catalog, components } = await liveryCatalog(session, {
   catalogId: CATALOG_ID,
-  playerUrl: new URL('player/index.html', location.href).href,
   onProblem: (c, m) => problems.push([c, m]),
   onAppAction: (kind, action, args) => app.push({ kind, action, args }),
 });
@@ -43,7 +42,7 @@ document.getElementById('app')!.append(surface);
 const CATALOG_2 = 'https://livery.example/a2ui/catalog/second';
 const actions2: unknown[] = [];
 const session2 = await LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true });
-const second = await liveryCatalog(session2, { catalogId: CATALOG_2, playerUrl: new URL('player/index.html', location.href).href });
+const second = await liveryCatalog(session2, { catalogId: CATALOG_2 });
 const processor2 = new MessageProcessor([second.catalog as any], (a) => { actions2.push(a); });
 processor2.processMessages([
   { version: 'v0.9', createSurface: { surfaceId: 'chat-2', catalogId: CATALOG_2 } },

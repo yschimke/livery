@@ -15,7 +15,10 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.protocol.NamedValue
+import ee.schimke.livery.protocol.ValueType
 import ee.schimke.livery.instantiate.Admission
 import ee.schimke.livery.instantiate.CachedImages
 import ee.schimke.livery.instantiate.ImageRequest
@@ -40,9 +43,12 @@ import kotlinx.serialization.json.contentOrNull
  * Livery components in an A2UI surface on a host that plays document bytes: a browser's Remote
  * Compose player (docs/A2UI.md "The web"). The same pipeline as `livery-a2ui-compose`, without
  * Compose: a component's resolved properties become a dataset, the planner selects and binds a
- * template (or [DocumentAdmission] admits the agent's own document), [TemplateInstantiator] writes
- * the values into it, and the page plays the bytes. A data-model change is a new [render]; the
- * player swaps the document in place.
+ * template (or [DocumentAdmission] admits the agent's own document), and the page plays it with the
+ * bound values as the document's named values. A data-model change is a new [render] with the same
+ * [Rendered.Ready.documentKey]: the page pushes the changed values into the document already
+ * playing, as `LiveryTemplate` does on Compose, and never reloads it. Only what a web player can't
+ * set on a playing document is written into it ([TemplateInstantiator]): the bound images (drawn
+ * from `livery:value/<input>`) and `long` values; a change to one of those is a new document.
  *
  * Rendering never waits on the network: [render] uses only images already on the device, and
  * answers [Rendered.Waiting] when one is missing; [fetchImages] fetches them, off the render path,
@@ -69,8 +75,19 @@ class LiveryA2uiWeb(
   data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap())
 
   sealed interface Rendered {
-    /** Play [bytes]; pass [id] to [action] and [shown]. */
-    data class Ready(val id: Int, val bytes: ByteArray, val designId: String, val sha256: String) : Rendered
+    /**
+     * Play [document] with [values] (its named values: strings, numbers, booleans as 1 or 0, colours
+     * as `#AARRGGBB`); pass [id] to [action] and [shown]. While [documentKey] is the one already
+     * playing, only the values changed: set them, don't load the document again.
+     */
+    data class Ready(
+      val id: Int,
+      val document: ByteArray,
+      val documentKey: String,
+      val values: Map<String, JsonElement>,
+      val designId: String,
+      val sha256: String,
+    ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
     data class Fallback(val reason: String) : Rendered
@@ -131,9 +148,19 @@ class LiveryA2uiWeb(
       else -> return Rendered.Fallback("$name (${contract.ref}): $p")
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
+    // What a playing document can't take as a named value is written in; the rest stays live.
+    val written = Bindings(plan.bindings.values.filterValues { it is NamedValue.Image || it is NamedValue.L })
+    val live = plan.bindings.values.filterValues { it !is NamedValue.Image && it !is NamedValue.L }.mapValues { (_, v) -> playerValue(v) }
+    val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" }
+    val draws = written.values.isNotEmpty() || contract.inputs.values.any { it.type == ValueType.Image }
+    if (!draws) {
+      val id = next++
+      this.live[id] = Live(plan, wiring)
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256)
+    }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
-    return when (val i = instantiator.instantiate(plan.template.bytes, plan.bindings, px(space.widthDp), px(space.heightDp), capabilities.maxBytes)) {
+    return when (val i = instantiator.instantiate(plan.template.bytes, written, px(space.widthDp), px(space.heightDp), capabilities.maxBytes)) {
       is InstantiateResult.Failed -> {
         val misses = cached?.misses.orEmpty()
         if (misses.isEmpty()) return Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
@@ -142,8 +169,8 @@ class LiveryA2uiWeb(
       }
       is InstantiateResult.Ok -> {
         val id = next++
-        live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, plan.template.entry.designId, plan.template.entry.sha256)
+        this.live[id] = Live(plan, wiring)
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256)
       }
     }
   }
@@ -211,6 +238,17 @@ class LiveryA2uiWeb(
     val kinds = contract.actions.values.map { it.kind }.toSet()
     ActionRouter(kinds.associateWith { route }, urlAllowlist, events, clock).dispatch(state.plan, name, args)
     return routed ?: Routed.Dropped(ActionGate.check(contract, name, args).problem ?: "not handled")
+  }
+
+  /** A named value as the web player sets it: booleans as 1 or 0, colours as `#AARRGGBB`. */
+  private fun playerValue(v: NamedValue): JsonElement = when (v) {
+    is NamedValue.Str -> JsonPrimitive(v.value)
+    is NamedValue.I -> JsonPrimitive(v.value)
+    is NamedValue.L -> JsonPrimitive(v.value)
+    is NamedValue.F -> JsonPrimitive(v.value)
+    is NamedValue.B -> JsonPrimitive(if (v.value) 1 else 0)
+    is NamedValue.Color -> JsonPrimitive("#" + (v.argb and 0xFFFFFFFFL).toString(16).uppercase().padStart(8, '0'))
+    is NamedValue.Image -> JsonPrimitive(v.ref)
   }
 
   private fun agent(action: JsonObject, args: Map<String, String>): Routed.Agent {
