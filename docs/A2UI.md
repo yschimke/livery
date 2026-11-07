@@ -50,15 +50,50 @@ A2UI message or the app changing.
 
 ### How the document gets there
 
-| Route | Who picks the document | When it changes |
-| --- | --- | --- |
-| **Catalog** (the default) | `TemplateSelector`, from the signed designs installed on the device, honouring the agent's `design` / `variant` preference and the slot's size | whenever the catalog publishes a new design or template; the next refresh, no app or agent change |
-| **Decision** | the app's decision server: a `designId` or exact `sha256` from the same signed catalog (PROTOCOL.md §5.3), placed into the surface by the app | per decision |
-| **Preview** (development only) | an exact `sha256` from an unsigned preview channel (`livery-mcp`'s `publish_preview`), in a client that allows unsigned catalogs | per draft |
+Flexible delivery, one gate. The component takes an optional `template` property; every form ends in
+the same three checks before a byte is played, so where a document comes from never changes who
+vouched for it:
 
-In every route the bytes come from a Livery catalog channel the client already trusts, never inside
-an A2UI message. That keeps A2UI messages small and textual, and keeps the A2UI agent out of the
-trust path for executable layout.
+1. **Integrity:** the bytes hash to the `sha256` they were named by (PROTOCOL.md §1).
+2. **Authority:** that `sha256` is vouched for by a key the app trusts for this contract's prefix
+   (§3.2 rule 6): listed in a signed manifest, or signed directly (below).
+3. **Eligibility:** the template passes §5.1 for this slot (contract, `rcApiLevel`, profiles, byte
+   budget, size), and its assets are verified like any template's.
+
+| `template` | Who fetches what | Use |
+| --- | --- | --- |
+| absent, or `{"design", "variant"}` | the client selects from the catalogs **the app** configured (a GitHub release, a static host, a Livery server channel) | the default: designs change with the catalog, no agent or app change |
+| `{"query": {…}}` | the client asks **the app's** configured Livery server for a decision, sending the contract, the device's query (size, theme, `rcApiLevel`, minor, locale) and the agent's params; the answer is a normal decision (§8) | server-side choice per request: personalisation, ads, experiments run on the server |
+| `{"sha256", "url"?}` | the client fetches the blob from `url` (or its catalogs' `blobBase`), checks the hash, and plays it only if a trusted manifest lists that hash or a signature (below) covers it | the agent or its backend names one exact document; it plays exactly or not at all (§5.3) |
+| `{"sha256", "url"?, "signature"}` | as above, with a **template signature**: Ed25519 over `livery-template:<contract id@major>:<sha256>` by a trusted key | a server that mints documents per request (generated, instantiated) without publishing a manifest for each |
+| `{"inline": "<base64>", "signature"}` | nothing to fetch; the bytes are in the message, signed as above, within a small byte budget (the app's, 64 KiB by default) | tiny documents, or a transport with no second fetch; refused above the budget |
+| `{"channel": "pr-123"}` or an unsigned form | the client's catalog source at another channel | development only, in a client that allows unsigned catalogs; never in production |
+
+Two rules hold for every form:
+
+- **The app chooses the hosts; the agent chooses only from them.** `url` must resolve to a host one
+  of the app's catalog sources or its Livery server uses, and a `query` goes only to the app's
+  configured server. An agent can therefore name content but never make the device contact a host
+  the app didn't configure, the same rule images follow (§6.2).
+- **A URL or a hash is not trust.** Anyone can host bytes and quote their hash; only a signature
+  from a key the app trusts makes them playable. This is why a template signature is the one new
+  piece of protocol here: it is the per-document form of the manifest signature, with the same keys
+  and the same contract-prefix limits.
+
+**Waiting.** A slot never waits on the network (DESIGN.md), but a document the agent names may not
+be on the device yet. The client starts fetching the moment the message arrives (as an `OnDemand`
+design is fetched), and the component stays in A2UI's loading state, which the surface already
+shows for pending data, for at most a short budget (the app's, 1 s by default). Then:
+
+- a `design` or `query` answer that isn't ready falls back to the automatic design and swaps in
+  later;
+- an exact `sha256`, signed or inline, draws nothing else in its place (§5.3): it reports an A2UI
+  error and the app's fallback, and plays once it arrives if the surface still shows it.
+
+Where it is fetched from never changes what it may do: whatever the route, the document reads and
+emits only what its contract declares. A document that arrived outside a built catalog (signed or
+inline) is decoded on the device by `TemplateInspector` (`livery-instantiate`, multiplatform), the
+check `livery build --inspect` runs, and refused if it reads or emits anything its contract doesn't.
 
 ## Why a component per contract, not one generic `RemoteCompose` component
 
@@ -161,9 +196,8 @@ The component is a Livery slot whose decision comes from the agent:
    component reports an A2UI error and draws the app's native fallback for that contract, or an
    empty box of the requested size.
 
-An exact `sha256` is deliberately not a production property: an agent naming bytes is what a
-decision server does, and a decision server is a separate trust domain. A Livery decision can still
-be carried *into* an A2UI surface by the app (below).
+With a `template` other than a design preference, the steps above apply to the document it names
+instead of to the catalog's choice (see [How the document gets there](#how-the-document-gets-there)).
 
 ### Actions, events and analytics
 
@@ -282,7 +316,10 @@ Kotlin writes it; the TypeScript and Swift adapters must reproduce it.
    `promo/banner` inside an A2UI surface, rendered in CI by `livery-render`.
 3. The same source on desktop and Wasm against the port.
 4. The `set` action kind (protocol level, Kotlin, Swift, fixtures), and two-way binding in A2UI.
-5. `@livery/a2ui`, after the TypeScript port.
+5. Documents named by the message: `sha256` (+ `url`) against the trusted manifests first, then the
+   template signature (protocol, `livery sign-template`, `signing.json` cases) and `inline`; the
+   `query` form with `livery-server`'s decision endpoint.
+6. `@livery/a2ui`, after the TypeScript port.
 
 ## Open questions
 
