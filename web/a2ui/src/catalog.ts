@@ -156,6 +156,7 @@ class LiveryElement extends A2uiLitElement {
     disconnectedCallback(): void {
       super.disconnectedCallback();
       this.resize?.disconnect();
+      this.sequence++; // a render still on its way is never shown: it takes the release path
       if (this.render_ !== undefined) this.livery?.session.release(this.render_);
       this.render_ = undefined;
       this.player?.dispose();
@@ -231,15 +232,17 @@ class LiveryElement extends A2uiLitElement {
       if (wasFallback) { this.requestUpdate(); await this.updateComplete; }
       const previous = this.render_;
       this.render_ = r.render;
+      const player = this.player;
       try {
         const first = previous === undefined;
-        await this.player.show(r.documentKey, r.document, r.values, this.clientWidth, this.clientHeight, density);
-        // An impression per document shown, as LiveryTemplate reports after its first frame.
-        if (first || this.shownKey !== r.documentKey) session.shown(r.render);
-        this.shownKey = r.documentKey;
+        const shown = await player.show(r.documentKey, r.document, r.values, this.clientWidth, this.clientHeight, density);
+        // An impression per document shown, as LiveryTemplate reports after its first frame. A
+        // show a newer one replaced, or one the element left the page during, isn't one.
+        if (shown && mine === this.sequence && (first || this.shownKey !== r.documentKey)) session.shown(r.render);
+        if (shown && mine === this.sequence) this.shownKey = r.documentKey;
       } catch (e) {
-        this.player.forget();
-        this.cannotPlay(props, `the player could not play ${r.design}: ${(e as Error).message}`);
+        player.forget();
+        if (mine === this.sequence) this.cannotPlay(props, `the player could not play ${r.design}: ${(e as Error).message}`);
       }
       if (previous !== undefined) session.release(previous);
     }

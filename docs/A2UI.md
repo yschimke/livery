@@ -307,8 +307,8 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
 - **Each player implements the Remote Compose spec.** No player defines it, AndroidX's included:
   that one is a useful reference to compare against, and it can be wrong too. Two places where the
   TypeScript player didn't follow the spec are fixed in rc-players' copy of it
-  ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829), vendored here until it
-  merges). First, a layout's spacing and a corner radius may be a variable reference, which Compose
+  ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829), merged; vendored
+  from its `main`). First, a layout's spacing and a corner radius may be a variable reference, which Compose
   writes for dp over the density. The player read it as a plain float (`NaN`), so templates had no
   surfaces and no touch areas. Second, it skipped the definitions inside a click, so a button whose
   action name another click defined fired nothing until that one was tapped. The browser test taps

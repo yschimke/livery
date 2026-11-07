@@ -18,6 +18,9 @@ export class RcCanvasPlayer {
   private readonly host: HostApi;
   private key?: string;
   private values = new Map<string, string>();
+  /** Shows run one after another; one asked for while another runs replaces any still queued. */
+  private queue: Promise<unknown> = Promise.resolve();
+  private latest = 0;
   /** Documents loaded and values set, for tests and debugging. */
   readonly stats = { loads: 0, sets: 0 };
 
@@ -30,9 +33,22 @@ export class RcCanvasPlayer {
 
   /**
    * Shows [documentKey]'s document with [values]: loads [document] only when the key differs from
-   * the one playing, then sets each value that changed.
+   * the one playing, then sets each value that changed. A load is asynchronous, so shows are
+   * queued: each waits for the one before it, and a show superseded while it waits does nothing
+   * (resolves `false`), so an older one can never land after a newer one.
    */
-  async show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
+  show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean> {
+    const mine = ++this.latest;
+    const run = this.queue.then(async () => {
+      if (mine !== this.latest) return false;
+      await this.apply(documentKey, document, values, widthPx, heightPx, density);
+      return true;
+    });
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  private async apply(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
     if (documentKey !== this.key) {
       this.handle.player.setDensity(density);
       // Sized before the load too: the player fixes its touch mapping from the canvas a document
@@ -69,6 +85,7 @@ export class RcCanvasPlayer {
   }
 
   dispose(): void {
+    this.latest++;
     this.host.dispose();
     this.handle.destroy();
   }

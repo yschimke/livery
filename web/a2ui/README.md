@@ -7,7 +7,7 @@ canvas in the page with the TypeScript Remote Compose player. A data change sets
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
-The player is vendored from rc-players with two fixes this package needs
+The player is vendored from rc-players `main`, which has two fixes this package needs
 ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829)): without them, these
 templates lay out at `NaN` and their buttons don't fire.
 

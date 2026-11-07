@@ -6,10 +6,10 @@ from `src/web/main.ts`. It draws a document on a `<canvas>` in the page, and its
 (`createHostApi`) sets named values on the document while it plays and reports its host actions.
 
 - Source: [yschimke/rc-players](https://github.com/yschimke/rc-players) `third_party/remote-compose-player`,
-  commit `466d2273d9691f66ba410d7bcd7d9a9f529ed8d8` ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829):
-  NaN-boxed `spacedBy` and rounded-clip radii resolved, and a click's definitions loaded with the
-  document, without which these templates lay out at `NaN` and their buttons don't fire; rebuild
-  from `main` once it merges), itself vendored from
+  `main` at commit `9f6a5806d189da791043113bd78256a6cabb8142`, which includes
+  [yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829) (NaN-boxed `spacedBy`
+  and rounded-clip radii resolved, and a click's definitions loaded with the document, without
+  which these templates lay out at `NaN` and their buttons don't fire), itself vendored from
   [yschimke/remotecompose-experiments](https://github.com/yschimke/remotecompose-experiments)
   `players/typescript/` (fork of `camaelon/remotecompose-experiments`).
 - License: Apache-2.0.
