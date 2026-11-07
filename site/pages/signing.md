@@ -43,6 +43,21 @@ TrustedKey("adnet-1", adnetPub, contractPrefixes = setOf("ads/"))
 
 A manifest signed by that key that mentions any other contract is rejected.
 
+## Signing one document
+
+A document sent with a message instead of through a catalog (an A2UI `template`) carries its own
+signature, by the same keys and held to the same contract prefixes (PROTOCOL.md §3.4):
+
+```bash
+livery sign-template designs/banner-classic/in-app.rc --contract promo/banner@1 --key acme.key --key-id acme-1
+```
+
+It prints the template JSON to send, `{"inline": <base64>, "signature": {...}}`. The client still
+checks the document against its contract, and plays a signed one only if it uses no risky feature
+(shaders, haptics, sound, particles, embedded images or fonts, wake) that the app hasn't opted into.
+An unsigned document plays only under the app's unsigned-document policy, and never with a risky
+feature (PROTOCOL.md §3.5).
+
 ## Rotation
 
 Ship the new public key in an app release alongside the old one, then sign with the new key once

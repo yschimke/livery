@@ -417,4 +417,53 @@ class ConformanceTest {
       put("cases", kotlinx.serialization.json.JsonArray(cases))
     })
   }
+
+  /**
+   * PROTOCOL.md §3.4: template signatures, by the same test key as `signing.json` (which must exist
+   * first, so the key never churns): accepted, or rejected with the reason every port gives.
+   */
+  @Test fun templateSigning() = runBlocking {
+    val keys = Json.parseToJsonElement(File(dir, "signing.json").readText()).jsonObject
+    fun str(key: String) = (keys[key] as kotlinx.serialization.json.JsonPrimitive).content
+    val priv = KeyFactory.getInstance("Ed25519").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(str("testPrivateKeyPkcs8"))))
+    val pub = Base64.getDecoder().decode(str("testPublicKey"))
+    fun sign(contract: String, sha: String) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(TemplateSignatures.message(contract, sha)); sign() })
+    val sha = "ab".repeat(32)
+    val other = "cd".repeat(32)
+    val good = sign("promo/banner@1", sha)
+    val all = listOf(TrustedKey("k1", pub))
+    val ads = listOf(TrustedKey("k1", pub, setOf("ads/")))
+    data class Case(val name: String, val contract: String, val sha256: String, val sig: ManifestSignature, val trust: List<TrustedKey>)
+    val cases = listOf(
+      Case("valid", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("other bytes", "promo/banner@1", other, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("other contract", "promo/banner@2", sha, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("unknown key id", "promo/banner@1", sha, ManifestSignature(keyId = "k2", signature = good), all),
+      Case("wrong algorithm", "promo/banner@1", sha, ManifestSignature(alg = "RS256", keyId = "k1", signature = good), all),
+      Case("not base64", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = "%%%"), all),
+      Case("key outside its contract scope", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = good), ads),
+    ).map { c ->
+      val v = TemplateSignatures.verify(JavaCrypto, c.trust, c.contract, c.sha256, c.sig)
+      buildJsonObject {
+        put("name", c.name)
+        put("contract", c.contract)
+        put("sha256", c.sha256)
+        put("signature", json.encodeToJsonElement(ManifestSignature.serializer(), c.sig))
+        put("trust", kotlinx.serialization.json.JsonArray(c.trust.map { k ->
+          buildJsonObject {
+            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey))
+            if (k.contractPrefixes.isNotEmpty()) put("contractPrefixes", kotlinx.serialization.json.JsonArray(k.contractPrefixes.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+          }
+        }))
+        when (v) {
+          is TemplateVerification.Accepted -> put("expect", "accepted")
+          is TemplateVerification.Rejected -> { put("expect", "rejected"); put("reason", v.reason) }
+        }
+      }
+    }
+    check("template-signing.json", buildJsonObject {
+      put("note", "TEST KEY ONLY (signing.json's). Ed25519 over livery-template:<contract>:<sha256>; signature is standard padded base64.")
+      put("cases", kotlinx.serialization.json.JsonArray(cases))
+    })
+  }
 }

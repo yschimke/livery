@@ -40,6 +40,8 @@ kotlin {
     portMain.kotlin.srcDir("src/a2ui/kotlin")
     commonMain.dependencies {
       api(project(":livery-compose"))
+      // DocumentAdmission: documents sent with a message, decoded and held to their contract.
+      api(project(":livery-instantiate"))
       implementation(libs.kotlinx.serialization.json)
     }
     androidMain.dependencies {
@@ -58,6 +60,7 @@ kotlin {
       implementation(project(":livery-publish"))
       implementation(compose.desktop.currentOs)
       implementation(libs.a2ui.cmp.ui.test)
+      implementation(libs.rc.player.protocol)
     }
   }
 }

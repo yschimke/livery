@@ -32,6 +32,7 @@ import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
+import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.TemplateEvent
@@ -59,7 +60,7 @@ import kotlinx.coroutines.runBlocking
  * rc-players' Compose player.
  */
 @OptIn(ExperimentalTestApi::class)
-abstract class LiveryA2uiSurfaceTest {
+abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? = null) {
   private val samples = File(System.getProperty("livery.samples") ?: "../samples/catalog")
 
   /** The sample catalog with the two-way one's contracts and designs added (it needs level 7). */
@@ -106,6 +107,7 @@ abstract class LiveryA2uiSurfaceTest {
     events = { events += it },
     clock = clock,
     appActions = listOf("dismiss", "navigate", "app:vote").associateWith { kind -> { _, _, args -> appHandled += kind to args } },
+    documents = documents,
   )
 
   private val basic: A2uiCatalog = materialA2uiBasicCatalogV1(

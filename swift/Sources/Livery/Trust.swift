@@ -60,3 +60,27 @@ public enum Hashing {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
   }
 }
+
+/// §3.4: a signature over one document, Ed25519 over `livery-template:<contract id@major>:<sha256>`,
+/// by the same trusted keys and held to the same contract prefixes as manifests. The Swift
+/// counterpart of the Kotlin `TemplateSignatures`, pinned by `conformance/template-signing.json`.
+public enum TemplateSignatures {
+  public static func message(_ contractRef: String, _ sha256: String) -> Data { Data("livery-template:\(contractRef):\(sha256)".utf8) }
+
+  /// The key that signed `sha256` for `contractRef`, or why the signature doesn't count.
+  public static func verify(keys: [TrustedKey], contractRef: String, sha256: String, signature: ManifestSignature) -> TemplateVerification {
+    guard signature.alg == "Ed25519" else { return .rejected("unsupported alg \(signature.alg)") }
+    guard let key = keys.first(where: { $0.keyId == signature.keyId }) else { return .rejected("untrusted key \(signature.keyId)") }
+    guard let sig = Data(base64Encoded: signature.signature) else { return .rejected("signature is not base64") }
+    guard let pub = try? Curve25519.Signing.PublicKey(rawRepresentation: key.publicKey),
+      pub.isValidSignature(sig, for: message(contractRef, sha256))
+    else { return .rejected("bad signature") }
+    guard key.allows(contractRef) else { return .rejected("key \(key.keyId) may not sign \(contractRef)") }
+    return .accepted(key)
+  }
+}
+
+public enum TemplateVerification: Sendable, Equatable {
+  case accepted(TrustedKey)
+  case rejected(String)
+}

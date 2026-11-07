@@ -168,6 +168,28 @@ final class ConformanceTests: XCTestCase {
     }
   }
 
+  struct TemplateSigningFixture: Decodable {
+    struct Case: Decodable {
+      var name: String; var contract: String; var sha256: String; var signature: ManifestSignature
+      var trust: [SigningFixture.Key]; var expect: String; var reason: String?
+    }
+    var cases: [Case]
+  }
+
+  func testTemplateSigning() throws {
+    let f = try JSONDecoder().decode(TemplateSigningFixture.self, from: fixture("template-signing.json"))
+    XCTAssertFalse(f.cases.isEmpty)
+    for c in f.cases {
+      let keys = c.trust.map { TrustedKey(keyId: $0.keyId, publicKey: Data(base64Encoded: $0.publicKey)!, contractPrefixes: Set($0.contractPrefixes ?? [])) }
+      switch TemplateSignatures.verify(keys: keys, contractRef: c.contract, sha256: c.sha256, signature: c.signature) {
+      case .accepted: XCTAssertEqual("accepted", c.expect, c.name)
+      case .rejected(let reason):
+        XCTAssertEqual("rejected", c.expect, c.name)
+        XCTAssertEqual(reason, c.reason, c.name)
+      }
+    }
+  }
+
   func testRolloutBucketsMatchKotlin() {
     // FNV-1a 32 of "exp:u1"; the Kotlin DecisionsTest uses the same inputs.
     XCTAssertEqual(LocalRulesDecider.bucket("exp", "u1"), LocalRulesDecider.bucket("exp", "u1"))

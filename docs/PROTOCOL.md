@@ -147,6 +147,42 @@ everything.
   period it must stop using it for every kind of slot, including exact references (§5.3).
 - `revoked` on a design or template entry withdraws it at once.
 
+### 3.4 Template signatures
+
+A document can arrive with a message (an A2UI `template`, docs/A2UI.md) rather than through a
+catalog. Signing a manifest doesn't cover it, so it carries its own signature: `{"alg": "Ed25519",
+"keyId", "signature"}` as in §3.1, over the UTF-8 bytes of `livery-template:<contract>:<sha256>`,
+where `<contract>` is `id@major` and `<sha256>` the lowercase hex hash of the document. The hash
+binds the bytes and the contract binds what they may play as. A client verifies it with its trusted
+keys and must reject it when `alg` is not `Ed25519`, `keyId` is not trusted, `signature` is not
+valid Base64 or doesn't verify, or the key has contract prefixes and the contract starts with none
+of them (§3.2 rule 6). `livery sign-template` makes one.
+
+### 3.5 Documents sent with a message
+
+A client must decide whether such a document plays before playing it, and play it exactly or not
+at all (§5.3): it never substitutes a catalog template, and never keeps the bytes for another slot.
+It must refuse, and report why, a document:
+
+1. over its size limit: the app's for signed documents, the unsigned policy's for unsigned ones;
+2. whose signature fails §3.4, or, unsigned, unless the app has an **unsigned-document policy**
+   that names a prefix of its contract (off unless the app sets one);
+3. that doesn't decode, reads a named value its contract can't produce or as another type (§4.2),
+   or emits an action its contract doesn't declare;
+4. that uses a **risky feature** the app doesn't allow for it.
+
+A risky feature is something a document can do beyond drawing its contract's data and sending its
+contract's actions: `shaders` (runtime shaders), `haptics`, `sound`, `particles` (particle
+systems), `embedded-images` (image bytes in the document, which §6's rules never see),
+`embedded-fonts` (font bytes in the document) and `wake` (scheduling its own redraws). A client
+reads them from the document's operations, never from anything sent beside it. A **signed**
+document may use only the features the app opted into for signed documents, none by default. An
+**unsigned** document may use none, whatever the app opts into, and may emit an `open-url` or
+`present` action only if the unsigned policy names that kind.
+
+A client that can't decode documents must refuse every unsigned one, and every signed one unless
+its app allows every risky feature.
+
 ## 4. Contracts and data
 
 A contract is `id`, `major`, `minor`, `inputs` (name → `InputSpec`), `lists` (name → `ListSpec`),
@@ -460,6 +496,7 @@ draws in; a contract needn't declare them, and a template may read them.
 | `binding.json` | §4.1: a contract and datasets, and the bindings or the sorted names of the problems |
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
+| `template-signing.json` | §3.4: template signatures, by the same test key: `accepted`, or `rejected` with the reason |
 | `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
 | `actions.json` | §7, §7.1: a contract's actions (`set`s among them) and emitted arguments, and the arguments its event carries or why it is dropped |
 | `screens.json` | §8.2: screen placements, a requested presentation and depth, and the presentation used or why the screen is refused |

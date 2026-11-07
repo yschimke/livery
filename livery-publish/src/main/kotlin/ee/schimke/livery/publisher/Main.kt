@@ -34,6 +34,10 @@ private const val USAGE = """livery — build, sign and check a template catalog
                                        experiments, seasons and placement rules (--markdown for a
                                        pull request comment); exits 1 when something isn't compatible
   livery verify <out> --pub <file> --key-id <id>
+  livery sign-template <doc.rc> --contract <id@major> --key <file> --key-id <id>
+                                       signs one document to play as that contract, for sending
+                                       with a message (an A2UI `template`); prints the template
+                                       JSON: {"inline": <base64>, "signature": {...}}
   livery preview <doc.rc> <out> --src <catalog> --contract <id@major> [--target <json>] [--title <t>]
                                        one document as an unsigned catalog in <out>/preview-<hash>/,
                                        checked against the contract, for a debug build to play
@@ -106,6 +110,14 @@ fun main(args: Array<String>) {
           is Verification.Accepted -> println("ok: ${v.manifest.catalog}/${v.manifest.channel} serial ${v.manifest.serial}")
           is Verification.Rejected -> { System.err.println("rejected: ${v.reason}"); exitProcess(1) }
         }
+      }
+      "sign-template" -> {
+        val doc = File(a.getOrNull(1) ?: usage()).readBytes()
+        val sig = Signing.signTemplate(doc, opt("--contract") ?: usage(), File(opt("--key") ?: usage()).readText(), opt("--key-id") ?: usage())
+        println(Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), kotlinx.serialization.json.buildJsonObject {
+          put("inline", kotlinx.serialization.json.JsonPrimitive(Base64.getEncoder().encodeToString(doc)))
+          put("signature", Json.encodeToJsonElement(ManifestSignature.serializer(), sig))
+        }))
       }
       "preview" -> {
         val doc = File(a.getOrNull(1) ?: usage())

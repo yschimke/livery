@@ -1,0 +1,127 @@
+{
+  "note": "TEST KEY ONLY (signing.json's). Ed25519 over livery-template:<contract>:<sha256>; signature is standard padded base64.",
+  "cases": [
+    {
+      "name": "valid",
+      "contract": "promo/banner@1",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "keyId": "k1",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "accepted"
+    },
+    {
+      "name": "other bytes",
+      "contract": "promo/banner@1",
+      "sha256": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "signature": {
+        "keyId": "k1",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected",
+      "reason": "bad signature"
+    },
+    {
+      "name": "other contract",
+      "contract": "promo/banner@2",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "keyId": "k1",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected",
+      "reason": "bad signature"
+    },
+    {
+      "name": "unknown key id",
+      "contract": "promo/banner@1",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "keyId": "k2",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected",
+      "reason": "untrusted key k2"
+    },
+    {
+      "name": "wrong algorithm",
+      "contract": "promo/banner@1",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "alg": "RS256",
+        "keyId": "k1",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected",
+      "reason": "unsupported alg RS256"
+    },
+    {
+      "name": "not base64",
+      "contract": "promo/banner@1",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "keyId": "k1",
+        "signature": "%%%"
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4="
+        }
+      ],
+      "expect": "rejected",
+      "reason": "signature is not base64"
+    },
+    {
+      "name": "key outside its contract scope",
+      "contract": "promo/banner@1",
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "signature": {
+        "keyId": "k1",
+        "signature": "nJ7D+2y4y+7UKXbVTAVp9CUK9QcDJz3CjojxySSleM32u/s4WFCcEZtTd8eHWHQXp4Njd5ZlY0nLYFVt3Bo2Bw=="
+      },
+      "trust": [
+        {
+          "keyId": "k1",
+          "publicKey": "6nSLkZ4uBk5m8ojXlSlVxuxPSRrvUqs/4hQWZ71QjD4=",
+          "contractPrefixes": [
+            "ads/"
+          ]
+        }
+      ],
+      "expect": "rejected",
+      "reason": "key k1 may not sign promo/banner@1"
+    }
+  ]
+}
