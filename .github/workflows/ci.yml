@@ -105,6 +105,9 @@ jobs:
       # The sample's documents are placeholders, apart from tile-default/in-app.rc.
       inspect: false
       comment: false
+      # Runs `livery review` (the renderer in the CLI); with contents: read the images stay in the
+      # run's artifact.
+      previews: true
     permissions:
       contents: read
 

@@ -1,0 +1,59 @@
+package ee.schimke.livery.review
+
+import ee.schimke.livery.publisher.CompatibilityCheck
+import java.io.File
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class ReviewPreviewsTest {
+  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private fun temp(name: String) = Files.createTempDirectory(name).toFile()
+  private val keep = System.getProperty("livery.render.out")?.let(::File)
+
+  @Test fun aChangedDesignIsDrawnBeforeAndAfterWithEachExample() {
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    // tile-default's in-app document is replaced by another build of it (the sample's other
+    // templates are placeholders, which aren't drawn).
+    javaClass.getResourceAsStream("/demo-tile.rc")!!.use { File(tree, "designs/tile-default/in-app.rc").writeBytes(it.readBytes()) }
+    val out = keep?.resolve("changed") ?: temp("previews")
+    val c = CompatibilityCheck.compareTrees(tree, sample, "main")
+    val previews = ReviewPreviews(out, imageBase = "https://example.test/").render(c)
+
+    val tile = previews.single()
+    assertEquals("tile-default", tile.design)
+    assertNull(tile.failure)
+    assertEquals(listOf("on", "off", "unavailable"), tile.shots.map { it.example })
+    for (shot in tile.shots) {
+      assertEquals("https://example.test/tile-default-${shot.example}-after.png", shot.after)
+      assertEquals("https://example.test/tile-default-${shot.example}-before.png", shot.before)
+      val (a, b) = listOf("after", "before").map { File(out, "tile-default-${shot.example}-$it.png").readBytes() }
+      assertTrue(a.isNotEmpty() && b.isNotEmpty())
+      assertEquals(a.contentEquals(b), shot.unchanged)
+    }
+
+    val md = CompatibilityCheck.markdown(c.report, previews)
+    assertTrue("**Previews**" in md, md)
+    assertTrue(("| before |" in md && "| after |" in md) || "| unchanged |" in md, md)
+    assertTrue("<img src=\"https://example.test/tile-default-on-" in md, md)
+  }
+
+  @Test fun aNewCatalogIsDrawnAfterOnly() {
+    val out = keep?.resolve("added") ?: temp("previews")
+    val c = CompatibilityCheck.compareTrees(sample, temp("empty"), "nothing")
+    val previews = ReviewPreviews(out).render(c)
+    assertEquals(c.report.templates.map { it.design }.distinct().sorted(), previews.map { it.design }.sorted())
+    val tile = previews.single { it.design == "tile-default" }
+    assertNull(tile.failure)
+    assertTrue(tile.shots.isNotEmpty() && tile.shots.all { it.before == null && it.after != null }, tile.toString())
+    // The other designs' templates are placeholders: said, not drawn.
+    assertTrue(previews.filter { it.design != "tile-default" }.all { it.failure == "no template is a Remote Compose document" }, previews.toString())
+  }
+
+  @Test fun anUnchangedTreeDrawsNothing() {
+    val copy = temp("copy").also { sample.copyRecursively(it) }
+    assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))
+  }
+}

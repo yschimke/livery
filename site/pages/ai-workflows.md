@@ -115,8 +115,8 @@ result on every template of the design.
   `await_feedback`, `send_message` and `set_status`, so a person and an agent edit together with
   the person's real data on screen.
 - `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly.
-- Pictures in `check_compatibility` and `livery check`: each changed template rendered before and
-  after with every example, side by side.
+- Pictures in `check_compatibility`: each changed design rendered before and after with every
+  example, as `livery review` does for a pull request.
 - `livery check --against <release URL>`: a published catalog as the baseline, not only a git
   revision or a source tree.
 - Retired versions in the manifest, so a decision or feed item pinned to an older template's hash

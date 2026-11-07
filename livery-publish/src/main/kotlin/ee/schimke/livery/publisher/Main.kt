@@ -40,6 +40,9 @@ private const val USAGE = """livery — build, sign and check a template catalog
 """
 
 fun main(args: Array<String>) {
+  // Reports are UTF-8 (markdown with ·, × and –) whatever the platform's default charset: a CI
+  // runner's can be ASCII, which prints each as `?`.
+  System.setOut(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.out), true, Charsets.UTF_8))
   val a = args.toList()
   val extensions = LiveryCommand.installed()
   fun opt(name: String) = a.indexOf(name).takeIf { it >= 0 }?.let { a.getOrNull(it + 1) }
