@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/yschimke/livery/compare/v0.3.0...v0.4.0) (2026-11-07)
+
+
+### Features
+
+* concise review comments with before/after pictures, kept preview data, and fail on Android 16 widget crashes ([#19](https://github.com/yschimke/livery/issues/19)) ([816f8b5](https://github.com/yschimke/livery/commit/816f8b5c5d93505002fbe4a92b798f11e8a6c5b4))
+* Livery contracts as A2UI components, set actions for two-way binding, and a livery-a2ui-compose prototype ([#22](https://github.com/yschimke/livery/issues/22)) ([704712d](https://github.com/yschimke/livery/commit/704712dcff14b7741873123ef798be8856d66acc))
+* livery play, a template played as this release of Livery plays it ([#20](https://github.com/yschimke/livery/issues/20)) ([7db8cc5](https://github.com/yschimke/livery/commit/7db8cc5efc8eb4d1a058a0ff2d445f75255f6011))
+* risky features for documents: template signatures, an agent-bytes policy, and catalog gating (protocol level 8) ([#23](https://github.com/yschimke/livery/issues/23)) ([7500f34](https://github.com/yschimke/livery/commit/7500f349ae043107cb093c15f63ab6278a1eeb9b))
+
 ## [0.3.0](https://github.com/yschimke/livery/compare/v0.2.0...v0.3.0) (2026-11-06)
 
 
