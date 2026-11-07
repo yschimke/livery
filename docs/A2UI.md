@@ -315,11 +315,13 @@ Kotlin writes it; the TypeScript and Swift adapters must reproduce it.
 ## The prototype
 
 [`livery-a2ui-compose`](../livery-a2ui-compose) is the component on Compose, compiled from one source
-directory (`src/a2ui`) for Android against the AndroidX AARs and for the JVM against the port. Its
-test, `PromoBannerA2uiTest`, runs the sample catalog's `promo/banner@1` in a real A2UI surface on the
-desktop: JSON messages applied by A2UI's engine, a basic `Text` beside a generated `PromoBanner`,
-the template selected from the catalog `livery-publish` builds, offline, and played by rc-players.
-It checks that:
+directory (`src/a2ui`) twice: for Android against the AndroidX AARs, and for the JVM and the browser
+(Wasm) against the port, through one `portMain` source set. Its tests run the sample catalog in a
+real A2UI surface on the desktop: JSON messages applied by A2UI's engine, basic-catalog components
+beside generated Livery ones, templates selected from the catalog `livery-publish` builds, offline,
+and played by rc-players.
+
+`PromoBannerA2uiTest` (`promo/banner@1`, a `PromoBanner`) checks that:
 
 - the catalog the client advertises has `PromoBanner`, with the contract's limits and defaults in
   its schema and without the theme roles;
@@ -330,6 +332,26 @@ It checks that:
   and nothing else draws;
 - tapping the template's CTA sends the agent's `startTrial` event, from component `promo`, with
   the agent's context and the template's `route`, and Livery's own `Action` event.
+
+`PollA2uiTest` (`social/poll@1`, a `SocialPoll`) is the loop an agent runs, with data that keeps
+changing. The agent binds the poll to `/poll` once (`question`, `summary`, and `options`, a list of
+`label`, `share`, `result` and `mark`) and wires `vote`:
+
+1. A tap on "Swift" is the template's `vote` with `option: "1"`; it reaches the agent as its `vote`
+   event, from component `poll`, with `option` and the agent's own `poll` context.
+2. The agent counts it and answers with `updateDataModel`: new shares and results, `✓` on Swift,
+   "129 votes · you voted". The same document redraws.
+3. Other people's votes keep arriving as more `updateDataModel`s, and keep redrawing it.
+4. Through all of it there is one `Impression`: the document is kept and only its values change.
+
+It also checks that a `vote` the agent didn't wire goes to the app's `app:vote` handler instead,
+and that the document draws as many option rows as the data has (`options.count`, up to the
+contract's 4), so the same document serves a two-option and a four-option poll.
+
+The poll's document is a real one, captured from Compose by `livery-capture`'s `SamplePollTest`:
+every row is the same composable reading `options.<i>.*`, its bar is `fillMaxWidth(share)`, and it
+is gone when `options.count` is at most `i`. The data does the formatting (`result`, `summary`,
+`mark`), so the agent decides what the results say and the design decides how they look.
 
 `samples/catalog/designs/banner-classic/in-app.rc` was a placeholder, so it is now captured from
 Compose by `livery-capture`'s `SampleBannerTest` (regenerate with
@@ -358,7 +380,8 @@ What the prototype taught, and what it doesn't do yet:
    `livery publish` writes `a2ui-catalog.json`.
 2. `livery-a2ui-compose` on Android against the AndroidX AARs and on the JVM against the port, with
    the sample catalog's `promo/banner` inside an A2UI surface. *Prototyped* (above).
-3. Wasm against the port, and moving to the AndroidX release the port next follows.
+3. Wasm against the port (*compiles*; not yet run in a browser), and moving to the AndroidX
+   release the port next follows.
 4. The `set` action kind (protocol level, Kotlin, Swift, fixtures), and two-way binding in A2UI.
 5. Documents named by the message: `sha256` (+ `url`) against the trusted manifests first, then the
    template signature (protocol, `livery sign-template`, `signing.json` cases) and `inline`; the

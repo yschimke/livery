@@ -47,8 +47,8 @@ class ReviewPreviewsTest {
     val c = CompatibilityCheck.compareTrees(sample, temp("empty"), "nothing")
     val previews = ReviewPreviews(out).render(c)
     assertEquals(c.report.templates.map { it.design }.distinct().sorted(), previews.map { it.design }.sorted())
-    // tile-default and banner-classic are real documents; the other designs' are placeholders.
-    val real = setOf("tile-default", "banner-classic")
+    // tile-default, banner-classic and poll-card are real documents; the other designs' are placeholders.
+    val real = setOf("tile-default", "banner-classic", "poll-card")
     for (design in real) {
       val p = previews.single { it.design == design }
       assertNull(p.failure)

@@ -9,10 +9,10 @@ plugins {
 // build.gradle.kts's `published` list.
 //
 // AndroidX publishes A2UI for Android only; yschimke/a2ui-catalog ports the same release to Compose
-// Multiplatform under upstream's own packages. So the code in src/a2ui is compiled twice, against
-// the AndroidX AARs on Android (an Android app keeps the real library) and against the port on the
-// JVM. Neither library has a common variant, so that directory is not a KMP source set (whose
-// metadata compilation would need one): it is a plain source directory of both targets.
+// Multiplatform (JVM and Wasm) under upstream's own packages. So the code in src/a2ui is compiled
+// twice: in androidMain against the AndroidX AARs (an Android app keeps the real library), and in
+// portMain, shared by jvm and wasmJs, against the port. The AARs have no common variant, so the
+// directory can't be commonMain (whose metadata compilation would need one).
 //
 // A2UI's alpha train pulls Compose 1.13 alphas (AndroidX Compose 1.13.0-alpha03, Compose
 // Multiplatform 1.13.0-alpha02), ahead of the stable 1.12 line the core modules build on. That is
@@ -27,10 +27,17 @@ kotlin {
     aarMetadata { minCompileSdk = 36 }
   }
   jvm()
+  // The browser, against the port's Wasm build. Its tests are the JVM ones (no headless browser in
+  // CI), as in livery-compose.
+  @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class) wasmJs { browser { testTask { enabled = false } } }
 
   sourceSets {
+    // The port's two targets share one intermediate source set, as livery-compose's skikoMain does.
+    val portMain by creating { dependsOn(commonMain.get()) }
+    jvmMain.get().dependsOn(portMain)
+    wasmJsMain.get().dependsOn(portMain)
     androidMain.get().kotlin.srcDir("src/a2ui/kotlin")
-    jvmMain.get().kotlin.srcDir("src/a2ui/kotlin")
+    portMain.kotlin.srcDir("src/a2ui/kotlin")
     commonMain.dependencies {
       api(project(":livery-compose"))
       implementation(libs.kotlinx.serialization.json)
@@ -40,7 +47,7 @@ kotlin {
       implementation(libs.a2ui.material3)
       implementation(libs.a2ui.androidx.material3)
     }
-    jvmMain.dependencies {
+    portMain.dependencies {
       api(libs.a2ui.cmp.compose.ui)
       implementation(libs.a2ui.cmp.material3)
       implementation(libs.a2ui.cmp.material3.base)
