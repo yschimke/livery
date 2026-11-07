@@ -1,53 +1,21 @@
 package ee.schimke.livery.publisher
 
 import java.io.File
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
-/**
- * A catalog source tree on disk, for the common catalog code in `livery-catalog`: the JVM edge.
- * Writes create their parent directories.
- */
-class FileSource(val file: File) : SourceFile {
-  override val name: String get() = file.name
-  override val isFile: Boolean get() = file.isFile
-  override val isDirectory: Boolean get() = file.isDirectory
+/** The system's file system, which the File overloads below read and write through. */
+private val SYSTEM: FileSystem = FileSystem.SYSTEM
 
-  override fun resolve(name: String): SourceFile = FileSource(File(file, name))
-
-  override fun listFiles(): List<SourceFile>? = file.listFiles()?.map(::FileSource)
-
-  override fun readBytes(): ByteArray = file.readBytes()
-
-  override fun readText(): String = file.readText()
-
-  override fun length(): Long = file.length()
-
-  override fun writeBytes(bytes: ByteArray) {
-    file.parentFile?.mkdirs()
-    file.writeBytes(bytes)
-  }
-
-  override fun delete() {
-    file.delete()
-  }
-
-  override fun toString(): String = file.path
-}
-
-/** [file] as a [SourceFile]. */
-val File.source: SourceFile get() = FileSource(this)
-
-/** The [File] behind a [SourceFile] this edge made. */
-val SourceFile.file: File get() = (this as? FileSource)?.file ?: error("$this is not on disk")
-
-fun CatalogBuilder.build(src: File, layout: Layout, serial: Long? = null): CatalogBuilder.Output = build(src.source, layout, serial)
+fun CatalogBuilder.build(src: File, layout: Layout, serial: Long? = null): CatalogBuilder.Output = build(SYSTEM, src.toOkioPath(), layout, serial)
 
 fun CompatibilityCheck.compare(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): CompatibilityCheck.Report =
-  compare(src.source, old?.source, against, inspect)
+  compare(SYSTEM, src.toOkioPath(), old?.toOkioPath(), against, inspect)
 
 fun CompatibilityCheck.compareTrees(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): CompatibilityCheck.Comparison =
-  compareTrees(src.source, old?.source, against, inspect)
+  compareTrees(SYSTEM, src.toOkioPath(), old?.toOkioPath(), against, inspect)
 
 /**
  * Compares the tree at [src] with [against]: a directory, or a git revision of the repository [src]
@@ -99,17 +67,17 @@ fun CompatibilityCheck.atRevision(src: File, revision: String): Pair<File, File>
   return dir to (if (prefix.isEmpty()) dir else File(dir, prefix))
 }
 
-fun KeptExamples.load(src: File): Map<String, Map<String, kotlinx.serialization.json.JsonObject>> = load(src.source)
+fun KeptExamples.load(src: File): Map<String, Map<String, kotlinx.serialization.json.JsonObject>> = load(SYSTEM, src.toOkioPath())
 
-fun KeptExamples.missing(src: File, base: File): List<KeptExamples.Missing> = missing(src.source, base.source)
+fun KeptExamples.missing(src: File, base: File): List<KeptExamples.Missing> = missing(SYSTEM, src.toOkioPath(), base.toOkioPath())
 
 /** Writes [missing]'s data into [src]'s kept examples; returns the files written. */
-fun KeptExamples.keep(src: File, base: File): List<File> = keep(src.source, base.source).map { it.file }
+fun KeptExamples.keep(src: File, base: File): List<File> = keep(SYSTEM, src.toOkioPath(), base.toOkioPath()).map { it.toFile() }
 
 fun TemplateImport.into(src: File, designId: String, name: String, document: ByteArray, target: ee.schimke.livery.protocol.Target, source: Map<String, String> = emptyMap()): TemplateImport.Imported =
-  into(src.source, designId, name, document, target, source)
+  into(SYSTEM, src.toOkioPath(), designId, name, document, target, source)
 
-fun TemplateImport.contract(src: File, ref: String): ee.schimke.livery.protocol.Contract = contract(src.source, ref)
+fun TemplateImport.contract(src: File, ref: String): ee.schimke.livery.protocol.Contract = contract(SYSTEM, src.toOkioPath(), ref)
 
 /** Writes [result] as a static catalog into [out]/<channel>/, unsigned, and returns that directory. */
 @Suppress("UnusedReceiverParameter")
