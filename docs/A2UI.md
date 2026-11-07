@@ -268,10 +268,10 @@ action kind.
 
 | Module | Platforms | Does |
 | --- | --- | --- |
-| `livery-a2ui` *(built)* | KMP (JVM, Android, iOS, Wasm), no Compose | **Produces.** *Built:* `LiveryA2ui.component(contract)` (name, properties, `schema()`), `catalogSchema(catalogId, contracts)`, `dataset`, `themeValues`, `writable`, `eventPayload`, pinned by `conformance/a2ui.json`; `ProjectionMatchesA2uiTest` holds A2UI's own advertised schema to it. *Planned:* the agent builders and validator below. The projection: contract → A2UI component definition (JSON Schema), a whole Livery catalog → an A2UI catalog JSON; the dataset assembly from resolved properties; event mapping. Server-side builders for agents written in Kotlin (`liveryComponent("promo", promoBanner) { headline(path("/offer/title")); action("cta", event("startTrial")) }`) and a validator that runs `ContractBinder` over the literal parts of an `updateComponents` message before it is sent. The same code the clients run |
+| `livery-a2ui` *(built)* | KMP (JVM, Android, iOS, Wasm), no Compose | **Produces.** *Built:* `LiveryA2ui.component(contract)` (name, properties, `schema()`), `catalogSchema(catalogId, contracts)`, `dataset`, `themeValues`, `writable`, `eventPayload`, pinned by `conformance/a2ui.json`; `ProjectionMatchesA2uiTest` holds A2UI's own advertised schema to it. *Built:* `LiveryA2uiMessages.validate` (an agent's messages against the contracts: properties, actions, `template`, `design`, and values through `ContractBinder`, bindings too given the data model) and the `LiveryA2ui.componentJson(id, contract) { … }` builder. The projection: contract → A2UI component definition (JSON Schema), a whole Livery catalog → an A2UI catalog JSON; the dataset assembly from resolved properties; event mapping. The same code the clients run |
 | `livery-a2ui-compose` | Android (AndroidX `androidx.a2ui`), desktop and Wasm (`ee.schimke.a2uicmp` port) | **Renders.** `LiveryA2uiComponents(host, contracts)`: one `A2uiComponent` per contract over `LiveryTemplate`; `liveryA2uiCatalog(basic, host)` to combine with the Material basic catalog |
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
-| `livery-mcp` | CLI | `a2ui_component_schema(contract)` and `validate_a2ui(message)`, for an agent authoring an A2UI response against a catalog |
+| `livery-mcp` *(built)* | any MCP host (`livery-mcp-core`) | `a2ui_component_schema(contract?)` and `validate_a2ui(message, data_model?)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
 | `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
@@ -428,8 +428,8 @@ What the prototype taught, and what it doesn't do yet:
 ## Order of work
 
 1. `livery-a2ui`: projection, dataset assembly, event mapping, `conformance/a2ui.json`;
-   `livery build --a2ui <catalogId>` writes `a2ui-catalog.json`. *Done* (below). Still to do: the
-   Kotlin builders for agents and the `updateComponents` validator.
+   `livery build --a2ui <catalogId>` writes `a2ui-catalog.json`. *Done* (below). The Kotlin
+   builder for agents and the message validator (with the MCP tools) are *done* too.
 2. `livery-a2ui-compose` on Android against the AndroidX AARs and on the JVM against the port, with
    the sample catalog's `promo/banner` inside an A2UI surface. *Prototyped* (above).
 3. Wasm against the port (*compiles*; not yet run in a browser), and moving to the AndroidX

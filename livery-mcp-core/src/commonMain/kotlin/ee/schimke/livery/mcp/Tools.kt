@@ -11,7 +11,8 @@ import kotlinx.serialization.json.putJsonObject
 
 /** The tools' names, descriptions and input schemas, as `tools/list` returns them. */
 internal object Tools {
-  private class Arg(val name: String, val type: String, val description: String, val required: Boolean = false)
+  /** [types]: the JSON Schema type, or several (`["object", "array"]`) when the argument takes either. */
+  private class Arg(val name: String, val type: String, val description: String, val required: Boolean = false, val types: List<String> = listOf(type))
 
   private fun tool(name: String, description: String, vararg args: Arg) = buildJsonObject {
     put("name", name)
@@ -19,7 +20,10 @@ internal object Tools {
     putJsonObject("inputSchema") {
       put("type", "object")
       putJsonObject("properties") {
-        for (a in args) putJsonObject(a.name) { put("type", a.type); put("description", a.description) }
+        for (a in args) putJsonObject(a.name) {
+          if (a.types.size == 1) put("type", a.type) else putJsonArray("type") { a.types.forEach { add(it) } }
+          put("description", a.description)
+        }
       }
       putJsonArray("required") { args.filter { it.required }.forEach { add(it.name) } }
       put("additionalProperties", false)
@@ -48,6 +52,12 @@ internal object Tools {
     tool("check_compatibility", "Compares the catalog with an earlier version of itself, as `livery check` does: contract changes marked compatible or breaking, and for each template what it reads and emits now, the contract minor it requires, its size, and which values only its own default covers. ok=false means apps already installed would break.",
       Arg("against", "string", "A git revision of the catalog's repository (default HEAD, so: what the working tree changes), e.g. origin/main, or another source tree's path"),
       Arg("inspect", "boolean", "Also decode every document: its reads, emits and types against the contract (default false)")),
+    tool("a2ui_component_schema", "The catalog's contracts as A2UI components (docs/A2UI.md): one component's JSON schema, or the whole A2UI catalog to prompt an agent with. A component takes the contract's inputs as A2UI values or {\"path\": …} bindings, plus design, variant, actions (an A2UI action per contract action) and template.",
+      Arg("contract", "string", "One contract (id@major); all of them when left out"),
+      Arg("catalog_id", "string", "The A2UI catalog id the client advertises (default livery)")),
+    tool("validate_a2ui", "Checks an A2UI message (or an array of messages) before it is sent: every Livery component's properties, its values through the same contract gate every client runs (literals, and bindings when data_model is given), its actions, template and design. Basic-catalog components are A2UI's to check.",
+      Arg("message", "object", "An A2UI message such as {\"version\": \"v0.9\", \"updateComponents\": …}, or an array of them", required = true, types = listOf("object", "array")),
+      Arg("data_model", "object", "The surface's data model, to check bound values too")),
     tool("list_history", "A design's version history from the catalog's git log: for each template, the commits that changed it and where it came from (its sidecar's source). Render one with render_preview's revision.",
       Arg("design", "string", "A design id in the catalog", required = true), Arg("template", "string", "Only this template"),
       Arg("limit", "integer", "At most this many commits per template (default 20)")),
