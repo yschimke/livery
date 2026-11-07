@@ -212,22 +212,31 @@ class LiveryA2uiComponent(
   }
 
   /** A document the agent sent with the message (PROTOCOL.md §3.4), as given: its bytes, its signature. */
-  private class InlineDocument(val bytes: ByteArray?, val signature: ManifestSignature?, val problem: String?) {
-    val key: Any = listOf(bytes?.contentHashCode(), bytes?.size, signature)
+  private class InlineDocument(val text: String?, val bytes: ByteArray?, val signature: ManifestSignature?, val problem: String?) {
+    /** The document as sent, compared whole: a different document is always admitted afresh. */
+    val key: Any = listOf(text, signature, problem)
   }
 
+  /**
+   * Null only when the agent sent no `template`: then the catalog chooses. A `template` that is
+   * there but malformed is a document request all the same, so it is refused, never answered with a
+   * catalog design (PROTOCOL.md §3.5).
+   */
   private fun inlineDocument(properties: A2uiComponentProperties): InlineDocument? {
-    val template = properties[templateProperty] as? Map<*, *> ?: return null
-    val text = template["inline"] as? String ?: return null
+    if (templateProperty !in properties) return null
+    val template = properties[templateProperty] as? Map<*, *>
+      ?: return InlineDocument(null, null, null, "template must be {\"inline\": <base64>, \"signature\"?}")
+    val text = template["inline"] as? String
+      ?: return InlineDocument(null, null, null, "template needs inline: the document as base64")
     val bytes = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()
-      ?: return InlineDocument(null, null, "inline is not base64")
+      ?: return InlineDocument(text, null, null, "inline is not base64")
     val sig = (template["signature"] as? Map<*, *>)?.let { s ->
       val keyId = s["keyId"] as? String
       val value = s["signature"] as? String
-      if (keyId == null || value == null) return InlineDocument(null, null, "signature needs keyId and signature")
+      if (keyId == null || value == null) return InlineDocument(text, null, null, "signature needs keyId and signature")
       ManifestSignature(alg = s["alg"] as? String ?: "Ed25519", keyId = keyId, signature = value)
     }
-    return InlineDocument(bytes, sig, null)
+    return InlineDocument(text, bytes, sig, null)
   }
 
   /**

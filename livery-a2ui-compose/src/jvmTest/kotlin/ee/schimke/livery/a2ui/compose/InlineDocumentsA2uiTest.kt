@@ -110,6 +110,24 @@ class InlineDocumentsA2uiTest : InlineSurfaceTest(
     assertTrue("signature: bad signature" in why, why)
   }
 
+  @Test fun aMalformedTemplateIsRefusedNotAnsweredWithACatalogDesign() = runComposeUiTest {
+    assertTrue("template needs inline" in refuses("""{"inline":3}"""))
+  }
+
+  @Test fun aTemplateThatIsntAnObjectIsRefused() = runComposeUiTest {
+    assertTrue("template must be" in refuses("\"banner-classic\""))
+  }
+
+  @Test fun aDifferentDocumentIsAdmittedAfresh() = runComposeUiTest {
+    // The same component, first a plain document, then one with a shader: the second is checked
+    // on its own, and an unsigned shader is refused even though the first one played.
+    send(create, components(inline(InlineFixtures.banner)))
+    show()
+    send(components(inline(InlineFixtures.bannerWithShader)))
+    waitUntil(timeoutMillis = 10_000) { outbound.any { it is A2uiClientErrorMessage } }
+    assertTrue(outbound.filterIsInstance<A2uiClientErrorMessage>().any { "an unsigned document may not use [shaders]" in it.message })
+  }
+
   @Test fun theAgentsDataStillPassesTheContract() = runComposeUiTest {
     send(create, components(inline(InlineFixtures.banner)).replace("\"Try Premium free\"", "\"" + "x".repeat(41) + "\""))
     setContent { MaterialTheme { A2uiSurface(surfaceModel = surface(), transitionSpec = null) } }
