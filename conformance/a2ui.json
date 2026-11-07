@@ -1,0 +1,947 @@
+{
+  "note": "Livery in A2UI's terms (docs/A2UI.md): the component each contract becomes, and the data and events that cross between A2UI and Livery.",
+  "components": [
+    {
+      "contract": {
+        "id": "promo/banner",
+        "major": 1,
+        "title": "Promotion banner",
+        "inputs": {
+          "headline": {
+            "type": "string",
+            "required": true,
+            "maxLength": 40
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "cta": {
+            "type": "string",
+            "required": true,
+            "maxLength": 18
+          },
+          "hero": {
+            "type": "image"
+          },
+          "accent": {
+            "type": "color",
+            "default": "#FF6750A4"
+          },
+          "theme.primary": {
+            "type": "color",
+            "role": "primary"
+          },
+          "theme.surface": {
+            "type": "color",
+            "role": "surface"
+          },
+          "theme.onSurface": {
+            "type": "color",
+            "role": "onSurface"
+          }
+        },
+        "actions": {
+          "cta": {
+            "kind": "navigate",
+            "args": {
+              "route": {
+                "type": "string",
+                "required": true
+              }
+            }
+          },
+          "dismiss": {
+            "kind": "dismiss"
+          }
+        },
+        "examples": {
+          "default": {
+            "headline": "Try Premium free",
+            "body": "Offline downloads and no ads for 30 days.",
+            "cta": "Start trial"
+          },
+          "long": {
+            "headline": "A headline that uses all forty character",
+            "body": "Body copy at its limit to check wrapping on the smallest supported width.",
+            "cta": "Eighteen chars cta"
+          }
+        },
+        "dataSource": "Decision"
+      },
+      "name": "PromoBanner",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string",
+            "const": "PromoBanner"
+          },
+          "headline": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 40 characters."
+          },
+          "body": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 120 characters."
+          },
+          "cta": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 18 characters."
+          },
+          "hero": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "An image: asset:<sha256>, https://… or app:<key>."
+          },
+          "accent": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "A colour, #RRGGBB or #AARRGGBB. Default \"#FF6750A4\"."
+          },
+          "design": {
+            "type": "string",
+            "description": "A Livery design id to prefer; unavailable falls back to the automatic choice."
+          },
+          "variant": {
+            "type": "string",
+            "description": "A layout variant to prefer, such as compact or hero."
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "cta": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind navigate. Adds route to an event's context."
+              },
+              "dismiss": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind dismiss."
+              }
+            },
+            "additionalProperties": false,
+            "description": "What each of the template's actions does; an action left out is handled by the app."
+          },
+          "template": {
+            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+          }
+        },
+        "required": [
+          "component",
+          "headline",
+          "cta"
+        ],
+        "description": "Promotion banner. Livery contract promo/banner@1: a server-driven template; its look is chosen by the client."
+      }
+    },
+    {
+      "contract": {
+        "id": "social/poll",
+        "major": 1,
+        "title": "Poll",
+        "inputs": {
+          "question": {
+            "type": "string",
+            "required": true,
+            "maxLength": 120
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 48,
+            "description": "under the options, formatted for display: \"128 votes · closes Friday\""
+          },
+          "theme.primary": {
+            "type": "color",
+            "role": "primary"
+          },
+          "theme.surface": {
+            "type": "color",
+            "role": "surface"
+          },
+          "theme.onSurface": {
+            "type": "color",
+            "role": "onSurface"
+          }
+        },
+        "lists": {
+          "options": {
+            "item": {
+              "label": {
+                "type": "string",
+                "required": true,
+                "maxLength": 40
+              },
+              "share": {
+                "type": "float",
+                "default": 0,
+                "min": 0.0,
+                "max": 1.0,
+                "description": "this option's fraction of the votes, drawn as its bar"
+              },
+              "result": {
+                "type": "string",
+                "maxLength": 8,
+                "description": "the share formatted for display: \"42%\""
+              },
+              "mark": {
+                "type": "string",
+                "maxLength": 2,
+                "description": "\"✓\" on the option the person chose, otherwise empty"
+              }
+            },
+            "max": 4
+          }
+        },
+        "actions": {
+          "vote": {
+            "kind": "app:vote",
+            "args": {
+              "option": {
+                "type": "string",
+                "required": true,
+                "description": "the chosen option's index, from 0"
+              }
+            },
+            "description": "the person picked an option"
+          }
+        },
+        "examples": {
+          "open": {
+            "question": "Which language do you write your UI in?",
+            "summary": "128 votes",
+            "options": [
+              {
+                "label": "Kotlin",
+                "share": 0.52,
+                "result": "52%"
+              },
+              {
+                "label": "Swift",
+                "share": 0.27,
+                "result": "27%"
+              },
+              {
+                "label": "TypeScript",
+                "share": 0.21,
+                "result": "21%"
+              }
+            ]
+          },
+          "voted": {
+            "question": "Which language do you write your UI in?",
+            "summary": "129 votes · you voted",
+            "options": [
+              {
+                "label": "Kotlin",
+                "share": 0.53,
+                "result": "53%",
+                "mark": "✓"
+              },
+              {
+                "label": "Swift",
+                "share": 0.26,
+                "result": "26%"
+              },
+              {
+                "label": "TypeScript",
+                "share": 0.21,
+                "result": "21%"
+              }
+            ]
+          }
+        }
+      },
+      "name": "SocialPoll",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string",
+            "const": "SocialPoll"
+          },
+          "question": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 120 characters."
+          },
+          "summary": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "under the options, formatted for display: \"128 votes · closes Friday\" At most 48 characters."
+          },
+          "options": {
+            "$ref": "common_types.json#/$defs/DynamicValue",
+            "description": "An array of at most 4 objects, each with label, share, result, mark."
+          },
+          "design": {
+            "type": "string",
+            "description": "A Livery design id to prefer; unavailable falls back to the automatic choice."
+          },
+          "variant": {
+            "type": "string",
+            "description": "A layout variant to prefer, such as compact or hero."
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "vote": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "the person picked an option Kind app:vote. Adds option to an event's context."
+              }
+            },
+            "additionalProperties": false,
+            "description": "What each of the template's actions does; an action left out is handled by the app."
+          },
+          "template": {
+            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+          }
+        },
+        "required": [
+          "component",
+          "question"
+        ],
+        "description": "Poll. Livery contract social/poll@1: a server-driven template; its look is chosen by the client."
+      }
+    },
+    {
+      "contract": {
+        "id": "live/status-tile",
+        "major": 1,
+        "title": "Live status tile",
+        "inputs": {
+          "name": {
+            "type": "string",
+            "required": true,
+            "maxLength": 40
+          },
+          "state": {
+            "type": "string",
+            "required": true,
+            "description": "formatted for display"
+          },
+          "is_on": {
+            "type": "bool",
+            "default": false
+          },
+          "level": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0
+          },
+          "available": {
+            "type": "bool",
+            "default": true
+          },
+          "theme.primary": {
+            "type": "color",
+            "role": "primary"
+          }
+        },
+        "actions": {
+          "toggle": {
+            "kind": "app:toggle"
+          },
+          "details": {
+            "kind": "navigate",
+            "args": {
+              "route": {
+                "type": "string",
+                "required": true
+              }
+            }
+          }
+        },
+        "examples": {
+          "on": {
+            "name": "Kitchen",
+            "state": "On · 80%",
+            "is_on": true,
+            "level": 0.8
+          },
+          "off": {
+            "name": "Kitchen",
+            "state": "Off",
+            "is_on": false,
+            "level": 0
+          },
+          "unavailable": {
+            "name": "Kitchen",
+            "state": "Unavailable",
+            "available": false
+          }
+        }
+      },
+      "name": "LiveStatusTile",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string",
+            "const": "LiveStatusTile"
+          },
+          "name": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 40 characters."
+          },
+          "state": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "formatted for display"
+          },
+          "is_on": {
+            "$ref": "common_types.json#/$defs/DynamicBoolean",
+            "description": "Default false."
+          },
+          "level": {
+            "$ref": "common_types.json#/$defs/DynamicNumber",
+            "description": "At least 0. At most 1."
+          },
+          "available": {
+            "$ref": "common_types.json#/$defs/DynamicBoolean",
+            "description": "Default true."
+          },
+          "design": {
+            "type": "string",
+            "description": "A Livery design id to prefer; unavailable falls back to the automatic choice."
+          },
+          "variant": {
+            "type": "string",
+            "description": "A layout variant to prefer, such as compact or hero."
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "toggle": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind app:toggle."
+              },
+              "details": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind navigate. Adds route to an event's context."
+              }
+            },
+            "additionalProperties": false,
+            "description": "What each of the template's actions does; an action left out is handled by the app."
+          },
+          "template": {
+            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+          }
+        },
+        "required": [
+          "component",
+          "name",
+          "state"
+        ],
+        "description": "Live status tile. Livery contract live/status-tile@1: a server-driven template; its look is chosen by the client."
+      }
+    },
+    {
+      "contract": {
+        "id": "feed/article",
+        "major": 1,
+        "title": "Feed article",
+        "inputs": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "maxLength": 90
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "published": {
+            "type": "long",
+            "description": "epoch seconds; the document formats it relative to the player clock"
+          },
+          "thumbnail": {
+            "type": "image"
+          },
+          "saved": {
+            "type": "bool",
+            "default": false
+          }
+        },
+        "lists": {
+          "tags": {
+            "item": {
+              "label": {
+                "type": "string",
+                "required": true,
+                "maxLength": 16
+              }
+            },
+            "max": 3
+          }
+        },
+        "actions": {
+          "open": {
+            "kind": "navigate",
+            "args": {
+              "route": {
+                "type": "string",
+                "required": true
+              }
+            }
+          },
+          "save": {
+            "kind": "app:toggle-save"
+          }
+        },
+        "examples": {
+          "default": {
+            "title": "Remote Compose templates in production",
+            "source": "Engineering",
+            "published": 1793000000,
+            "tags": [
+              {
+                "label": "android"
+              },
+              {
+                "label": "sdui"
+              }
+            ]
+          }
+        },
+        "dataSource": "Feed"
+      },
+      "name": "FeedArticle",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string",
+            "const": "FeedArticle"
+          },
+          "title": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 90 characters."
+          },
+          "source": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 30 characters."
+          },
+          "published": {
+            "$ref": "common_types.json#/$defs/DynamicNumber",
+            "description": "epoch seconds; the document formats it relative to the player clock A whole number."
+          },
+          "thumbnail": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "An image: asset:<sha256>, https://… or app:<key>."
+          },
+          "saved": {
+            "$ref": "common_types.json#/$defs/DynamicBoolean",
+            "description": "Default false."
+          },
+          "tags": {
+            "$ref": "common_types.json#/$defs/DynamicValue",
+            "description": "An array of at most 3 objects, each with label."
+          },
+          "design": {
+            "type": "string",
+            "description": "A Livery design id to prefer; unavailable falls back to the automatic choice."
+          },
+          "variant": {
+            "type": "string",
+            "description": "A layout variant to prefer, such as compact or hero."
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind navigate. Adds route to an event's context."
+              },
+              "save": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "Kind app:toggle-save."
+              }
+            },
+            "additionalProperties": false,
+            "description": "What each of the template's actions does; an action left out is handled by the app."
+          },
+          "template": {
+            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+          }
+        },
+        "required": [
+          "component",
+          "title"
+        ],
+        "description": "Feed article. Livery contract feed/article@1: a server-driven template; its look is chosen by the client."
+      }
+    },
+    {
+      "contract": {
+        "id": "shop/quantity",
+        "major": 1,
+        "title": "Quantity stepper",
+        "inputs": {
+          "name": {
+            "type": "string",
+            "required": true,
+            "maxLength": 40
+          },
+          "price": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "formatted for display: \"€2.49\""
+          },
+          "quantity": {
+            "type": "int",
+            "default": 1,
+            "min": 0.0,
+            "max": 9.0
+          },
+          "theme.primary": {
+            "type": "color",
+            "role": "primary"
+          },
+          "theme.surface": {
+            "type": "color",
+            "role": "surface"
+          },
+          "theme.onSurface": {
+            "type": "color",
+            "role": "onSurface"
+          }
+        },
+        "actions": {
+          "setQuantity": {
+            "kind": "set",
+            "description": "the person stepped the quantity; the host writes it back",
+            "input": "quantity"
+          }
+        },
+        "examples": {
+          "one": {
+            "name": "Oat milk, 1 l",
+            "price": "€2.49",
+            "quantity": 1
+          },
+          "none": {
+            "name": "Oat milk, 1 l",
+            "price": "€2.49",
+            "quantity": 0
+          }
+        }
+      },
+      "name": "ShopQuantity",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string",
+            "const": "ShopQuantity"
+          },
+          "name": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "At most 40 characters."
+          },
+          "price": {
+            "$ref": "common_types.json#/$defs/DynamicString",
+            "description": "formatted for display: \"€2.49\" At most 16 characters."
+          },
+          "quantity": {
+            "$ref": "common_types.json#/$defs/DynamicNumber",
+            "description": "At least 0. At most 9. A whole number. Default 1."
+          },
+          "design": {
+            "type": "string",
+            "description": "A Livery design id to prefer; unavailable falls back to the automatic choice."
+          },
+          "variant": {
+            "type": "string",
+            "description": "A layout variant to prefer, such as compact or hero."
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "setQuantity": {
+                "$ref": "common_types.json#/$defs/Action",
+                "description": "the person stepped the quantity; the host writes it back Writes quantity back through its data-model path, so bind quantity to one; an event here also gets the new value as value."
+              }
+            },
+            "additionalProperties": false,
+            "description": "What each of the template's actions does; an action left out is handled by the app."
+          },
+          "template": {
+            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+          }
+        },
+        "required": [
+          "component",
+          "name"
+        ],
+        "description": "Quantity stepper. Livery contract shop/quantity@1: a server-driven template; its look is chosen by the client."
+      }
+    }
+  ],
+  "names": [
+    {
+      "contract": "promo/banner@1",
+      "name": "PromoBanner"
+    },
+    {
+      "contract": "promo/banner@2",
+      "name": "PromoBannerV2"
+    },
+    {
+      "contract": "ha-card/tile_v2.x@1",
+      "name": "HaCardTileV2X"
+    }
+  ],
+  "datasets": [
+    {
+      "name": "inputs as resolved; unbound and pending ones left out",
+      "contract": "promo/banner@1",
+      "resolved": {
+        "headline": "Try Premium free",
+        "cta": "Start trial",
+        "body": null
+      },
+      "expect": {
+        "headline": "Try Premium free",
+        "cta": "Start trial"
+      }
+    },
+    {
+      "name": "component properties and theme roles are not data",
+      "contract": "promo/banner@1",
+      "resolved": {
+        "headline": "Hi",
+        "design": "banner-classic",
+        "actions": {},
+        "theme.primary": "#FF000000"
+      },
+      "expect": {
+        "headline": "Hi"
+      }
+    },
+    {
+      "name": "a list as an array of objects",
+      "contract": "social/poll@1",
+      "resolved": {
+        "question": "Which?",
+        "options": [
+          {
+            "label": "Kotlin",
+            "share": 0.52
+          },
+          {
+            "label": "Swift",
+            "share": 0.48
+          }
+        ]
+      },
+      "expect": {
+        "question": "Which?",
+        "options": [
+          {
+            "label": "Kotlin",
+            "share": 0.52
+          },
+          {
+            "label": "Swift",
+            "share": 0.48
+          }
+        ]
+      }
+    },
+    {
+      "name": "a number is passed as given, for ContractBinder to judge",
+      "contract": "feed/article@1",
+      "resolved": {
+        "title": "Remote Compose",
+        "published": 1.0E20
+      },
+      "expect": {
+        "title": "Remote Compose",
+        "published": 1.0E20
+      }
+    },
+    {
+      "name": "a whole number, as A2UI resolves it (a double)",
+      "contract": "shop/quantity@1",
+      "resolved": {
+        "name": "Oat milk",
+        "quantity": 3.0
+      },
+      "expect": {
+        "name": "Oat milk",
+        "quantity": 3.0
+      }
+    }
+  ],
+  "themes": [
+    {
+      "contract": "promo/banner@1",
+      "argbByRole": {
+        "primary": 4284960932,
+        "surface": 4294899711,
+        "onSurface": 4280097568,
+        "error": 4289930782
+      },
+      "expect": {
+        "theme.primary": "#FF6750A4",
+        "theme.surface": "#FFFEF7FF",
+        "theme.onSurface": "#FF1D1B20"
+      }
+    },
+    {
+      "contract": "social/poll@1",
+      "argbByRole": {
+        "primary": 4284960932,
+        "surface": 4294899711,
+        "onSurface": 4280097568,
+        "error": 4289930782
+      },
+      "expect": {
+        "theme.primary": "#FF6750A4",
+        "theme.surface": "#FFFEF7FF",
+        "theme.onSurface": "#FF1D1B20"
+      }
+    }
+  ],
+  "writable": [
+    {
+      "type": "int",
+      "value": "3",
+      "expect": 3
+    },
+    {
+      "type": "long",
+      "value": "1793000000000",
+      "expect": 1793000000000
+    },
+    {
+      "type": "float",
+      "value": "0.5",
+      "expect": 0.5
+    },
+    {
+      "type": "bool",
+      "value": "true",
+      "expect": true
+    },
+    {
+      "type": "bool",
+      "value": "false",
+      "expect": false
+    },
+    {
+      "type": "string",
+      "value": "",
+      "expect": ""
+    },
+    {
+      "type": "string",
+      "value": "{\"a\":1}",
+      "expect": "{\"a\":1}"
+    },
+    {
+      "type": "int",
+      "value": "x",
+      "expect": null
+    }
+  ],
+  "events": [
+    {
+      "name": "the template's arguments join the agent's context",
+      "action": {
+        "event": {
+          "name": "vote",
+          "context": {
+            "poll": "ui-language"
+          }
+        }
+      },
+      "args": {
+        "option": "1"
+      },
+      "expect": {
+        "action": {
+          "event": {
+            "name": "vote",
+            "context": {
+              "poll": "ui-language",
+              "option": "1"
+            }
+          }
+        },
+        "shadowed": []
+      }
+    },
+    {
+      "name": "no context of the agent's own",
+      "action": {
+        "event": {
+          "name": "startTrial"
+        }
+      },
+      "args": {
+        "route": "/premium"
+      },
+      "expect": {
+        "action": {
+          "event": {
+            "name": "startTrial",
+            "context": {
+              "route": "/premium"
+            }
+          }
+        },
+        "shadowed": []
+      }
+    },
+    {
+      "name": "an argument wins over a context key it shadows, which is reported",
+      "action": {
+        "event": {
+          "name": "vote",
+          "context": {
+            "option": "9",
+            "poll": "p"
+          }
+        }
+      },
+      "args": {
+        "option": "1"
+      },
+      "expect": {
+        "action": {
+          "event": {
+            "name": "vote",
+            "context": {
+              "option": "1",
+              "poll": "p"
+            }
+          }
+        },
+        "shadowed": [
+          "option"
+        ]
+      }
+    },
+    {
+      "name": "a function call passes as it is",
+      "action": {
+        "functionCall": {
+          "call": "openUrl",
+          "args": {
+            "url": "https://example.com"
+          }
+        }
+      },
+      "args": {
+        "route": "/x"
+      },
+      "expect": {
+        "action": {
+          "functionCall": {
+            "call": "openUrl",
+            "args": {
+              "url": "https://example.com"
+            }
+          }
+        },
+        "shadowed": []
+      }
+    }
+  ]
+}

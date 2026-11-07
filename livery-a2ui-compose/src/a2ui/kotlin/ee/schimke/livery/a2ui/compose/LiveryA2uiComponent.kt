@@ -29,6 +29,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import ee.schimke.livery.a2ui.A2uiComponentSpec
+import ee.schimke.livery.a2ui.A2uiPropertySpec
+import ee.schimke.livery.a2ui.LiveryA2ui
 import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ActionRouter
 import ee.schimke.livery.client.PlanResult
@@ -66,60 +69,42 @@ import kotlinx.serialization.json.JsonPrimitive
 class LiveryA2uiComponent(
   val contract: Contract,
   private val host: LiveryA2uiHost,
-  override val name: String = LiveryA2uiNames.componentName(contract),
+  override val name: String = LiveryA2ui.componentName(contract),
 ) : A2uiComponent {
 
-  override val description: String =
-    listOfNotNull(contract.title, "Livery contract ${contract.ref}: a server-driven template; its look is chosen by the client.")
-      .joinToString(". ")
+  /** What the contract is in A2UI's terms: the one projection every renderer shares (livery-a2ui). */
+  val spec: A2uiComponentSpec = LiveryA2ui.component(contract, name)
 
-  /** The inputs an agent gives: every input but the theme roles, which the host fills. */
-  private val agentInputs: Map<String, InputSpec> = contract.inputs.filterValues { it.role == null }
+  override val description: String = spec.description
 
-  private val inputProperties: Map<String, DynamicA2uiProperty<Any>> =
-    agentInputs.mapValues { (key, spec) -> inputProperty(key, spec) }
+  private val agentInputs: Map<String, InputSpec> = LiveryA2ui.agentInputs(contract)
 
-  private val listProperties: Map<String, DynamicA2uiProperty<Any>> =
-    contract.lists.mapValues { (key, spec) ->
-      A2uiProperty.dynamicValue(
-        key,
-        description = listOfNotNull(spec.description, "An array of at most ${spec.max} objects, each with ${spec.item.keys.joinToString()}.").joinToString(" "),
-      )
-    }
+  private fun propertyOf(key: String) = spec.properties.first { it.key == key }
 
-  private val designProperty: StaticA2uiProperty<String> =
-    A2uiProperty.string(DESIGN, description = "A Livery design id to prefer; unavailable falls back to the automatic choice.")
+  @Suppress("UNCHECKED_CAST")
+  private fun dynamic(p: A2uiPropertySpec): DynamicA2uiProperty<Any> = when (p.kind) {
+    A2uiPropertySpec.Kind.DynamicString -> A2uiProperty.dynamicString(p.key, p.required, p.description)
+    A2uiPropertySpec.Kind.DynamicNumber -> A2uiProperty.dynamicNumber(p.key, p.required, p.description)
+    A2uiPropertySpec.Kind.DynamicBoolean -> A2uiProperty.dynamicBoolean(p.key, p.required, p.description)
+    else -> A2uiProperty.dynamicValue(p.key, p.required, p.description)
+  } as DynamicA2uiProperty<Any> // Bound as Any: the value goes into a JSON dataset, where ContractBinder checks its type.
 
-  private val variantProperty: StaticA2uiProperty<String> =
-    A2uiProperty.string(VARIANT, description = "A layout variant to prefer, such as compact or hero.")
+  private val inputProperties: Map<String, DynamicA2uiProperty<Any>> = agentInputs.keys.associateWith { dynamic(propertyOf(it)) }
+
+  private val listProperties: Map<String, DynamicA2uiProperty<Any>> = contract.lists.keys.associateWith { dynamic(propertyOf(it)) }
+
+  private val designProperty: StaticA2uiProperty<String> = propertyOf(DESIGN).let { A2uiProperty.string(it.key, description = it.description) }
+
+  private val variantProperty: StaticA2uiProperty<String> = propertyOf(VARIANT).let { A2uiProperty.string(it.key, description = it.description) }
 
   private val actionProperties: Map<String, StaticA2uiProperty<Map<String, Any?>>> =
-    contract.actions.mapValues { (key, spec) ->
-      A2uiProperty.action(
-        key,
-        description = listOfNotNull(
-          spec.description,
-          if (spec.kind == ActionKinds.SET) "Writes ${spec.input} back through its data-model path, so bind ${spec.input} to one; an event here also gets the new value as value." else "Kind ${spec.kind}.",
-          spec.args.keys.takeIf { it.isNotEmpty() }?.let { "Adds ${it.joinToString()} to an event's context." },
-        ).joinToString(" "),
-      )
-    }
+    propertyOf(ACTIONS).properties.associate { it.key to A2uiProperty.action(it.key, description = it.description) }
 
-  private val actionsProperty: StaticA2uiProperty<A2uiComponentProperties> =
-    A2uiProperty.nested(
-      ACTIONS,
-      properties = actionProperties.values.toList(),
-      description = "What each of the template's actions does; an action left out is handled by the app.",
-      isAdditionalPropertiesAllowed = false,
-    )
+  private val actionsProperty: StaticA2uiProperty<A2uiComponentProperties> = propertyOf(ACTIONS).let {
+    A2uiProperty.nested(it.key, properties = actionProperties.values.toList(), description = it.description, isAdditionalPropertiesAllowed = false)
+  }
 
-  private val templateProperty: StaticA2uiProperty<Any> =
-    A2uiProperty.any(
-      TEMPLATE,
-      description = "Usually left out: the client picks a reviewed design. To send the document itself: " +
-        "{\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only " +
-        "where the app allows them, and never with shaders or other risky features.",
-    )
+  private val templateProperty: StaticA2uiProperty<Any> = propertyOf(TEMPLATE).let { A2uiProperty.any(it.key, description = it.description) }
 
   override val properties: List<A2uiProperty<*>> =
     inputProperties.values + listProperties.values + listOf(designProperty, variantProperty, actionsProperty, templateProperty)
@@ -156,7 +141,7 @@ class LiveryA2uiComponent(
         if (kind == ActionKinds.SET) {
           val input = spec.input
           val update = input?.let(currentUpdaters::get)
-          val value = input?.let { contract.inputs[it] }?.let { writable(args[ActionGate.VALUE], it.type) }
+          val value = input?.let { contract.inputs[it] }?.let { LiveryA2ui.writable(args[ActionGate.VALUE], it.type) }
           if (update != null && value != null) {
             update(value)
           } else {
@@ -289,18 +274,9 @@ class LiveryA2uiComponent(
   /** The agent's inputs and lists, resolved against the data model, as a dataset for the contract. */
   @Composable
   private fun A2uiComponentScope.dataset(properties: A2uiComponentProperties): JsonObject {
-    val values = LinkedHashMap<String, JsonElement>()
-    for ((key, spec) in agentInputs) {
-      val value: Any? = properties.bind(inputProperties.getValue(key))
-      // As the agent gave it: ContractBinder decides whether a number fits the input (a whole
-      // double for an int, a range, 2^53), never a narrowing here.
-      if (value != null) values[key] = toJson(value)
-    }
-    for ((key, property) in listProperties) {
-      val value: Any? = properties.bind(property)
-      if (value != null) values[key] = toJson(value)
-    }
-    return JsonObject(values)
+    val resolved = LinkedHashMap<String, Any?>()
+    for ((key, property) in inputProperties + listProperties) resolved[key] = properties.bind(property)
+    return LiveryA2ui.dataset(contract, resolved)
   }
 
   /** Theme role inputs, from the host's Material colour scheme. */
@@ -315,11 +291,7 @@ class LiveryA2uiComponent(
       "background" to scheme.background, "onBackground" to scheme.onBackground,
       "error" to scheme.error, "onError" to scheme.onError,
     )
-    val values = contract.inputs.mapNotNull { (key, spec) ->
-      val colour = spec.role?.let(byRole::get)?.takeIf { spec.type == ValueType.Color } ?: return@mapNotNull null
-      key to JsonPrimitive("#" + colour.toArgb().toUInt().toString(16).padStart(8, '0').uppercase())
-    }
-    return JsonObject(values.toMap())
+    return LiveryA2ui.themeValues(contract, byRole.mapValues { it.value.toArgb().toLong() })
   }
 
   /**
@@ -337,86 +309,26 @@ class LiveryA2uiComponent(
   }
 
   /** The inputs this contract's `set` actions change, in a stable order (composition reads them each time). */
-  private val setInputs: List<String> =
-    contract.actions.values.filter { it.kind == ActionKinds.SET }.mapNotNull { it.input }.filter { it in agentInputs }.distinct().sorted()
+  private val setInputs: List<String> = LiveryA2ui.setInputs(contract)
 
   private fun wiring(properties: A2uiComponentProperties): Map<String, Map<String, Any?>> {
     val actions = properties[actionsProperty] ?: return emptyMap()
     return actionProperties.mapNotNull { (key, property) -> actions[property]?.let { key to it } }.toMap()
   }
 
-  /**
-   * The agent's action with the template's declared arguments added to an event's context. A
-   * context key that names an argument too is the agent's mistake: the argument wins, and the agent
-   * is told.
-   */
+  /** The agent's action with the template's checked arguments in its event context; a shadowed context key is reported. */
   private fun withArguments(scope: A2uiComponentScope, action: Map<String, Any?>, args: Map<String, String>): Map<String, Any?> {
-    @Suppress("UNCHECKED_CAST")
-    val event = action["event"] as? Map<String, Any?> ?: return action
-    @Suppress("UNCHECKED_CAST")
-    val context = event["context"] as? Map<String, Any?> ?: emptyMap()
-    val shadowed = context.keys intersect args.keys
-    if (shadowed.isNotEmpty()) {
-      scope.reportError(A2uiException.A2uiRuntimeException("$name: the event context names the template's own arguments $shadowed"))
+    val payload = LiveryA2ui.eventPayload(action, args)
+    if (payload.shadowed.isNotEmpty()) {
+      scope.reportError(A2uiException.A2uiRuntimeException("$name: the event context names the template's own arguments ${payload.shadowed}"))
     }
-    return action + ("event" to (event + ("context" to (context + args))))
+    return payload.action
   }
 
   companion object {
-    const val DESIGN: String = "design"
-    const val VARIANT: String = "variant"
-    const val ACTIONS: String = "actions"
-    const val TEMPLATE: String = "template"
-
-    @Suppress("UNCHECKED_CAST")
-    private fun inputProperty(key: String, spec: InputSpec): DynamicA2uiProperty<Any> {
-      // Required to the agent only when the template has no default to draw instead.
-      val required = spec.required && spec.default == null
-      val description = describe(spec)
-      val property: DynamicA2uiProperty<*> = when (spec.type) {
-        ValueType.String, ValueType.Color, ValueType.Image -> A2uiProperty.dynamicString(key, required, description)
-        ValueType.Int, ValueType.Long, ValueType.Float -> A2uiProperty.dynamicNumber(key, required, description)
-        ValueType.Bool -> A2uiProperty.dynamicBoolean(key, required, description)
-      }
-      // Bound as Any: the value goes into a JSON dataset, where ContractBinder checks its type.
-      return property as DynamicA2uiProperty<Any>
-    }
-
-    private fun describe(spec: InputSpec): String = listOfNotNull(
-      spec.description,
-      spec.maxLength?.let { "At most $it characters." },
-      spec.min?.let { "At least $it." },
-      spec.max?.let { "At most $it." },
-      when (spec.type) {
-        ValueType.Color -> "A colour, #RRGGBB or #AARRGGBB."
-        ValueType.Image -> "An image: asset:<sha256>, https://… or app:<key>."
-        ValueType.Int, ValueType.Long -> "A whole number."
-        else -> null
-      },
-      spec.default?.let { "Default $it." },
-    ).joinToString(" ").ifEmpty { spec.type.name.lowercase() }
-
-    /**
-     * A `set`'s value, already checked by ActionGate against its input, as the data model holds the
-     * input's type: numbers as numbers, a bool as a bool.
-     */
-    internal fun writable(value: String?, type: ValueType): Any? = when (type) {
-      ValueType.Int, ValueType.Long -> value?.toLongOrNull()
-      ValueType.Float -> value?.toDoubleOrNull()
-      ValueType.Bool -> value?.toBooleanStrictOrNull()
-      ValueType.String, ValueType.Color, ValueType.Image -> value
-    }
-
-    internal fun toJson(value: Any?): JsonElement = when (value) {
-      null -> JsonNull
-      is JsonElement -> value
-      is String -> JsonPrimitive(value)
-      is Boolean -> JsonPrimitive(value)
-      is Number -> JsonPrimitive(value)
-      is Map<*, *> -> JsonObject(value.entries.associate { (k, v) -> k.toString() to toJson(v) })
-      is Iterable<*> -> JsonArray(value.map(::toJson))
-      is Array<*> -> JsonArray(value.map(::toJson))
-      else -> JsonPrimitive(value.toString())
-    }
+    const val DESIGN: String = LiveryA2ui.DESIGN
+    const val VARIANT: String = LiveryA2ui.VARIANT
+    const val ACTIONS: String = LiveryA2ui.ACTIONS
+    const val TEMPLATE: String = LiveryA2ui.TEMPLATE
   }
 }

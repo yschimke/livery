@@ -43,7 +43,7 @@ class LiveryA2uiHost(
   val documents: DocumentAdmission? = null,
 )
 
-object LiveryA2ui {
+object LiveryA2uiCompose {
   /**
    * [base] (the basic catalog, typically) plus one [LiveryA2uiComponent] per contract in
    * [contracts]: the catalog a client advertises as [catalogId].
@@ -64,16 +64,8 @@ object LiveryA2ui {
   suspend fun playableContracts(repository: TemplateRepository, capabilities: PlayerCapabilities): List<Contract> {
     val manifest = repository.current() ?: return emptyList()
     // One component per contract major, at the newest minor the catalog keeps (as Manifest.contract).
-    return manifest.contracts.map { it.ref }.distinct().mapNotNull(manifest::contract)
+    return ee.schimke.livery.a2ui.LiveryA2ui.newestMinors(manifest.contracts)
       .filter { repository.resolve(TemplateQuery(it.ref, capabilities)) != null }
   }
 }
 
-/** The deterministic name of a contract's component (docs/A2UI.md). */
-object LiveryA2uiNames {
-  /** `promo/banner@1` is `PromoBanner`; `promo/banner@2` is `PromoBannerV2`. */
-  fun componentName(contract: Contract): String {
-    val base = contract.id.split('/', '-', '_', '.').filter { it.isNotEmpty() }.joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
-    return if (contract.major > 1) "${base}V${contract.major}" else base
-  }
-}

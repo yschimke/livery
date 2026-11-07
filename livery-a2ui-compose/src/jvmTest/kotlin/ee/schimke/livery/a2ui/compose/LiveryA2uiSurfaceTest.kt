@@ -119,7 +119,7 @@ abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? =
     localeProvider = A2uiLocaleProvider.Default,
   )
 
-  protected val catalog: A2uiCatalog = LiveryA2ui.catalog(CATALOG_ID, basic, host, runBlocking { LiveryA2ui.playableContracts(repository, caps) })
+  protected val catalog: A2uiCatalog = LiveryA2uiCompose.catalog(CATALOG_ID, basic, host, runBlocking { LiveryA2uiCompose.playableContracts(repository, caps) })
 
   private val processor = A2uiMessageProcessor(catalogs = listOf(catalog))
   private val parser = A2uiMessageParser()

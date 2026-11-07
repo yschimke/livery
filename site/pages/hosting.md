@@ -42,6 +42,10 @@ jobs:
 declare, or reads a value as a different type than its contract declares. Use it whenever
 documents come from more than one tool, or from an agent.
 
+`--a2ui <catalogId>` also writes `a2ui-catalog.json`: the catalog's contracts as
+[A2UI](https://a2ui.org) components (one per contract major, at its newest minor), the same schema
+an app's `livery-a2ui-compose` advertises, for prompting an agent that answers in A2UI.
+
 ## Checking a change
 
 `livery check` compares a catalog source tree with an earlier version of itself: a git revision of
