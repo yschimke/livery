@@ -31,6 +31,35 @@ client: A2UI surface ─▶ PromoBanner (generated from promo/banner@1)
                           └─ host action "cta" ─▶ ActionGate ─▶ A2UI event startTrial
 ```
 
+## The component is a slot, not a widget
+
+The A2UI component never describes what the document draws. It is a **slot typed by a contract**:
+the agent and the A2UI data model only ever see the contract's inputs, lists and actions, and the
+document is delivered separately, through Livery, and may change at any time without the agent, the
+A2UI message or the app changing.
+
+- `live/status-tile@1` has a `level` input and a `toggle` action. One design draws `level` as a
+  slider, another as a ring, next month's as two buttons; each reads the same named value and emits
+  the same action. The agent binds `level` to `/lamp/brightness` once, and every design works.
+- Writing back is by input too: a slider design and a stepper design both emit `set` for `level`
+  (below), so the data model is updated the same way whichever control the design happens to use.
+- What a document may read and emit is checked against the contract when it is published
+  (`livery build --inspect`), so a new document can't need data or send actions the agent and the
+  app don't already know about. A design that needs more is a new contract minor (optional
+  additions) or a new major, never a surprise.
+
+### How the document gets there
+
+| Route | Who picks the document | When it changes |
+| --- | --- | --- |
+| **Catalog** (the default) | `TemplateSelector`, from the signed designs installed on the device, honouring the agent's `design` / `variant` preference and the slot's size | whenever the catalog publishes a new design or template; the next refresh, no app or agent change |
+| **Decision** | the app's decision server: a `designId` or exact `sha256` from the same signed catalog (PROTOCOL.md §5.3), placed into the surface by the app | per decision |
+| **Preview** (development only) | an exact `sha256` from an unsigned preview channel (`livery-mcp`'s `publish_preview`), in a client that allows unsigned catalogs | per draft |
+
+In every route the bytes come from a Livery catalog channel the client already trusts, never inside
+an A2UI message. That keeps A2UI messages small and textual, and keeps the A2UI agent out of the
+trust path for executable layout.
+
 ## Why a component per contract, not one generic `RemoteCompose` component
 
 A single `RemoteCompose { template, values: {…}, actions: {…} }` component is the obvious first
