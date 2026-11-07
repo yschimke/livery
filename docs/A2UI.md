@@ -292,7 +292,9 @@ moves with it, as a2ui-catalog does.
 ### The web
 
 *Built*: [`web/a2ui`](../web/a2ui) (`@livery/a2ui`) over [`livery-web`](../livery-web), checked in
-headless Chromium by CI (`web` job). There is no TypeScript port: the web runs Kotlin's own
+headless Chromium by CI (`web` job).
+
+![The sample catalog's promo banner and quantity row in an A2UI surface, in headless Chromium](images/a2ui-web.png) There is no TypeScript port: the web runs Kotlin's own
 selection, trust, binding, instantiation and action gate, compiled to Wasm, so it can't drift from
 the other clients and needs no fixture of its own beyond the ones Kotlin already passes.
 
