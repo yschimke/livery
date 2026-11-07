@@ -139,10 +139,47 @@ jobs:
     permissions:
       contents: read
 
+  # `@livery/a2ui` (web/a2ui) in headless Chromium: livery-web's Wasm module, A2UI's own Lit
+  # renderer and rc-players' web player, drawing the sample catalog in an A2UI surface.
+  web:
+    name: Web (A2UI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web/a2ui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Android SDK platform
+        working-directory: .
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: livery-web's Wasm module and the livery CLI
+        working-directory: .
+        run: ./gradlew :livery-web:webDist :livery-publish:installDist
+      - name: npm ci, check and build
+        run: |
+          npm ci
+          npm run check
+          npm run build
+      # Not a dependency of the package: the test's browser, installed for this run only.
+      - name: Playwright's Chromium
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: End-to-end in Chromium
+        run: npm test
+
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
   # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
   gradle:
-    needs: [changes, build, swift, catalog-review, catalog-publish]
+    needs: [changes, build, swift, catalog-review, catalog-publish, web]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -156,13 +193,15 @@ jobs:
           SWIFT_NEEDED: ${{ needs.changes.outputs.swift }}
           REVIEW: ${{ needs.catalog-review.result }}
           PUBLISH: ${{ needs.catalog-publish.result }}
+          WEB: ${{ needs.web.result }}
         run: |
           ok=true
           [ "$CHANGES" = success ] || ok=false
           [ "$BUILD" = success ] || ok=false
           [ "$REVIEW" = success ] || ok=false
           [ "$PUBLISH" = success ] || ok=false
+          [ "$WEB" = success ] || ok=false
           if [ "$SWIFT_NEEDED" = true ]; then [ "$SWIFT" = success ] || ok=false
           else [ "$SWIFT" = success ] || [ "$SWIFT" = skipped ] || ok=false; fi
-          echo "changes=$CHANGES build=$BUILD swift=$SWIFT (needed: $SWIFT_NEEDED) review=$REVIEW publish=$PUBLISH"
+          echo "changes=$CHANGES build=$BUILD swift=$SWIFT (needed: $SWIFT_NEEDED) review=$REVIEW publish=$PUBLISH web=$WEB"
           $ok || { echo "::error::A gated job did not succeed"; exit 1; }
