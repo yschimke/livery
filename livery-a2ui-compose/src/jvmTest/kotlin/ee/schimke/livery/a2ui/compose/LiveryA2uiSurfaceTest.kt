@@ -1,5 +1,6 @@
 package ee.schimke.livery.a2ui.compose
 
+import ee.schimke.livery.publisher.build
 import androidx.a2ui.compose.runtime.A2uiMessageParser
 import androidx.a2ui.compose.ui.A2uiCatalog
 import androidx.a2ui.compose.ui.A2uiMessageProcessor

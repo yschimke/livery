@@ -1,5 +1,7 @@
 package ee.schimke.livery.uibuilder
 
+import ee.schimke.livery.publisher.into
+import ee.schimke.livery.publisher.contract
 import ee.schimke.livery.publisher.CatalogProblems
 import ee.schimke.livery.publisher.LiveryCommand
 import ee.schimke.livery.publisher.TemplateImport

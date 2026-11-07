@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import ee.schimke.livery.publisher.compareTrees
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.protocol.NamedValue

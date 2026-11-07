@@ -1,5 +1,6 @@
 package ee.schimke.livery.verify
 
+import ee.schimke.livery.publisher.load
 import android.app.Activity
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder

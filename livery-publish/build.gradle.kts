@@ -11,6 +11,8 @@ kotlin { jvmToolchain(17) }
 dependencies {
   api(project(":livery-protocol"))
   api(project(":livery-client"))
+  // The catalog logic, in common code; this module is its JVM edge (files, git, the CLI).
+  api(project(":livery-catalog"))
   // `livery build --a2ui`: the catalog's contracts as A2UI components.
   implementation(project(":livery-a2ui"))
   // TemplateInspector, for `livery build --inspect`: what a document really reads and emits.

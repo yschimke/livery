@@ -6,9 +6,6 @@ import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.TemplateEntry
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 
 /**
@@ -93,25 +90,12 @@ object CompatibilityCheck {
     val kept: Map<String, Map<String, kotlinx.serialization.json.JsonObject>> = emptyMap(),
   )
 
-  /**
-   * Compares the tree at [src] with [against]: a directory, or a git revision of the repository [src]
-   * is in. [inspect] decodes every document too (`livery build --inspect`): its reads, emits and types.
-   */
-  fun check(src: File, against: String, inspect: Boolean = false): Report = checkTrees(src, against, inspect).report
-
-  /** [check], keeping the built trees. */
-  fun checkTrees(src: File, against: String, inspect: Boolean = false): Comparison {
-    File(against).takeIf { it.isDirectory }?.let { return compareTrees(src, it, against, inspect) }
-    val (temp, old) = atRevision(src, against)
-    return try { compareTrees(src, old, against, inspect) } finally { temp.deleteRecursively() }
-  }
-
   /** Compares two source trees; [old] may be missing (nothing published yet) or not build. */
-  fun compare(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): Report =
+  fun compare(src: SourceFile, old: SourceFile?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Report =
     compareTrees(src, old, against, inspect).report
 
   /** [compare], keeping the built trees. */
-  fun compareTrees(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): Comparison {
+  fun compareTrees(src: SourceFile, old: SourceFile?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Comparison {
     val problems = mutableListOf<String>()
     val warnings = mutableListOf<String>()
     val new = try {
@@ -119,12 +103,12 @@ object CompatibilityCheck {
     } catch (e: CatalogProblems) {
       return Comparison(Report(against, emptyList(), emptyList(), problems = e.problems, warnings = emptyList()), null, null)
     }
-    val before = old?.takeIf { File(it, "catalog.json").isFile }?.let {
+    val before = old?.takeIf { it.resolve("catalog.json").isFile }?.let {
       runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
         .onFailure { e -> warnings += "$against doesn't build, so only this tree is checked: ${(e as? CatalogProblems)?.problems ?: e.message}" }
         .getOrNull()
     }
-    if (before == null && old != null && !File(old, "catalog.json").isFile) warnings += "$against has no catalog: everything is new"
+    if (before == null && old != null && !old.resolve("catalog.json").isFile) warnings += "$against has no catalog: everything is new"
 
     val contracts = contractReports(before?.manifest, new.manifest)
     contracts.filter { it.breaking }.forEach { r ->
@@ -221,7 +205,7 @@ object CompatibilityCheck {
 
   private val JSON = kotlinx.serialization.json.Json { encodeDefaults = true }
 
-  private fun time(ms: Long?): String = ms?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "open"
+  private fun time(ms: Long?): String = ms?.let { @OptIn(kotlin.time.ExperimentalTime::class) kotlin.time.Instant.fromEpochMilliseconds(it).toString() } ?: "open"
 
   /** The top-level fields that differ, as `field: old -> new`. */
   private fun <T> fieldChanges(serializer: kotlinx.serialization.KSerializer<T>, a: T, b: T, skip: Set<String> = emptySet()): List<String> {
@@ -303,7 +287,7 @@ object CompatibilityCheck {
 
   /** Who guarantees each value [t] reads (see [TemplateReport.values]). */
   private fun valueGuarantees(c: Contract, t: TemplateEntry, bytes: ByteArray?): Map<String, String> {
-    val reads = (t.reads + (bytes?.let { TemplateInspector.facts(it)?.declaredReads }.orEmpty())).toSortedSet()
+    val reads = (t.reads + (bytes?.let { TemplateInspector.facts(it)?.declaredReads }.orEmpty())).distinct().sorted()
     return reads.associateWith { name ->
       val spec = ContractEvolution.specOf(c, name)
       when {
@@ -333,42 +317,6 @@ object CompatibilityCheck {
     append(" L").append(t.target.rcApiLevel)
   }
 
-  /** A git revision: a ref, tag or hash with `~`/`^` suffixes; never an option or a path outside git. */
-  private val REVISION = Regex("[A-Za-z0-9][A-Za-z0-9._/~^-]{0,199}")
-
-  /**
-   * [src] as it was at [revision], extracted to a temporary directory: the same path in the same
-   * repository. Missing at that revision gives an empty directory (nothing published yet). Returns
-   * the temporary directory (delete it when done) and the tree inside it.
-   */
-  fun atRevision(src: File, revision: String): Pair<File, File> {
-    require(REVISION.matches(revision) && ".." !in revision) { "'$revision' is neither a directory nor a git revision" }
-    fun git(vararg args: String, out: File? = null, at: File = src): String {
-      val pb = ProcessBuilder(listOf("git", "-C", at.path) + args).redirectError(ProcessBuilder.Redirect.PIPE)
-      if (out != null) pb.redirectOutput(out)
-      val p = pb.start()
-      val text = if (out == null) p.inputStream.readBytes().decodeToString() else ""
-      val err = p.errorStream.readBytes().decodeToString()
-      if (!p.waitFor(60, TimeUnit.SECONDS)) { p.destroyForcibly(); error("git ${args.first()} timed out") }
-      require(p.exitValue() == 0) { "git ${args.joinToString(" ")}: ${err.trim()}" }
-      return text.trim()
-    }
-    val prefix = git("rev-parse", "--show-prefix")
-    // Pathspecs are relative to where git runs, so the tree is listed and archived from the top.
-    val top = File(git("rev-parse", "--show-toplevel"))
-    val commit = git("rev-parse", "--verify", "--quiet", "$revision^{commit}")
-    val dir = Files.createTempDirectory("livery-check").toFile()
-    val tar = File(dir, "tree.tar")
-    val listed = git("ls-tree", "-d", "--name-only", commit, "--", prefix.trimEnd('/').ifEmpty { "." }, at = top)
-    if (prefix.isNotEmpty() && listed.isEmpty()) return dir to File(dir, "tree").apply { mkdirs() }
-    git("archive", "--format=tar", "-o", tar.path, commit, "--", prefix.ifEmpty { "." }, at = top)
-    val x = ProcessBuilder("tar", "-xf", tar.path, "-C", dir.path).redirectErrorStream(true).start()
-    x.inputStream.readBytes()
-    require(x.waitFor(60, TimeUnit.SECONDS) && x.exitValue() == 0) { "couldn't extract $revision" }
-    tar.delete()
-    return dir to (if (prefix.isEmpty()) dir else File(dir, prefix))
-  }
-
   /** The report as people read it in a terminal or a CI log. */
   fun text(r: Report): String = buildString {
     appendLine("livery check against ${r.against}: ${if (r.ok) "compatible" else "NOT compatible"}")
@@ -385,7 +333,7 @@ object CompatibilityCheck {
       line("reads +", t.readsAdded); line("reads -", t.readsRemoved); line("emits +", t.emitsAdded); line("emits -", t.emitsRemoved)
       if (t.status != "removed") {
         appendLine("      requires minor ${t.requiresMinor}${t.previousRequiresMinor?.takeIf { it != t.requiresMinor }?.let { " (was $it)" } ?: ""}, ${t.bytes} bytes${t.previousBytes?.takeIf { it != t.bytes }?.let { " (was $it)" } ?: ""}")
-        t.values.entries.groupBy({ it.value }, { it.key }).toSortedMap().forEach { (k, v) -> appendLine("      $k: ${v.joinToString(", ")}") }
+        t.values.entries.groupBy({ it.value }, { it.key }).entries.sortedBy { it.key }.forEach { (k, v) -> appendLine("      $k: ${v.joinToString(", ")}") }
       }
     }
     val same = r.templates.count { it.status == "unchanged" }
@@ -549,7 +497,7 @@ object CompatibilityCheck {
 
   private fun templates(n: Int) = "$n template${if (n == 1) "" else "s"}"
 
-  private fun kb(bytes: Long): String = if (bytes < 1000) "$bytes B" else "%.1f KB".format(java.util.Locale.ROOT, bytes / 1000.0)
+  private fun kb(bytes: Long): String = if (bytes < 1000) "$bytes B" else "${(bytes + 50) / 1000}.${(bytes + 50) % 1000 / 100} KB"
 
   private fun range(bytes: List<Long>): String? {
     if (bytes.isEmpty()) return null
@@ -562,7 +510,7 @@ object CompatibilityCheck {
     val both = ts.filter { it.status == "changed" && it.previousBytes != null }
     val was = both.sumOf { it.previousBytes!! }.takeIf { it > 0 } ?: return ""
     val now = both.sumOf { it.bytes }
-    val p = Math.round((now - was) * 100.0 / was)
+    val p = kotlin.math.floor((now - was) * 100.0 / was + 0.5).toLong()
     return if (p > 0) "+$p%" else if (p < 0) "−${-p}%" else "±0%"
   }
 

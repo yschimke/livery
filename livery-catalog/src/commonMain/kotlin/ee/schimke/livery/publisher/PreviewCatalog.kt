@@ -1,13 +1,11 @@
 package ee.schimke.livery.publisher
 
-import ee.schimke.livery.client.JavaCrypto
+import ee.schimke.livery.client.Sha256
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.InstallPolicy
 import ee.schimke.livery.protocol.Target
-import java.io.File
-import java.nio.file.Files
 import kotlinx.serialization.json.Json
 
 /**
@@ -42,32 +40,19 @@ object PreviewCatalog {
       if (emits.isNotEmpty()) add("emits actions ${contract.ref} doesn't declare: ${emits.sorted()}")
     }
     if (problems.isNotEmpty()) throw CatalogProblems(problems)
-    val sha = JavaCrypto.sha256HexBlocking(document)
+    val sha = Sha256.hex(document)
     val channel = "preview-${sha.take(12)}"
     val designId = "preview-${sha.take(12)}"
     val json = Json { prettyPrint = true; encodeDefaults = false }
-    val src = Files.createTempDirectory("livery-preview").toFile()
-    try {
-      File(src, "catalog.json").writeText(json.encodeToString(CatalogConfig.serializer(), CatalogConfig("preview", channel, ttlSeconds = 60, expiresInDays = expiresInDays)))
-      File(src, "contracts").mkdirs()
-      File(src, "contracts/contract.json").writeText(json.encodeToString(Contract.serializer(), contract))
-      val dir = File(src, "designs/$designId").apply { mkdirs() }
-      File(dir, "design.json").writeText(json.encodeToString(Design.serializer(),
-        Design(designId, contract.ref, title ?: "Preview ${sha.take(12)}", install = InstallPolicy.Always)))
-      File(dir, "preview.rc").writeBytes(document)
-      File(dir, "preview.json").writeText(json.encodeToString(TemplateSpec.serializer(),
-        TemplateSpec(target, reads = facts.declaredReads.sorted(), emits = facts.emits.sorted(), source = source)))
-      return Result(CatalogBuilder().build(src, Layout.Static), channel)
-    } finally {
-      src.deleteRecursively()
-    }
-  }
-
-  /** Writes [result] as a static catalog into [out]/<channel>/, unsigned, and returns that directory. */
-  fun write(result: Result, out: File): File {
-    val dir = File(out, result.channel).apply { deleteRecursively(); mkdirs() }
-    result.output.files.forEach { (path, b) -> File(dir, path).apply { parentFile.mkdirs() }.writeBytes(b) }
-    File(dir, ee.schimke.livery.protocol.Manifest.FILE).writeBytes(result.output.manifestBytes)
-    return dir
+    val src = MemorySource()
+    src.resolve("catalog.json").writeText(json.encodeToString(CatalogConfig.serializer(), CatalogConfig("preview", channel, ttlSeconds = 60, expiresInDays = expiresInDays)))
+    src.resolve("contracts").resolve("contract.json").writeText(json.encodeToString(Contract.serializer(), contract))
+    val dir = src.resolve("designs").resolve(designId)
+    dir.resolve("design.json").writeText(json.encodeToString(Design.serializer(),
+      Design(designId, contract.ref, title ?: "Preview ${sha.take(12)}", install = InstallPolicy.Always)))
+    dir.resolve("preview.rc").writeBytes(document)
+    dir.resolve("preview.json").writeText(json.encodeToString(TemplateSpec.serializer(),
+      TemplateSpec(target, reads = facts.declaredReads.sorted(), emits = facts.emits.sorted(), source = source)))
+    return Result(CatalogBuilder().build(src, Layout.Static), channel)
   }
 }

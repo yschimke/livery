@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import ee.schimke.livery.publisher.load
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test

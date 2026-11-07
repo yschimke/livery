@@ -1,8 +1,7 @@
 package ee.schimke.livery.publisher
 
 import ee.schimke.livery.protocol.Contract
-import java.io.File
-import java.security.MessageDigest
+import ee.schimke.livery.client.Sha256
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -28,7 +27,7 @@ object KeptExamples {
   data class Missing(val contract: String, val file: String, val name: String, val data: JsonObject)
 
   /** The kept examples of [src], by contract ref, each labelled `<example> (kept <hash>)`. */
-  fun load(src: File): Map<String, Map<String, JsonObject>> {
+  fun load(src: SourceFile): Map<String, Map<String, JsonObject>> {
     val byFile = contractFiles(src)
     return byFile.mapNotNull { (stem, contract) ->
       val kept = kept(src, stem).associate { (name, data) -> "$name (kept ${hash(data)})" to data }
@@ -40,7 +39,7 @@ object KeptExamples {
    * The example data [base] has, current or kept, that [src] neither has (under any name) nor
    * keeps. A contract [src] no longer has at all was removed, and its data with it: not missing.
    */
-  fun missing(src: File, base: File): List<Missing> {
+  fun missing(src: SourceFile, base: SourceFile): List<Missing> {
     val now = contractFiles(src)
     val have = now.flatMap { (stem, c) ->
       c.examples.values.map { c.ref to hash(it) } + kept(src, stem).map { c.ref to hash(it.second) }
@@ -54,17 +53,15 @@ object KeptExamples {
   }
 
   /** Writes [missing]'s data into [src]'s kept examples; returns the files written. */
-  fun keep(src: File, base: File): List<File> = missing(src, base).map { m ->
-    File(src, "contracts/$DIR/${m.file}/${safe(m.name)}-${hash(m.data)}.json").apply {
-      parentFile.mkdirs()
+  fun keep(src: SourceFile, base: SourceFile): List<SourceFile> = missing(src, base).map { m ->
+    src.resolve("contracts").resolve(DIR).resolve(m.file).resolve("${safe(m.name)}-${hash(m.data)}.json").apply {
       writeText(PRETTY.encodeToString(JsonObject.serializer(), m.data) + "\n")
     }
   }
 
   /** A short, stable hash of an example's data, whatever its key order. */
   fun hash(data: JsonObject): String =
-    MessageDigest.getInstance("SHA-256").digest(canonical(data).toString().toByteArray())
-      .take(4).joinToString("") { "%02x".format(it) }
+    Sha256.hex(canonical(data).toString().encodeToByteArray()).take(8)
 
   private fun canonical(e: JsonElement): JsonElement = when (e) {
     is JsonObject -> JsonObject(e.entries.sortedBy { it.key }.associate { (k, v) -> k to canonical(v) })
@@ -73,12 +70,12 @@ object KeptExamples {
   }
 
   /** The examples kept for the contract in `contracts/<stem>.json`, as (example name, data). */
-  private fun kept(src: File, stem: String): List<Pair<String, JsonObject>> =
-    File(src, "contracts/$DIR/$stem").listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
+  private fun kept(src: SourceFile, stem: String): List<Pair<String, JsonObject>> =
+    src.resolve("contracts").resolve(DIR).resolve(stem).listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
       .map { it.nameWithoutExtension.substringBeforeLast('-') to Json.parseToJsonElement(it.readText()).jsonObject }
 
-  private fun contractFiles(src: File): List<Pair<String, Contract>> =
-    File(src, "contracts").listFiles().orEmpty().filter { it.isFile && it.extension == "json" }.sortedBy { it.name }
+  private fun contractFiles(src: SourceFile): List<Pair<String, Contract>> =
+    src.resolve("contracts").listFiles().orEmpty().filter { it.isFile && it.extension == "json" }.sortedBy { it.name }
       .mapNotNull { f -> runCatching { f.nameWithoutExtension to LENIENT.decodeFromString(Contract.serializer(), f.readText()) }.getOrNull() }
 
   private fun safe(s: String) = s.replace(Regex("[^A-Za-z0-9._]"), "_")

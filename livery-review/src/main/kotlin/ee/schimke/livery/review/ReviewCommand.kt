@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import ee.schimke.livery.publisher.checkTrees
 import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.LiveryCommand
 import java.io.File

@@ -9,7 +9,7 @@ import ee.schimke.livery.protocol.ActionKinds
 import ee.schimke.livery.protocol.Presentation
 import ee.schimke.livery.protocol.ScreenValues
 import ee.schimke.livery.client.ContractEvolution
-import ee.schimke.livery.client.JavaCrypto
+import ee.schimke.livery.client.Sha256
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.Contract
@@ -23,7 +23,6 @@ import ee.schimke.livery.protocol.Preview
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.ThemePack
-import java.io.File
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -156,7 +155,7 @@ class CatalogProblems(val problems: List<String>) : Exception(problems.joinToStr
  */
 class CatalogBuilder(
   private val json: Json = Json { prettyPrint = true; ignoreUnknownKeys = false; encodeDefaults = false },
-  private val now: () -> Long = System::currentTimeMillis,
+  private val now: () -> Long = ::epochMillis,
   /**
    * Optional deep check of a document (op profile, size, the named values it reads and their types
    * against its [Contract], when the design's contract exists); returns problems.
@@ -171,14 +170,14 @@ class CatalogBuilder(
     val seasons: Set<String> = emptySet(),
   )
 
-  fun build(src: File, layout: Layout, serial: Long? = null): Output {
+  fun build(src: SourceFile, layout: Layout, serial: Long? = null): Output {
     val problems = mutableListOf<String>()
-    val config = json.decodeFromString(CatalogConfig.serializer(), File(src, "catalog.json").readText())
-    val contracts = jsonFiles(File(src, "contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
-    val themes = jsonFiles(File(src, "themes")).map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
-    val placements = jsonFiles(File(src, "placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
-    val seasons = jsonFiles(File(src, "seasons")).map { json.decodeFromString(Season.serializer(), it.readText()) }
-    val authored = jsonFiles(File(src, "experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
+    val config = json.decodeFromString(CatalogConfig.serializer(), src.resolve("catalog.json").readText())
+    val contracts = jsonFiles(src.resolve("contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
+    val themes = jsonFiles(src.resolve("themes")).map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
+    val placements = jsonFiles(src.resolve("placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
+    val seasons = jsonFiles(src.resolve("seasons")).map { json.decodeFromString(Season.serializer(), it.readText()) }
+    val authored = jsonFiles(src.resolve("experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
     val files = linkedMapOf<String, ByteArray>()
     val (blobDir, previewDir) = when (layout) {
       Layout.Static -> "blobs/" to "previews/"
@@ -187,15 +186,15 @@ class CatalogBuilder(
     val assetDir = if (layout is Layout.GitHubRelease) "" else "assets/"
     val assets = linkedMapOf<String, AssetEntry>()
     fun addAsset(bytes: ByteArray, entry: (sha: String) -> AssetEntry): AssetEntry {
-      val a = entry(JavaCrypto.sha256HexBlocking(bytes))
+      val a = entry(Sha256.hex(bytes))
       files[assetDir + a.fileName] = bytes
       return assets.getOrPut(a.sha256) { a }
     }
-    val fontsDir = File(src, "fonts")
-    val fonts = File(fontsDir, "fonts.json").takeIf { it.isFile }
+    val fontsDir = src.resolve("fonts")
+    val fonts = fontsDir.resolve("fonts.json").takeIf { it.isFile }
       ?.let { json.decodeFromString(ListSerializer(FontFile.serializer()), it.readText()) }.orEmpty()
       .mapNotNull { f ->
-        val file = File(fontsDir, f.file)
+        val file = fontsDir.resolve(f.file)
         val mime = when (file.extension.lowercase()) { "ttf" -> "font/ttf"; "otf" -> "font/otf"; "woff2" -> "font/woff2"; else -> null }
         when {
           !file.isFile -> { problems += "fonts/${f.file}: missing"; null }
@@ -231,16 +230,16 @@ class CatalogBuilder(
 
     val designs = mutableListOf<Design>()
     val templates = mutableListOf<TemplateEntry>()
-    for (dir in File(src, "designs").listFiles().orEmpty().filter { it.isDirectory }.sortedBy { it.name }) {
-      val designFile = File(dir, "design.json")
+    for (dir in src.resolve("designs").listFiles().orEmpty().filter { it.isDirectory }.sortedBy { it.name }) {
+      val designFile = dir.resolve("design.json")
       if (!designFile.isFile) { problems += "${dir.name}: no design.json"; continue }
       val design = json.decodeFromString(Design.serializer(), designFile.readText())
       if (design.id != dir.name) problems += "${dir.name}: design.json id '${design.id}' must match its directory"
       if (contract(design.contract) == null) problems += "${design.id}: unknown contract ${design.contract}"
 
-      val previews = File(dir, "previews").listFiles().orEmpty().filter { it.extension in setOf("png", "webp") }.sortedBy { it.name }.map { f ->
+      val previews = dir.resolve("previews").listFiles().orEmpty().filter { it.extension in setOf("png", "webp") }.sortedBy { it.name }.map { f ->
         val bytes = f.readBytes()
-        val sha = JavaCrypto.sha256HexBlocking(bytes)
+        val sha = Sha256.hex(bytes)
         val (w, h) = imageSize(bytes) ?: (0 to 0)
         val theme = f.nameWithoutExtension.substringBefore('~')
         val example = f.nameWithoutExtension.substringAfter('~', "").ifEmpty { null }
@@ -250,7 +249,7 @@ class CatalogBuilder(
       }
       designs += design.copy(previews = design.previews + previews)
 
-      val images = File(dir, "assets").listFiles().orEmpty().filter { it.isFile }.sortedBy { it.name }.mapNotNull { f ->
+      val images = dir.resolve("assets").listFiles().orEmpty().filter { it.isFile }.sortedBy { it.name }.mapNotNull { f ->
         val mime = when (f.extension.lowercase()) { "png" -> "image/png"; "webp" -> "image/webp"; "svg" -> "image/svg+xml"; "jpg", "jpeg" -> "image/jpeg"; else -> null }
         if (mime == null) { problems += "${design.id}/assets/${f.name}: not an image"; null }
         else addAsset(f.readBytes()) { sha -> AssetEntry(sha, f.length(), mime, AssetKind.Image, name = f.nameWithoutExtension) }
@@ -259,7 +258,7 @@ class CatalogBuilder(
       val rcs = dir.listFiles().orEmpty().filter { it.extension == "rc" }.sortedBy { it.name }
       if (rcs.isEmpty()) problems += "${design.id}: no .rc templates"
       for (rc in rcs) {
-        val specFile = File(dir, rc.nameWithoutExtension + ".json")
+        val specFile = dir.resolve(rc.nameWithoutExtension + ".json")
         if (!specFile.isFile) { problems += "${design.id}/${rc.name}: no ${specFile.name} sidecar"; continue }
         val spec = json.decodeFromString(TemplateSpec.serializer(), specFile.readText())
         val bytes = rc.readBytes()
@@ -275,7 +274,7 @@ class CatalogBuilder(
             problems += "${design.id}/${rc.name}: a ${spec.target.container} template's contract ${c.ref} declares no dismiss action"
           }
         }
-        val sha = JavaCrypto.sha256HexBlocking(bytes)
+        val sha = Sha256.hex(bytes)
         files["$blobDir$sha.rc"] = bytes
         val fontAssets = spec.fonts.flatMap { family ->
           when {
@@ -415,7 +414,7 @@ class CatalogBuilder(
   }
   }
 
-  private fun jsonFiles(dir: File) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
+  private fun jsonFiles(dir: SourceFile) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
 
   /** PNG IHDR or WebP VP8/VP8L/VP8X dimensions, without an image library. */
   private fun imageSize(b: ByteArray): Pair<Int, Int>? {
@@ -424,9 +423,9 @@ class CatalogBuilder(
     fun le24(i: Int) = le16(i) or ((b[i + 2].toInt() and 0xFF) shl 16)
     return when {
       b.size > 24 && b[1] == 'P'.code.toByte() && b[2] == 'N'.code.toByte() -> be(16) to be(20)
-      b.size > 30 && String(b, 8, 4) == "WEBP" -> when (String(b, 12, 4)) {
+      b.size > 30 && b.decodeToString(8, 12) == "WEBP" -> when (b.decodeToString(12, 16)) {
         "VP8 " -> (le16(26) and 0x3FFF) to (le16(28) and 0x3FFF)
-        "VP8L" -> { val v = be(21).let { Integer.reverseBytes(it) }; ((v and 0x3FFF) + 1) to (((v shr 14) and 0x3FFF) + 1) }
+        "VP8L" -> { val v = be(21).let { (it ushr 24) or ((it ushr 8) and 0xFF00) or ((it shl 8) and 0xFF0000) or (it shl 24) }; ((v and 0x3FFF) + 1) to (((v shr 14) and 0x3FFF) + 1) }
         "VP8X" -> (le24(24) + 1) to (le24(27) + 1)
         else -> null
       }
@@ -434,3 +433,7 @@ class CatalogBuilder(
     }
   }
 }
+
+/** Now, in epoch milliseconds, on every platform. */
+@OptIn(kotlin.time.ExperimentalTime::class)
+internal fun epochMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
