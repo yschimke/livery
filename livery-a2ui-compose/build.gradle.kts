@@ -67,3 +67,8 @@ tasks.withType<Test>().configureEach {
   providers.gradleProperty("livery.render.out").orNull?.let { systemProperty("livery.render.out", it) }
   systemProperty("livery.samples", rootProject.file("samples/catalog").absolutePath)
 }
+
+// The Wasm browser test task is off (see wasmJs above), so there is no Compose UI test bundle for
+// this configuration check to guard; `binaries.executable()` would turn a library into an app.
+// livery-compose does the same.
+tasks.matching { it.name == "checkComposeUiTestConfigurationForWasmJs" }.configureEach { enabled = false }
