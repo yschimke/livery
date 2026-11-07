@@ -230,11 +230,16 @@ class LiveryA2uiComponent(
       ?: return InlineDocument(null, null, null, "template needs inline: the document as base64")
     val bytes = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()
       ?: return InlineDocument(text, null, null, "inline is not base64")
-    val sig = (template["signature"] as? Map<*, *>)?.let { s ->
+    // A signature that is there must verify or refuse: never read a malformed one as "unsigned",
+    // which an agent-bytes policy might then play (PROTOCOL.md §3.5).
+    val sig = if ("signature" !in template) null else {
+      val s = template["signature"] as? Map<*, *>
+        ?: return InlineDocument(text, null, null, "signature must be {\"keyId\", \"signature\", \"alg\"?}")
       val keyId = s["keyId"] as? String
       val value = s["signature"] as? String
+      val alg = if ("alg" in s) s["alg"] as? String ?: return InlineDocument(text, null, null, "signature alg must be a string") else "Ed25519"
       if (keyId == null || value == null) return InlineDocument(text, null, null, "signature needs keyId and signature")
-      ManifestSignature(alg = s["alg"] as? String ?: "Ed25519", keyId = keyId, signature = value)
+      ManifestSignature(alg = alg, keyId = keyId, signature = value)
     }
     return InlineDocument(text, bytes, sig, null)
   }
@@ -247,13 +252,16 @@ class LiveryA2uiComponent(
    */
   @Composable
   private fun InlineContent(scope: A2uiComponentScope, inline: InlineDocument, dataset: JsonObject, liveryHost: LiveryHost, modifier: Modifier) {
-    val admission by produceState<Admission?>(null, inline.key, host.documents) {
-      value = when {
+    // Each answer is kept with the request it answers: while a new document is being admitted, the
+    // previous one doesn't play on with the new request's data and actions; nothing draws.
+    val answer by produceState<Pair<Any, Admission>?>(null, inline.key, host.documents) {
+      value = inline.key to when {
         inline.bytes == null -> Admission.Refused(inline.problem ?: "no document")
         host.documents == null -> Admission.Refused("the app accepts no documents sent with a message")
         else -> host.documents.admit(inline.bytes, contract, inline.signature)
       }
     }
+    val admission = answer?.takeIf { it.first == inline.key }?.second
     val plan: Any? = when (val a = admission) {
       null -> null
       is Admission.Refused -> a.reason

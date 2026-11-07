@@ -118,6 +118,16 @@ class InlineDocumentsA2uiTest : InlineSurfaceTest(
     assertTrue("template must be" in refuses("\"banner-classic\""))
   }
 
+  @Test fun aMalformedSignatureIsRefusedNotTakenAsUnsigned() = runComposeUiTest {
+    // This app plays unsigned promo documents, so reading the bad signature as "none" would play it.
+    val why = refuses(inline(InlineFixtures.banner, "\"invalid\""))
+    assertTrue("signature must be" in why, why)
+  }
+
+  @Test fun aSignatureWithANonStringAlgIsRefused() = runComposeUiTest {
+    assertTrue("alg must be a string" in refuses(inline(InlineFixtures.banner, """{"keyId":"app","signature":"x","alg":7}""")))
+  }
+
   @Test fun aDifferentDocumentIsAdmittedAfresh() = runComposeUiTest {
     // The same component, first a plain document, then one with a shader: the second is checked
     // on its own, and an unsigned shader is refused even though the first one played.
