@@ -41,7 +41,8 @@ object LiveryA2uiMessages {
       components.mapNotNull { it as? JsonObject }.flatMap { c ->
         val name = (c["component"] as? JsonPrimitive)?.content
         val contract = name?.let(byName::get) ?: return@flatMap emptyList()
-        component(c, contract, dataModel, designs?.get(contract.ref))
+        // A known catalog with no designs for this contract still checks: no design is one of its.
+        component(c, contract, dataModel, designs?.let { it[contract.ref].orEmpty() })
       }
     }
   }
@@ -108,7 +109,10 @@ object LiveryA2uiMessages {
     if (runCatching { kotlin.io.encoding.Base64.decode(inline.content) }.isFailure) return listOf("inline is not base64")
     val s = t["signature"] ?: return emptyList()
     if (s !is JsonObject) return listOf("signature must be {\"keyId\", \"signature\", \"alg\"?}")
-    if (s["keyId"] !is JsonPrimitive || s["signature"] !is JsonPrimitive) return listOf("signature needs keyId and signature")
+    // As the clients read it (LiveryA2uiComponent.inlineDocument): each field a string.
+    fun text(key: String) = (s[key] as? JsonPrimitive)?.takeIf { it.isString }
+    if (text("keyId") == null || text("signature") == null) return listOf("signature needs keyId and signature, as strings")
+    if ("alg" in s && text("alg") == null) return listOf("signature's alg must be a string")
     return emptyList()
   }
 

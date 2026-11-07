@@ -11,7 +11,8 @@ import kotlinx.serialization.json.putJsonObject
 
 /** The tools' names, descriptions and input schemas, as `tools/list` returns them. */
 internal object Tools {
-  private class Arg(val name: String, val type: String, val description: String, val required: Boolean = false)
+  /** [types]: the JSON Schema type, or several (`["object", "array"]`) when the argument takes either. */
+  private class Arg(val name: String, val type: String, val description: String, val required: Boolean = false, val types: List<String> = listOf(type))
 
   private fun tool(name: String, description: String, vararg args: Arg) = buildJsonObject {
     put("name", name)
@@ -19,7 +20,10 @@ internal object Tools {
     putJsonObject("inputSchema") {
       put("type", "object")
       putJsonObject("properties") {
-        for (a in args) putJsonObject(a.name) { put("type", a.type); put("description", a.description) }
+        for (a in args) putJsonObject(a.name) {
+          if (a.types.size == 1) put("type", a.type) else putJsonArray("type") { a.types.forEach { add(it) } }
+          put("description", a.description)
+        }
       }
       putJsonArray("required") { args.filter { it.required }.forEach { add(it.name) } }
       put("additionalProperties", false)
@@ -52,7 +56,7 @@ internal object Tools {
       Arg("contract", "string", "One contract (id@major); all of them when left out"),
       Arg("catalog_id", "string", "The A2UI catalog id the client advertises (default livery)")),
     tool("validate_a2ui", "Checks an A2UI message (or an array of messages) before it is sent: every Livery component's properties, its values through the same contract gate every client runs (literals, and bindings when data_model is given), its actions, template and design. Basic-catalog components are A2UI's to check.",
-      Arg("message", "object", "An A2UI message such as {\"version\": \"v0.9\", \"updateComponents\": …}, or an array of them", required = true),
+      Arg("message", "object", "An A2UI message such as {\"version\": \"v0.9\", \"updateComponents\": …}, or an array of them", required = true, types = listOf("object", "array")),
       Arg("data_model", "object", "The surface's data model, to check bound values too")),
     tool("list_history", "A design's version history from the catalog's git log: for each template, the commits that changed it and where it came from (its sidecar's source). Render one with render_preview's revision.",
       Arg("design", "string", "A design id in the catalog", required = true), Arg("template", "string", "Only this template"),

@@ -51,6 +51,21 @@ class LiveryA2uiMessagesTest {
     assertEquals(listOf("design"), problems(m, designs = mapOf("promo/banner@1" to setOf("banner-bold"))).map { it.property })
   }
 
+  @Test fun aContractWithNoDesignsInAKnownCatalogTakesNone() {
+    val m = message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","design":"feed-card"}""")
+    assertEquals(listOf("design"), problems(m, designs = mapOf("feed/article@1" to setOf("feed-card"))).map { it.property })
+  }
+
+  @Test fun aSignatureNeedsStringFields() {
+    val doc = kotlin.io.encoding.Base64.encode(byteArrayOf(1, 2, 3))
+    fun signed(signature: String) = problems(message(
+      """{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":{"inline":"$doc","signature":$signature}}"""))
+      .map { it.property }
+    assertEquals(listOf("template"), signed("""{"keyId":123,"signature":false}"""))
+    assertEquals(listOf("template"), signed("""{"keyId":"main","signature":"c2ln","alg":42}"""))
+    assertEquals(emptyList(), signed("""{"keyId":"main","signature":"c2ln","alg":"Ed25519"}"""))
+  }
+
   @Test fun theBuilderWritesWhatTheValidatorAccepts() {
     val c = LiveryA2ui.componentJson("promo", promo) {
       path("headline", "/offer/title"); value("cta", "Shop now"); design("banner-bold")

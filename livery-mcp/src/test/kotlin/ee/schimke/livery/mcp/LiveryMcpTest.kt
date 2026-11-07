@@ -86,6 +86,13 @@ class LiveryMcpTest {
     assertEquals(setOf("design", "actions.nope", "headline"), properties, bad.toString())
     val good = Json.parseToJsonElement(message.toString().replace("banner-nope", "banner-bold").replace(""","actions":{"nope":{"event":{"name":"x"}}}""", "")).jsonObject
     assertEquals("true", call("validate_a2ui", "message" to good, "data_model" to args("t" to "Spring sale")).body().jsonObject["ok"]!!.jsonPrimitive.content)
+    // A whole response, as an array of messages, and the schema that says it may be one.
+    val both = buildJsonObject { put("message", JsonArray(listOf(good, message))); put("data_model", args("t" to "Spring sale")) }
+    assertEquals("false", mcp.call("validate_a2ui", both).body().jsonObject["ok"]!!.jsonPrimitive.content)
+    val tools = mcp.handle(buildJsonObject { put("jsonrpc", "2.0"); put("id", 4); put("method", "tools/list") })!!["result"]!!
+      .jsonObject["tools"]!!.jsonArray.map { it.jsonObject }.single { it["name"]!!.jsonPrimitive.content == "validate_a2ui" }
+    val type = tools["inputSchema"]!!.jsonObject["properties"]!!.jsonObject["message"]!!.jsonObject["type"]!!.jsonArray
+    assertEquals(listOf("object", "array"), type.map { it.jsonPrimitive.content })
   }
 
   @Test fun dataIsBoundOrRefused() = runBlocking<Unit> {
