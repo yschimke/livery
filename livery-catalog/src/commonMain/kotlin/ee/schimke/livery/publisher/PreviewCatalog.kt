@@ -1,6 +1,7 @@
 package ee.schimke.livery.publisher
 
-import ee.schimke.livery.client.Sha256
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
@@ -40,11 +41,12 @@ object PreviewCatalog {
       if (emits.isNotEmpty()) add("emits actions ${contract.ref} doesn't declare: ${emits.sorted()}")
     }
     if (problems.isNotEmpty()) throw CatalogProblems(problems)
-    val sha = Sha256.hex(document)
+    val sha = sha256Hex(document)
     val channel = "preview-${sha.take(12)}"
     val designId = "preview-${sha.take(12)}"
     val json = Json { prettyPrint = true; encodeDefaults = false }
-    val src = MemorySource()
+    // Built in memory: a catalog of one, never on disk.
+    val src = Node(FakeFileSystem(), "/preview".toPath())
     src.resolve("catalog.json").writeText(json.encodeToString(CatalogConfig.serializer(), CatalogConfig("preview", channel, ttlSeconds = 60, expiresInDays = expiresInDays)))
     src.resolve("contracts").resolve("contract.json").writeText(json.encodeToString(Contract.serializer(), contract))
     val dir = src.resolve("designs").resolve(designId)

@@ -18,6 +18,7 @@ dependencies {
   // TemplateInspector, for `livery build --inspect`: what a document really reads and emits.
   implementation(project(":livery-instantiate"))
   testImplementation(kotlin("test"))
+  testImplementation(libs.okio.fakefilesystem)
   testImplementation(platform(libs.rc.players.bom))
   testImplementation(libs.rc.player.protocol)
 }

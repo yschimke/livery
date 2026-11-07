@@ -1,5 +1,7 @@
 package ee.schimke.livery.publisher
 
+import okio.FileSystem
+import okio.Path
 import ee.schimke.livery.instantiate.TemplateInspector
 
 import ee.schimke.livery.client.BindResult
@@ -9,7 +11,6 @@ import ee.schimke.livery.protocol.ActionKinds
 import ee.schimke.livery.protocol.Presentation
 import ee.schimke.livery.protocol.ScreenValues
 import ee.schimke.livery.client.ContractEvolution
-import ee.schimke.livery.client.Sha256
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.Contract
@@ -170,7 +171,10 @@ class CatalogBuilder(
     val seasons: Set<String> = emptySet(),
   )
 
-  fun build(src: SourceFile, layout: Layout, serial: Long? = null): Output {
+  /** Builds the source tree at [src] on [fileSystem]. */
+  fun build(fileSystem: FileSystem, src: Path, layout: Layout, serial: Long? = null): Output = build(Node(fileSystem, src), layout, serial)
+
+  internal fun build(src: Node, layout: Layout, serial: Long? = null): Output {
     val problems = mutableListOf<String>()
     val config = json.decodeFromString(CatalogConfig.serializer(), src.resolve("catalog.json").readText())
     val contracts = jsonFiles(src.resolve("contracts")).map { json.decodeFromString(Contract.serializer(), it.readText()) }
@@ -186,7 +190,7 @@ class CatalogBuilder(
     val assetDir = if (layout is Layout.GitHubRelease) "" else "assets/"
     val assets = linkedMapOf<String, AssetEntry>()
     fun addAsset(bytes: ByteArray, entry: (sha: String) -> AssetEntry): AssetEntry {
-      val a = entry(Sha256.hex(bytes))
+      val a = entry(sha256Hex(bytes))
       files[assetDir + a.fileName] = bytes
       return assets.getOrPut(a.sha256) { a }
     }
@@ -239,7 +243,7 @@ class CatalogBuilder(
 
       val previews = dir.resolve("previews").listFiles().orEmpty().filter { it.extension in setOf("png", "webp") }.sortedBy { it.name }.map { f ->
         val bytes = f.readBytes()
-        val sha = Sha256.hex(bytes)
+        val sha = sha256Hex(bytes)
         val (w, h) = imageSize(bytes) ?: (0 to 0)
         val theme = f.nameWithoutExtension.substringBefore('~')
         val example = f.nameWithoutExtension.substringAfter('~', "").ifEmpty { null }
@@ -274,7 +278,7 @@ class CatalogBuilder(
             problems += "${design.id}/${rc.name}: a ${spec.target.container} template's contract ${c.ref} declares no dismiss action"
           }
         }
-        val sha = Sha256.hex(bytes)
+        val sha = sha256Hex(bytes)
         files["$blobDir$sha.rc"] = bytes
         val fontAssets = spec.fonts.flatMap { family ->
           when {
@@ -414,7 +418,7 @@ class CatalogBuilder(
   }
   }
 
-  private fun jsonFiles(dir: SourceFile) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
+  private fun jsonFiles(dir: Node) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
 
   /** PNG IHDR or WebP VP8/VP8L/VP8X dimensions, without an image library. */
   private fun imageSize(b: ByteArray): Pair<Int, Int>? {

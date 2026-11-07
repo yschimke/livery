@@ -1,5 +1,7 @@
 package ee.schimke.livery.publisher
 
+import okio.FileSystem
+import okio.Path
 import ee.schimke.livery.client.ContractChange
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.instantiate.TemplateInspector
@@ -91,11 +93,14 @@ object CompatibilityCheck {
   )
 
   /** Compares two source trees; [old] may be missing (nothing published yet) or not build. */
-  fun compare(src: SourceFile, old: SourceFile?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Report =
-    compareTrees(src, old, against, inspect).report
+  fun compare(fileSystem: FileSystem, src: Path, old: Path?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Report =
+    compareTrees(fileSystem, src, old, against, inspect).report
 
   /** [compare], keeping the built trees. */
-  fun compareTrees(src: SourceFile, old: SourceFile?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Comparison {
+  fun compareTrees(fileSystem: FileSystem, src: Path, old: Path?, against: String = old?.toString() ?: "nothing", inspect: Boolean = false): Comparison =
+    compareTrees(Node(fileSystem, src), old?.let { Node(fileSystem, it) }, against, inspect)
+
+  internal fun compareTrees(src: Node, old: Node?, against: String, inspect: Boolean): Comparison {
     val problems = mutableListOf<String>()
     val warnings = mutableListOf<String>()
     val new = try {

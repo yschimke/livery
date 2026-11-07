@@ -11,7 +11,7 @@ order: 24
 | `livery-launcher-widgets` | Android 16+ | Available; not yet device-tested in CI |
 | `livery-verify` | Robolectric (Android 16, Java 21) | Available: launcher widgets on Android 16's own player |
 | `Livery`, `LiveryUI` (Swift package) | iOS 15, macOS 12, watchOS 8, tvOS 15 | Available; CI on macOS |
-| `livery-catalog` (catalog build and check, no file system) | JVM, iOS, Wasm | Available from the release after 0.4.0 |
+| `livery-catalog` (catalog build and check, on any Okio file system) | JVM, iOS, Wasm | Available from the release after 0.4.0 |
 | `livery-publish` (`livery` CLI) | JVM | Available |
 | `livery-gradle-plugin` (`ee.schimke.composeai.livery.catalog`) | Gradle, Android apps | Available |
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
