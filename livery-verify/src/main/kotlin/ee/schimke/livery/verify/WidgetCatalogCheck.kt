@@ -25,7 +25,10 @@ object WidgetCatalogCheck {
     override fun toString(): String = "$design/$template with '$example': $reason"
   }
 
-  /** Each template played; [Failure]s only for those that didn't play. */
+  /**
+   * Each template played; [Failure]s only for those that didn't play. Throws when [catalog] isn't a
+   * catalog source tree, so a test pointed at the wrong path fails.
+   */
   suspend fun launcherWidgets(
     activity: Activity,
     catalog: File,
@@ -37,6 +40,10 @@ object WidgetCatalogCheck {
      */
     images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray? = { _, _, _ -> null },
   ): List<Failure> {
+    // A wrong path must fail the test, not pass it by playing nothing.
+    require(File(catalog, "contracts").isDirectory && File(catalog, "designs").isDirectory) {
+      "${catalog.absolutePath} isn't a catalog source tree (no contracts/ and designs/)"
+    }
     val contracts = File(catalog, "contracts").listFiles().orEmpty().filter { it.extension == "json" }
       .map { JSON.decodeFromString(Contract.serializer(), it.readText()) }
       .groupBy { it.ref }.mapValues { (_, v) -> v.maxBy { it.minor } }

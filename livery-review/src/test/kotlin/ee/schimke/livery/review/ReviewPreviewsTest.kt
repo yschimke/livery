@@ -119,6 +119,18 @@ class ReviewPreviewsTest {
     assertTrue(tile.shots.all { it.before!!.endsWith(".before.png") }, "not reused: $tile")
   }
 
+  @Test fun aContractChangeAloneIsDrawn() {
+    // No template changed; a default did, so tile-default draws differently.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "contracts/status-tile.json").let { f ->
+      f.writeText(f.readText().replace("\"available\": { \"type\": \"bool\", \"default\": true }", "\"available\": { \"type\": \"bool\", \"default\": false }"))
+    }
+    val c = CompatibilityCheck.compareTrees(tree, sample, "main")
+    assertTrue(c.report.templates.all { it.status == "unchanged" }, c.report.templates.toString())
+    val tile = ReviewPreviews(temp("previews")).render(c).single { it.design == "tile-default" }
+    assertTrue(tile.shots.all { it.before!!.endsWith(".before.png") }, tile.toString())
+  }
+
   @Test fun anUnchangedTreeDrawsNothing() {
     val copy = temp("copy").also { sample.copyRecursively(it) }
     assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))

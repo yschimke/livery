@@ -37,7 +37,20 @@ class ReviewPreviews(
   fun render(c: CompatibilityCheck.Comparison): List<DesignPreview> {
     out.mkdirs()
     val touched = c.report.templates.filter { it.status != "unchanged" }.map { it.design }.distinct()
-    return touched.map { design -> preview(design, c.before, c.after) }
+    return (touched + drawnDifferently(c.before, c.after).filter { it !in touched }).map { design -> preview(design, c.before, c.after) }
+  }
+
+  /**
+   * Designs whose documents are the same but would draw differently: a contract (its defaults and
+   * examples) or a template's images or fonts changed. The report counts their templates unchanged.
+   */
+  private fun drawnDifferently(before: CatalogBuilder.Output?, after: CatalogBuilder.Output?): List<String> {
+    if (before == null || after == null) return emptyList()
+    val was = before.manifest.templates.associateBy { it.designId to it.target }
+    return after.manifest.templates.filter { t ->
+      val old = was[t.designId to t.target] ?: return@filter false
+      contract(after, t) != contract(before, old) || !sameResources(t to after, old to before)
+    }.map { it.designId }.distinct().sorted()
   }
 
   private fun preview(design: String, before: CatalogBuilder.Output?, after: CatalogBuilder.Output?): DesignPreview {

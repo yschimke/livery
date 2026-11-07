@@ -42,6 +42,11 @@ class PlatformWidgetPlayerTest {
     assertTrue("Unknown operation" in failed.reason || "couldn't be adapted" in failed.reason, failed.reason)
   }
 
+  @Test fun aPathThatIsntACatalogFails() {
+    val missing = File(Files.createTempDirectory("x").toFile(), "nope")
+    kotlin.test.assertFailsWith<IllegalArgumentException> { runBlocking { WidgetCatalogCheck.launcherWidgets(activity, missing) } }
+  }
+
   @Test fun theCatalogsOwnImagesResolve() = runBlocking {
     val catalog = Files.createTempDirectory("catalog").toFile()
     val png = byteArrayOf(1, 2, 3)
