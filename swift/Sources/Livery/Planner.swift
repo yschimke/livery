@@ -130,7 +130,9 @@ public struct ActionRouter: Sendable {
     let handler = handlers[spec.kind]
     if handler == nil && spec.kind != ActionKinds.track { return error("no handler for \(spec.kind)") }
     events(base)
-    await handler?(plan, action, args)
+    // A handler gets every argument, with the checked ones as the gate passed them (a `set` of a
+    // bool arrives as true or false, not a document's 1 or 0).
+    await handler?(plan, action, args.merging(check.args) { _, checked in checked })
   }
 
   /// PROTOCOL.md §7: a host named action's value as arguments: none, a JSON object of strings, or one value.

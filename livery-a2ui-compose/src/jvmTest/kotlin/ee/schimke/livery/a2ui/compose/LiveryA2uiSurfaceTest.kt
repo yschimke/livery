@@ -66,10 +66,17 @@ abstract class LiveryA2uiSurfaceTest {
   private val tree = Files.createTempDirectory("livery-a2ui").toFile().also { tree ->
     samples.copyRecursively(tree)
     for (dir in listOf("contracts", "designs")) File(samples.parentFile, "two-way/$dir").copyRecursively(File(tree, dir))
+    prepare(tree)
   }
   private val built = CatalogBuilder(now = { 0 }).build(tree, Layout.Static, serial = 0)
   private val caps = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   private val clock = Clock { 1_000L }
+
+  /**
+   * Changes the catalog source tree before it is built. Runs during construction: it may use only
+   * [tree], not the subclass's own properties.
+   */
+  protected open fun prepare(tree: File) {}
 
   /** Livery's events: impressions, actions, errors. */
   protected val events = mutableListOf<TemplateEvent>()

@@ -56,7 +56,9 @@ object LiveryA2ui {
    */
   suspend fun playableContracts(repository: TemplateRepository, capabilities: PlayerCapabilities): List<Contract> {
     val manifest = repository.current() ?: return emptyList()
-    return manifest.contracts.filter { repository.resolve(TemplateQuery(it.ref, capabilities)) != null }
+    // One component per contract major, at the newest minor the catalog keeps (as Manifest.contract).
+    return manifest.contracts.map { it.ref }.distinct().mapNotNull(manifest::contract)
+      .filter { repository.resolve(TemplateQuery(it.ref, capabilities)) != null }
   }
 }
 
