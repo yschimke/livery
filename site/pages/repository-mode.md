@@ -186,6 +186,32 @@ Review pictures draw each kept example after the current ones, labelled `on (kep
 `livery-verify` plays every launcher widget with them too. The catalog build ignores the folder:
 kept examples are for checking, not for apps.
 
+## Playing a template as a release played it
+
+`livery play` plays one template with one set of data as that release of Livery plays it, and
+writes a PNG: on rc-players' Compose player (`--surface compose`), or written for a widget and
+played on Android 16's own launcher widget player (`--surface launcher-widget`). It exits 1 when the
+template crashes or is refused, which is what a home screen shows as a warning sign.
+
+```bash
+livery play designs/tile-default/launcher.rc --contract contracts/status-tile.json \
+  --example on --surface launcher-widget --size 352x190 --out tile.png
+```
+
+Every Livery release ships it, so to try a template as an app on an older release plays it,
+download that release's CLI and run the same command:
+
+```bash
+v=0.3.0
+curl -fsSL -o livery-$v.zip https://github.com/yschimke/livery/releases/download/v$v/livery-$v.zip
+unzip -q livery-$v.zip && livery-$v/bin/livery play …
+```
+
+`--example` takes a contract example or, with `--catalog <src>`, a kept one (`on (kept 1a2b3c4d)`).
+The widget player runs under Robolectric in a Java 21 JVM (`LIVERY_JAVA`, else `JAVA_HOME`); on
+first use it downloads Android 16 and Robolectric's native graphics from Maven Central, checked
+against their published SHA-1, into `LIVERY_CACHE` (default `~/.cache/livery`).
+
 ## Review tools
 
 | Tool | |
@@ -194,8 +220,12 @@ kept examples are for checking, not for apps.
 | `livery review <src> --against origin/main --previews <dir>` | the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in `<dir>` (`--image-base <url>` for where they will be served, `--size <w>x<h>` to choose the template) |
 | `livery build <src> <out> --inspect` | everything the publish would refuse |
 | `livery keep-examples <src> --against origin/main` | keeps the example data the base had that the tree no longer has (above) |
+| `livery play <template.rc> --contract <c> --example <e> --surface launcher-widget` | one template, played as this release plays it: a PNG, and exit 1 on a crash (above) |
 | `livery-mcp` | the same checks and `render_preview` for agents, with `list_history` and previews at a revision (see [AI workflows](ai-workflows.md)) |
 
 ## Planned
 
 - Preview channels per pull request, for a debug build to play before merging.
+- Which Livery release each app release ships, recorded by the Gradle plugin, so a review can play
+  every changed template as the app releases still in use play it (`livery play` from each
+  release, for the app's last six months or each minor version).

@@ -1,0 +1,41 @@
+package ee.schimke.livery.review
+
+import java.io.File
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class PlayCommandTest {
+  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val out = Files.createTempDirectory("play").toFile()
+
+  private fun play(vararg args: String) = PlayCommand().run(args.toList(), emptyMap())
+
+  @Test fun aTemplatePlaysWithAnExample() {
+    val png = File(out, "on.png")
+    val code = play(
+      "$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json",
+      "--example", "on", "--size", "360x120", "--out", png.path,
+    )
+    assertEquals(0, code)
+    assertTrue(png.length() > 0)
+  }
+
+  @Test fun dataThatDoesntBindFails() {
+    val data = File(out, "bad.json").apply { writeText("""{ "name": 3 }""") }
+    assertEquals(1, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--data", data.path, "--out", File(out, "x.png").path))
+  }
+
+  @Test fun aKeptExampleIsNamedByItsLabel() {
+    val catalog = Files.createTempDirectory("catalog").toFile().also { sample.copyRecursively(it) }
+    File(catalog, "contracts/examples/status-tile").mkdirs()
+    File(catalog, "contracts/examples/status-tile/dim-x.json").writeText("""{ "name": "Hall", "state": "Dim", "is_on": true, "level": 0.05 }""")
+    val label = ee.schimke.livery.publisher.KeptExamples.load(catalog).getValue("live/status-tile@1").keys.single()
+    assertEquals(0, play("$catalog/designs/tile-default/in-app.rc", "--contract", "$catalog/contracts/status-tile.json", "--catalog", catalog.path, "--example", label, "--out", File(out, "k.png").path))
+  }
+
+  @Test fun anUnknownSurfaceIsAUsageError() {
+    assertEquals(64, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--surface", "toaster"))
+  }
+}

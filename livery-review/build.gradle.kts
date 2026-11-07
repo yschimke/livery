@@ -21,3 +21,14 @@ dependencies {
 tasks.withType<Test>().configureEach {
   providers.gradleProperty("livery.render.out").orNull?.let { systemProperty("livery.render.out", it) }
 }
+
+// The Android SDK jar `livery play --surface launcher-widget` has Robolectric play on: the one the
+// bundled Robolectric expects, named here from the version catalog so the two never drift.
+val playProperties by tasks.registering {
+  val sdk = libs.versions.robolectric.sdk36.get()
+  val out = layout.buildDirectory.dir("generated/play")
+  inputs.property("sdk", sdk)
+  outputs.dir(out)
+  doLast { out.get().asFile.resolve("livery-play.properties").apply { parentFile.mkdirs(); writeText("robolectric.sdk36=$sdk\n") } }
+}
+sourceSets.main { resources.srcDir(playProperties) }
