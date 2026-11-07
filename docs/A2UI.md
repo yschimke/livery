@@ -304,12 +304,15 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   reloads the document, as `LiveryTemplate` does on Compose. Only what that player can't set live
   is written into the document (`TemplateInstantiator`): bound images (`livery:value/<input>`) and
   `long` values; a change to one of those is a new document.
-- **Two fixes in that player** came out of this, in rc-players' copy of it
+- **Each player implements the Remote Compose spec.** No player defines it, AndroidX's included:
+  that one is a useful reference to compare against, and it can be wrong too. Two places where the
+  TypeScript player didn't follow the spec are fixed in rc-players' copy of it
   ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829), vendored here until it
-  merges): Compose writes dp spacing and corner radii as expressions over the density, which the
-  player used raw (`NaN`), so templates had no surfaces and no touch areas; and it skipped the
-  definitions inside a click, so a button whose action name another click defined fired nothing
-  until that one was tapped. The browser test taps the drawn buttons.
+  merges). First, a layout's spacing and a corner radius may be a variable reference, which Compose
+  writes for dp over the density. The player read it as a plain float (`NaN`), so templates had no
+  surfaces and no touch areas. Second, it skipped the definitions inside a click, so a button whose
+  action name another click defined fired nothing until that one was tapped. The browser test taps
+  the drawn buttons.
 - **The component.** One `A2uiLitElement` per contract, registered with
   `basicCatalog.derive({catalogId, components: [...basic, ...livery]})`. Inputs and lists come
   resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
@@ -317,7 +320,12 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   action goes out through `dispatchAction` with the template's checked arguments in its context.
 - **Images.** Rendering never waits on the network: a render uses only images already on the
   device, and one that misses answers *waiting*; the element fetches them (`fetchImages`, off the
-  render path) and renders again, as widget hosts do with `CachedImages`.
+  render path) and renders again, as widget hosts do with `CachedImages`. One fetch serves every
+  component waiting in the session. If an image can't be fetched, the component can't draw.
+- **When it can't draw.** The agent hears why (`onProblem`). A chosen design that can't load, or
+  whose image can't be fetched, falls back to the automatic choice, never to nothing. The agent's
+  own `template` document is never replaced, so it, and an automatic choice that can't draw either,
+  show the page's `fallback`.
 - **Theme.** Each role (`primary`, `surface`, `onSurface`, …) from `--livery-<role>`, else A2UI's
   own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
   components beside it.

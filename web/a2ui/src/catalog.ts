@@ -123,6 +123,8 @@ class LiveryElement extends A2uiLitElement {
     /** The agent's design failed to play: render the automatic choice instead, until the props change. */
     private automatic = false;
     private automaticFor?: string;
+    /** A fetch for this element's images failed: if it renders waiting again, it can't draw. */
+    private imagesFailed = false;
     private shownKey?: string;
     private resize?: ResizeObserver;
     private widthDp = 0;
@@ -204,17 +206,24 @@ class LiveryElement extends A2uiLitElement {
       this.request = request;
       const mine = ++this.sequence;
       const r: Rendered = await session.render(spec.name, props, space);
-      if (mine !== this.sequence) return; // a newer render is on its way
-      if (!r.ok && r.waiting) {
+      if (mine !== this.sequence) {
+        // A newer render is on its way: this one is never shown, so the session can drop its plan.
+        if (r.ok) session.release(r.render);
+        return;
+      }
+      if (!r.ok && r.waiting && !this.imagesFailed) {
         // An image isn't on the device: fetch it off the render path, then render again. Not the agent's problem.
-        session.whenImagesArrive(() => { this.request = ''; this.requestUpdate(); });
+        session.whenImagesArrive((arrived) => {
+          this.imagesFailed = !arrived;
+          this.request = '';
+          this.requestUpdate();
+        });
         void session.fetchImages();
         return;
       }
+      this.imagesFailed = false;
       if (!r.ok) {
-        options.onProblem?.(spec.name, r.reason);
-        this.fallback = r.reason;
-        this.requestUpdate();
+        this.cannotPlay(props, r.waiting ? `an image could not be fetched: ${r.reason}` : r.reason);
         return;
       }
       const wasFallback = this.fallback !== undefined;
@@ -230,20 +239,25 @@ class LiveryElement extends A2uiLitElement {
         this.shownKey = r.documentKey;
       } catch (e) {
         this.player.forget();
-        const reason = `the player could not play ${r.design}: ${(e as Error).message}`;
-        options.onProblem?.(spec.name, reason);
-        // A chosen design that can't play falls back to the automatic choice, never to nothing. The
-        // agent's own document is never replaced (PROTOCOL.md §5.3): its fallback is the page's.
-        if (props[DESIGN] !== undefined && props[TEMPLATE] === undefined && !this.automatic) {
-          this.automatic = true;
-          this.request = '';
-          this.requestUpdate();
-        } else {
-          this.fallback = reason;
-          this.requestUpdate();
-        }
+        this.cannotPlay(props, `the player could not play ${r.design}: ${(e as Error).message}`);
       }
       if (previous !== undefined) session.release(previous);
+    }
+
+    /**
+     * This render can't draw. The agent hears why. A chosen design falls back to the automatic
+     * choice, never to nothing; the agent's own document is never replaced (PROTOCOL.md §5.3), so
+     * it, and an automatic choice that can't draw either, show the page's fallback.
+     */
+    private cannotPlay(props: Record<string, unknown>, reason: string): void {
+      this.livery?.options.onProblem?.(this.livery.spec.name, reason);
+      if (props[DESIGN] !== undefined && props[TEMPLATE] === undefined && !this.automatic) {
+        this.automatic = true;
+        this.request = '';
+      } else {
+        this.fallback = reason;
+      }
+      this.requestUpdate();
     }
 
     /**

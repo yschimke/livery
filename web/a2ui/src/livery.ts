@@ -118,26 +118,28 @@ export class LiverySession {
   }
 
   private fetching: Promise<unknown> = Promise.resolve();
-  private readonly waiting = new Set<() => void>();
+  private readonly waiting = new Set<(arrived: boolean) => void>();
 
   /**
    * Fetches the images renders were waiting for (`waiting: true`), off the render path, then calls
    * every [whenImagesArrive] callback, whichever render asked: the session's misses are one queue,
-   * so one fetch can bring another component's image. Fetches run one after another.
+   * so one fetch can bring another component's image. Fetches run one after another. `arrived` is
+   * false when one of them could not be fetched: render again, and a render still waiting has
+   * failed.
    */
   fetchImages(): Promise<void> {
     this.fetching = this.fetching.then(async () => {
-      const arrived = String(await this.lib.liveryFetchImages(this.id)) === 'true';
-      if (!arrived) return;
+      let arrived = false;
+      try { arrived = String(await this.lib.liveryFetchImages(this.id)) === 'true'; } catch { /* as a miss */ }
       const callbacks = [...this.waiting];
       this.waiting.clear();
-      callbacks.forEach((c) => c());
+      callbacks.forEach((c) => c(arrived));
     }).catch(() => {});
     return this.fetching as Promise<void>;
   }
 
-  /** [callback] runs once, the next time a fetch brings images: render again then. */
-  whenImagesArrive(callback: () => void): void {
+  /** [callback] runs once, when the next fetch ends: render again then. */
+  whenImagesArrive(callback: (arrived: boolean) => void): void {
     this.waiting.add(callback);
   }
 
