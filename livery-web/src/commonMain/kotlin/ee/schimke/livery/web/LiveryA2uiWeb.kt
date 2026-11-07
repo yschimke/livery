@@ -148,7 +148,7 @@ class LiveryA2uiWeb(
     val dataset = JsonObject(LiveryA2ui.dataset(contract, props.mapValues { it.value }) + LiveryA2ui.themeValues(contract, space.themeArgb))
     val wiring = (props[LiveryA2ui.ACTIONS] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonObject)?.let { k to it } }.toMap()
     val plan = when (val p = plan(contract, props, dataset, space)) {
-      is RenderPlan -> if (space.decisionId != null && p.decision == null) p.copy(decisionId = space.decisionId) else p
+      is RenderPlan -> p
       else -> return Rendered.Fallback("$name (${contract.ref}): $p")
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
@@ -271,12 +271,12 @@ class LiveryA2uiWeb(
 
   /** A [RenderPlan], or why there is none. */
   private suspend fun plan(contract: Contract, props: JsonObject, dataset: JsonObject, space: Space): Any {
-    if (LiveryA2ui.TEMPLATE in props) return inline(contract, props.getValue(LiveryA2ui.TEMPLATE), dataset)
+    if (LiveryA2ui.TEMPLATE in props) return inline(contract, props.getValue(LiveryA2ui.TEMPLATE), dataset, space.decisionId)
     val query = TemplateQuery(
       contract.ref, capabilities, widthDp = space.widthDp,
       designId = props.str(LiveryA2ui.DESIGN), variant = props.str(LiveryA2ui.VARIANT), minor = contract.minor,
     )
-    return when (val r = planner.forAppData(query, dataset)) {
+    return when (val r = planner.forAppData(query, dataset, decisionId = space.decisionId)) {
       is PlanResult.Ready -> r.plan
       is PlanResult.Fallback -> r.reason
     }
@@ -287,7 +287,7 @@ class LiveryA2uiWeb(
    * or nothing, never a catalog design in its place. A `template` that is there but malformed is
    * refused, and a signature that is there must verify.
    */
-  private suspend fun inline(contract: Contract, template: JsonElement, dataset: JsonObject): Any {
+  private suspend fun inline(contract: Contract, template: JsonElement, dataset: JsonObject, decisionId: String?): Any {
     val t = template as? JsonObject ?: return "template must be {\"inline\": <base64>, \"signature\"?}"
     val text = t.str("inline") ?: return "template needs inline: the document as base64"
     val bytes = runCatching { Base64.decode(text) }.getOrNull() ?: return "inline is not base64"
@@ -311,7 +311,7 @@ class LiveryA2uiWeb(
     // Its events say whose bytes these were, so analytics never mix them with reviewed designs.
     val label = admitted.signedBy?.let { "a2ui:signed:$it" } ?: "a2ui:unsigned"
     val entry = TemplateEntry(admitted.sha256, admitted.bytes.size.toLong(), label, contract.ref, Target(capabilities.surface, capabilities.maxRcApiLevel))
-    return RenderPlan(LoadedTemplate(entry, null, admitted.bytes, LoadedTemplate.Origin.Fresh, contract), contract, bindings)
+    return RenderPlan(LoadedTemplate(entry, null, admitted.bytes, LoadedTemplate.Origin.Fresh, contract), contract, bindings, decisionId = decisionId)
   }
 
   private fun event(type: TemplateEvent.Type, plan: RenderPlan) = TemplateEvent(

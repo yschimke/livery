@@ -119,6 +119,16 @@ class LiveryA2uiWebTest {
     web.action(r.id, "cta", "string", """{"route":"/premium"}""")
     assertEquals(listOf(TemplateEvent.Type.Impression, TemplateEvent.Type.Action), events.takeLast(2).map { it.type })
     assertTrue(events.takeLast(2).all { it.decisionId == "a2ui:chat-1/promo" }, events.toString())
+    // The planner's own events too: data that doesn't bind is reported for that component.
+    events.clear()
+    web.render("PromoBanner", props("""{"headline":"${"x".repeat(200)}","cta":"Go"}"""), LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/bad"))
+    assertEquals(listOf("a2ui:chat-1/bad"), events.filter { it.type == TemplateEvent.Type.Error }.map { it.decisionId }, events.toString())
+    // And the agent's own document.
+    val bytes = built.files.entries.first { it.key.contains(r.sha256) }.value
+    val admitting = web(DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)))
+    val inline = admitting.render("PromoBanner", JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes)}"}"""))), LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/doc"))
+    admitting.shown(assertIs<LiveryA2uiWeb.Rendered.Ready>(inline).id)
+    assertEquals("a2ui:chat-1/doc", events.last().decisionId)
   }
 
   @Test fun anUnwiredActionGoesToThePageOrIsDropped() = runTest {
