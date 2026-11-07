@@ -78,7 +78,7 @@ class ReviewPreviews(
         val after = draw(a, afterContract, "after")
         // The same template, contract and assets on both sides draw the same: render it once.
         val same = a != null && b != null && a.first.sha256 == b.first.sha256 && beforeContract == afterContract &&
-          a.first.assets.all { sha -> asset(a.second, sha).contentEqualsOrNull(asset(b.second, sha)) }
+          sameResources(a, b)
         val before = if (same) after else draw(b, beforeContract, "before")
         DesignPreview.Shot(
           example = name,
@@ -106,6 +106,18 @@ class ReviewPreviews(
   private fun pick(templates: List<TemplateEntry>): TemplateEntry? =
     if (size != null) templates.firstOrNull { it.target.size.covers(size.first, size.second) }
     else templates.maxWithOrNull(compareBy({ (it.target.size.minWidthDp ?: 0) * (it.target.size.minHeightDp ?: 0) }, { it.target.rcApiLevel }))
+
+  /**
+   * Whether two templates draw with the same images and fonts: the same set of assets, each with
+   * the same entry (a font's family, weight and style) and the same bytes.
+   */
+  private fun sameResources(a: Pair<TemplateEntry, CatalogBuilder.Output>, b: Pair<TemplateEntry, CatalogBuilder.Output>): Boolean {
+    if (a.first.assets.toSet() != b.first.assets.toSet()) return false
+    return a.first.assets.all { sha ->
+      a.second.manifest.assets.firstOrNull { it.sha256 == sha } == b.second.manifest.assets.firstOrNull { it.sha256 == sha } &&
+        asset(a.second, sha).contentEqualsOrNull(asset(b.second, sha))
+    }
+  }
 
   private fun ByteArray?.contentEqualsOrNull(other: ByteArray?): Boolean =
     if (this == null || other == null) this == other else contentEquals(other)

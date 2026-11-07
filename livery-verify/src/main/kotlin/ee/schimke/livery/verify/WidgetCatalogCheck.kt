@@ -31,11 +31,16 @@ object WidgetCatalogCheck {
     catalog: File,
     density: Float = activity.resources.displayMetrics.density,
     maxBytes: Long = Long.MAX_VALUE,
+    /**
+     * Images that aren't the catalog's own (`https://`, `app:`), as the app's resolver would give
+     * them: by default none, so a template that needs one fails as it would without it.
+     */
+    images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray? = { _, _, _ -> null },
   ): List<Failure> {
     val contracts = File(catalog, "contracts").listFiles().orEmpty().filter { it.extension == "json" }
       .map { JSON.decodeFromString(Contract.serializer(), it.readText()) }
       .groupBy { it.ref }.mapValues { (_, v) -> v.maxBy { it.minor } }
-    val instantiator = TemplateInstantiator { _, _, _ -> null }
+    val instantiator = TemplateInstantiator(images(catalog, images))
     val failures = mutableListOf<Failure>()
     for (designDir in File(catalog, "designs").listFiles().orEmpty().filter { it.isDirectory }.sortedBy { it.name }) {
       val design = File(designDir, "design.json").takeIf { it.isFile }?.let { JSON.parseToJsonElement(it.readText()).jsonObject } ?: continue
@@ -78,6 +83,20 @@ object WidgetCatalogCheck {
     val h = s.minHeightDp?.takeIf { it > 0 } ?: minOf(DEFAULT_H, s.maxHeightDp ?: DEFAULT_H)
     return w to h
   }
+
+  /** The catalog's own images, `asset:<sha256>`, from each design's assets folder; others from [other]. */
+  internal fun images(
+    catalog: File,
+    other: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray?,
+  ): suspend (String, Int, Int) -> ByteArray? {
+    val assets = File(catalog, "designs").listFiles().orEmpty()
+      .flatMap { File(it, "assets").listFiles().orEmpty().filter { f -> f.isFile } }
+      .associateBy { sha256(it.readBytes()) }
+    return { ref, w, h -> ref.removePrefix("asset:").takeIf { it != ref }?.let { assets[it]?.readBytes() } ?: other(ref, w, h) }
+  }
+
+  private fun sha256(bytes: ByteArray): String =
+    java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
   private const val DEFAULT_W = 250
   private const val DEFAULT_H = 180

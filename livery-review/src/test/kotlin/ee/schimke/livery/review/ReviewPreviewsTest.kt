@@ -105,6 +105,20 @@ class ReviewPreviewsTest {
     assertTrue(tile.shots.all { it.before == it.after && it.unchanged }, tile.toString())
   }
 
+  @Test fun aTemplateThatDropsAFontIsDrawnOnBothSides() {
+    // The document and contract are the same; the old template also had a bundled font.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/launcher.rc").writeText("changed placeholder")
+    val old = temp("old").also { sample.copyRecursively(it) }
+    File(old, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"emits\": [", "\"fonts\": [\"Placeholder Sans\"], \"emits\": ["))
+    }
+    val c = CompatibilityCheck.compareTrees(tree, old, "main")
+    val tile = ReviewPreviews(temp("previews")).render(c).single { it.design == "tile-default" }
+    assertNull(tile.failure, tile.toString())
+    assertTrue(tile.shots.all { it.before!!.endsWith(".before.png") }, "not reused: $tile")
+  }
+
   @Test fun anUnchangedTreeDrawsNothing() {
     val copy = temp("copy").also { sample.copyRecursively(it) }
     assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))

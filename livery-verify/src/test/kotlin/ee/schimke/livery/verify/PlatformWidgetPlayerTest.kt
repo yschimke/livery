@@ -42,6 +42,18 @@ class PlatformWidgetPlayerTest {
     assertTrue("Unknown operation" in failed.reason || "couldn't be adapted" in failed.reason, failed.reason)
   }
 
+  @Test fun theCatalogsOwnImagesResolve() = runBlocking {
+    val catalog = Files.createTempDirectory("catalog").toFile()
+    val png = byteArrayOf(1, 2, 3)
+    File(catalog, "designs/d/assets").mkdirs()
+    File(catalog, "designs/d/assets/hero.png").writeBytes(png)
+    val sha = java.security.MessageDigest.getInstance("SHA-256").digest(png).joinToString("") { "%02x".format(it) }
+    val resolve = WidgetCatalogCheck.images(catalog) { ref, _, _ -> if (ref == "https://x/y.png") byteArrayOf(9) else null }
+    assertTrue(resolve("asset:$sha", 10, 10).contentEquals(png))
+    assertTrue(resolve("https://x/y.png", 10, 10).contentEquals(byteArrayOf(9)), "the caller's images")
+    assertEquals(null, resolve("asset:" + "0".repeat(64), 10, 10))
+  }
+
   @Test fun theCatalogCheckReportsEachTemplateAndExampleThatFails() = runBlocking {
     val catalog = Files.createTempDirectory("catalog").toFile()
     File(catalog, "contracts").mkdirs()
