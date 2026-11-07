@@ -11,6 +11,8 @@ kotlin { jvmToolchain(17) }
 dependencies {
   api(project(":livery-protocol"))
   api(project(":livery-client"))
+  // `livery build --a2ui`: the catalog's contracts as A2UI components.
+  implementation(project(":livery-a2ui"))
   // TemplateInspector, for `livery build --inspect`: what a document really reads and emits.
   implementation(project(":livery-instantiate"))
   testImplementation(kotlin("test"))

@@ -21,6 +21,8 @@ private const val USAGE = """livery — build, sign and check a template catalog
       --serial <n>                         default: now in ms (must only grow per channel)
       --inspect                            decode every .rc and check it reads and emits only what
                                            its sidecar declares
+      --a2ui <catalogId>                   also write a2ui-catalog.json: the catalog's contracts as
+                                           A2UI components, the schema to prompt an agent with
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
                                            upload with: gh release upload <tag> <out>/*
   livery keep-examples <src> --against <rev|dir>
@@ -79,6 +81,7 @@ fun main(args: Array<String>) {
           File(out, Manifest.SIGNATURE_FILE).writeText(Json.encodeToString(ManifestSignature.serializer(), sig))
         }
         val m = result.manifest
+        opt("--a2ui")?.let { A2uiCatalogFile.write(out, it, m) }
         println("${m.catalog}/${m.channel} serial ${m.serial}: ${m.designs.size} designs, ${m.templates.size} templates, ${m.contracts.size} contracts, ${m.placements.size} placements -> $out")
       }
       "keep-examples" -> {
