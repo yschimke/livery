@@ -2,6 +2,20 @@
   "contract": {
     "id": "c/card",
     "major": 1,
+    "inputs": {
+      "qty": {
+        "type": "int",
+        "min": 0.0,
+        "max": 9.0
+      },
+      "liked": {
+        "type": "bool"
+      },
+      "note": {
+        "type": "string",
+        "maxLength": 10
+      }
+    },
     "actions": {
       "open": {
         "kind": "navigate",
@@ -49,6 +63,18 @@
       },
       "close": {
         "kind": "dismiss"
+      },
+      "setQty": {
+        "kind": "set",
+        "input": "qty"
+      },
+      "setLiked": {
+        "kind": "set",
+        "input": "liked"
+      },
+      "setNote": {
+        "kind": "set",
+        "input": "note"
       }
     }
   },
@@ -178,6 +204,113 @@
       "args": {},
       "expect": {
         "problem": "undeclared action"
+      }
+    },
+    {
+      "name": "set: a value its input allows",
+      "action": "setQty",
+      "args": {
+        "value": "3"
+      },
+      "expect": {
+        "args": {
+          "value": "3"
+        }
+      }
+    },
+    {
+      "name": "set: above its input's max",
+      "action": "setQty",
+      "args": {
+        "value": "10"
+      },
+      "expect": {
+        "problem": "argument 'value' is above 9.0"
+      }
+    },
+    {
+      "name": "set: below its input's min",
+      "action": "setQty",
+      "args": {
+        "value": "-1"
+      },
+      "expect": {
+        "problem": "argument 'value' is below 0.0"
+      }
+    },
+    {
+      "name": "set: not its input's type",
+      "action": "setQty",
+      "args": {
+        "value": "2.5"
+      },
+      "expect": {
+        "problem": "argument 'value' is not an int"
+      }
+    },
+    {
+      "name": "set: no value",
+      "action": "setQty",
+      "args": {},
+      "expect": {
+        "problem": "missing argument 'value'"
+      }
+    },
+    {
+      "name": "set: only value is an argument",
+      "action": "setQty",
+      "args": {
+        "value": "2",
+        "other": "x"
+      },
+      "expect": {
+        "args": {
+          "value": "2"
+        }
+      }
+    },
+    {
+      "name": "set: a document's boolean, as 1",
+      "action": "setLiked",
+      "args": {
+        "value": "1"
+      },
+      "expect": {
+        "args": {
+          "value": "true"
+        }
+      }
+    },
+    {
+      "name": "set: a bool, as false",
+      "action": "setLiked",
+      "args": {
+        "value": "false"
+      },
+      "expect": {
+        "args": {
+          "value": "false"
+        }
+      }
+    },
+    {
+      "name": "set: not a bool",
+      "action": "setLiked",
+      "args": {
+        "value": "2"
+      },
+      "expect": {
+        "problem": "argument 'value' is not a bool"
+      }
+    },
+    {
+      "name": "set: longer than its input's maxLength",
+      "action": "setNote",
+      "args": {
+        "value": "xxxxxxxxxxx"
+      },
+      "expect": {
+        "problem": "argument 'value' is longer than 10"
       }
     }
   ]

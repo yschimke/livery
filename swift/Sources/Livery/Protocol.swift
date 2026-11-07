@@ -407,8 +407,10 @@ public struct ActionSpec: Codable, Equatable, Sendable {
   public var since: Int
   /// For a `present` action, the screen placement it opens (§8.2).
   public var placement: String?
+  /// For a `set` action, the input it changes (§7.1).
+  public var input: String?
 
-  enum CodingKeys: String, CodingKey { case kind, args, description, since, placement }
+  enum CodingKeys: String, CodingKey { case kind, args, description, since, placement, input }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     kind = try c.decode(String.self, forKey: .kind)
@@ -416,6 +418,7 @@ public struct ActionSpec: Codable, Equatable, Sendable {
     description = try c.decodeIfPresent(String.self, forKey: .description)
     since = try c.value(.since, 0)
     placement = try c.decodeIfPresent(String.self, forKey: .placement)
+    input = try c.decodeIfPresent(String.self, forKey: .input)
   }
 }
 
@@ -426,6 +429,7 @@ public enum ActionKinds {
   public static let track = "track"
   public static let refresh = "refresh"
   public static let present = "present"
+  public static let set = "set"
 }
 
 /// A typed named value; JSON `{"type": "<kind>", …}` as kotlinx.serialization writes it.

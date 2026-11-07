@@ -134,6 +134,9 @@ const val PRESENTATION_LEVEL: Int = 5
 /** The protocol level that added designs that aren't automatic (PROTOCOL.md §5.2): an older client would pick them. */
 const val AUTOMATIC_LEVEL: Int = 6
 
+/** The protocol level that added `set` actions (PROTOCOL.md §7.1): an older client would drop every one. */
+const val SET_LEVEL: Int = 7
+
 /**
  * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
  * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
@@ -207,6 +210,8 @@ class CatalogBuilder(
       a.kind == ActionKinds.PRESENT && a.placement.isNullOrBlank() -> problems += "contract ${c.ref}.${c.minor}: action $n is `present` but names no placement"
       a.kind != ActionKinds.PRESENT && a.placement != null -> problems += "contract ${c.ref}.${c.minor}: action $n names a placement but isn't `present`"
     }
+    // PROTOCOL.md §7.1: a `set` names one of its contract's own scalar inputs; nothing else names one.
+    for (c in contracts) ActionGate.setProblems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     (config.minorPolicy.contracts.keys - contracts.map { it.ref }.toSet()).forEach { problems += "catalog.json minorPolicy: unknown contract $it" }
     // Every minor a catalog keeps of one major must be a minor change from the one before (PROTOCOL.md §4.3).
     for ((_, versions) in contracts.groupBy { it.ref }) {
@@ -356,6 +361,8 @@ class CatalogBuilder(
           contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.PRESENT } }) PRESENTATION_LEVEL else 0,
         // An older client ignores `automatic` and would draw such a design (a season's) all year.
         if (designs.any { !it.automatic }) AUTOMATIC_LEVEL else 0,
+        // An older client doesn't know `set`, so a template's own controls would do nothing there.
+        if (contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.SET } }) SET_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",

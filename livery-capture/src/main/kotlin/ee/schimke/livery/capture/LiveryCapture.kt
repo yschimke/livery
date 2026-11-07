@@ -4,6 +4,7 @@ package ee.schimke.livery.capture
 
 import android.content.Context
 import androidx.compose.remote.creation.compose.action.Action
+import androidx.compose.remote.creation.compose.action.hostAction
 import androidx.compose.remote.creation.compose.capture.RemoteCreationDisplayInfo
 import androidx.compose.remote.creation.compose.capture.RemoteDensity
 import androidx.compose.remote.creation.compose.capture.captureSingleRemoteDocument
@@ -14,6 +15,7 @@ import androidx.compose.remote.creation.compose.state.RemoteInt
 import androidx.compose.remote.creation.compose.state.RemoteLong
 import androidx.compose.remote.creation.compose.state.RemoteState
 import androidx.compose.remote.creation.compose.state.RemoteString
+import androidx.compose.remote.creation.compose.state.rs
 import androidx.compose.remote.creation.profile.Profile
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -23,6 +25,7 @@ import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ContractEvolution
 import ee.schimke.livery.instantiate.TemplateInspector
+import ee.schimke.livery.protocol.ActionKinds
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.InputSpec
 import ee.schimke.livery.protocol.Target
@@ -93,6 +96,29 @@ class LiveryValues(val contract: Contract) {
     ActionGate.check(contract, name, args).problem?.let { throw IllegalArgumentException("${contract.ref} action '$name': $it") }
     val payload = if (args.isEmpty()) name else JSON_ARGS.encodeToString(JsonObject.serializer(), JsonObject(args.toSortedMap().mapValues { JsonPrimitive(it.value) }))
     return rcWidgetHostAction(name = name, payload = payload)
+  }
+
+  /**
+   * The `set` action [name] (PROTOCOL.md §7.1), sending [value] as the new value of the input it
+   * names: the person changed it here, and the host writes it back to wherever that input comes
+   * from (an A2UI data model, the app's own state). [value] is evaluated when tapped, so a stepper's
+   * plus is `v.set("setQuantity", v.int("quantity") + 1)`.
+   */
+  fun set(name: String, value: RemoteInt): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.Int, ValueType.Long)
+
+  fun set(name: String, value: RemoteFloat): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.Float)
+
+  fun set(name: String, value: RemoteString): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.String)
+
+  /** A bool reaches the host as `1` or `0`, which the client takes as `true` or `false`. */
+  fun set(name: String, value: RemoteBoolean): Action = setAction(name, { n -> hostAction(n, value.toRemoteInt()) }, ValueType.Bool)
+
+  private fun setAction(name: String, action: (RemoteString) -> Action, vararg types: ValueType): Action {
+    val spec = contract.actions[name] ?: throw IllegalArgumentException("${contract.ref} declares no action '$name': ${contract.actions.keys.sorted()}")
+    require(spec.kind == ActionKinds.SET) { "${contract.ref} action '$name' is ${spec.kind}, not set" }
+    val input = contract.inputs[spec.input] ?: throw IllegalArgumentException("${contract.ref} action '$name' sets no input of the contract")
+    require(input.type in types) { "${contract.ref} action '$name' sets ${spec.input}, a ${input.type.name.lowercase()}, not ${types.joinToString(" or ") { it.name.lowercase() }}" }
+    return action(name.rs)
   }
 
   private fun default(name: String, type: ValueType, countOk: Boolean = false, themeOk: Boolean = false): JsonElement? {

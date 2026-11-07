@@ -1,4 +1,4 @@
-# Livery protocol, level 4
+# Livery protocol, level 7
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 6 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 7 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -70,7 +70,10 @@ so a publisher must set `minClient` to at least 4 for a catalog in which any pla
 screen placement's rules, so a publisher must set `minClient` to at least 5 for a catalog with a
 `present` action or a placement rule with a `presentation` or `screens`. Level 6 added designs
 that aren't automatic (§2.3): a level-5 client would pick one like any other, so a publisher must
-set `minClient` to at least 6 for a catalog with a design whose `automatic` is false. A client must
+set `minClient` to at least 6 for a catalog with a design whose `automatic` is false. Level 7 added
+`set` actions (§7.1): a level-6 client has no handler for the kind and would drop every one, so a
+template's own controls would do nothing; a publisher must set `minClient` to at least 7 for a
+catalog with a `set` action. A client must
 reject a manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
 ### 2.2 Template entries and targets
@@ -153,7 +156,8 @@ A contract is `id`, `major`, `minor`, `inputs` (name → `InputSpec`), `lists` (
 
 `InputSpec`: `type` (`string`, `int`, `long`, `float`, `bool`, `color`, `image`), `required`,
 `default`, `maxLength`, `min`, `max`, `role`, `description`, `since`. `ListSpec`: `item` (field →
-`InputSpec`), `max`, `description`, `since`. `ActionSpec`: `kind`, `args`, `description`, `since`.
+`InputSpec`), `max`, `description`, `since`. `ActionSpec`: `kind`, `args`, `description`, `since`,
+`placement` (a `present`'s, §8.2) and `input` (a `set`'s, §7.1).
 `since` is the contract minor that added the input, list or action; 0 when absent.
 
 ### 4.1 Binding a dataset
@@ -193,7 +197,7 @@ survives. A new minor may:
 - change descriptions, examples and defaults.
 
 Anything else needs a new major: removing an input, list, field, action or action argument;
-changing a type or an action's `kind`; adding a required input or argument, or making an optional
+changing a type, an action's `kind` or a `set`'s `input`; adding a required input or argument, or making an optional
 one required; and tightening a limit, since producers (an action's arguments are produced by
 templates) already send values the old limit allowed. A publisher must
 refuse a catalog that holds two versions of one major whose difference is not a minor change, or an
@@ -304,9 +308,9 @@ value is either nothing, a JSON object whose values are all strings (the argumen
 value or number (passed as the argument `value`). Anything else is not an action. A client must
 drop, and report, an action its contract doesn't declare, one whose kind has no handler, and an
 `open-url` whose `url` is not allowlisted. Built-in kinds: `open-url`, `navigate`, `dismiss`,
-`track`, `refresh`, `present` (opens the screen placement its `placement` names, §8.2); anything
-else is the app's (`app:<kind>`). A publisher must refuse a `present` action without a `placement`,
-and a `placement` on any other kind.
+`track`, `refresh`, `present` (opens the screen placement its `placement` names, §8.2), `set`
+(changes the input its `input` names, §7.1); anything else is the app's (`app:<kind>`). A publisher
+must refuse a `present` action without a `placement`, and a `placement` on any other kind.
 
 An action's `args` declare its arguments, each a `string`, `int`, `long`, `float` or `bool` with
 the input checks it carries (`required`, `maxLength`, `min`, `max`); a catalog declaring another type
@@ -320,6 +324,26 @@ A `track` action needs no handler: the client records its `Action` event and doe
 handler an app registers for `track` still runs). It reports an interaction that changes only the
 template's own state, combined with that change in one tap (`combinedAction(valueChange(…),
 hostAction(…))`).
+
+### 7.1 Writing an input back: `set`
+
+A `set` action says the person changed one of the template's inputs, from the template's own
+control (a toggle, a stepper, a slider), to the action's `value`. Its `input` names that input: one
+of the contract's own `inputs` (not a list field), of a type an action can carry (`string`, `int`,
+`long`, `float`, `bool`), and not a theme role. It declares no `args`: its one argument is `value`,
+required and checked as that input is checked by binding (§4.1: type, `min`, `max`, `maxLength`). A
+`bool` input also takes `1` and `0`, which is how a document's boolean reaches the host, and the
+client passes it on as `true` or `false`. A publisher must refuse a `set` without an `input`, one
+whose `input` breaks these rules or that declares `args`, and an `input` on any other kind.
+
+The document computes `value` when tapped, so it needs no state of its own: a stepper's `+` sends
+`quantity + 1`. The host writes the value back to wherever the input's value comes from (the app's
+model, an A2UI data-model path) and the new value comes back into the document as the input, so
+the document and its source can't disagree. A value the input doesn't allow (a step past `max`) is
+dropped and reported like any action that fails its check, and nothing is written. Like any action,
+a `set` goes to a handler for its kind; the client checks it first, its `Action` event carries
+`value`, and an app with nothing to write back registers no `set` handler, which drops and reports
+it (§7).
 
 A host that dispatches only numeric host actions (a launcher widget's `RemoteViews` player) gets
 the template's named actions rewritten when it is instantiated: each becomes the numeric action
@@ -435,7 +459,7 @@ draws in; a contract needn't declare them, and a template may read them.
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |
 | `signing.json` | §3.2: manifests, signatures and trusted keys, and `accepted` or `rejected` |
 | `experiments.json` | §8.1: experiments and users (bucketing id, time, segments), and the arm or `null` |
-| `actions.json` | §7: a contract's actions and emitted arguments, and the arguments its event carries or why it is dropped |
+| `actions.json` | §7, §7.1: a contract's actions (`set`s among them) and emitted arguments, and the arguments its event carries or why it is dropped |
 | `screens.json` | §8.2: screen placements, a requested presentation and depth, and the presentation used or why the screen is refused |
 | `design-arms.json` | §8.1: experiments with design arms, and per contract and user the design arm (experiment, arm, design or none) or `null` |
 

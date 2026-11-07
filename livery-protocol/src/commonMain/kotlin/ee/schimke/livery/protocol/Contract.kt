@@ -107,6 +107,11 @@ data class ActionSpec(
   val since: Int = 0,
   /** For a `present` action, the screen placement it opens (PROTOCOL.md §8.2). */
   val placement: String? = null,
+  /**
+   * For a `set` action, the input it changes (PROTOCOL.md §7.1): its one argument, `value`, is
+   * checked as that input is, and the host writes it back to wherever the input's value comes from.
+   */
+  val input: String? = null,
 )
 
 /** Built-in action kinds every client understands; anything else needs an app handler. */
@@ -122,6 +127,8 @@ object ActionKinds {
   const val REFRESH: String = "refresh"
   /** Open the secondary screen its [ActionSpec.placement] names (PROTOCOL.md §8.2). */
   const val PRESENT: String = "present"
+  /** The person changed the input its [ActionSpec.input] names to the action's `value` (PROTOCOL.md §7.1). */
+  const val SET: String = "set"
 }
 
 /** A typed named value as pushed into a player. */

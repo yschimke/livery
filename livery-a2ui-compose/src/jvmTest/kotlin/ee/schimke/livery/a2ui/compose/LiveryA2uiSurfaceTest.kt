@@ -39,6 +39,7 @@ import ee.schimke.livery.publisher.CatalogBuilder
 import ee.schimke.livery.publisher.Layout
 import java.awt.image.BufferedImage
 import java.io.File
+import java.nio.file.Files
 import javax.imageio.ImageIO
 import kotlin.test.AfterTest
 import kotlin.test.assertNotNull
@@ -52,7 +53,7 @@ import kotlinx.coroutines.runBlocking
 
 /**
  * An A2UI surface on the desktop JVM whose catalog is the Material basic catalog plus a Livery
- * component per playable contract of the sample catalog: JSON messages parsed and applied by A2UI's
+ * component per playable contract of the sample catalogs (`samples/catalog`, plus `samples/two-way`): JSON messages parsed and applied by A2UI's
  * engine (the Compose Multiplatform port), templates from the catalog `livery-publish` builds,
  * offline (only the bundled copy, as an app's first launch without a network), played by
  * rc-players' Compose player.
@@ -60,7 +61,13 @@ import kotlinx.coroutines.runBlocking
 @OptIn(ExperimentalTestApi::class)
 abstract class LiveryA2uiSurfaceTest {
   private val samples = File(System.getProperty("livery.samples") ?: "../samples/catalog")
-  private val built = CatalogBuilder(now = { 0 }).build(samples, Layout.Static, serial = 0)
+
+  /** The sample catalog with the two-way one's contracts and designs added (it needs level 7). */
+  private val tree = Files.createTempDirectory("livery-a2ui").toFile().also { tree ->
+    samples.copyRecursively(tree)
+    for (dir in listOf("contracts", "designs")) File(samples.parentFile, "two-way/$dir").copyRecursively(File(tree, dir))
+  }
+  private val built = CatalogBuilder(now = { 0 }).build(tree, Layout.Static, serial = 0)
   private val caps = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   private val clock = Clock { 1_000L }
 

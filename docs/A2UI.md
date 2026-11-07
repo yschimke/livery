@@ -223,21 +223,26 @@ agent wiring at all. Every action, wired or not, is an `Action` event on the app
 
 A2UI lets an input component write the data model at a property's path (`bindUpdater`). A template
 that changes one of its own inputs (a toggle, a stepper) needs the same, and so does an app that
-plays a template live outside A2UI. This is a general Livery feature, so it is proposed as protocol,
-not as an A2UI special case:
+plays a template live outside A2UI. So it is Livery protocol, not an A2UI special case: the `set`
+action kind (PROTOCOL.md §7.1, protocol level 7).
 
-- **Protocol (new level):** a built-in action kind `set`, with `input` naming the contract input it
-  updates and one argument `value` of that input's type: "the user changed this value". A publisher
-  refuses a `set` whose input doesn't exist or isn't a scalar. A client routes it like any action;
-  `ActionGate` checks `value` against the input's spec (type, `min`/`max`, `maxLength`).
-- **In A2UI:** the component routes `set` to the updater of the property bound to that input. When
-  the agent gave a literal, there is no updater: the action is dropped and reported, as an
-  unhandled kind is. The write changes the data model, the property re-binds, and the new value is
-  pushed back into the document, so the document and the model can't disagree.
-- **Outside A2UI:** an app's `set` handler updates its own model and the live push does the rest.
-
-Until that level ships, the A2UI component works one way (data in, events out), which already
-covers banners, cards and feeds.
+- **Protocol:** a `set` names the contract input it changes (`input`) and carries one argument,
+  `value`, checked as that input is (type, `min`/`max`, `maxLength`; a bool also takes the `1`/`0`
+  a document's boolean sends). The document computes `value` when tapped (`quantity + 1`), so it
+  keeps no state of its own. The publisher refuses a `set` without a scalar input of its own
+  contract, and a catalog with one needs level 7. Kotlin and Swift agree through
+  `conformance/actions.json`.
+- **In A2UI:** the component writes a `set`'s value through the updater of the property bound to
+  that input, A2UI's own `bindUpdater`. The data model changes, the property re-binds, and the new
+  value is pushed back into the document, so the document and the model can't disagree; anything
+  else in the surface bound to the same path (a `Button`'s event context) sees it too. When the
+  agent wired the action as well, its event follows the write, with `value`. When the agent gave a
+  literal, there is nowhere to write: the agent gets an A2UI error and nothing changes, as A2UI's
+  own inputs go read-only. A value past the input's limits is refused before anything is written.
+- **Outside A2UI:** an app registers a `set` handler that updates its own model, and the live push
+  does the rest.
+- **Authoring:** `livery-capture`'s `LiveryValues.set(name, value)` sends one, checked against the
+  input's type at capture.
 
 ### What an app can do that an agent can't
 
@@ -348,6 +353,13 @@ It also checks that a `vote` the agent didn't wire goes to the app's `app:vote` 
 and that the document draws as many option rows as the data has (`options.count`, up to the
 contract's 4), so the same document serves a two-option and a four-option poll.
 
+`QuantityA2uiTest` (`shop/quantity@1` from `samples/two-way`, a `ShopQuantity`) is two-way
+binding. The agent binds `quantity` to `/cart/qty`; the template's `+` and `−` are `set`s of
+`quantity`, and each tap writes `/cart/qty` through A2UI's updater, so an A2UI `Button` beside it
+reads the new quantity into its `checkout` event. It also checks that the next step starts from a
+quantity the agent sent, that a step past the contract's max of 9 is refused and writes nothing,
+and that a literal `quantity` (nowhere to write) is reported to the agent.
+
 The poll's document is a real one, captured from Compose by `livery-capture`'s `SamplePollTest`:
 every row is the same composable reading `options.<i>.*`, its bar is `fillMaxWidth(share)`, and it
 is gone when `options.count` is at most `i`. The data does the formatting (`result`, `summary`,
@@ -371,7 +383,7 @@ What the prototype taught, and what it doesn't do yet:
   by its label inside the A2UI surface.
 - **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
   conformance fixture; events carry no `a2ui:<surface>/<component>` decision id; the
-  `createSurface` theme isn't read (theme roles come from the host's Material colours); no `set`,
+  `createSurface` theme isn't read (theme roles come from the host's Material colours); no
   `template` forms other than the design preference, or height rules beyond the template's own.
 
 ## Order of work
@@ -382,7 +394,8 @@ What the prototype taught, and what it doesn't do yet:
    the sample catalog's `promo/banner` inside an A2UI surface. *Prototyped* (above).
 3. Wasm against the port (*compiles*; not yet run in a browser), and moving to the AndroidX
    release the port next follows.
-4. The `set` action kind (protocol level, Kotlin, Swift, fixtures), and two-way binding in A2UI.
+4. The `set` action kind (protocol level 7, Kotlin, Swift, fixtures), and two-way binding in A2UI.
+   *Done* (above, and `QuantityA2uiTest`).
 5. Documents named by the message: `sha256` (+ `url`) against the trusted manifests first, then the
    template signature (protocol, `livery sign-template`, `signing.json` cases) and `inline`; the
    `query` form with `livery-server`'s decision endpoint.

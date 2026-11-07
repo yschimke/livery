@@ -150,6 +150,8 @@ object ContractEvolution {
 
   private fun MutableList<ContractChange>.action(path: String, o: ActionSpec, n: ActionSpec, oldMinor: Int) {
     if (o.kind != n.kind) add(ContractChange(path, "kind changed from ${o.kind} to ${n.kind}", breaking = true))
+    // A `set` that changes another input writes a different value, and templates already emit it.
+    if (o.input != n.input) add(ContractChange(path, "input changed from ${o.input} to ${n.input}", breaking = true))
     if (o.since != n.since) add(ContractChange(path, "since changed from ${o.since} to ${n.since}", breaking = true))
     // Templates send the args and the app reads them: the same rules as inputs (a new required arg,
     // a tightened limit or a type change breaks templates of the old minor).

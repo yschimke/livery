@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ActionRouter
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RenderPlan
@@ -89,7 +90,7 @@ class LiveryA2uiComponent(
         key,
         description = listOfNotNull(
           spec.description,
-          "Kind ${spec.kind}.",
+          if (spec.kind == ActionKinds.SET) "Writes ${spec.input} back through its data-model path, so bind ${spec.input} to one; an event here also gets the new value as value." else "Kind ${spec.kind}.",
           spec.args.keys.takeIf { it.isNotEmpty() }?.let { "Adds ${it.joinToString()} to an event's context." },
         ).joinToString(" "),
       )
@@ -118,15 +119,34 @@ class LiveryA2uiComponent(
     val variant = properties[variantProperty]
     val wiring = wiring(properties)
     val currentWiring by rememberUpdatedState(wiring)
+    val updaters = updaters(properties)
+    val currentUpdaters by rememberUpdatedState(updaters)
 
-    // The router routes every kind the contract declares to one handler, which sends the action to
-    // the agent when it wired it, and otherwise to the app's handler for its kind.
+    // The router routes every kind the contract declares to one handler. A `set` writes its value
+    // back through the input's data-model binding (and then reaches the agent too, if it wired it);
+    // any other action goes to the agent when it wired it, and otherwise to the app's handler for
+    // its kind.
     val liveryHost = remember(host, scope) {
       val kinds = contract.actions.values.map { it.kind }.toSet()
       val route: suspend (RenderPlan, String, Map<String, String>) -> Unit = { plan, action, args ->
         val wired = currentWiring[action]
-        val kind = contract.actions[action]?.kind
-        when {
+        val spec = contract.actions[action]
+        val kind = spec?.kind
+        if (kind == ActionKinds.SET) {
+          val input = spec.input
+          val update = input?.let(currentUpdaters::get)
+          val value = input?.let { contract.inputs[it] }?.let { writable(args[ActionGate.VALUE], it.type) }
+          if (update != null && value != null) {
+            update(value)
+          } else {
+            // A literal (or missing) binding has nowhere to write: tell the agent, as A2UI's own
+            // inputs degrade to read-only, and Livery's pipeline.
+            val why = "$name.$input is not bound to a data-model path, so $action can't write it"
+            scope.reportError(A2uiException.A2uiRuntimeException(why))
+            host.events.emit(TemplateEvent(TemplateEvent.Type.Error, host.clock.nowEpochMs(), designId = plan.template.entry.designId, sha256 = plan.template.entry.sha256, action = action, detail = why))
+          }
+          if (wired != null) scope.dispatchAction(withArguments(scope, wired, args))
+        } else when {
           wired != null -> scope.dispatchAction(withArguments(scope, wired, args))
           kind != null && host.appActions[kind] != null -> host.appActions.getValue(kind)(plan, action, args)
           kind != ActionKinds.TRACK -> host.events.emit(
@@ -200,6 +220,24 @@ class LiveryA2uiComponent(
     return JsonObject(values.toMap())
   }
 
+  /**
+   * The data-model updater of each input a `set` action names: present only where the agent bound
+   * that input to a path (`{"path": …}`), which is the only place a value can be written back.
+   */
+  @Composable
+  private fun A2uiComponentScope.updaters(properties: A2uiComponentProperties): Map<String, (Any?) -> Unit> {
+    val updaters = LinkedHashMap<String, (Any?) -> Unit>()
+    for (input in setInputs) {
+      val property = inputProperties[input] ?: continue
+      properties.bindUpdater(property)?.let { updaters[input] = it }
+    }
+    return updaters
+  }
+
+  /** The inputs this contract's `set` actions change, in a stable order (composition reads them each time). */
+  private val setInputs: List<String> =
+    contract.actions.values.filter { it.kind == ActionKinds.SET }.mapNotNull { it.input }.filter { it in agentInputs }.distinct().sorted()
+
   private fun wiring(properties: A2uiComponentProperties): Map<String, Map<String, Any?>> {
     val actions = properties[actionsProperty] ?: return emptyMap()
     return actionProperties.mapNotNull { (key, property) -> actions[property]?.let { key to it } }.toMap()
@@ -254,6 +292,17 @@ class LiveryA2uiComponent(
       },
       spec.default?.let { "Default $it." },
     ).joinToString(" ").ifEmpty { spec.type.name.lowercase() }
+
+    /**
+     * A `set`'s value, already checked by ActionGate against its input, as the data model holds the
+     * input's type: numbers as numbers, a bool as a bool.
+     */
+    internal fun writable(value: String?, type: ValueType): Any? = when (type) {
+      ValueType.Int, ValueType.Long -> value?.toLongOrNull()
+      ValueType.Float -> value?.toDoubleOrNull()
+      ValueType.Bool -> value?.toBooleanStrictOrNull()
+      ValueType.String, ValueType.Color, ValueType.Image -> value
+    }
 
     internal fun toJson(value: Any?): JsonElement = when (value) {
       null -> JsonNull
