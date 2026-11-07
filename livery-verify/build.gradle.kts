@@ -25,6 +25,8 @@ kotlin { jvmToolchain(17) }
 dependencies {
   api(project(":livery-client"))
   implementation(project(":livery-instantiate"))
+  // KeptExamples: a contract's older preview data, played as well as the current examples.
+  implementation(project(":livery-publish"))
   implementation(platform(libs.rc.players.bom))
   implementation(libs.rc.widget.launcher)
   implementation(libs.kotlinx.coroutines.core)

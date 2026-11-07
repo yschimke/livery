@@ -23,6 +23,10 @@ private const val USAGE = """livery — build, sign and check a template catalog
                                            its sidecar declares
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
                                            upload with: gh release upload <tag> <out>/*
+  livery keep-examples <src> --against <rev|dir>
+                                       keeps the example data the base had that the tree no longer
+                                       has, under contracts/examples/, so templates stay checked
+                                       with it (livery check fails until it is kept)
   livery check <src> --against <rev|dir> [--inspect] [--json | --markdown]
                                        compares <src> with a git revision of its repository (e.g.
                                        origin/main) or another source tree: contract changes,
@@ -72,6 +76,16 @@ fun main(args: Array<String>) {
         }
         val m = result.manifest
         println("${m.catalog}/${m.channel} serial ${m.serial}: ${m.designs.size} designs, ${m.templates.size} templates, ${m.contracts.size} contracts, ${m.placements.size} placements -> $out")
+      }
+      "keep-examples" -> {
+        val src = File(a.getOrNull(1) ?: usage())
+        val against = opt("--against") ?: usage()
+        val written = File(against).takeIf { it.isDirectory }?.let { KeptExamples.keep(src, it) } ?: run {
+          val (temp, old) = CompatibilityCheck.atRevision(src, against)
+          try { KeptExamples.keep(src, old) } finally { temp.deleteRecursively() }
+        }
+        if (written.isEmpty()) println("nothing to keep: every example $against had is current or kept")
+        written.forEach { println("kept ${it.relativeTo(src)}") }
       }
       "check" -> {
         val src = File(a.getOrNull(1) ?: usage())

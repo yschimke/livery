@@ -131,6 +131,16 @@ class ReviewPreviewsTest {
     assertTrue(tile.shots.all { it.before!!.endsWith(".before.png") }, tile.toString())
   }
 
+  @Test fun keptPreviewDataIsDrawnToo() {
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/launcher.rc").writeText("changed placeholder")
+    File(tree, "contracts/examples/status-tile").mkdirs()
+    File(tree, "contracts/examples/status-tile/dim-1a2b3c4d.json").writeText("""{ "name": "Hall", "state": "Dim", "is_on": true, "level": 0.05 }""")
+    val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
+    assertEquals(listOf("on", "off", "unavailable", "dim (kept 1a2b3c4d)"), tile.shots.map { it.example })
+    assertNull(tile.failure)
+  }
+
   @Test fun anUnchangedTreeDrawsNothing() {
     val copy = temp("copy").also { sample.copyRecursively(it) }
     assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))

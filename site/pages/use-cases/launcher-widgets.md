@@ -80,7 +80,8 @@ TemplateRepository(..., targets = listOf(inApp, launcher))
 
 Android 16's widget player doesn't let a template's exception out: it catches it while drawing,
 disables itself and draws a red warning sign, on someone's home screen. `livery-verify` plays every
-launcher template in the catalog, with each of its contract's examples, on that player under
+launcher template in the catalog, with each of its contract's examples and the older preview data
+the catalog keeps (see [Repository mode](../repository-mode.md#older-preview-data)), on that player under
 Robolectric, and reports each one that crashes, that the player refuses, or that can't be written
 for a widget:
 

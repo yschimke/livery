@@ -161,6 +161,31 @@ own, `livery-previews/pr-<number>`, replaced on every push, and cites that commi
 Without it (or from a fork) the comment names the files instead, and the run's `livery-previews`
 artifact has them. Delete the branches of closed pull requests whenever you like.
 
+## Older preview data
+
+A contract's `examples` are the data every template is previewed, reviewed and verified with. When a
+change edits or drops one, the old data doesn't stop mattering: an installed app may still send data
+shaped like it. So it is kept, beside the contract, and every template stays checked with it:
+
+```
+contracts/
+  status-tile.json
+  examples/
+    status-tile/
+      on-1a2b3c4d.json     the data `on` had before, named by its hash
+```
+
+`livery check` fails while the base has example data that is neither in the contract (under any
+name) nor kept, and when a kept example no longer binds to the contract. Keep it with:
+
+```bash
+livery keep-examples catalog --against origin/main
+```
+
+Review pictures draw each kept example after the current ones, labelled `on (kept 1a2b3c4d)`, and
+`livery-verify` plays every launcher widget with them too. The catalog build ignores the folder:
+kept examples are for checking, not for apps.
+
 ## Review tools
 
 | Tool | |
@@ -168,6 +193,7 @@ artifact has them. Delete the branches of closed pull requests whenever you like
 | `livery check <src> --against origin/main --inspect` | the review report in a terminal; `--markdown` for a comment, `--json` for other tools |
 | `livery review <src> --against origin/main --previews <dir>` | the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in `<dir>` (`--image-base <url>` for where they will be served, `--size <w>x<h>` to choose the template) |
 | `livery build <src> <out> --inspect` | everything the publish would refuse |
+| `livery keep-examples <src> --against origin/main` | keeps the example data the base had that the tree no longer has (above) |
 | `livery-mcp` | the same checks and `render_preview` for agents, with `list_history` and previews at a revision (see [AI workflows](ai-workflows.md)) |
 
 ## Planned

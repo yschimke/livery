@@ -8,6 +8,7 @@ import ee.schimke.livery.instantiate.TemplateInstantiator
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
+import ee.schimke.livery.publisher.KeptExamples
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -16,9 +17,10 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Every launcher widget template in a catalog source tree, written with each of its contract's
- * examples the way the widget provider writes it ([TemplateInstantiator]) and played on Android 16's
- * own widget player ([PlatformWidgetPlayer]). Run it from a Robolectric test (`sdk = [36]`) and fail
- * on any [Failure]: each is a widget that would draw a warning sign on someone's home screen.
+ * examples and the older preview data the tree keeps ([KeptExamples]) the way the widget provider
+ * writes it ([TemplateInstantiator]), and played on Android 16's own widget player
+ * ([PlatformWidgetPlayer]). Run it from a Robolectric test (`sdk = [36]`) and fail on any
+ * [Failure]: each is a widget that would draw a warning sign on someone's home screen.
  */
 object WidgetCatalogCheck {
   data class Failure(val design: String, val template: String, val example: String, val reason: String) {
@@ -48,6 +50,7 @@ object WidgetCatalogCheck {
       .map { JSON.decodeFromString(Contract.serializer(), it.readText()) }
       .groupBy { it.ref }.mapValues { (_, v) -> v.maxBy { it.minor } }
     val instantiator = TemplateInstantiator(images(catalog, images))
+    val kept = KeptExamples.load(catalog)
     val failures = mutableListOf<Failure>()
     for (designDir in File(catalog, "designs").listFiles().orEmpty().filter { it.isDirectory }.sortedBy { it.name }) {
       val design = File(designDir, "design.json").takeIf { it.isFile }?.let { JSON.parseToJsonElement(it.readText()).jsonObject } ?: continue
@@ -63,7 +66,8 @@ object WidgetCatalogCheck {
         if (contract == null) { failures += Failure(id, name, "-", "no contract ${design["contract"]}"); continue }
         val (wDp, hDp) = sizeFor(target)
         val (w, h) = (wDp * density).toInt() to (hDp * density).toInt()
-        val examples = contract.examples.ifEmpty { mapOf("(no data)" to JsonObject(emptyMap())) }
+        // The current examples and the kept older ones: installed apps may still send that data.
+        val examples = (contract.examples + kept[contract.ref].orEmpty()).ifEmpty { mapOf("(no data)" to JsonObject(emptyMap())) }
         for ((example, data) in examples) {
           val bindings = when (val b = ContractBinder.bind(contract, data)) {
             is BindResult.Ok -> b.bindings

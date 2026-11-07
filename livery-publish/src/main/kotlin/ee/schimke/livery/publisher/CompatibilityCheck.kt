@@ -89,6 +89,8 @@ object CompatibilityCheck {
     val before: CatalogBuilder.Output?,
     /** This tree, or null when it doesn't build (the report says why). */
     val after: CatalogBuilder.Output?,
+    /** This tree's kept examples ([KeptExamples]), by contract ref: drawn and played as well. */
+    val kept: Map<String, Map<String, kotlinx.serialization.json.JsonObject>> = emptyMap(),
   )
 
   /**
@@ -133,7 +135,22 @@ object CompatibilityCheck {
     val experiments = experimentReports(before, new, warnings)
     val placements = placementReports(before?.manifest, new.manifest)
     val designs = designReports(before?.manifest, new.manifest)
-    return Comparison(Report(against, contracts, templates, designs, experiments, placements, problems, warnings), before, new)
+    // Preview data the base had stays checked: kept when it changes or goes, and still binding.
+    val kept = KeptExamples.load(src)
+    if (old != null) KeptExamples.missing(src, old).forEach { m ->
+      problems += "contract ${m.contract}: example '${m.name}' changed or was removed, and its old data isn't kept; " +
+        "keep it with `livery keep-examples <src> --against $against`"
+    }
+    for ((ref, examples) in kept) {
+      val c = new.manifest.contracts.filter { it.ref == ref }.maxByOrNull { it.minor }
+        ?: run { warnings += "kept examples for $ref, which this tree no longer has"; continue }
+      for ((label, data) in examples) {
+        (ee.schimke.livery.client.ContractBinder.bind(c, data) as? ee.schimke.livery.client.BindResult.Invalid)?.let {
+          problems += "contract $ref: kept example '$label' no longer binds: ${it.problems.map { p -> "${p.name}: ${p.message}" }}"
+        }
+      }
+    }
+    return Comparison(Report(against, contracts, templates, designs, experiments, placements, problems, warnings), before, new, kept)
   }
 
   private fun contractReports(old: Manifest?, new: Manifest): List<ContractReport> {

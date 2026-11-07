@@ -31,13 +31,14 @@ class ReviewPreviews(
   private val size: Pair<Int, Int>? = null,
   private val density: Float = 2f,
   private val maxExamples: Int = 4,
+  private val maxKept: Int = 4,
   private val render: (ByteArray, Bindings, RenderSpec, RcImageLoader, RcTypefaceLoader) -> ByteArray =
     { rc, b, spec, images, fonts -> TemplateRenderer.png(rc, b, spec, images, fonts) },
 ) {
   fun render(c: CompatibilityCheck.Comparison): List<DesignPreview> {
     out.mkdirs()
     val touched = c.report.templates.filter { it.status != "unchanged" }.map { it.design }.distinct()
-    return (touched + drawnDifferently(c.before, c.after).filter { it !in touched }).map { design -> preview(design, c.before, c.after) }
+    return (touched + drawnDifferently(c.before, c.after).filter { it !in touched }).map { design -> preview(design, c.before, c.after, c.kept) }
   }
 
   /**
@@ -53,7 +54,12 @@ class ReviewPreviews(
     }.map { it.designId }.distinct().sorted()
   }
 
-  private fun preview(design: String, before: CatalogBuilder.Output?, after: CatalogBuilder.Output?): DesignPreview {
+  private fun preview(
+    design: String,
+    before: CatalogBuilder.Output?,
+    after: CatalogBuilder.Output?,
+    kept: Map<String, Map<String, kotlinx.serialization.json.JsonObject>>,
+  ): DesignPreview {
     val now = after?.let { documents(it, design) }.orEmpty()
     val was = before?.let { documents(it, design) }.orEmpty()
     // A size only the old tree covers (a variant this change removes) still draws its before.
@@ -68,7 +74,8 @@ class ReviewPreviews(
     val b = same(was)?.let { it to before!! }
     val contract = (a ?: b)!!.let { (t, output) -> contract(output, t) }
       ?: return DesignPreview(design, describe(chosen), w, h, emptyList(), "no contract ${chosen.contract}")
-    val examples = contract.examples.entries.take(maxExamples)
+    // The current examples, then the kept older data (KeptExamples): installed apps may still send it.
+    val examples = contract.examples.entries.take(maxExamples) + kept[contract.ref].orEmpty().entries.take(maxKept)
     if (examples.isEmpty()) return DesignPreview(design, describe(chosen), w, h, emptyList(), "${contract.ref} has no examples")
     val spec = runCatching { RenderSpec(w, h, density) }.getOrElse { return DesignPreview(design, describe(chosen), w, h, emptyList(), "size out of range") }
     return try {

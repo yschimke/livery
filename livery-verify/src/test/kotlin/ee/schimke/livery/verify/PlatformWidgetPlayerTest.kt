@@ -71,8 +71,12 @@ class PlatformWidgetPlayerTest {
       // Not a launcher widget: not played here.
       File(dir, "in-app.json").writeText("""{ "target": { "surface": "in-app", "rcApiLevel": 7 } }""")
     }
+    // Older preview data the catalog keeps is played too.
+    File(catalog, "contracts/examples/headphone-controls").mkdirs()
+    File(catalog, "contracts/examples/headphone-controls/playing-0badf00d.json").writeText(
+      """{ "title": "Old track", "short_title": "Old", "playing": true, "mode": 1 }""")
     val failures = WidgetCatalogCheck.launcherWidgets(activity, catalog, density = 2f)
-    val examples = listOf("bluetooth", "mp3", "disconnected")
+    val examples = listOf("bluetooth", "mp3", "disconnected", "playing (kept 0badf00d)")
     assertEquals(examples.map { "broken" to it }, failures.map { it.design to it.example }, failures.toString())
     assertTrue(failures.all { it.reason.startsWith("crashed while drawing") }, failures.toString())
   }
