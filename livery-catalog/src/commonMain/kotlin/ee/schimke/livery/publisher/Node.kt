@@ -1,6 +1,7 @@
 package ee.schimke.livery.publisher
 
 import okio.ByteString.Companion.toByteString
+import okio.FileMetadata
 import okio.FileSystem
 import okio.Path
 
@@ -10,8 +11,8 @@ import okio.Path
  */
 internal class Node(val fs: FileSystem, val path: Path) {
   val name: String get() = path.name
-  val isFile: Boolean get() = fs.metadataOrNull(path)?.isRegularFile == true
-  val isDirectory: Boolean get() = fs.metadataOrNull(path)?.isDirectory == true
+  val isFile: Boolean get() = metadata()?.isRegularFile == true
+  val isDirectory: Boolean get() = metadata()?.isDirectory == true
   val extension: String get() = name.substringAfterLast('.', "")
   val nameWithoutExtension: String get() = name.substringBeforeLast(".")
 
@@ -25,7 +26,14 @@ internal class Node(val fs: FileSystem, val path: Path) {
 
   fun readText(): String = fs.read(path) { readUtf8() }
 
-  fun length(): Long = fs.metadata(path).size ?: readBytes().size.toLong()
+  fun length(): Long = metadata()?.size ?: readBytes().size.toLong()
+
+  /** What [path] is, following a symbolic link to its target as java.io.File does; null when absent or dangling. */
+  private fun metadata(): FileMetadata? {
+    val m = fs.metadataOrNull(path) ?: return null
+    if (m.symlinkTarget == null) return m
+    return runCatching { fs.metadataOrNull(fs.canonicalize(path)) }.getOrNull()
+  }
 
   /** Writes [bytes] here, creating parent directories. */
   fun writeBytes(bytes: ByteArray) {

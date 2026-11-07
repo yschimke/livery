@@ -29,6 +29,26 @@ class InMemoryTreeTest {
     assertTrue(disk.files.all { (k, v) -> v.contentEquals(memory.files.getValue(k)) })
   }
 
+  /** Linked designs and assets are read as their targets, as java.io.File did before Okio. */
+  @Test fun followsSymbolicLinks() {
+    val linked = java.nio.file.Files.createTempDirectory("livery-links").toFile()
+    sample.listFiles()!!.forEach { f ->
+      if (f.name == "designs") {
+        val designs = File(linked, "designs").apply { mkdirs() }
+        f.listFiles()!!.forEach { d -> java.nio.file.Files.createSymbolicLink(File(designs, d.name).toPath(), d.toPath()) }
+      } else java.nio.file.Files.createSymbolicLink(File(linked, f.name).toPath(), f.toPath())
+    }
+    try {
+      val direct = CatalogBuilder(now = { 0 }).build(sample, Layout.Static, serial = 1)
+      val viaLinks = CatalogBuilder(now = { 0 }).build(linked, Layout.Static, serial = 1)
+      assertEquals(direct.manifestBytes.decodeToString(), viaLinks.manifestBytes.decodeToString())
+    } finally {
+      // Never File.deleteRecursively here: it follows the links and deletes the sample itself.
+      // Files.walk doesn't follow links, so only the links and their folders go.
+      java.nio.file.Files.walk(linked.toPath()).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(java.nio.file.Files::delete) }
+    }
+  }
+
   @Test fun compareAndKeepInMemory() {
     val fs = FakeFileSystem()
     val tree = copy(fs, "/tree")
