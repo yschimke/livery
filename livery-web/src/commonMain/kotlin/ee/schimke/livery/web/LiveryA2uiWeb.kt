@@ -15,7 +15,10 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.instantiate.Admission
+import ee.schimke.livery.instantiate.CachedImages
+import ee.schimke.livery.instantiate.ImageRequest
 import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.instantiate.InstantiateResult
 import ee.schimke.livery.instantiate.TemplateInstantiator
@@ -41,6 +44,10 @@ import kotlinx.serialization.json.contentOrNull
  * the values into it, and the page plays the bytes. A data-model change is a new [render]; the
  * player swaps the document in place.
  *
+ * Rendering never waits on the network: [render] uses only images already on the device, and
+ * answers [Rendered.Waiting] when one is missing; [fetchImages] fetches them, off the render path,
+ * and the page renders again (as widget hosts do with `CachedImages`).
+ *
  * A document's host action comes back through [action]: [ActionGate] checks it, then it goes to
  * the agent when it wired it, writes an input back for a `set`, or goes to the page's own handler
  * for its kind ([appKinds]).
@@ -51,13 +58,12 @@ class LiveryA2uiWeb(
   val capabilities: PlayerCapabilities,
   private val events: EventSink,
   private val clock: Clock,
-  private val instantiator: TemplateInstantiator,
+  /** Images for templates that draw them; null draws none (a template that needs one waits forever). */
+  private val images: ImageResolver? = null,
   private val documents: DocumentAdmission? = null,
   private val urlAllowlist: (String) -> Boolean = { false },
   /** Action kinds the page handles itself (`navigate`, `dismiss`, `app:…`) when the agent didn't wire them. */
   private val appKinds: Set<String> = emptySet(),
-  /** How many renders' plans [action] can still answer for: the latest per component on screen. */
-  private val keep: Int = 64,
 ) {
   /** The size and theme a render is for. */
   data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap())
@@ -68,6 +74,9 @@ class LiveryA2uiWeb(
 
     /** Draw the page's fallback, and tell the agent [reason]. */
     data class Fallback(val reason: String) : Rendered
+
+    /** An image isn't on the device yet ([reason]): call [fetchImages], then render again. Not the agent's problem. */
+    data class Waiting(val reason: String) : Rendered
   }
 
   /** Where a template's host action goes. */
@@ -90,8 +99,10 @@ class LiveryA2uiWeb(
 
   private class Live(val plan: RenderPlan, val wiring: Map<String, JsonObject>)
 
+  /** Plans by render id, until the page [release]s them: every one on screen can still act. */
   private val live = LinkedHashMap<Int, Live>()
   private var next = 1
+  private val missing = LinkedHashSet<ImageRequest>()
 
   /**
    * The contracts worth advertising: one per major, those the repository can resolve a template for
@@ -120,15 +131,33 @@ class LiveryA2uiWeb(
       else -> return Rendered.Fallback("$name (${contract.ref}): $p")
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
+    val cached = images?.let(::CachedImages)
+    val instantiator = cached?.instantiator ?: NO_IMAGES
     return when (val i = instantiator.instantiate(plan.template.bytes, plan.bindings, px(space.widthDp), px(space.heightDp), capabilities.maxBytes)) {
-      is InstantiateResult.Failed -> Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
+      is InstantiateResult.Failed -> {
+        val misses = cached?.misses.orEmpty()
+        if (misses.isEmpty()) return Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
+        missing += misses
+        Rendered.Waiting("$name (${contract.ref}): ${i.reason}")
+      }
       is InstantiateResult.Ok -> {
         val id = next++
         live[id] = Live(plan, wiring)
-        while (live.size > keep) live.remove(live.keys.first())
         Rendered.Ready(id, i.bytes, plan.template.entry.designId, plan.template.entry.sha256)
       }
     }
+  }
+
+  /**
+   * Fetches the images earlier renders were [Rendered.Waiting] for, off the render path; true when
+   * there were some and all arrived, so a new [render] can draw.
+   */
+  suspend fun fetchImages(): Boolean {
+    val resolver = images ?: return false
+    val asked = missing.toList()
+    missing.clear()
+    // Each is attempted even after one fails; one that fails is asked for again by the next render.
+    return asked.isNotEmpty() && asked.map { resolver.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
   }
 
   /** The page shows render [id] (the player is ready): its impression, as `LiveryTemplate` reports after its first frame. */
@@ -250,5 +279,7 @@ class LiveryA2uiWeb(
   private companion object {
     /** The image size to ask for when A2UI gives no bound: a phone-width card. */
     const val DEFAULT_IMAGE_DP = 360
+
+    val NO_IMAGES = TemplateInstantiator { _, _, _ -> null }
   }
 }

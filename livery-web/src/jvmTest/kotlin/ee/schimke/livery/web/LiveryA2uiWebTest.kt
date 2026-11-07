@@ -13,7 +13,11 @@ import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.instantiate.AgentBytesPolicy
 import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.instantiate.TemplateInspector
-import ee.schimke.livery.instantiate.TemplateInstantiator
+import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.client.RedirectingFetcher
+import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
+import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
+import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.TemplateEvent
@@ -52,9 +56,9 @@ class LiveryA2uiWebTest {
     JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
     TemplateRepository.Bundled(built.manifest) { sha -> built.files.entries.firstOrNull { it.key.contains(sha) }?.value },
   )
-  private fun web(documents: DocumentAdmission? = null) = LiveryA2uiWeb(
+  private fun web(documents: DocumentAdmission? = null, images: ImageResolver? = null) = LiveryA2uiWeb(
     repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock,
-    TemplateInstantiator { _, _, _ -> null }, documents, appKinds = setOf("navigate", "app:vote"),
+    images, documents, appKinds = setOf("navigate", "app:vote"),
   )
 
   private fun props(json: String) = Json.parseToJsonElement(json).jsonObject
@@ -129,5 +133,44 @@ class LiveryA2uiWebTest {
     assertEquals("a2ui:unsigned", r.designId)
     val malformed = JsonObject(promo + ("template" to JsonPrimitive("nope")))
     assertIs<LiveryA2uiWeb.Rendered.Fallback>(admitting.render("PromoBanner", malformed), "a malformed template is refused, never answered from the catalog")
+  }
+
+  @Test fun anImageNotOnTheDeviceWaitsAndIsFetchedOffTheRenderPath() = runTest {
+    // The catalog's promo document with an image bound to `hero`, sent as an admitted inline document.
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val plain = built.files.entries.first { it.key.contains(chosen.sha256) }.value
+    val d = RcDocumentCodec.decode(plain, RcWireLimits())
+    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "livery:value/hero".encodeToByteArray())) + d.operations))
+    val png = File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes()
+    val fetched = mutableListOf<String>()
+    val fetcher = object : RedirectingFetcher {
+      override suspend fun get(url: String, etag: String?) = get(url, etag, Long.MAX_VALUE) { false }
+      override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult {
+        fetched += url
+        return FetchResult.Ok(png, null)
+      }
+    }
+    val web = web(
+      DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)),
+      ImageResolver(repository, fetcher, JavaCrypto, directHosts = setOf("img.example")),
+    )
+    val props = JsonObject(promo + ("hero" to JsonPrimitive("https://img.example/hero.png")) + ("template" to props("""{"inline":"${Base64.encode(withImage)}"}""")))
+
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", props, LiveryA2uiWeb.Space(widthDp = 360)))
+    assertEquals(emptyList(), fetched, "rendering never waits on the network")
+    assertTrue(web.fetchImages())
+    assertEquals(1, fetched.size)
+    assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", props, LiveryA2uiWeb.Space(widthDp = 360)), "the image is on the device now")
+    assertEquals(1, fetched.size, "and the second render used it from there")
+    assertEquals(false, web.fetchImages(), "nothing left to fetch")
+  }
+
+  @Test fun everyRenderStillOnScreenCanAct() = runTest {
+    val web = web()
+    val first = web.render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    repeat(100) { web.render("PromoBanner", promo) }
+    assertIs<LiveryA2uiWeb.Routed.Agent>(web.action(first.id, "cta", "string", """{"route":"/a"}"""), "no plan is dropped while its render is on screen")
+    web.release(first.id)
+    assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(first.id, "cta", "string", """{"route":"/a"}"""))
   }
 }

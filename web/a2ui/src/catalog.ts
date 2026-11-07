@@ -30,13 +30,15 @@ export interface LiveryCatalogOptions {
   fallback?: (spec: LiveryComponentSpec, reason: string) => unknown;
 }
 
-/** One Livery component's A2UI API: its name, tag, element and props schema. */
+/** One Livery component's A2UI API: its name, tag, element and props schema, and the session it draws with. */
 export interface LiveryComponentApi {
   name: string;
   tagName: string;
   element: CustomElementConstructor;
   schema: z.ZodTypeAny;
   spec: LiveryComponentSpec;
+  session: LiverySession;
+  options: LiveryCatalogOptions;
 }
 
 /**
@@ -63,13 +65,20 @@ export async function liveryCatalog(session: LiverySession, options: LiveryCatal
   return { catalog, components };
 }
 
-/** The A2UI component for one contract ([spec]), its element defined once per tag. */
+/**
+ * The A2UI component for one contract ([spec]). Its element is defined once per tag, and takes its
+ * session, spec and options from the catalog entry it was rendered from, never from the first
+ * catalog that defined the tag: two catalogs (or a session opened again) each draw with their own.
+ */
 export function liveryComponent(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): LiveryComponentApi {
   const tagName = `livery-${kebab(spec.name)}`;
-  const existing = customElements.get(tagName);
-  const element = existing ?? defineElement(session, spec, options);
-  if (!existing) customElements.define(tagName, element);
-  return { name: spec.name, tagName, element, schema: schemaOf(spec), spec };
+  let element = customElements.get(tagName);
+  if (!element) {
+    // One constructor per tag (the registry allows no other), all of them the same element.
+    element = class extends LiveryElement {};
+    customElements.define(tagName, element);
+  }
+  return { name: spec.name, tagName, element, schema: schemaOf(spec), spec, session, options };
 }
 
 /** The props schema, from the same projection as Kotlin's (`livery-a2ui`): A2UI's own dynamic types. */
@@ -97,14 +106,15 @@ function propertySchema(p: LiveryPropertySpec): z.ZodTypeAny {
 
 const DYNAMIC = new Set(['DynamicString', 'DynamicNumber', 'DynamicBoolean', 'DynamicValue']);
 
-function defineElement(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): CustomElementConstructor {
-  return class LiveryElement extends A2uiLitElement {
+/** Every Livery component's element: what it draws comes from its catalog entry ([LiveryComponentApi]). */
+class LiveryElement extends A2uiLitElement {
     static styles = css`
       :host { display: block; width: 100%; height: var(--livery-a2ui-height, 200px); }
       .frame { width: 100%; height: 100%; }
     `;
 
     private player?: RcFramePlayer;
+    private playerUrl?: string;
     private render_?: number;
     private request = '';
     private fallback?: string;
@@ -112,9 +122,15 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     private resize?: ResizeObserver;
     private widthDp = 0;
 
+    /** This element's catalog entry: the session, spec and options of the catalog it was rendered from. */
+    private get livery(): LiveryComponentApi | undefined {
+      const model = this.context?.componentModel;
+      const entry = model?.catalog?.components?.get(model.type) as LiveryComponentApi | undefined;
+      return entry?.session ? entry : undefined;
+    }
+
     connectedCallback(): void {
       super.connectedCallback();
-      this.player ??= new RcFramePlayer(options.playerUrl, (a) => void this.onAction(a));
       // A new width can choose another design: render again when it changes by more than a little.
       this.resize = new ResizeObserver(() => {
         const w = Math.round(this.clientWidth);
@@ -126,7 +142,8 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     disconnectedCallback(): void {
       super.disconnectedCallback();
       this.resize?.disconnect();
-      if (this.render_ !== undefined) session.release(this.render_);
+      if (this.render_ !== undefined) this.livery?.session.release(this.render_);
+      this.render_ = undefined;
       this.player?.dispose();
       this.player = undefined;
     }
@@ -137,12 +154,13 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     }
 
     render() {
-      if (this.fallback !== undefined) return html`${options.fallback?.(spec, this.fallback) ?? nothing}`;
+      const api = this.livery;
+      if (this.fallback !== undefined) return html`${(api && api.options.fallback?.(api.spec, this.fallback)) ?? nothing}`;
       return html`<div class="frame">${this.player?.frame}</div>`;
     }
 
     /** The props Livery renders from: inputs and lists as A2UI resolved them, the rest as the agent wrote them. */
-    private props(): Record<string, unknown> {
+    private props(spec: LiveryComponentSpec): Record<string, unknown> {
       const resolved = (this.controller.props ?? {}) as Record<string, unknown>;
       const raw = this.context.componentModel.properties;
       const out: Record<string, unknown> = {};
@@ -154,8 +172,17 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     }
 
     private async sync(): Promise<void> {
-      if (!this.player || !this.context) return;
-      const props = this.props();
+      const api = this.livery;
+      if (!api || !this.context) return;
+      const { session, spec, options } = api;
+      // One player per element, kept across renders; a new one only if the catalog's player changes.
+      if (!this.player || this.playerUrl !== options.playerUrl) {
+        this.player?.dispose();
+        this.playerUrl = options.playerUrl;
+        this.player = new RcFramePlayer(options.playerUrl, (a) => void this.onAction(a));
+        this.requestUpdate();
+      }
+      const props = this.props(spec);
       const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, density: window.devicePixelRatio || 1, theme: themeOf(this) };
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
@@ -163,6 +190,11 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
       const mine = ++this.sequence;
       const r: Rendered = await session.render(spec.name, props, space);
       if (mine !== this.sequence) return; // a newer render is on its way
+      if (!r.ok && r.waiting) {
+        // An image isn't on the device: fetch it off the render path, then render again. Not the agent's problem.
+        if (await session.fetchImages()) { this.request = ''; this.requestUpdate(); }
+        return;
+      }
       if (!r.ok) {
         options.onProblem?.(spec.name, r.reason);
         this.fallback = r.reason;
@@ -184,7 +216,9 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     }
 
     private async onAction(a: NamedAction): Promise<void> {
-      if (this.render_ === undefined) return;
+      const api = this.livery;
+      if (this.render_ === undefined || !api) return;
+      const { session, spec, options } = api;
       const value = a.valueType === 'none' ? null : a.value;
       const routed: Routed = await session.action(this.render_, a.name, a.valueType, value);
       switch (routed.route) {
@@ -209,10 +243,10 @@ function defineElement(session: LiverySession, spec: LiveryComponentSpec, option
     }
 
     private dispatch(agent: { action: Record<string, unknown>; shadowed: string[] }) {
-      if (agent.shadowed.length > 0) options.onProblem?.(spec.name, `the event context names the template's own arguments ${JSON.stringify(agent.shadowed)}`);
+      const api = this.livery;
+      if (api && agent.shadowed.length > 0) api.options.onProblem?.(api.spec.name, `the event context names the template's own arguments ${JSON.stringify(agent.shadowed)}`);
       void this.context.dispatchAction(agent.action as any);
     }
-  };
 }
 
 /**

@@ -16,7 +16,6 @@ import ee.schimke.livery.client.WebCrypto
 import ee.schimke.livery.instantiate.AgentBytesPolicy
 import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.instantiate.RiskyFeature
-import ee.schimke.livery.instantiate.TemplateInstantiator
 import ee.schimke.livery.a2ui.LiveryA2ui
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
@@ -100,7 +99,7 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   )
   val web = LiveryA2uiWeb(
     repository, SlotPlanner(repository, sink, clock), c.capabilities, sink, clock,
-    TemplateInstantiator(ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts)),
+    ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts),
     documents, urlAllowlist = { url -> c.urlAllowlist.any(url::startsWith) }, appKinds = c.appKinds,
   )
   val id = nextSession++
@@ -143,8 +142,9 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = asyn
 
 /**
  * Renders component [name] with its resolved [props] (JSON) in [space] (`{widthDp, heightDp,
- * density, theme: {role: "#AARRGGBB"}}`): `{ok: true, render, bytes (base64), design, sha256}` or
- * `{ok: false, reason}`.
+ * density, theme: {role: "#AARRGGBB"}}`): `{ok: true, render, bytes (base64), design, sha256}`,
+ * `{ok: false, reason}`, or `{ok: false, waiting: true, reason}` when an image isn't on the device
+ * yet: call [liveryFetchImages], then render again.
  */
 @JsExport
 fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = async {
@@ -156,8 +156,13 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
       put("ok", true); put("render", r.id); put("bytes", Base64.encode(r.bytes)); put("design", r.designId); put("sha256", r.sha256)
     }
     is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason) }
+    is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason) }
   }
 }
+
+/** Fetches the images renders were waiting for (off the render path); resolves to whether all arrived. */
+@JsExport
+fun liveryFetchImages(session: Int): Promise<JsAny?> = async { session(session).web.fetchImages() }
 
 /** The player shows render [render]: its impression. */
 @JsExport

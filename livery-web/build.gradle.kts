@@ -26,6 +26,8 @@ kotlin {
       implementation(kotlin("test"))
       implementation(libs.kotlinx.coroutines.test)
       implementation(project(":livery-publish"))
+      // To give a test document a data-bound image.
+      implementation(libs.rc.player.protocol)
     }
   }
 }

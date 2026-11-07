@@ -39,7 +39,7 @@ await build({ stdin: { contents: "export * from '@js-joda/core';", resolveDir: r
 writeFileSync(join(site, 'index.html'), `<!doctype html><meta charset="utf-8">
 <script type="importmap">{"imports": {"@js-joda/core": "./js-joda.mjs"}}</script>
 <style>body { font-family: sans-serif; width: 420px; } livery-promo-banner { --livery-a2ui-height: 180px; } livery-shop-quantity { --livery-a2ui-height: 120px; }</style>
-<div id="app"></div><script type="module" src="./app.js"></script>`);
+<div id="app"></div><div id="second"></div><script type="module" src="./app.js"></script>`);
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.rc': 'application/octet-stream', '.png': 'image/png', '.ttf': 'font/ttf' };
 const server = createServer(async (req, res) => {
@@ -71,7 +71,7 @@ try {
 
   // Each Livery component's player reaches `ready` with its document.
   const frameOf = async (tag) => {
-    const handle = await page.waitForSelector(`${tag} iframe`, { state: "attached", timeout: 60_000 });
+    const handle = await page.waitForSelector(`#app ${tag} iframe`, { state: "attached", timeout: 60_000 });
     const frame = await handle.contentFrame();
     await frame.waitForFunction(() => document.documentElement.dataset.rcPlayerState === 'ready', null, { timeout: 60_000 });
     return frame;
@@ -112,6 +112,17 @@ try {
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/offer/title', value: 'Summer sale' } }]));
   await page.waitForFunction(() => window.__livery.events().some((e) => e.type === 'Impression'), null, { timeout: 30_000 });
   check(true, `a data-model update redraws (${before} earlier events drained)`);
+
+  // A second catalog with the same component names draws with its own session, and its actions reach
+  // its own processor, not the first one's.
+  const secondHandle = await page.waitForSelector('#second livery-promo-banner iframe', { state: 'attached', timeout: 60_000 });
+  const secondFrame = await secondHandle.contentFrame();
+  await secondFrame.waitForFunction(() => document.documentElement.dataset.rcPlayerState === 'ready', null, { timeout: 60_000 });
+  const firstCount = await page.evaluate(() => window.__livery.actions.length);
+  await secondFrame.evaluate(() => window.parent.postMessage({ type: 'cp-rc-host-named-action', name: 'cta', valueType: 'string', value: '{"route":"/b"}' }, '*'));
+  await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 });
+  const second = await page.evaluate(() => window.__livery.actions2[0]);
+  check(second.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);

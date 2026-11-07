@@ -308,6 +308,9 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
   read as the agent wrote them. A `set` writes through `dataContext.set(path, value)`; an agent's
   action goes out through `dispatchAction` with the template's checked arguments in its context.
+- **Images.** Rendering never waits on the network: a render uses only images already on the
+  device, and one that misses answers *waiting*; the element fetches them (`fetchImages`, off the
+  render path) and renders again, as widget hosts do with `CachedImages`.
 - **Theme.** Each role (`primary`, `surface`, `onSurface`, …) from `--livery-<role>`, else A2UI's
   own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
   components beside it.

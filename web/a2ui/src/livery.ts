@@ -50,7 +50,7 @@ export interface LiverySpace {
 
 export type Rendered =
   | { ok: true; render: number; bytes: Uint8Array; design: string; sha256: string }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; waiting?: boolean };
 
 export type Routed =
   | { route: 'agent'; action: Record<string, unknown>; shadowed: string[] }
@@ -69,6 +69,7 @@ export interface LiveryWebModule {
   liveryRelease(session: number, render: number): void;
   liveryAction(session: number, render: number, name: string, valueType: string, value: string | null): Promise<unknown>;
   liveryEvents(session: number): string;
+  liveryFetchImages(session: number): Promise<unknown>;
 }
 
 /** Loads the Wasm module shipped in this package (`dist/livery-web/`). */
@@ -104,6 +105,11 @@ export class LiverySession {
   async render(name: string, props: Record<string, unknown>, space: LiverySpace = {}): Promise<Rendered> {
     const r = JSON.parse(String(await this.lib.liveryRender(this.id, name, JSON.stringify(props), JSON.stringify(space))));
     return r.ok ? { ...r, bytes: base64ToBytes(r.bytes) } : r;
+  }
+
+  /** Fetches the images a render was waiting for (`waiting: true`), off the render path; true when all arrived. */
+  async fetchImages(): Promise<boolean> {
+    return String(await this.lib.liveryFetchImages(this.id)) === 'true';
   }
 
   shown(render: number): void {
