@@ -28,6 +28,41 @@ keeps working (see [Versions within a major](#versions-within-a-major)).
 - Data that doesn't fit is **refused, not dropped**: an unknown key, a wrong type, an over-long
   string. The same check runs in the app, the publisher, decision servers and agent tools.
 
+### Declaring a contract in Kotlin
+
+An app that owns its contracts can declare them once in Kotlin with `ContractDef`
+(`livery-protocol`, from the release after 0.4.0) and generate the JSON from it. Each input and
+action is a typed handle, so the app that fills a contract and the Compose code that draws it
+share one declaration, and a rename breaks both at compile time:
+
+```kotlin
+object SessionContract : ContractDef("conf/session", major = 1, title = "Session card") {
+  val title = string("title", required = true, maxLength = 120)
+  val speakers = string("speakers", maxLength = 80, description = "names, comma separated")
+  val live = bool("live", default = false)
+  val theme = themeRoles()                         // theme.primary, theme.onSurface, …
+  val open = action("open", "app:open-session")
+  val tickets = action("tickets", ActionKinds.OPEN_URL, arg = "url")
+
+  override val examples get() = mapOf(
+    "default" to mapOf(title to "Building adaptive apps", speakers to "Jane Doe", live to true),
+  )
+}
+
+val json = Json.encodeToString(Contract.serializer(), SessionContract.toContract())  // contracts/session.json
+val data = SessionContract.data(mapOf(SessionContract.title to session.title))      // for ContractBinder
+```
+
+- The builders mirror the types and every `InputSpec` field: `string`, `int`, `long`, `float`,
+  `bool`, `color` (ARGB default, optional `role`), `image`, and `input(name, spec)` for anything
+  else; `action(name, kind, args)`, `action(name, kind, arg = "url")` for one required string
+  argument, and `setAction(name, input)` for a `set`.
+- `toContract()` is the protocol's own `Contract`, in declaration order. A name declared twice, a
+  `since` above the contract's minor, a required input with a `since`, or an example keyed by
+  another contract's handle fails at once.
+- `themeRoles()` declares the theme roles as `role`-tagged colour inputs; it takes any list of
+  `theme.<role>` names, such as `ThemeRoles.MATERIAL3` for every Material 3 colour role.
+
 ### Versions within a major
 
 Apps already installed keep the contract minor they were built with, so a new minor may only add
@@ -90,7 +125,10 @@ with the tightest size fit; else the preferred variant's, else `default`'s.
 
 A **theme pack** (`themes/<id>.json`) is named values, usually `theme.*` colours, that a slot pushes
 beside its data: `repository.theme("dusk")` gives them as bindings to pass as `extra`. Changing a
-pack recolours every template that reads those names, with no new document. Theme packs and
+pack recolours every template that reads those names, with no new document. To use the app's own
+Material 3 colours (dynamic colour included), `livery-compose-material3` gives
+`MaterialTheme.colorScheme.toLiveryTheme()` as the same bindings, with `theme.surface` from the
+scheme's `surfaceContainerHigh` (the surface a card sits on) unless you pass another. Theme packs and
 placement rules come from `repository.current()`: the downloaded catalog, or the bundled one before
 the first download.
 

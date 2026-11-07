@@ -55,6 +55,9 @@ ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 cmp-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 cmp-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
 cmp-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+# Material 3 for livery-compose-material3: the newest stable Compose Multiplatform Material 3 (its
+# later lines are alphas). An app on a newer Material 3 resolves to its own.
+cmp-material3 = { module = "org.jetbrains.compose.material3:material3", version = "1.9.0" }
 rc-players-bom = { module = "ee.schimke.composeai:rc-players-bom", version.ref = "rc-players" }
 rc-player-compose = { module = "ee.schimke.composeai:rc-player-compose" }
 rc-player-edit = { module = "ee.schimke.composeai:rc-player-edit" }
