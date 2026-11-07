@@ -47,6 +47,13 @@
         "variant": "winter",
         "install": "Always",
         "automatic": false
+      },
+      {
+        "id": "fx",
+        "contract": "c/tile@1",
+        "title": "Effects",
+        "variant": "fx",
+        "install": "Always"
       }
     ],
     "templates": [
@@ -220,6 +227,22 @@
             "androidx"
           ]
         }
+      },
+      {
+        "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "bytes": 100,
+        "designId": "fx",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "features": [
+          "shaders"
+        ]
       }
     ]
   },
@@ -540,6 +563,57 @@
         "variant": "compact"
       },
       "expect": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "a risky feature the player doesn't allow: the design falls back",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "fx"
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "the player allows that feature",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ],
+          "features": [
+            "shaders"
+          ]
+        },
+        "designId": "fx"
+      },
+      "expect": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "name": "allowing another feature isn't enough",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ],
+          "features": [
+            "haptics"
+          ]
+        },
+        "designId": "fx"
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   ]
 }

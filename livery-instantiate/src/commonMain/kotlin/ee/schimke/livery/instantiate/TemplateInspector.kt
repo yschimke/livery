@@ -22,6 +22,8 @@ data class TemplateFacts(
    * value's comes from its default in the document, a data-bound image's is an image.
    */
   val types: Map<String, Set<Int>> = emptyMap(),
+  /** The [RiskyFeature]s its operations use: what a document arriving outside a catalog is held to. */
+  val features: Set<RiskyFeature> = emptySet(),
 ) {
   /** [reads] without the names a host writes itself: what a sidecar declares. */
   val declaredReads: Set<String> get() = reads - TemplateInspector.HOST_NAMES
@@ -47,7 +49,7 @@ object TemplateInspector {
     // used both ways keeps both types, so a conflict is caught.
     val uses = d.namedVariables.map { it.name.removePrefix("USER:") to it.type } + images.map { it to RcNamedVariable.IMAGE_TYPE }
     val types = uses.groupBy({ it.first }, { it.second }).mapValues { (_, v) -> v.toSet() }
-    TemplateFacts(template.size, types.keys, RcHostActionRewrites.actionNames(d), types)
+    TemplateFacts(template.size, types.keys, RcHostActionRewrites.actionNames(d), types, RiskyFeature.of(d))
   }.getOrNull()
 
   /**

@@ -67,8 +67,18 @@ vouched for it:
 | `{"query": {…}}` | the client asks **the app's** configured Livery server for a decision, sending the contract, the device's query (size, theme, `rcApiLevel`, minor, locale) and the agent's params; the answer is a normal decision (§8) | server-side choice per request: personalisation, ads, experiments run on the server |
 | `{"sha256", "url"?}` | the client fetches the blob from `url` (or its catalogs' `blobBase`), checks the hash, and plays it only if a trusted manifest lists that hash or a signature (below) covers it | the agent or its backend names one exact document; it plays exactly or not at all (§5.3) |
 | `{"sha256", "url"?, "signature"}` | as above, with a **template signature**: Ed25519 over `livery-template:<contract id@major>:<sha256>` by a trusted key | a server that mints documents per request (generated, instantiated) without publishing a manifest for each |
-| `{"inline": "<base64>", "signature"}` | nothing to fetch; the bytes are in the message, signed as above, within a small byte budget (the app's, 64 KiB by default) | tiny documents, or a transport with no second fetch; refused above the budget |
+| `{"inline": "<base64>", "signature"}` | nothing to fetch; the bytes are in the message, signed as above (PROTOCOL.md §3.4), within the app's signed limit (256 KiB by default) | documents a server or tool makes per request, signed by a key the app trusts; may use the risky features the app opts into for signed documents |
+| `{"inline": "<base64>"}`, unsigned | nothing to fetch; plays only under the app's **agent-bytes policy** (off by default): its contract prefixes, at most 64 KiB, never a risky feature, no `open-url` or `present` unless the policy names it | an app whose agent is its own backend and that accepts unreviewed layout in that slot |
 | `{"channel": "pr-123"}` or an unsigned form | the client's catalog source at another channel | development only, in a client that allows unsigned catalogs; never in production |
+
+**Documents in the message** pass one gate, `DocumentAdmission` (`livery-instantiate`, PROTOCOL.md
+§3.5), before anything draws: size, hash, signature or agent-bytes policy, that the document reads
+and emits only what its contract declares, and its **risky features** (`shaders`, `haptics`,
+`sound`, `particles`, `embedded-images`, `embedded-fonts`, `wake`), read from its operations. A
+signed document may use those the app opts into (`signedFeatures`, none by default); an unsigned one
+none at all, whatever the app sets, because nothing reviewed it. Either plays exactly as sent or
+not at all, is never kept for another slot, and its events name it `a2ui:signed:<keyId>` or
+`a2ui:unsigned`, so analytics and experiments can tell it from a reviewed design.
 
 Two rules hold for every form:
 
@@ -396,8 +406,13 @@ What the prototype taught, and what it doesn't do yet:
    release the port next follows.
 4. The `set` action kind (protocol level 7, Kotlin, Swift, fixtures), and two-way binding in A2UI.
    *Done* (above, and `QuantityA2uiTest`).
-5. Documents named by the message: `sha256` (+ `url`) against the trusted manifests first, then the
-   template signature (protocol, `livery sign-template`, `signing.json` cases) and `inline`; the
+5. Documents named by the message. *Done for `inline`*: template signatures (PROTOCOL.md §3.4,
+   `livery sign-template`, Kotlin and Swift, `conformance/template-signing.json`), and
+   `DocumentAdmission` with risky features and the agent-bytes policy (§3.5, `InlineDocumentsA2uiTest`).
+   Catalog templates are held to the same features (*done*, protocol level 8): the publisher
+   records each template's `features`, and selection skips one the player's
+   `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
+   inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
    `query` form with `livery-server`'s decision endpoint.
 6. `@livery/a2ui`, after the TypeScript port.
 

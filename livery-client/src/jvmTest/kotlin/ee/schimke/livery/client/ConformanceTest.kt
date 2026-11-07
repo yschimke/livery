@@ -68,8 +68,8 @@ class ConformanceTest {
   )
   @Serializable data class SelectionFixture(val manifest: Manifest, val cases: List<SelectionCase>)
 
-  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap(), requiresMinor: Int = 0) =
-    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked, requiresMinor = requiresMinor)
+  private fun t(sha: Char, design: String, target: Target, bytes: Long = 100, revoked: Boolean = false, tags: Map<String, String> = emptyMap(), requiresMinor: Int = 0, features: List<String> = emptyList()) =
+    TemplateEntry(sha.toString().repeat(64), bytes, design, "c/tile@1", target, tags = tags, revoked = revoked, requiresMinor = requiresMinor, features = features)
 
   @Test fun selection() {
     val inApp = { level: Int -> Target(Surfaces.IN_APP, level, listOf("androidx")) }
@@ -83,6 +83,8 @@ class ConformanceTest {
         Design("gone", "c/tile@1", "Gone", revoked = true),
         // Shipped to everyone, but drawn only when named or picked by an arm (a season).
         Design("winter", "c/tile@1", "Winter", variant = "winter", install = InstallPolicy.Always, automatic = false),
+        // Its only template uses a shader (§5.1): it plays only where the player allows shaders.
+        Design("fx", "c/tile@1", "Effects", variant = "fx", install = InstallPolicy.Always),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -100,6 +102,7 @@ class ConformanceTest {
         t('b', "winter", inApp(9), bytes = 50),
         // Sorts first on a tie, so only the byte budget keeps it out.
         t('0', "builtin", inApp(8), bytes = 900_000),
+        t('f', "fx", inApp(8), features = listOf("shaders")),
       ),
     )
     val app8 = PlayerCapabilities(Surfaces.IN_APP, 8, setOf("androidx"))
@@ -127,6 +130,9 @@ class ConformanceTest {
       SelectionCase("app on the contract's minor gets the newer template", q(app8).copy(variant = "compact", minor = 2), expect = null),
       SelectionCase("app on an older minor gets the older template", q(app8).copy(variant = "compact", minor = 1), expect = null),
       SelectionCase("no minor accepts any", q(app8).copy(variant = "compact"), expect = null),
+      SelectionCase("a risky feature the player doesn't allow: the design falls back", q(app8).copy(designId = "fx"), expect = null),
+      SelectionCase("the player allows that feature", q(app8.copy(features = setOf("shaders"))).copy(designId = "fx"), expect = null),
+      SelectionCase("allowing another feature isn't enough", q(app8.copy(features = setOf("haptics"))).copy(designId = "fx"), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
       val qq = c.query
@@ -414,6 +420,55 @@ class ConformanceTest {
       put("note", "TEST KEY ONLY. Ed25519 over the exact manifest bytes; signature is standard padded base64.")
       put("testPrivateKeyPkcs8", privateKey)
       put("testPublicKey", publicKey)
+      put("cases", kotlinx.serialization.json.JsonArray(cases))
+    })
+  }
+
+  /**
+   * PROTOCOL.md §3.4: template signatures, by the same test key as `signing.json` (which must exist
+   * first, so the key never churns): accepted, or rejected with the reason every port gives.
+   */
+  @Test fun templateSigning() = runBlocking {
+    val keys = Json.parseToJsonElement(File(dir, "signing.json").readText()).jsonObject
+    fun str(key: String) = (keys[key] as kotlinx.serialization.json.JsonPrimitive).content
+    val priv = KeyFactory.getInstance("Ed25519").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(str("testPrivateKeyPkcs8"))))
+    val pub = Base64.getDecoder().decode(str("testPublicKey"))
+    fun sign(contract: String, sha: String) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(TemplateSignatures.message(contract, sha)); sign() })
+    val sha = "ab".repeat(32)
+    val other = "cd".repeat(32)
+    val good = sign("promo/banner@1", sha)
+    val all = listOf(TrustedKey("k1", pub))
+    val ads = listOf(TrustedKey("k1", pub, setOf("ads/")))
+    data class Case(val name: String, val contract: String, val sha256: String, val sig: ManifestSignature, val trust: List<TrustedKey>)
+    val cases = listOf(
+      Case("valid", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("other bytes", "promo/banner@1", other, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("other contract", "promo/banner@2", sha, ManifestSignature(keyId = "k1", signature = good), all),
+      Case("unknown key id", "promo/banner@1", sha, ManifestSignature(keyId = "k2", signature = good), all),
+      Case("wrong algorithm", "promo/banner@1", sha, ManifestSignature(alg = "RS256", keyId = "k1", signature = good), all),
+      Case("not base64", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = "%%%"), all),
+      Case("key outside its contract scope", "promo/banner@1", sha, ManifestSignature(keyId = "k1", signature = good), ads),
+    ).map { c ->
+      val v = TemplateSignatures.verify(JavaCrypto, c.trust, c.contract, c.sha256, c.sig)
+      buildJsonObject {
+        put("name", c.name)
+        put("contract", c.contract)
+        put("sha256", c.sha256)
+        put("signature", json.encodeToJsonElement(ManifestSignature.serializer(), c.sig))
+        put("trust", kotlinx.serialization.json.JsonArray(c.trust.map { k ->
+          buildJsonObject {
+            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey))
+            if (k.contractPrefixes.isNotEmpty()) put("contractPrefixes", kotlinx.serialization.json.JsonArray(k.contractPrefixes.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+          }
+        }))
+        when (v) {
+          is TemplateVerification.Accepted -> put("expect", "accepted")
+          is TemplateVerification.Rejected -> { put("expect", "rejected"); put("reason", v.reason) }
+        }
+      }
+    }
+    check("template-signing.json", buildJsonObject {
+      put("note", "TEST KEY ONLY (signing.json's). Ed25519 over livery-template:<contract>:<sha256>; signature is standard padded base64.")
       put("cases", kotlinx.serialization.json.JsonArray(cases))
     })
   }

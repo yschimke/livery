@@ -50,3 +50,29 @@ class ManifestVerifier(private val crypto: Crypto, private val policy: TrustPoli
     return Verification.Accepted(manifest, key)
   }
 }
+
+/**
+ * PROTOCOL.md §3.4: a signature over one document rather than a manifest, for a document that
+ * arrives with a message instead of through a catalog. It is Ed25519 over
+ * `livery-template:<contract id@major>:<sha256>` ([message]), by the same trusted keys, held to the
+ * same contract prefixes, so a key that may sign `ads/` manifests may sign `ads/` documents and
+ * nothing else. The hash binds the bytes and the contract binds what they may be played as.
+ */
+object TemplateSignatures {
+  fun message(contractRef: String, sha256: String): ByteArray = "livery-template:$contractRef:$sha256".encodeToByteArray()
+
+  /** The key that signed [sha256] for [contractRef], or why the signature doesn't count. */
+  suspend fun verify(crypto: Crypto, keys: List<TrustedKey>, contractRef: String, sha256: String, signature: ManifestSignature): TemplateVerification {
+    if (signature.alg != "Ed25519") return TemplateVerification.Rejected("unsupported alg ${signature.alg}")
+    val key = keys.firstOrNull { it.keyId == signature.keyId } ?: return TemplateVerification.Rejected("untrusted key ${signature.keyId}")
+    val sig = runCatching { Base64.decode(signature.signature) }.getOrNull() ?: return TemplateVerification.Rejected("signature is not base64")
+    if (!crypto.verifyEd25519(key.publicKey, message(contractRef, sha256), sig)) return TemplateVerification.Rejected("bad signature")
+    if (!key.allows(contractRef)) return TemplateVerification.Rejected("key ${key.keyId} may not sign $contractRef")
+    return TemplateVerification.Accepted(key)
+  }
+}
+
+sealed interface TemplateVerification {
+  data class Accepted(val key: TrustedKey) : TemplateVerification
+  data class Rejected(val reason: String) : TemplateVerification
+}

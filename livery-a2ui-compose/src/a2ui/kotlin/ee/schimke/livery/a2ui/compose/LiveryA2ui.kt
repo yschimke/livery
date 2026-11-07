@@ -10,6 +10,7 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.PlayerCapabilities
 
@@ -34,6 +35,12 @@ class LiveryA2uiHost(
   val images: ImageResolver? = null,
   val theme: RcPlayerTheme = RcPlayerTheme.System,
   val fallback: @Composable (contract: Contract, reason: String) -> Unit = { _, _ -> },
+  /**
+   * Documents the agent sends with the message (`template: {inline, signature}`): who may sign
+   * them, the risky features a signed one may use, and whether unsigned ones play at all. Null
+   * refuses every one: the component then draws only reviewed designs from the catalog.
+   */
+  val documents: DocumentAdmission? = null,
 )
 
 object LiveryA2ui {

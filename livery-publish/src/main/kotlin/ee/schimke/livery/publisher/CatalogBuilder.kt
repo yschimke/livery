@@ -137,6 +137,9 @@ const val AUTOMATIC_LEVEL: Int = 6
 /** The protocol level that added `set` actions (PROTOCOL.md §7.1): an older client would drop every one. */
 const val SET_LEVEL: Int = 7
 
+/** The protocol level that gates templates on risky features (PROTOCOL.md §5.1): an older client would play a shader anywhere. */
+const val FEATURES_LEVEL: Int = 8
+
 /**
  * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
  * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
@@ -288,6 +291,8 @@ class CatalogBuilder(
           reads = spec.reads, emits = spec.emits,
           requiresMinor = contract(design.contract)?.let { ContractEvolution.requiresMinor(it, spec.reads, spec.emits) } ?: 0,
           assets = (images + fontAssets).map { it.sha256 }.distinct(), fonts = spec.fonts,
+          // Read from the document itself, never the sidecar: a template can't hide a shader.
+          features = TemplateInspector.facts(bytes)?.features.orEmpty().map { it.wire }.sorted(),
           source = spec.source,
         )
       }
@@ -363,6 +368,8 @@ class CatalogBuilder(
         if (designs.any { !it.automatic }) AUTOMATIC_LEVEL else 0,
         // An older client doesn't know `set`, so a template's own controls would do nothing there.
         if (contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.SET } }) SET_LEVEL else 0,
+        // An older client ignores `features` and would play a template's shader where no app allowed it.
+        if (templates.any { it.features.isNotEmpty() }) FEATURES_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",

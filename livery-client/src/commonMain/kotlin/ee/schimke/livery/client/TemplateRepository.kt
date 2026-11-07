@@ -409,7 +409,7 @@ class TemplateRepository(
      * Level 5 added secondary screens: a catalog with `present` actions or screen rules requires it.
      * Level 6 added designs that aren't automatic: a catalog with one requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 7
+    const val PROTOCOL_LEVEL: Int = 8
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

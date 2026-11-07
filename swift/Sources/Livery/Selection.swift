@@ -27,6 +27,7 @@ public enum TemplateSelector {
     return !t.revoked && t.contract == query.contract
       && (query.minor.map { t.requiresMinor <= $0 } ?? true)
       && t.bytes <= query.caps.maxBytes
+      && query.caps.features.isSuperset(of: t.features)
       && t.target.themeFits(query.caps, wanted: query.theme)
       && t.target.fits(query.caps, widthDp: query.widthDp, heightDp: query.heightDp)
       && query.tags.allSatisfy { t.tags[$0.key] == $0.value || design.tags[$0.key] == $0.value }

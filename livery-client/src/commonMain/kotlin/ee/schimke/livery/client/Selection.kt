@@ -66,8 +66,8 @@ object TemplateSelector {
 
   /**
    * Whether [t] may play for [query]: right contract, a live design, not revoked, needing no newer
-   * contract minor than the app's, within the player's byte budget, level, profiles, container, size
-   * and theme, and matching its tags. Exact
+   * contract minor than the app's, within the player's byte budget, using no risky feature the
+   * player doesn't allow, within its level, profiles, container, size and theme, and matching its tags. Exact
    * references (a decision's or feed item's `sha256`) pass through this same check.
    */
   fun eligible(
@@ -81,6 +81,7 @@ object TemplateSelector {
       t.contract == query.contract &&
       (query.minor == null || t.requiresMinor <= query.minor) &&
       t.bytes <= query.caps.maxBytes &&
+      query.caps.features.containsAll(t.features) &&
       t.target.themeFits(query.caps, query.theme) &&
       t.target.fits(query.caps, query.widthDp, query.heightDp) &&
       query.tags.all { (k, v) -> t.tags[k] == v || design.tags[k] == v }

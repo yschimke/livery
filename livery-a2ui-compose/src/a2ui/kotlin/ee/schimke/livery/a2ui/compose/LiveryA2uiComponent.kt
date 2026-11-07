@@ -8,6 +8,15 @@ import androidx.a2ui.compose.runtime.StaticA2uiProperty
 import androidx.a2ui.compose.ui.A2uiComponent
 import androidx.a2ui.model.protocol.A2uiException
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.produceState
+import ee.schimke.livery.client.BindResult
+import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.client.LoadedTemplate
+import ee.schimke.livery.instantiate.Admission
+import ee.schimke.livery.protocol.ManifestSignature
+import ee.schimke.livery.protocol.Target
+import ee.schimke.livery.protocol.TemplateEntry
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -104,8 +113,16 @@ class LiveryA2uiComponent(
       isAdditionalPropertiesAllowed = false,
     )
 
+  private val templateProperty: StaticA2uiProperty<Any> =
+    A2uiProperty.any(
+      TEMPLATE,
+      description = "Usually left out: the client picks a reviewed design. To send the document itself: " +
+        "{\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only " +
+        "where the app allows them, and never with shaders or other risky features.",
+    )
+
   override val properties: List<A2uiProperty<*>> =
-    inputProperties.values + listProperties.values + listOf(designProperty, variantProperty, actionsProperty)
+    inputProperties.values + listProperties.values + listOf(designProperty, variantProperty, actionsProperty, templateProperty)
 
   @Composable
   override fun A2uiComponentScope.isReady(properties: A2uiComponentProperties): Boolean =
@@ -168,6 +185,12 @@ class LiveryA2uiComponent(
       )
     }
 
+    val inline = inlineDocument(properties)
+    if (inline != null) {
+      InlineContent(scope, inline, dataset, liveryHost, modifier)
+      return
+    }
+
     BoxWithConstraints(modifier) {
       val widthDp = if (constraints.hasBoundedWidth) maxWidth.value.toInt() else null
       val query = TemplateQuery(contract.ref, host.capabilities, widthDp = widthDp, designId = design, variant = variant, minor = contract.minor)
@@ -183,6 +206,73 @@ class LiveryA2uiComponent(
           // Tell the agent, so it can correct itself; the app decides what draws instead.
           SideEffect { scope.reportError(A2uiException.A2uiRuntimeException("$name (${contract.ref}): ${r.reason}")) }
           host.fallback(contract, r.reason)
+        }
+      }
+    }
+  }
+
+  /** A document the agent sent with the message (PROTOCOL.md §3.4), as given: its bytes, its signature. */
+  private class InlineDocument(val text: String?, val bytes: ByteArray?, val signature: ManifestSignature?, val problem: String?) {
+    /** The document as sent, compared whole: a different document is always admitted afresh. */
+    val key: Any = listOf(text, signature, problem)
+  }
+
+  /**
+   * Null only when the agent sent no `template`: then the catalog chooses. A `template` that is
+   * there but malformed is a document request all the same, so it is refused, never answered with a
+   * catalog design (PROTOCOL.md §3.5).
+   */
+  private fun inlineDocument(properties: A2uiComponentProperties): InlineDocument? {
+    if (templateProperty !in properties) return null
+    val template = properties[templateProperty] as? Map<*, *>
+      ?: return InlineDocument(null, null, null, "template must be {\"inline\": <base64>, \"signature\"?}")
+    val text = template["inline"] as? String
+      ?: return InlineDocument(null, null, null, "template needs inline: the document as base64")
+    val bytes = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()
+      ?: return InlineDocument(text, null, null, "inline is not base64")
+    val sig = (template["signature"] as? Map<*, *>)?.let { s ->
+      val keyId = s["keyId"] as? String
+      val value = s["signature"] as? String
+      if (keyId == null || value == null) return InlineDocument(text, null, null, "signature needs keyId and signature")
+      ManifestSignature(alg = s["alg"] as? String ?: "Ed25519", keyId = keyId, signature = value)
+    }
+    return InlineDocument(text, bytes, sig, null)
+  }
+
+  /**
+   * Plays exactly the document the agent sent, or nothing (PROTOCOL.md §5.3): it passes the app's
+   * [DocumentAdmission] (signature or agent-bytes policy, the contract, risky features) and its data
+   * the contract gate; otherwise the agent is told and the app's fallback draws. Never another
+   * template in its place, and never kept: it lives only in this surface.
+   */
+  @Composable
+  private fun InlineContent(scope: A2uiComponentScope, inline: InlineDocument, dataset: JsonObject, liveryHost: LiveryHost, modifier: Modifier) {
+    val admission by produceState<Admission?>(null, inline.key, host.documents) {
+      value = when {
+        inline.bytes == null -> Admission.Refused(inline.problem ?: "no document")
+        host.documents == null -> Admission.Refused("the app accepts no documents sent with a message")
+        else -> host.documents.admit(inline.bytes, contract, inline.signature)
+      }
+    }
+    val plan: Any? = when (val a = admission) {
+      null -> null
+      is Admission.Refused -> a.reason
+      is Admission.Admitted -> when (val b = ContractBinder.bind(contract, dataset)) {
+        is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
+        is BindResult.Ok -> {
+          // Its events say whose bytes these were, so analytics never mix them with reviewed designs.
+          val label = a.signedBy?.let { "a2ui:signed:$it" } ?: "a2ui:unsigned"
+          val entry = TemplateEntry(a.sha256, a.bytes.size.toLong(), label, contract.ref, Target(host.capabilities.surface, host.capabilities.maxRcApiLevel))
+          RenderPlan(LoadedTemplate(entry, null, a.bytes, LoadedTemplate.Origin.Fresh, contract), contract, b.bindings)
+        }
+      }
+    }
+    Box(modifier) {
+      when (plan) {
+        is RenderPlan -> LiveryTemplate(plan, liveryHost)
+        is String -> {
+          SideEffect { scope.reportError(A2uiException.A2uiRuntimeException("$name (${contract.ref}): $plan")) }
+          host.fallback(contract, plan)
         }
       }
     }
@@ -268,6 +358,7 @@ class LiveryA2uiComponent(
     const val DESIGN: String = "design"
     const val VARIANT: String = "variant"
     const val ACTIONS: String = "actions"
+    const val TEMPLATE: String = "template"
 
     @Suppress("UNCHECKED_CAST")
     private fun inputProperty(key: String, spec: InputSpec): DynamicA2uiProperty<Any> {

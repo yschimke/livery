@@ -84,6 +84,8 @@ plugin and pass `bundled = AndroidBundled.fromAssets(context)`; see [Hosting](ho
 
 ```kotlin
 val inApp = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
+// A template that uses a risky feature (shaders, haptics, sound, …) plays only where you allow it:
+// PlayerCapabilities(…, features = setOf("shaders")). None by default.
 val repository = TemplateRepository(
   source = GitHubReleaseSource("acme", "app-templates"),
   fetcher = KtorFetcher(),           // OkHttp on Android and the JVM, Darwin on iOS
