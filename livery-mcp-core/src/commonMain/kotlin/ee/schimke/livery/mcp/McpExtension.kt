@@ -8,8 +8,9 @@ import kotlinx.serialization.json.JsonObject
  * documents (with their `source`), which then go through the same gate as any other:
  * `validate_template`, `render_preview`, `submit_draft`, `publish_preview`.
  *
- * Found with [java.util.ServiceLoader] ([Factory]); a factory returns null when its tool isn't
- * configured, so a server without it offers nothing extra.
+ * A host finds them its own way: `livery-mcp` with `java.util.ServiceLoader` ([Factory],
+ * `McpExtension.load`); a factory returns null when its tool isn't configured, so a server
+ * without it offers nothing extra.
  */
 interface McpExtension {
   /** The tools' definitions, as `tools/list` returns them. */
@@ -23,8 +24,6 @@ interface McpExtension {
     fun create(args: List<String>, env: Map<String, String>): McpExtension?
   }
 
-  companion object {
-    fun load(args: List<String>, env: Map<String, String>): List<McpExtension> =
-      java.util.ServiceLoader.load(Factory::class.java).mapNotNull { it.create(args, env) }
-  }
+  /** For a host's loader: `livery-mcp`'s `McpExtension.load`. */
+  companion object
 }

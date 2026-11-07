@@ -27,7 +27,7 @@ class LiveryMcpTest {
   private val tile = File(src, "designs/tile-default/in-app.rc").readBytes()
   private val tileB64 = Base64.getEncoder().encodeToString(tile)
   private val out = Files.createTempDirectory("preview").toFile()
-  private val mcp = LiveryMcp(SourceTree(src), writable = true, previewOut = out)
+  private val mcp = LiveryMcp.local(src, writable = true, previewOut = out)
 
   private fun args(vararg pairs: Pair<String, Any>) = Json.parseToJsonElement(
     Json.encodeToString(JsonObject.serializer(), JsonObject(pairs.associate { (k, v) ->
@@ -47,9 +47,9 @@ class LiveryMcpTest {
     val tools = mcp.handle(buildJsonObject { put("jsonrpc", "2.0"); put("id", 2); put("method", "tools/list") })!!["result"]!!
       .jsonObject["tools"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }
     assertTrue("submit_draft" in tools && "build_preview" in tools)
-    val readOnly = LiveryMcp(SourceTree(src)).handle(buildJsonObject { put("jsonrpc", "2.0"); put("id", 3); put("method", "tools/list") })!!
+    val readOnly = LiveryMcp.local(src).handle(buildJsonObject { put("jsonrpc", "2.0"); put("id", 3); put("method", "tools/list") })!!
     assertFalse("submit_draft" in readOnly.toString(), "a read-only server offers no writes")
-    assertTrue(LiveryMcp(SourceTree(src)).call("submit_draft", JsonObject(emptyMap())).isError())
+    assertTrue(LiveryMcp.local(src).call("submit_draft", JsonObject(emptyMap())).isError())
   }
 
   @Test fun contractsAndDesigns() {
@@ -59,6 +59,18 @@ class LiveryMcpTest {
     assertTrue(call("get_contract", "contract" to "nope@1").isError())
     val designs = call("list_designs", "contract" to "live/status-tile@1").text()
     assertTrue("tile-default" in designs && "banner-classic" !in designs)
+  }
+
+  /** A linked template is listed at its document's size, as java.io.File reported it. */
+  @Test fun linkedTemplatesReportTheirDocumentsSize() {
+    // The link replaces the template inside this test's own copy of the sample; its target is a copy too.
+    val target = Files.createTempFile("tile", ".rc").toFile().apply { writeBytes(tile); deleteOnExit() }
+    val rc = File(src, "designs/tile-default/in-app.rc").apply { delete() }
+    Files.createSymbolicLink(rc.toPath(), target.toPath())
+    val design = (call("list_designs", "contract" to "live/status-tile@1").body() as JsonArray)
+      .map { it.jsonObject }.single { it["design"]!!.jsonObject["id"]!!.jsonPrimitive.content == "tile-default" }
+    val inApp = design["templates"]!!.jsonArray.map { it.jsonObject }.single { it["name"]!!.jsonPrimitive.content == "in-app" }
+    assertEquals(tile.size.toLong(), inApp["bytes"]!!.jsonPrimitive.content.toLong())
   }
 
   @Test fun dataIsBoundOrRefused() {
@@ -192,7 +204,7 @@ class LiveryMcpTest {
       .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
     git("init", "-q"); git("add", "."); git("commit", "-qm", "add catalog")
     val first = git("rev-parse", "HEAD").trim()
-    val sub = LiveryMcp(SourceTree(catalog))
+    val sub = LiveryMcp.local(catalog)
     val h = Json.parseToJsonElement(sub.call("list_history", args("design" to "tile-default", "template" to "in-app")).text()).jsonArray.single().jsonObject
     assertEquals(listOf("add catalog"), h["changes"]!!.jsonArray.map { it.jsonObject["subject"]!!.jsonPrimitive.content })
     assertFalse(sub.call("render_preview", args("design" to "tile-default", "template" to "in-app", "revision" to first)).isError())

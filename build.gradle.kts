@@ -39,6 +39,7 @@ val published = mapOf(
   ":livery-datadog" to ("Livery Datadog" to "Livery events and template taps as Datadog RUM actions and errors"),
   ":livery-sentry" to ("Livery Sentry" to "Livery events as Sentry breadcrumbs, and Sentry's tag on each template slot"),
   ":livery-amplitude" to ("Livery Amplitude" to "Livery events in Amplitude, with experiment arms as user properties"),
+  ":livery-mcp-core" to ("Livery MCP core" to "Livery's agent tools as a transport-free Model Context Protocol server, on any Okio file system: Kotlin Multiplatform"),
   ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
   ":livery-verify" to ("Livery verify" to "Play Livery templates on the players apps ship them to, under Robolectric, and fail on their errors"),
   ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),

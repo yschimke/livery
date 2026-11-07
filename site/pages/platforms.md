@@ -19,6 +19,7 @@ order: 24
 | `livery-firebase` | Android | Available (Firebase Analytics, Remote Config, Firestore); not yet tested against a live project |
 | `@livery/web` | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
+| `livery-mcp-core` (the agent tools, transport-free) | JVM, iOS, Wasm | Available from the release after 0.4.0 |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android | Available since 0.2.0; not yet tested against live projects |
 | `livery-capture` | Android (unit tests, Robolectric) | Available since 0.2.0 |

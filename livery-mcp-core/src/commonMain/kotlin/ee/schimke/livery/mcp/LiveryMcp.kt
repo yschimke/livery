@@ -1,8 +1,7 @@
+@file:OptIn(ExperimentalEncodingApi::class)
+
 package ee.schimke.livery.mcp
 
-import ee.schimke.livery.publisher.build
-import ee.schimke.livery.publisher.check
-import ee.schimke.livery.publisher.write
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.ContractEvolution
@@ -18,10 +17,8 @@ import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.Layout
 import ee.schimke.livery.publisher.PreviewCatalog
 import ee.schimke.livery.publisher.TemplateSpec
-import ee.schimke.livery.render.RenderSpec
-import ee.schimke.livery.render.TemplateRenderer
-import java.io.File
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -35,6 +32,8 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import ee.schimke.livery.publisher.targetMetadataOrNull
+import okio.Path
 
 /**
  * Livery's agent tools (DESIGN.md "AI workflows") over one catalog source tree, as a Model Context
@@ -46,17 +45,21 @@ import kotlinx.serialization.json.putJsonObject
  * catalogs are signed by a key the agent doesn't hold.
  *
  * Transport-free: [handle] takes one JSON-RPC message and returns its response (null for a
- * notification), so stdio ([main]) and an HTTP endpoint can share it.
+ * notification), so stdio (`livery-mcp`), an HTTP endpoint or a browser can share it. [host] adds
+ * what only some platforms can do: renders, git history, checks against a revision.
  */
 class LiveryMcp(
   /** The catalog source tree its tools read (and an extension may read too). */
   val tree: SourceTree,
   private val writable: Boolean = false,
-  private val previewOut: File? = null,
+  /** Where `build_preview` and `publish_preview` write, on the tree's file system. */
+  private val previewOut: Path? = null,
   private val extensions: List<McpExtension> = emptyList(),
+  private val host: McpHost = McpHost.None,
 ) {
   private val json = Json { prettyPrint = true; encodeDefaults = false }
-  private val history = GitHistory(tree.root)
+  private val fs = tree.fileSystem
+  private val history: CatalogHistory? by lazy { host.history(tree) }
 
   fun handle(message: JsonObject): JsonObject? {
     val id = message["id"] ?: return null
@@ -107,6 +110,8 @@ class LiveryMcp(
     }
   } catch (e: ToolError) {
     failed(e.message!!)
+  } catch (e: HostUnavailable) {
+    failed(e.message!!)
   } catch (e: CatalogProblems) {
     failed(e.message!!)
   } catch (e: kotlinx.serialization.SerializationException) {
@@ -136,7 +141,7 @@ class LiveryMcp(
       put("design", json.encodeToJsonElement(Design.serializer(), d.design))
       putJsonArray("templates") {
         for (t in d.templates) add(buildJsonObject {
-          put("name", t.name); put("bytes", t.rc.length())
+          put("name", t.name); put("bytes", fs.targetMetadataOrNull(t.rc)?.size ?: tree.readBytes(t.rc).size.toLong())
           put("target", json.encodeToJsonElement(ee.schimke.livery.protocol.Target.serializer(), t.spec.target))
           putJsonArray("reads") { t.spec.reads.forEach { add(it) } }
           putJsonArray("emits") { t.spec.emits.forEach { add(it) } }
@@ -194,10 +199,10 @@ class LiveryMcp(
           ?: throw ToolError("design ${d.design.id} has no template ${args.str("template")}: ${d.templates.map { it.name }}")
         // An earlier version, from the catalog's git history.
         val bytes = args.strOrNull("revision")?.let { rev ->
-          if (!history.available) throw ToolError("the catalog isn't a git checkout: no history to render from")
+          val history = history ?: throw ToolError("the catalog isn't a git checkout: no history to render from")
           runCatching { history.show(t.rc, rev) }.getOrElse { throw ToolError(it.message ?: "bad revision") }
             ?: throw ToolError("${d.design.id}/${t.name}.rc didn't exist at $rev")
-        } ?: t.rc.readBytes()
+        } ?: tree.readBytes(t.rc)
         bytes to contract(d.design.contract)
       }
     }
@@ -209,25 +214,17 @@ class LiveryMcp(
       is BindResult.Invalid -> throw ToolError("the data doesn't bind to ${c.ref}: ${r.problems.map { "${it.name}: ${it.message}" }}")
     }
     val spec = runCatching {
-      RenderSpec(
+      PreviewSpec(
         widthDp = args.intOrNull("width_dp") ?: 360, heightDp = args.intOrNull("height_dp") ?: 200,
         density = args.intOrNull("density")?.toFloat() ?: 2f, dark = args.boolOrNull("dark") ?: false,
       )
     }.getOrElse { throw ToolError("width_dp and height_dp must be 1 to 4096, density 1 to 4") }
     TemplateInspector.facts(bytes) ?: throw ToolError("not a Remote Compose document")
-    val png = try {
-      TemplateRenderer.png(bytes, bindings, spec)
-    } catch (e: Throwable) {
-      // The renderer is Skia: on a headless host its native library can fail to load (on Linux it
-      // links libGL, libfontconfig and libX11). Say so, so an agent can tell its user what to fix
-      // instead of retrying.
-      val link = generateSequence(e) { it.cause }.firstOrNull { it is UnsatisfiedLinkError } ?: throw e
-      throw ToolError("can't render on this host: Skia's native library didn't load (${link.message}). " +
-        "On Linux, install libGL and fontconfig (e.g. apt-get install libgl1 libfontconfig1) or put them on LD_LIBRARY_PATH.")
-    }
+    // A host that can't render returns null, or throws with the reason (a native library missing).
+    val png = host.render(bytes, bindings, spec) ?: throw ToolError("this host can't render previews")
     return buildJsonObject {
       putJsonArray("content") {
-        add(buildJsonObject { put("type", "image"); put("data", Base64.getEncoder().encodeToString(png)); put("mimeType", "image/png") })
+        add(buildJsonObject { put("type", "image"); put("data", Base64.Default.encode(png)); put("mimeType", "image/png") })
         add(buildJsonObject {
           put("type", "text")
           put("text", "${spec.widthDp}x${spec.heightDp} dp at ${spec.density}x, ${if (spec.dark) "dark" else "light"}, with ${bindings.values.keys.sorted()}")
@@ -251,18 +248,18 @@ class LiveryMcp(
     }
     val bytes = args.bytes("rc_base64")
     val spec = json.decodeFromJsonElement(TemplateSpec.serializer(), args.obj("sidecar"))
-    val dir = File(File(tree.root, "designs"), designId)
-    val designFile = File(dir, "design.json")
+    val dir = tree.root / "designs" / designId
+    val designFile = dir / "design.json"
     val newDesign = args["design_json"] as? JsonObject
-    if (!designFile.isFile && newDesign == null) throw ToolError("design $designId doesn't exist: pass design_json to create it")
+    if (!tree.isFile(designFile) && newDesign == null) throw ToolError("design $designId doesn't exist: pass design_json to create it")
     val writes = buildMap {
       newDesign?.let {
         val d = json.decodeFromJsonElement(Design.serializer(), it)
         if (d.id != designId) throw ToolError("design_json id '${d.id}' must be '$designId'")
         put(designFile, json.encodeToString(Design.serializer(), d).encodeToByteArray())
       }
-      put(File(dir, "$name.rc"), bytes)
-      put(File(dir, "$name.json"), json.encodeToString(TemplateSpec.serializer(), spec).encodeToByteArray())
+      put(dir / "$name.rc", bytes)
+      put(dir / "$name.json", json.encodeToString(TemplateSpec.serializer(), spec).encodeToByteArray())
     }
     // The draft itself is read, not trusted: what it reads and emits must be what its sidecar says.
     TemplateInspector.problems(bytes, spec.reads, spec.emits).takeIf { it.isNotEmpty() }?.let { problems ->
@@ -272,15 +269,16 @@ class LiveryMcp(
         put("note", "nothing was written; validate_template returns the reads and emits to declare")
       }
     }
-    val before = writes.keys.associateWith { f -> f.takeIf { it.isFile }?.readBytes() }
-    dir.mkdirs()
-    writes.forEach { (f, b) -> f.writeBytes(b) }
+    val before = writes.keys.associateWith { f -> f.takeIf(tree::isFile)?.let(tree::readBytes) }
+    val created = fs.metadataOrNull(dir) == null
+    fs.createDirectories(dir)
+    writes.forEach { (f, b) -> write(f, b) }
     val manifest = try {
-      CatalogBuilder().build(tree.root, Layout.Static, serial = 0).manifest
+      CatalogBuilder().build(fs, tree.root, Layout.Static, serial = 0).manifest
     } catch (e: Exception) {
       // Any failure (catalog problems, a sidecar or design that doesn't decode) puts the tree back.
-      before.forEach { (f, b) -> if (b == null) f.delete() else f.writeBytes(b) }
-      if (dir.listFiles().isNullOrEmpty()) dir.delete()
+      before.forEach { (f, b) -> if (b == null) fs.delete(f, mustExist = false) else write(f, b) }
+      if (created && fs.listOrNull(dir).isNullOrEmpty()) fs.delete(dir, mustExist = false)
       val problems = (e as? CatalogProblems)?.problems ?: listOf(e.message ?: e::class.simpleName.orEmpty())
       return buildJsonObject {
         put("ok", false)
@@ -290,42 +288,40 @@ class LiveryMcp(
     }
     return buildJsonObject {
       put("ok", true)
-      putJsonArray("written") { writes.keys.forEach { add(it.relativeTo(tree.root).path) } }
+      putJsonArray("written") { writes.keys.forEach { add(it.relativeTo(tree.root).toString()) } }
       put("templates", manifest.templates.count { it.designId == designId })
       put("next", "render_preview with design=$designId template=$name to look at it; commit the files for review")
     }
   }
 
   /** An unsigned catalog for a preview channel, never the catalog's own (production) channel. */
-  private fun buildPreview(out: File, channel: String): JsonObject {
+  private fun buildPreview(out: Path, channel: String): JsonObject {
     if (!SourceTree.safeName(channel)) throw ToolError("bad channel '$channel'")
-    val config = Json { ignoreUnknownKeys = true }.decodeFromString(CatalogConfig.serializer(), File(tree.root, "catalog.json").readText())
+    val config = Json { ignoreUnknownKeys = true }.decodeFromString(CatalogConfig.serializer(), tree.read(tree.root / "catalog.json"))
     if (channel == config.channel) throw ToolError("'$channel' is the catalog's own channel: production catalogs are built and signed by CI, not an agent")
-    val built = CatalogBuilder().build(tree.root, Layout.Static)
+    val built = CatalogBuilder().build(fs, tree.root, Layout.Static)
     val manifest = built.manifest.copy(channel = channel)
-    val dir = File(out, channel).apply { deleteRecursively(); mkdirs() }
-    built.files.forEach { (path, b) -> File(dir, path).apply { parentFile.mkdirs() }.writeBytes(b) }
-    File(dir, Manifest.FILE).writeText(json.encodeToString(Manifest.serializer(), manifest))
+    val dir = writeCatalog(out / channel, built.files, json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray())
     return buildJsonObject {
-      put("ok", true); put("path", dir.path); put("channel", channel); put("serial", manifest.serial)
+      put("ok", true); put("path", dir.toString()); put("channel", channel); put("serial", manifest.serial)
       put("signed", false)
       put("note", "unsigned: only a client that allows unsigned catalogs (a debug build) will play it")
     }
   }
 
   /** One document as its own unsigned catalog ([PreviewCatalog]), checked against its contract. */
-  private fun publishPreview(out: File, args: JsonObject): JsonObject {
+  private fun publishPreview(out: Path, args: JsonObject): JsonObject {
     val c = contract(args.str("contract"))
     val target = (args["target"] as? JsonObject)?.let { json.decodeFromJsonElement(ee.schimke.livery.protocol.Target.serializer(), it) }
     val source = (args["source"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }.orEmpty()
     val bytes = args.bytes("rc_base64")
     val result = if (target != null) PreviewCatalog.build(c, bytes, target, args.strOrNull("title"), source)
       else PreviewCatalog.build(c, bytes, title = args.strOrNull("title"), source = source)
-    val dir = PreviewCatalog.write(result, out)
+    val dir = writeCatalog(out / result.channel, result.output.files, result.output.manifestBytes)
     return buildJsonObject {
-      put("ok", true); put("channel", result.channel); put("path", dir.path); put("signed", false)
+      put("ok", true); put("channel", result.channel); put("path", dir.toString()); put("signed", false)
       put("design", result.output.manifest.designs.single().id)
-      put("note", "a catalog of this one document: point a debug build's repository at ${dir.path} (or wherever you serve it)")
+      put("note", "a catalog of this one document: point a debug build's repository at $dir (or wherever you serve it)")
     }
   }
 
@@ -335,8 +331,7 @@ class LiveryMcp(
    */
   private fun checkCompatibility(args: JsonObject): JsonElement {
     val against = args.strOrNull("against") ?: "HEAD"
-    if (!File(against).isDirectory && !history.available) throw ToolError("the catalog isn't a git checkout: pass another source tree as 'against'")
-    val report = CompatibilityCheck.check(tree.root, against, inspect = args.boolOrNull("inspect") ?: false)
+    val report = host.check(tree, against, inspect = args.boolOrNull("inspect") ?: false)
     return json.encodeToJsonElement(CompatibilityCheck.Report.serializer(), report).let { r ->
       JsonObject((r as JsonObject) + ("ok" to JsonPrimitive(report.ok)))
     }
@@ -344,7 +339,7 @@ class LiveryMcp(
 
   /** The commits that changed a design's templates, newest first, from git. */
   private fun listHistory(args: JsonObject): JsonElement {
-    if (!history.available) throw ToolError("the catalog isn't a git checkout: no history")
+    val history = history ?: throw ToolError("the catalog isn't a git checkout: no history")
     val d = tree.design(args.str("design")) ?: throw ToolError("unknown design ${args.str("design")}")
     val only = args.strOrNull("template")
     val limit = args.intOrNull("limit") ?: 20
@@ -367,6 +362,20 @@ class LiveryMcp(
 
   private class ToolError(message: String) : Exception(message)
 
+  private fun write(path: Path, bytes: ByteArray) {
+    path.parent?.let(fs::createDirectories)
+    fs.write(path) { write(bytes) }
+  }
+
+  /** A static catalog at [dir], replacing what was there: its files, then its manifest. */
+  private fun writeCatalog(dir: Path, files: Map<String, ByteArray>, manifest: ByteArray): Path {
+    fs.deleteRecursively(dir, mustExist = false)
+    fs.createDirectories(dir)
+    files.forEach { (path, b) -> write(dir / path, b) }
+    write(dir / Manifest.FILE, manifest)
+    return dir
+  }
+
   private fun text(value: JsonElement) = buildJsonObject {
     putJsonArray("content") { add(buildJsonObject { put("type", "text"); put("text", json.encodeToString(JsonElement.serializer(), value)) }) }
   }
@@ -382,7 +391,7 @@ class LiveryMcp(
   private fun JsonObject.intOrNull(key: String) = (this[key] as? JsonPrimitive)?.intOrNull
   private fun JsonObject.boolOrNull(key: String) = (this[key] as? JsonPrimitive)?.booleanOrNull
   private fun JsonObject.bytes(key: String): ByteArray =
-    runCatching { Base64.getDecoder().decode(str(key)) }.getOrElse { throw ToolError("'$key' is not base64") }
+    runCatching { Base64.Default.decode(str(key)) }.getOrElse { throw ToolError("'$key' is not base64") }
       .also { if (it.size > MAX_TEMPLATE_BYTES) throw ToolError("${it.size} bytes: a template over $MAX_TEMPLATE_BYTES bytes is refused") }
 
   private fun NamedValue.describe(): JsonElement = when (this) {
@@ -391,7 +400,8 @@ class LiveryMcp(
     is NamedValue.L -> JsonPrimitive(value)
     is NamedValue.F -> JsonPrimitive(value)
     is NamedValue.B -> JsonPrimitive(value)
-    is NamedValue.Color -> JsonPrimitive("#%08X".format(argb))
+    // As "%08X" printed a Long: its unsigned hex, at least eight digits.
+    is NamedValue.Color -> JsonPrimitive("#" + argb.toULong().toString(16).uppercase().padStart(8, '0'))
     is NamedValue.Image -> JsonPrimitive(ref)
   }
 
