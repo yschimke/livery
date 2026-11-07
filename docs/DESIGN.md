@@ -194,7 +194,8 @@ and schedulers are per platform:
 | `livery-gradle-plugin` | Gradle | `ee.schimke.composeai.livery.catalog`: builds a catalog source tree into an Android app's generated assets on every build (inspected, reproducible: serial 0 and fixed dates), read back by `livery-client`'s `AndroidBundled.fromAssets` as the repository's bundled copy |
 | `livery-server` *(optional, planned)* | JVM (Ktor) | channels with upload-what-changed, mirrors, previews, decisions, feeds, on-request instantiation, agent sessions |
 | `livery-render` | JVM | `TemplateRenderer.png`: a template with its values rendered headless to PNG through rc-players' Compose player on Skia, for agents, CI previews and picker previews |
-| `livery-mcp` | JVM CLI | agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
+| `livery-mcp-core` | KMP (JVM, iOS, Wasm) | the agent tools as a transport-free MCP server (`LiveryMcp.handle`, one JSON-RPC message in, its response out) over a `SourceTree` on any Okio `FileSystem`; what only some hosts can do (`render`, `history`, `check` against a revision) through `McpHost`, which by default says the host can't |
+| `livery-mcp` | JVM CLI | the JVM edge of `livery-mcp-core`: stdio, `JvmMcpHost` (Skia renders through `livery-render`, git history), `McpExtension` services. Agent tools over a catalog source tree, MCP over stdio (see below): contracts, `validate_data`, `validate_template` (the document itself, via `TemplateInspector`), `render_preview` (also at a git revision), `list_history`, `check_compatibility` (`livery check`), and with flags `submit_draft`, `build_preview` and `publish_preview`. Optional modules add tools through `McpExtension`. Sessions are *planned*, with `livery-server` |
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android, optional | integrations, each with its SDK `compileOnly`: Datadog RUM actions and errors, Sentry breadcrumbs and slot tags, Amplitude events and arm properties. Interaction tracking is by contract action (`ActionGate`, PROTOCOL.md §7), not by the app's layout tree, which can't see inside a document |
 | `livery-capture` | Android | Compose authoring: `LiveryValues` (a contract's values as named Remote Compose values, refusing undeclared names and wrong types), `LiveryCapture.capture` per target, and `DesignFolder` to write or check a design's files from a unit test |
 | `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `livery ui-builder scaffold` (a contract as host inputs) and `import` (a design at a revision into the tree, with its `source`) as a `LiveryCommand`, and `ui_builder_scaffold` / `ui_builder_export` in `livery-mcp` as an `McpExtension` |
@@ -347,8 +348,9 @@ data → PNG, through `livery-render`), and, when started with `--write` and `--
 the catalog's own channel) and `publish_preview` (one document as a catalog of its own, for a look
 before it joins). Versions: each template entry's `source` says where it came from (tool, design,
 revision, commit), and in a git checkout `list_history` and `render_preview(revision)` show and
-draw earlier versions. Authoring tools plug in as optional modules (`McpExtension` for
-`livery-mcp`, `LiveryCommand` for `livery`): `livery-uibuilder` scaffolds a contract as host inputs
+draw earlier versions. The tools are common code (`livery-mcp-core`), so an IDE, a browser
+or an agent's own process can serve a tree; `livery-mcp` is the stdio CLI on the JVM. Authoring
+tools plug in as optional modules (`McpExtension` for `livery-mcp`, `LiveryCommand` for `livery`): `livery-uibuilder` scaffolds a contract as host inputs
 and exports a UI Builder design at a revision.
 
 *Next*: retired versions in the manifest. When a design's template changes, the publisher keeps

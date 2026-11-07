@@ -1,5 +1,7 @@
 package ee.schimke.livery.uibuilder
 
+import ee.schimke.livery.mcp.local
+import ee.schimke.livery.mcp.load
 import com.sun.net.httpserver.HttpServer
 import ee.schimke.livery.mcp.LiveryMcp
 import ee.schimke.livery.mcp.McpExtension
@@ -40,7 +42,7 @@ class UiBuilderExtensionTest {
   private fun JsonObject.text() = this["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
   @Test fun exportsADesignWithItsRevision() {
-    val mcp = LiveryMcp(SourceTree(File("../samples/catalog")), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "secret"))))
+    val mcp = LiveryMcp.local(File("../samples/catalog"), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "secret"))))
     val r = mcp.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"))))
     val body = Json.parseToJsonElement(r.text()).jsonObject
     assertEquals(tile.toList(), Base64.getDecoder().decode(body["rc_base64"]!!.jsonPrimitive.content).toList())
@@ -55,11 +57,11 @@ class UiBuilderExtensionTest {
 
   @Test fun aRevisionIsAskedForAndFailuresAreToolErrors() {
     val ext = UiBuilderExtension(UiBuilderClient(url, "secret"))
-    ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"), "revision" to JsonPrimitive(7))), LiveryMcp(SourceTree(File("."))))
+    ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"), "revision" to JsonPrimitive(7))), LiveryMcp.local(File(".")))
     assertTrue(seen.last().endsWith("&revision=7"))
-    val missing = ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("nope"))), LiveryMcp(SourceTree(File("."))))
+    val missing = ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("nope"))), LiveryMcp.local(File(".")))
     assertEquals("true", missing["isError"]!!.jsonPrimitive.content)
-    val bad = ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("../x"))), LiveryMcp(SourceTree(File("."))))
+    val bad = ext.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("../x"))), LiveryMcp.local(File(".")))
     assertEquals("true", bad["isError"]!!.jsonPrimitive.content)
   }
 

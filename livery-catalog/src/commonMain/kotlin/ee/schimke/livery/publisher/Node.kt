@@ -11,8 +11,8 @@ import okio.Path
  */
 internal class Node(val fs: FileSystem, val path: Path) {
   val name: String get() = path.name
-  val isFile: Boolean get() = metadata()?.isRegularFile == true
-  val isDirectory: Boolean get() = metadata()?.isDirectory == true
+  val isFile: Boolean get() = fs.targetMetadataOrNull(path)?.isRegularFile == true
+  val isDirectory: Boolean get() = fs.targetMetadataOrNull(path)?.isDirectory == true
   val extension: String get() = name.substringAfterLast('.', "")
   val nameWithoutExtension: String get() = name.substringBeforeLast(".")
 
@@ -26,14 +26,7 @@ internal class Node(val fs: FileSystem, val path: Path) {
 
   fun readText(): String = fs.read(path) { readUtf8() }
 
-  fun length(): Long = metadata()?.size ?: readBytes().size.toLong()
-
-  /** What [path] is, following a symbolic link to its target as java.io.File does; null when absent or dangling. */
-  private fun metadata(): FileMetadata? {
-    val m = fs.metadataOrNull(path) ?: return null
-    if (m.symlinkTarget == null) return m
-    return runCatching { fs.metadataOrNull(fs.canonicalize(path)) }.getOrNull()
-  }
+  fun length(): Long = fs.targetMetadataOrNull(path)?.size ?: readBytes().size.toLong()
 
   /** Writes [bytes] here, creating parent directories. */
   fun writeBytes(bytes: ByteArray) {
@@ -50,3 +43,13 @@ internal class Node(val fs: FileSystem, val path: Path) {
 
 /** SHA-256 as lowercase hex: Okio's, on every platform. */
 internal fun sha256Hex(bytes: ByteArray): String = bytes.toByteString().sha256().hex()
+
+/**
+ * What [path] is, following a symbolic link to its target as java.io.File does (Okio's own
+ * metadata describes the link); null when it's absent or the link dangles.
+ */
+fun FileSystem.targetMetadataOrNull(path: Path): FileMetadata? {
+  val m = metadataOrNull(path) ?: return null
+  if (m.symlinkTarget == null) return m
+  return runCatching { metadataOrNull(canonicalize(path)) }.getOrNull()
+}

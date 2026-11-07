@@ -9,6 +9,8 @@ plugins {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+  // The server and its tools, in common code; this module is its JVM edge (stdio, Skia, git).
+  api(project(":livery-mcp-core"))
   implementation(project(":livery-publish"))
   implementation(project(":livery-render"))
   implementation(project(":livery-instantiate"))

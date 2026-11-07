@@ -1,5 +1,6 @@
 package ee.schimke.livery.uibuilder
 
+import ee.schimke.livery.mcp.local
 import com.sun.net.httpserver.HttpServer
 import ee.schimke.livery.mcp.LiveryMcp
 import ee.schimke.livery.mcp.SourceTree
@@ -63,7 +64,7 @@ class UiBuilderAuthoringTest {
   }
 
   @Test fun theMcpToolScaffoldsACatalogContract() {
-    val mcp = LiveryMcp(SourceTree(sample), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "t"))))
+    val mcp = LiveryMcp.local(sample, extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "t"))))
     val r = mcp.call(UiBuilderExtension.SCAFFOLD, JsonObject(mapOf("contract" to JsonPrimitive("live/status-tile@1"))))
     val body = Json.parseToJsonElement(r["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content).jsonObject
     assertEquals(setOf("available", "is_on", "level", "name", "state"), body["stateVariables"]!!.jsonObject.keys)
