@@ -56,6 +56,13 @@ class LiveryA2uiMessagesTest {
     assertEquals(listOf("design"), problems(m, designs = mapOf("feed/article@1" to setOf("feed-card"))).map { it.property })
   }
 
+  @Test fun aBindingPathIsAString() {
+    for (path in listOf("123", "false", "null")) {
+      val m = message("""{"id":"promo","component":"PromoBanner","headline":{"path":$path},"cta":"Go"}""")
+      assertEquals(listOf("headline"), problems(m).map { it.property }, path)
+    }
+  }
+
   @Test fun aSignatureNeedsStringFields() {
     val doc = kotlin.io.encoding.Base64.encode(byteArrayOf(1, 2, 3))
     fun signed(signature: String) = problems(message(

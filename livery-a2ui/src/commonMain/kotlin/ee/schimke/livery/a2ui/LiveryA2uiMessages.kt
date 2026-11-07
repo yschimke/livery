@@ -83,7 +83,8 @@ object LiveryA2uiMessages {
       val v = c[key] ?: continue
       when {
         v is JsonObject && "path" in v -> {
-          val path = (v["path"] as? JsonPrimitive)?.content ?: run { problem(key, "path must be a string"); null }
+          // A2UI's binding is a JSON string path; a number, boolean or null isn't one.
+          val path = (v["path"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: run { problem(key, "path must be a string"); null }
           if (path != null && dataModel != null) {
             val found = pointer(dataModel, path)
             if (found == null) problem(key, "nothing in the data model at $path") else resolved[key] = found
