@@ -7,9 +7,9 @@ canvas in the page with the TypeScript Remote Compose player. A data change sets
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
-**Known gaps.** On Livery's sample templates the TypeScript player doesn't yet draw surface
-backgrounds or rounded shapes, overlaps a column's children, and doesn't fire taps. Its fixes come
-next (docs/A2UI.md).
+The player is vendored from rc-players with two fixes this package needs
+([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829)): without them, these
+templates lay out at `NaN` and their buttons don't fire.
 
 The work is done by Livery's own Kotlin client compiled to Wasm (`livery-web`), which this package
 ships in `dist/livery-web/`. That covers selection, trust, binding, instantiation and the action

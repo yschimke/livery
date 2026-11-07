@@ -35,6 +35,9 @@ export class RcCanvasPlayer {
   async show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
     if (documentKey !== this.key) {
       this.handle.player.setDensity(density);
+      // Sized before the load too: the player fixes its touch mapping from the canvas a document
+      // loads into, so a document loaded at the default 256 px missed taps past it.
+      this.resize(widthPx, heightPx, density);
       await this.handle.loadFromArrayBuffer(document.slice().buffer);
       this.key = documentKey;
       this.values.clear();

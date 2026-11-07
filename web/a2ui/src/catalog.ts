@@ -225,9 +225,8 @@ class LiveryElement extends A2uiLitElement {
     }
 
     /**
-     * A host named action, exactly as the player's callback delivers one. @internal For tests: the
-     * TypeScript player doesn't fire these templates' taps yet (docs/A2UI.md), so the browser test
-     * delivers the action the document would send.
+     * A host named action, exactly as the player's callback delivers one. @internal For tests that
+     * send a document's action with values its buttons wouldn't (an undeclared argument).
      */
     liveryHostAction(a: NamedAction): Promise<void> {
       return this.onAction(a);

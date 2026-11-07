@@ -108,10 +108,35 @@ try {
       function shot64(d) { let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) | 0; return h; }
     }, shot.toString('base64'));
   };
-  // The TypeScript player doesn't draw these templates' surfaces yet (docs/A2UI.md), so this checks
-  // that the template draws its content, not its background.
+  // Drawn, not just loaded: the banner has its surface and its text.
   const banner = await colours('#app livery-promo-banner');
-  check(banner.distinct > 8, `the banner draws its content: ${JSON.stringify(banner)}`);
+  check(banner.notWhite > 0.5 && banner.distinct > 8, `the banner draws its surface and text: ${JSON.stringify(banner)}`);
+
+  // Where a template draws a button: the centre of its saturated pixels (the right-most button's, with `right`).
+  const buttonIn = async (selector, which = 'any') => {
+    const el = await page.$(selector);
+    const box = await el.boundingBox();
+    const shot = await el.screenshot();
+    const at = await page.evaluate(async ({ b64, which }) => {
+      const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const hits = [];
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        const i = (y * c.width + x) * 4, mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        if (mx - mn > 60) hits.push([x, y]);
+      }
+      if (!hits.length) return null;
+      const right = Math.max(...hits.map((h) => h[0]));
+      const mine = which === 'right' ? hits.filter((h) => h[0] > right - 36) : hits;
+      return { x: mine.reduce((a, h) => a + h[0], 0) / mine.length, y: mine.reduce((a, h) => a + h[1], 0) / mine.length, w: img.width };
+    }, { b64: shot.toString('base64'), which });
+    if (!at) throw new Error(`no button drawn in ${selector}`);
+    const scale = box.width / at.w;
+    return { x: box.x + at.x * scale, y: box.y + at.y * scale };
+  };
+  const tap = async (selector, which) => { const p = await buttonIn(selector, which); await page.mouse.click(p.x, p.y); };
 
   // Delivers a host named action to a Livery element, as its player's callback would.
   const hostAction = (selector, a) => page.evaluate(({ sel, a }) => {
@@ -119,19 +144,23 @@ try {
     return find(document).liveryHostAction(a);
   }, { sel: selector, a });
 
-  // The CTA's host action, through the gate, to the agent. (Delivered as the player's callback would:
-  // the TypeScript player doesn't fire these templates' taps yet.)
-  await hostAction('#app livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/premium","extra":"x"}' });
+  // A real tap on the drawn "Shop now": the template's host action, through the gate, to the agent.
+  await tap('#app livery-promo-banner');
   await page.waitForFunction(() => window.__livery.actions.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const action = await page.evaluate(() => window.__livery.actions[0]);
-  check(action?.name === 'startTrial' && action?.sourceComponentId === 'promo' && action?.context?.from === 'chat' && action?.context?.route === '/premium' && !('extra' in (action?.context ?? {})),
-    `the CTA sends the agent its event, with the declared argument and nothing undeclared: ${JSON.stringify(action)}`);
+  check(action?.name === 'startTrial' && action?.sourceComponentId === 'promo' && action?.context?.from === 'chat' && typeof action?.context?.route === 'string',
+    `tapping the CTA sends the agent its event, with the agent's context and the template's declared route: ${JSON.stringify(action)}`);
+  // An argument the contract doesn't declare never reaches the agent (delivered as the player would).
+  await hostAction('#app livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/premium","extra":"x"}' });
+  await page.waitForFunction(() => window.__livery.actions.length > 1, null, { timeout: 10_000 }).catch(() => {});
+  const undeclared = await page.evaluate(() => window.__livery.actions[1]);
+  check(undeclared?.context?.route === '/premium' && !('extra' in (undeclared?.context ?? {})), `nothing undeclared reaches the agent: ${JSON.stringify(undeclared)}`);
 
-  // "+": the template's `set` writes the data model, and the same document takes the new value.
+  // A real tap on "+": the template's `set` writes the data model, and the same document takes the new value.
   const before = await statsOf('#app livery-shop-quantity');
-  await hostAction('#app livery-shop-quantity', { name: 'setQuantity', valueType: 'int', value: 2 });
+  await tap('#app livery-shop-quantity', 'right');
   await page.waitForFunction(() => window.__livery.data('/cart/quantity') === 2, null, { timeout: 10_000 }).catch(() => {});
-  check(await page.evaluate(() => window.__livery.data('/cart/quantity')) === 2, 'setQuantity wrote /cart/quantity = 2');
+  check(await page.evaluate(() => window.__livery.data('/cart/quantity')) === 2, 'tapping + wrote /cart/quantity = 2');
   await page.waitForTimeout(300);
   const after = await statsOf('#app livery-shop-quantity');
   check(after.loads === before.loads && after.sets > before.sets, `and the document stayed, its value set: ${JSON.stringify({ before, after })}`);
@@ -154,7 +183,7 @@ try {
   // its own processor, not the first one's.
   await loaded('#second livery-promo-banner');
   const firstCount = await page.evaluate(() => window.__livery.actions.length);
-  await hostAction('#second livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/b"}' });
+  await tap('#second livery-promo-banner');
   await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const second = await page.evaluate(() => window.__livery.actions2[0]);
   check(second?.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
