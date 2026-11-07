@@ -61,7 +61,10 @@ for review, every template added, removed or changed: what it now reads and emit
 minor it requires (apps on an older minor stop getting it), its size, and which values only the
 template's own default covers when data leaves them out. It fails while example data the base had
 is neither current nor kept (`livery keep-examples`; see
-[Repository mode](repository-mode.md#older-preview-data)). `--markdown` prints it for a pull
+[Repository mode](repository-mode.md#older-preview-data)). A template that starts using a risky
+feature (a shader, haptics, sound, particles) is noted for review, since it plays only for apps
+that allow it; `--deny-new-features` fails the check instead, for a catalog that admits none.
+`--markdown` prints it for a pull
 request comment, summed up per design; `--json` prints the same report for other tools; agents get
 it from the MCP server's `check_compatibility`. `livery review` prints the markdown with pictures:
 each changed design drawn with its contract's examples, before and after (see

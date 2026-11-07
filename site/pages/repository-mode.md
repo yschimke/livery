@@ -216,7 +216,7 @@ against their published SHA-1, into `LIVERY_CACHE` (default `~/.cache/livery`).
 
 | Tool | |
 |---|---|
-| `livery check <src> --against origin/main --inspect` | the review report in a terminal; `--markdown` for a comment, `--json` for other tools |
+| `livery check <src> --against origin/main --inspect` | the review report in a terminal; `--markdown` for a comment, `--json` for other tools; `--deny-new-features` fails when a template gains a risky feature |
 | `livery review <src> --against origin/main --previews <dir>` | the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in `<dir>` (`--image-base <url>` for where they will be served, `--size <w>x<h>` to choose the template) |
 | `livery build <src> <out> --inspect` | everything the publish would refuse |
 | `livery keep-examples <src> --against origin/main` | keeps the example data the base had that the tree no longer has (above) |

@@ -79,6 +79,10 @@ object CompatibilityCheck {
     val values: Map<String, String> = emptyMap(),
     /** What a reviewer should look at in this template; each is in [Report.warnings] too, prefixed. */
     val notes: List<String> = emptyList(),
+    /** The risky features it uses (`shaders`, `haptics`, …; PROTOCOL.md §3.5): it plays only where an app allows them. */
+    val features: List<String> = emptyList(),
+    /** Of [features], those this change brings in: every one is a note, and `livery check --deny-new-features` fails on them. */
+    val featuresAdded: List<String> = emptyList(),
   )
 
   /** A check, with the two trees it built: what [ReviewPreviews]-style tools render from. */
@@ -190,6 +194,11 @@ object CompatibilityCheck {
       if (status != "unchanged") values.filterValues { it == "document" }.keys.sorted().forEach {
         note("`$it` is optional with no contract default; only the template's own default draws when it's missing")
       }
+      // A risky feature is reviewed once, when it arrives: a new template that has one, or a changed one that gains one.
+      val featuresAdded = (b.features - a?.features.orEmpty().toSet()).sorted()
+      if (featuresAdded.isNotEmpty()) {
+        note("now uses ${featuresAdded.joinToString()} (risky features); it plays only for apps that allow them, and draws another design for the rest")
+      }
       if (a != null && b.requiresMinor > a.requiresMinor) {
         note("now requires minor ${b.requiresMinor} (was ${a.requiresMinor}); apps on an older minor no longer get this design here")
       }
@@ -204,6 +213,8 @@ object CompatibilityCheck {
         bytes = b.bytes, previousBytes = a?.bytes,
         values = values,
         notes = notes,
+        features = b.features.sorted(),
+        featuresAdded = featuresAdded,
       )
     }
   }
@@ -337,7 +348,7 @@ object CompatibilityCheck {
       fun line(label: String, v: List<String>) { if (v.isNotEmpty()) appendLine("      $label ${v.joinToString(", ")}") }
       line("reads +", t.readsAdded); line("reads -", t.readsRemoved); line("emits +", t.emitsAdded); line("emits -", t.emitsRemoved)
       if (t.status != "removed") {
-        appendLine("      requires minor ${t.requiresMinor}${t.previousRequiresMinor?.takeIf { it != t.requiresMinor }?.let { " (was $it)" } ?: ""}, ${t.bytes} bytes${t.previousBytes?.takeIf { it != t.bytes }?.let { " (was $it)" } ?: ""}")
+        appendLine("      requires minor ${t.requiresMinor}${t.previousRequiresMinor?.takeIf { it != t.requiresMinor }?.let { " (was $it)" } ?: ""}, ${t.bytes} bytes${t.previousBytes?.takeIf { it != t.bytes }?.let { " (was $it)" } ?: ""}${if (t.features.isEmpty()) "" else ", uses ${t.features.joinToString()}"}")
         t.values.entries.groupBy({ it.value }, { it.key }).entries.sortedBy { it.key }.forEach { (k, v) -> appendLine("      $k: ${v.joinToString(", ")}") }
       }
     }
