@@ -80,15 +80,18 @@ Two rules hold for every form:
   piece of protocol here: it is the per-document form of the manifest signature, with the same keys
   and the same contract-prefix limits.
 
-**Waiting.** A slot never waits on the network (DESIGN.md), but a document the agent names may not
-be on the device yet. The client starts fetching the moment the message arrives (as an `OnDemand`
-design is fetched), and the component stays in A2UI's loading state, which the surface already
-shows for pending data, for at most a short budget (the app's, 1 s by default). Then:
+**Not waiting.** A slot never waits on the network (DESIGN.md), and a document the agent names may
+not be on the device yet. The client starts fetching the moment the message arrives (as an
+`OnDemand` design is fetched) and draws at once from what is on disk:
 
-- a `design` or `query` answer that isn't ready falls back to the automatic design and swaps in
-  later;
-- an exact `sha256`, signed or inline, draws nothing else in its place (§5.3): it reports an A2UI
-  error and the app's fallback, and plays once it arrives if the surface still shows it.
+- a `design` or `query` answer that isn't downloaded draws the installed automatic design now
+  (PROTOCOL.md §5.2) and swaps to the requested one when it arrives, if the surface still shows it;
+- an exact `sha256`, signed or inline, never has another template drawn in its place (§5.3): the
+  app's fallback for the contract draws now, an A2UI error tells the agent, and the document plays
+  when it arrives, if the surface still shows it. (`inline` is on disk the moment it is verified.)
+
+A2UI's loading state is used only for what A2UI itself is waiting on: a `required` input whose
+binding hasn't resolved yet.
 
 Where it is fetched from never changes what it may do: whatever the route, the document reads and
 emits only what its contract declares. A document that arrived outside a built catalog (signed or
