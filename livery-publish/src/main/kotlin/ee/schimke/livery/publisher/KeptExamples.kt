@@ -31,26 +31,25 @@ object KeptExamples {
   fun load(src: File): Map<String, Map<String, JsonObject>> {
     val byFile = contractFiles(src)
     return byFile.mapNotNull { (stem, contract) ->
-      val dir = File(src, "contracts/$DIR/$stem")
-      val kept = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }.associate { f ->
-        val name = f.nameWithoutExtension.substringBeforeLast('-')
-        val hash = f.nameWithoutExtension.substringAfterLast('-')
-        "$name (kept $hash)" to Json.parseToJsonElement(f.readText()).jsonObject
-      }
+      val kept = kept(src, stem).associate { (name, data) -> "$name (kept ${hash(data)})" to data }
       kept.takeIf { it.isNotEmpty() }?.let { contract.ref to it }
     }.groupBy({ it.first }, { it.second }).mapValues { (_, maps) -> maps.reduce { a, b -> a + b } }
   }
 
-  /** The example data [base] has that [src] neither has (under any name) nor keeps. */
+  /**
+   * The example data [base] has, current or kept, that [src] neither has (under any name) nor
+   * keeps. A contract [src] no longer has at all was removed, and its data with it: not missing.
+   */
   fun missing(src: File, base: File): List<Missing> {
     val now = contractFiles(src)
     val have = now.flatMap { (stem, c) ->
-      c.examples.values.map { c.ref to hash(it) } + keptHashes(src, stem).map { c.ref to it }
+      c.examples.values.map { c.ref to hash(it) } + kept(src, stem).map { c.ref to hash(it.second) }
     }.toSet()
     val stemOf = now.associate { (stem, c) -> c.ref to stem }
-    return contractFiles(base).flatMap { (stem, c) ->
-      c.examples.filter { (_, data) -> (c.ref to hash(data)) !in have }
-        .map { (name, data) -> Missing(c.ref, stemOf[c.ref] ?: stem, name, data) }
+    return contractFiles(base).filter { (_, c) -> c.ref in stemOf }.flatMap { (stem, c) ->
+      (c.examples.toList() + kept(base, stem)).distinctBy { hash(it.second) }
+        .filter { (_, data) -> (c.ref to hash(data)) !in have }
+        .map { (name, data) -> Missing(c.ref, stemOf.getValue(c.ref), name, data) }
     }
   }
 
@@ -73,9 +72,10 @@ object KeptExamples {
     else -> e
   }
 
-  private fun keptHashes(src: File, stem: String): List<String> =
-    File(src, "contracts/$DIR/$stem").listFiles().orEmpty().filter { it.extension == "json" }
-      .map { hash(Json.parseToJsonElement(it.readText()).jsonObject) }
+  /** The examples kept for the contract in `contracts/<stem>.json`, as (example name, data). */
+  private fun kept(src: File, stem: String): List<Pair<String, JsonObject>> =
+    File(src, "contracts/$DIR/$stem").listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
+      .map { it.nameWithoutExtension.substringBeforeLast('-') to Json.parseToJsonElement(it.readText()).jsonObject }
 
   private fun contractFiles(src: File): List<Pair<String, Contract>> =
     File(src, "contracts").listFiles().orEmpty().filter { it.isFile && it.extension == "json" }.sortedBy { it.name }

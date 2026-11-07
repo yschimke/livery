@@ -76,8 +76,10 @@ class PlatformWidgetPlayerTest {
     File(catalog, "contracts/examples/headphone-controls/playing-0badf00d.json").writeText(
       """{ "title": "Old track", "short_title": "Old", "playing": true, "mode": 1 }""")
     val failures = WidgetCatalogCheck.launcherWidgets(activity, catalog, density = 2f)
-    val examples = listOf("bluetooth", "mp3", "disconnected", "playing (kept 0badf00d)")
-    assertEquals(examples.map { "broken" to it }, failures.map { it.design to it.example }, failures.toString())
+    assertEquals(listOf("bluetooth", "mp3", "disconnected"), failures.take(3).map { it.example }, failures.toString())
+    assertEquals(4, failures.size, failures.toString())
+    assertTrue(failures.last().example.startsWith("playing (kept "), failures.toString())
+    assertTrue(failures.all { it.design == "broken" }, failures.toString())
     assertTrue(failures.all { it.reason.startsWith("crashed while drawing") }, failures.toString())
   }
 }

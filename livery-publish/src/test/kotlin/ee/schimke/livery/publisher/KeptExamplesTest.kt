@@ -49,6 +49,25 @@ class KeptExamplesTest {
     assertEquals(emptyList(), KeptExamples.missing(tree, sample))
   }
 
+  @Test fun keptDataCantBeDeletedLater() {
+    val base = copy()
+    base.edit("contracts/status-tile.json") { it.replace("\"level\": 0.8", "\"level\": 0.35") }
+    KeptExamples.keep(base, sample)
+    val tree = Files.createTempDirectory("next").toFile().also { base.copyRecursively(it) }
+    File(tree, "contracts/examples").deleteRecursively()
+    val r = CompatibilityCheck.compare(tree, base, "main")
+    assertTrue(r.problems.single().startsWith("contract live/status-tile@1: example 'on' changed or was removed"), r.problems.toString())
+    assertEquals(1, KeptExamples.keep(tree, base).size)
+    assertTrue(CompatibilityCheck.compare(tree, base, "main").ok)
+  }
+
+  @Test fun aRemovedContractTakesItsExamplesWithIt() {
+    val tree = copy()
+    File(tree, "contracts/feed-article.json").delete()
+    File(tree, "designs/article-card").deleteRecursively()
+    assertEquals(emptyList(), KeptExamples.missing(tree, sample))
+  }
+
   @Test fun aKeptExampleThatNoLongerBindsFails() {
     val tree = copy()
     File(tree, "contracts/examples/status-tile").mkdirs()

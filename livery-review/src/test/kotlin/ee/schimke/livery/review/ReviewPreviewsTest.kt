@@ -137,7 +137,8 @@ class ReviewPreviewsTest {
     File(tree, "contracts/examples/status-tile").mkdirs()
     File(tree, "contracts/examples/status-tile/dim-1a2b3c4d.json").writeText("""{ "name": "Hall", "state": "Dim", "is_on": true, "level": 0.05 }""")
     val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
-    assertEquals(listOf("on", "off", "unavailable", "dim (kept 1a2b3c4d)"), tile.shots.map { it.example })
+    assertEquals(listOf("on", "off", "unavailable"), tile.shots.take(3).map { it.example })
+    assertTrue(tile.shots.single { it.example.startsWith("dim (kept ") }.after != null, tile.toString())
     assertNull(tile.failure)
   }
 
