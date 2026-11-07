@@ -10,7 +10,6 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
-import ee.schimke.livery.client.TemplateSelector
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.PlayerCapabilities
 
@@ -51,12 +50,13 @@ object LiveryA2ui {
     )
 
   /**
-   * The contracts worth advertising: those with at least one template this device can play now,
-   * from what is on disk. An agent is only offered what the device can draw.
+   * The contracts worth advertising: those the repository can resolve a template for now, from
+   * disk alone (blobs and assets downloaded, designs installed or shipped by default), as a slot
+   * would. An agent is only offered what the device can draw.
    */
   suspend fun playableContracts(repository: TemplateRepository, capabilities: PlayerCapabilities): List<Contract> {
     val manifest = repository.current() ?: return emptyList()
-    return manifest.contracts.filter { TemplateSelector.select(manifest, TemplateQuery(it.ref, capabilities)) != null }
+    return manifest.contracts.filter { repository.resolve(TemplateQuery(it.ref, capabilities)) != null }
   }
 }
 

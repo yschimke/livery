@@ -80,6 +80,17 @@ class PromoBannerA2uiTest : LiveryA2uiSurfaceTest() {
     assertTrue(events.none { it.type == TemplateEvent.Type.Impression }, "nothing else draws in its place")
   }
 
+  @Test fun aNumberOutOfRangeIsRefusedNotNarrowed() = runComposeUiTest {
+    // feed/article's `published` is a long; 1e20 doesn't fit one. Narrowed, it would bind as
+    // Long.MAX_VALUE; passed through, ContractBinder refuses it.
+    send(create, """{"version":"v0.9","updateComponents":{"surfaceId":"$SURFACE","components":[
+      {"id":"root","component":"FeedArticle","title":"Remote Compose in production","published":1e20}]}}""")
+    setContent { MaterialTheme { A2uiSurface(surfaceModel = surface(), transitionSpec = null) } }
+    waitUntil(timeoutMillis = 10_000) { outbound.any { it is A2uiClientErrorMessage } }
+    assertTrue(events.any { it.type == TemplateEvent.Type.Error && "published" in (it.detail ?: "") }, events.toString())
+    assertTrue(events.none { it.type == TemplateEvent.Type.Impression })
+  }
+
   @Test fun anActionTheAgentWiredBecomesAnA2uiEventWithItsArguments() = runComposeUiTest {
     send(create, data("Try Premium free"), components())
     show()

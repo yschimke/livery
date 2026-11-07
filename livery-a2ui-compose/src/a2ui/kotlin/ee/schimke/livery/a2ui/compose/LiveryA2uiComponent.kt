@@ -170,7 +170,9 @@ class LiveryA2uiComponent(
     val values = LinkedHashMap<String, JsonElement>()
     for ((key, spec) in agentInputs) {
       val value: Any? = properties.bind(inputProperties.getValue(key))
-      if (value != null) values[key] = toJson(value, spec.type)
+      // As the agent gave it: ContractBinder decides whether a number fits the input (a whole
+      // double for an int, a range, 2^53), never a narrowing here.
+      if (value != null) values[key] = toJson(value)
     }
     for ((key, property) in listProperties) {
       val value: Any? = properties.bind(property)
@@ -252,12 +254,6 @@ class LiveryA2uiComponent(
       },
       spec.default?.let { "Default $it." },
     ).joinToString(" ").ifEmpty { spec.type.name.lowercase() }
-
-    private fun toJson(value: Any, type: ValueType): JsonElement = when {
-      // A2UI numbers arrive as Double; a whole number binds to an int or long input (PROTOCOL.md §4.1).
-      (type == ValueType.Int || type == ValueType.Long) && value is Number && value.toDouble() % 1.0 == 0.0 -> JsonPrimitive(value.toLong())
-      else -> toJson(value)
-    }
 
     internal fun toJson(value: Any?): JsonElement = when (value) {
       null -> JsonNull
