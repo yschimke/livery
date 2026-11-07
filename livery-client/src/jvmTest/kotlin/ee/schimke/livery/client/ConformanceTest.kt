@@ -174,11 +174,20 @@ class ConformanceTest {
   @Test fun actions() {
     val c = Contract(
       "c/card", 1,
+      // The inputs a `set` changes (§7.1): its `value` is checked as the input is.
+      inputs = mapOf(
+        "qty" to InputSpec(ValueType.Int, min = 0.0, max = 9.0),
+        "liked" to InputSpec(ValueType.Bool),
+        "note" to InputSpec(ValueType.String, maxLength = 10),
+      ),
       actions = mapOf(
         "open" to ActionSpec("navigate", args = mapOf("route" to InputSpec(ValueType.String, required = true, maxLength = 20))),
         "expand" to ActionSpec("track", args = mapOf("section" to InputSpec(ValueType.String), "index" to InputSpec(ValueType.Int, min = 0.0, max = 9.0))),
         "rate" to ActionSpec("app:rate", args = mapOf("stars" to InputSpec(ValueType.Int, required = true, min = 1.0, max = 5.0), "liked" to InputSpec(ValueType.Bool), "at" to InputSpec(ValueType.Long), "score" to InputSpec(ValueType.Float, max = 1.0))),
         "close" to ActionSpec("dismiss"),
+        "setQty" to ActionSpec("set", input = "qty"),
+        "setLiked" to ActionSpec("set", input = "liked"),
+        "setNote" to ActionSpec("set", input = "note"),
       ),
     )
     val cases = listOf(
@@ -194,6 +203,16 @@ class ConformanceTest {
       ActionCase("float above max", "rate", mapOf("stars" to "5", "score" to "1.5"), null),
       ActionCase("no arguments declared", "close", mapOf("value" to "x"), null),
       ActionCase("undeclared action", "share", emptyMap(), null),
+      ActionCase("set: a value its input allows", "setQty", mapOf("value" to "3"), null),
+      ActionCase("set: above its input's max", "setQty", mapOf("value" to "10"), null),
+      ActionCase("set: below its input's min", "setQty", mapOf("value" to "-1"), null),
+      ActionCase("set: not its input's type", "setQty", mapOf("value" to "2.5"), null),
+      ActionCase("set: no value", "setQty", emptyMap(), null),
+      ActionCase("set: only value is an argument", "setQty", mapOf("value" to "2", "other" to "x"), null),
+      ActionCase("set: a document's boolean, as 1", "setLiked", mapOf("value" to "1"), null),
+      ActionCase("set: a bool, as false", "setLiked", mapOf("value" to "false"), null),
+      ActionCase("set: not a bool", "setLiked", mapOf("value" to "2"), null),
+      ActionCase("set: longer than its input's maxLength", "setNote", mapOf("value" to "x".repeat(11)), null),
     ).map { k -> ActionGate.check(c, k.action, k.args).let { k.copy(expect = ActionExpect(it.args, it.problem)) } }
     check("actions.json", json.encodeToJsonElement(ActionFixture.serializer(), ActionFixture(c, cases)))
   }

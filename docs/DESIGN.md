@@ -197,6 +197,7 @@ and schedulers are per platform:
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android, optional | integrations, each with its SDK `compileOnly`: Datadog RUM actions and errors, Sentry breadcrumbs and slot tags, Amplitude events and arm properties. Interaction tracking is by contract action (`ActionGate`, PROTOCOL.md §7), not by the app's layout tree, which can't see inside a document |
 | `livery-capture` | Android | Compose authoring: `LiveryValues` (a contract's values as named Remote Compose values, refusing undeclared names and wrong types), `LiveryCapture.capture` per target, and `DesignFolder` to write or check a design's files from a unit test |
 | `livery-uibuilder` | JVM, optional | Compose UI Builder as one authoring tool: `livery ui-builder scaffold` (a contract as host inputs) and `import` (a design at a revision into the tree, with its `source`) as a `LiveryCommand`, and `ui_builder_scaffold` / `ui_builder_export` in `livery-mcp` as an `McpExtension` |
+| `livery-a2ui-compose` *(prototype)*; `livery-a2ui`, `@livery/a2ui` *(planned)* | KMP; Android, desktop, Wasm; browsers | a Livery contract as an [A2UI](https://a2ui.org) component: the agent picks a design and sends data, the client selects, binds through `ContractBinder` and plays a signed template, and the document's actions become A2UI events ([A2UI.md](A2UI.md)) |
 
 **Keeping ports honest.** The Swift and TypeScript clients are ports of a small surface
 (selection, binding, trust, URL resolution), pinned to the Kotlin one by shared **conformance

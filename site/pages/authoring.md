@@ -82,6 +82,13 @@ class StatusTileTemplates {
 - `v.action(name, args)` sends the arguments the action declares, checked when you capture; a
   `track` action reports a tap that only changes the template's own state, combined with it (see
   [Interaction tracking](interaction-tracking.md)).
+- `v.set(name, value)` sends a `set` action: the person changed the input it names (a toggle, a
+  stepper) to `value`, which the document computes when tapped, as in
+  `v.set("setQuantity", v.int("quantity") + 1)`. The host writes it back and the new value comes
+  back in as the input, so the template keeps no state of its own. `set` is checked against the
+  input's type when you capture; a value past the input's limits is refused by the client. A
+  catalog with a `set` needs protocol level 7. See
+  [`samples/two-way`](https://github.com/yschimke/livery/tree/main/samples/two-way).
 
 ## In Compose UI Builder
 

@@ -4,7 +4,10 @@ import ee.schimke.composeai.rcplayer.runtime.RcHostActionValue
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.composeai.rcplayer.runtime.RcPlayerEvent
 import ee.schimke.livery.client.ActionArguments
+import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.Bindings
+import ee.schimke.livery.protocol.ActionKinds
+import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.NamedValue
 
 /**
@@ -33,11 +36,15 @@ data class TemplateAction(val name: String, val args: Map<String, String>)
  * Livery's action convention: a template emits a host named action whose name is the contract
  * action and whose value is either nothing, a JSON object of string arguments, or a single value
  * (passed as `value`). Anything else (numeric host action ids, malformed JSON) is not an action.
+ *
+ * With [contract], a `set` action's text is its `value` exactly as sent, never parsed (PROTOCOL.md
+ * §7.1): an empty string, spaces, or text that starts with `{` are values a person can type.
  */
-fun RcPlayerEvent.toTemplateAction(): TemplateAction? {
+fun RcPlayerEvent.toTemplateAction(contract: Contract? = null): TemplateAction? {
   val e = this as? RcPlayerEvent.HostNamedAction ?: return null
+  val isSet = contract?.actions?.get(e.name)?.kind == ActionKinds.SET
   val args: Map<String, String> = when (val v = e.value) {
-    is RcHostActionValue.TextValue -> parseArgs(v.value) ?: return null
+    is RcHostActionValue.TextValue -> if (isSet) mapOf(ActionGate.VALUE to v.value) else parseArgs(v.value) ?: return null
     is RcHostActionValue.IntegerValue -> mapOf("value" to v.value.toString())
     is RcHostActionValue.FloatValue -> mapOf("value" to v.value.toString())
     else -> emptyMap()

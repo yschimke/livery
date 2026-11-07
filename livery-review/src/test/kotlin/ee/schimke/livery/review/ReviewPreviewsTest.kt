@@ -47,11 +47,15 @@ class ReviewPreviewsTest {
     val c = CompatibilityCheck.compareTrees(sample, temp("empty"), "nothing")
     val previews = ReviewPreviews(out).render(c)
     assertEquals(c.report.templates.map { it.design }.distinct().sorted(), previews.map { it.design }.sorted())
-    val tile = previews.single { it.design == "tile-default" }
-    assertNull(tile.failure)
-    assertTrue(tile.shots.isNotEmpty() && tile.shots.all { it.before == null && it.after != null }, tile.toString())
-    // The other designs' templates are placeholders: said, not drawn.
-    assertTrue(previews.filter { it.design != "tile-default" }.all { it.failure == "no template is a Remote Compose document" }, previews.toString())
+    // tile-default, banner-classic and poll-card are real documents; the other designs' are placeholders.
+    val real = setOf("tile-default", "banner-classic", "poll-card")
+    for (design in real) {
+      val p = previews.single { it.design == design }
+      assertNull(p.failure)
+      assertTrue(p.shots.isNotEmpty() && p.shots.all { it.before == null && it.after != null }, p.toString())
+    }
+    // The placeholders are said, not drawn.
+    assertTrue(previews.filter { it.design !in real }.all { it.failure == "no template is a Remote Compose document" }, previews.toString())
   }
 
   @Test fun namesNeverCollide() {

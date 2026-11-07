@@ -1,0 +1,42 @@
+{
+  "id": "social/poll", "major": 1, "title": "Poll", "dataSource": "App",
+  "inputs": {
+    "question": { "type": "string", "required": true, "maxLength": 120 },
+    "summary": { "type": "string", "maxLength": 48, "description": "under the options, formatted for display: \"128 votes · closes Friday\"" },
+    "theme.primary": { "type": "color", "role": "primary" },
+    "theme.surface": { "type": "color", "role": "surface" },
+    "theme.onSurface": { "type": "color", "role": "onSurface" }
+  },
+  "lists": {
+    "options": {
+      "item": {
+        "label": { "type": "string", "required": true, "maxLength": 40 },
+        "share": { "type": "float", "min": 0, "max": 1, "default": 0, "description": "this option's fraction of the votes, drawn as its bar" },
+        "result": { "type": "string", "maxLength": 8, "description": "the share formatted for display: \"42%\"" },
+        "mark": { "type": "string", "maxLength": 2, "description": "\"✓\" on the option the person chose, otherwise empty" }
+      },
+      "max": 4
+    }
+  },
+  "actions": {
+    "vote": { "kind": "app:vote", "args": { "option": { "type": "string", "required": true, "description": "the chosen option's index, from 0" } }, "description": "the person picked an option" }
+  },
+  "examples": {
+    "open": {
+      "question": "Which language do you write your UI in?", "summary": "128 votes",
+      "options": [
+        { "label": "Kotlin", "share": 0.52, "result": "52%" },
+        { "label": "Swift", "share": 0.27, "result": "27%" },
+        { "label": "TypeScript", "share": 0.21, "result": "21%" }
+      ]
+    },
+    "voted": {
+      "question": "Which language do you write your UI in?", "summary": "129 votes · you voted",
+      "options": [
+        { "label": "Kotlin", "share": 0.53, "result": "53%", "mark": "✓" },
+        { "label": "Swift", "share": 0.26, "result": "26%" },
+        { "label": "TypeScript", "share": 0.21, "result": "21%" }
+      ]
+    }
+  }
+}

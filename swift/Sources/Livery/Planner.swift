@@ -130,7 +130,9 @@ public struct ActionRouter: Sendable {
     let handler = handlers[spec.kind]
     if handler == nil && spec.kind != ActionKinds.track { return error("no handler for \(spec.kind)") }
     events(base)
-    await handler?(plan, action, args)
+    // A handler gets every argument, with the checked ones as the gate passed them (a `set` of a
+    // bool arrives as true or false, not a document's 1 or 0).
+    await handler?(plan, action, args.merging(check.args) { _, checked in checked })
   }
 
   /// PROTOCOL.md §7: a host named action's value as arguments: none, a JSON object of strings, or one value.
@@ -164,6 +166,7 @@ public struct ActionCheck: Equatable, Sendable {
 public enum ActionGate {
   public static func check(_ contract: Contract, _ action: String, _ args: [String: String]) -> ActionCheck {
     guard let spec = contract.actions[action] else { return ActionCheck(spec: nil, args: [:], problem: "undeclared action") }
+    if spec.kind == ActionKinds.set { return checkSet(contract, spec, args) }
     var declared: [String: String] = [:]
     for name in spec.args.keys.sorted() {
       let s = spec.args[name]!
@@ -175,6 +178,19 @@ public enum ActionGate {
       declared[name] = value
     }
     return ActionCheck(spec: spec, args: declared, problem: nil)
+  }
+
+  /// A `set` (§7.1): its one argument, `value`, required and checked as the input it names. A bool
+  /// also takes `1` and `0` (a document's boolean), passed on as `true` or `false`.
+  private static func checkSet(_ contract: Contract, _ spec: ActionSpec, _ args: [String: String]) -> ActionCheck {
+    guard let name = spec.input, let input = contract.inputs[name] else {
+      return ActionCheck(spec: spec, args: [:], problem: "set names no input of the contract")
+    }
+    guard let raw = args["value"] else { return ActionCheck(spec: spec, args: [:], problem: "missing argument 'value'") }
+    var value = raw
+    if input.type == .bool { value = raw == "1" ? "true" : raw == "0" ? "false" : raw }
+    if let p = problem("value", input, value) { return ActionCheck(spec: spec, args: [:], problem: p) }
+    return ActionCheck(spec: spec, args: ["value": value], problem: nil)
   }
 
   private static func problem(_ name: String, _ s: InputSpec, _ value: String) -> String? {

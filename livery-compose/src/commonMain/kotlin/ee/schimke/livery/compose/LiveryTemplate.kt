@@ -98,7 +98,7 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
       modifier = Modifier,
       theme = host.theme,
       namedValues = values,
-      onEvent = { e: RcPlayerEvent -> e.toTemplateAction()?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
+      onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
       typefaces = loader,
     )
   }

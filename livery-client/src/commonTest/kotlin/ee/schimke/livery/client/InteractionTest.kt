@@ -39,6 +39,21 @@ class InteractionTest {
       ActionGate.declarationProblems("pick", ActionSpec("track", args = mapOf("tint" to InputSpec(ValueType.Color)))))
   }
 
+  /** PROTOCOL.md §7.1: a handler gets a `set`'s value as the gate passed it, so a document's 1 is `true`. */
+  @Test fun aSetsHandlerGetsTheCheckedValue() = runTest {
+    val toggle = Contract("demo/toggle", 1, inputs = mapOf("on" to InputSpec(ValueType.Bool)), actions = mapOf("setOn" to ActionSpec("set", input = "on")))
+    val p = plan.copy(contract = toggle)
+    val events = mutableListOf<TemplateEvent>()
+    val handled = mutableListOf<Map<String, String>>()
+    val router = ActionRouter(mapOf("set" to { _, _, args -> handled += args }), { false }, EventSink { events += it }, { 5 })
+    router.dispatch(p, "setOn", mapOf("value" to "1"))
+    router.dispatch(p, "setOn", mapOf("value" to "0"))
+    assertEquals(listOf(mapOf("value" to "true"), mapOf("value" to "false")), handled)
+    assertEquals(listOf(mapOf("value" to "true"), mapOf("value" to "false")), events.map { it.args }, "and so does its event")
+    router.dispatch(p, "setOn", mapOf("value" to "2"))
+    assertEquals(2, handled.size, "a value the input doesn't allow reaches no handler")
+  }
+
   @Test fun trackNeedsNoHandlerAndEventsCarryOnlyDeclaredArguments() = runTest {
     val events = mutableListOf<TemplateEvent>()
     val handled = mutableListOf<Pair<String, Map<String, String>>>()

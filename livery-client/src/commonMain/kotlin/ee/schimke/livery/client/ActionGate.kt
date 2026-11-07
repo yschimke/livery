@@ -22,6 +22,7 @@ object ActionGate {
 
   fun check(contract: Contract, action: String, args: Map<String, String>): ActionCheck {
     val spec = contract.actions[action] ?: return ActionCheck(null, emptyMap(), "undeclared action")
+    if (spec.kind == ActionKinds.SET) return checkSet(contract, spec, args)
     val declared = LinkedHashMap<String, String>()
     for (name in spec.args.keys.sorted()) {
       val s = spec.args.getValue(name)
@@ -40,6 +41,47 @@ object ActionGate {
   fun declarationProblems(name: String, spec: ActionSpec): List<String> = spec.args.mapNotNull { (arg, s) ->
     if (s.type !in ARG_TYPES) "action $name argument $arg is ${s.type.name.lowercase()}: an action argument is a string, int, long, float or bool" else null
   }
+
+  /**
+   * Problems with a contract's `set` actions and `input` fields, for the publisher (PROTOCOL.md
+   * §7.1): a `set` names one of the contract's own inputs, of a type an action can carry, that isn't
+   * a theme role; it declares no arguments of its own (its `value` is the input's); and only a
+   * `set` names an input.
+   */
+  fun setProblems(contract: Contract): List<String> = contract.actions.entries.sortedBy { it.key }.flatMap { (name, spec) ->
+    when {
+      spec.kind != ActionKinds.SET -> listOfNotNull(spec.input?.let { "action $name names an input but isn't `set`" })
+      spec.input.isNullOrBlank() -> listOf("action $name is `set` but names no input")
+      else -> {
+        val input = contract.inputs[spec.input]
+        listOfNotNull(
+          when {
+            input == null -> "action $name sets ${spec.input}, which isn't one of the contract's inputs"
+            input.role != null -> "action $name sets ${spec.input}, a theme role, which the host fills"
+            input.type !in ARG_TYPES -> "action $name sets ${spec.input}, a ${input.type.name.lowercase()}, which an action can't carry"
+            else -> null
+          },
+          spec.args.takeIf { it.isNotEmpty() }?.let { "action $name is `set`: its one argument is value, checked as ${spec.input} is, so it declares none" },
+        )
+      }
+    }
+  }
+
+  /**
+   * A `set`: its one argument, `value`, required and checked as the input it names. A bool also
+   * takes `1` and `0`, which is how a document's boolean reaches the host, and is passed on as
+   * `true` or `false`.
+   */
+  private fun checkSet(contract: Contract, spec: ActionSpec, args: Map<String, String>): ActionCheck {
+    val input = spec.input?.let(contract.inputs::get) ?: return ActionCheck(spec, emptyMap(), "set names no input of the contract")
+    val raw = args[VALUE] ?: return ActionCheck(spec, emptyMap(), "missing argument '$VALUE'")
+    val value = if (input.type == ValueType.Bool) when (raw) { "1" -> "true"; "0" -> "false"; else -> raw } else raw
+    problem(VALUE, input, value)?.let { return ActionCheck(spec, emptyMap(), it) }
+    return ActionCheck(spec, mapOf(VALUE to value), null)
+  }
+
+  /** A `set` action's one argument. */
+  const val VALUE: String = "value"
 
   /** Whether the client handles [kind] itself: a `track` action is an event and nothing else. */
   fun isTrackOnly(kind: String): Boolean = kind == ActionKinds.TRACK

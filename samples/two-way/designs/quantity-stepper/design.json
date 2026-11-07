@@ -1,0 +1,1 @@
+{ "id": "quantity-stepper", "contract": "shop/quantity@1", "title": "Stepper", "author": "commerce-team", "install": "Always" }

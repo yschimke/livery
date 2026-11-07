@@ -129,6 +129,8 @@ class ActionRouter(
     val h = handlers[spec.kind]
     if (h == null && !ActionGate.isTrackOnly(spec.kind)) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "no handler for ${spec.kind}")); return }
     events.emit(base)
-    h?.invoke(plan, action, args)
+    // A handler gets every argument, with the checked ones as the gate passed them (a `set` of a
+    // bool arrives as true or false, not a document's 1 or 0).
+    h?.invoke(plan, action, args + check.args)
   }
 }
