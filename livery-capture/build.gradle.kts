@@ -51,5 +51,7 @@ val prepareRobolectricSdk by tasks.registering(Sync::class) {
 tasks.withType<Test>().configureEach {
   dependsOn(prepareRobolectricSdk)
   systemProperty("robolectric.offline", "true")
+  // -Plivery.capture.write=true rewrites the sample designs this module captures (SampleBannerTest).
+  providers.gradleProperty("livery.capture.write").orNull?.let { systemProperty("livery.capture.write", it) }
   systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-sdk").get().asFile.absolutePath)
 }

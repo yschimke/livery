@@ -19,7 +19,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-/** The tools against a copy of the sample catalog, whose tile-default in-app template is a real document. */
+/** The tools against a copy of the sample catalog, whose tile-default and banner-classic in-app templates are real documents. */
 class LiveryMcpTest {
   private val src: File = Files.createTempDirectory("catalog").toFile().also {
     File("../samples/catalog").copyRecursively(it)

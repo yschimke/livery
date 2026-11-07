@@ -1,6 +1,7 @@
 # Livery in A2UI
 
-*Proposal. Nothing here is built yet.* How a Livery template becomes one component of an
+*Proposal, with a first prototype:* [`livery-a2ui-compose`](#the-prototype) (not yet published).
+How a Livery template becomes one component of an
 [A2UI](https://a2ui.org) surface, on Android, Compose Multiplatform, the web and iOS, without
 Livery learning anything about A2UI and without A2UI learning anything about Remote Compose.
 
@@ -311,13 +312,53 @@ to (names, schemas), resolved property sets and the dataset or problems they giv
 actions with an agent's `actions` and the A2UI event (or Livery route, or refusal) each produces.
 Kotlin writes it; the TypeScript and Swift adapters must reproduce it.
 
+## The prototype
+
+[`livery-a2ui-compose`](../livery-a2ui-compose) is the component on Compose, compiled from one source
+directory (`src/a2ui`) for Android against the AndroidX AARs and for the JVM against the port. Its
+test, `PromoBannerA2uiTest`, runs the sample catalog's `promo/banner@1` in a real A2UI surface on the
+desktop: JSON messages applied by A2UI's engine, a basic `Text` beside a generated `PromoBanner`,
+the template selected from the catalog `livery-publish` builds, offline, and played by rc-players.
+It checks that:
+
+- the catalog the client advertises has `PromoBanner`, with the contract's limits and defaults in
+  its schema and without the theme roles;
+- the banner draws with data bound from the data model, in the host's colours;
+- an `updateDataModel` redraws the playing document without restarting it (one `Impression`);
+- a design the device doesn't have falls back to the automatic one;
+- data the contract refuses (a 41-character headline) is reported to the agent as an A2UI error,
+  and nothing else draws;
+- tapping the template's CTA sends the agent's `startTrial` event, from component `promo`, with
+  the agent's context and the template's `route`, and Livery's own `Action` event.
+
+`samples/catalog/designs/banner-classic/in-app.rc` was a placeholder, so it is now captured from
+Compose by `livery-capture`'s `SampleBannerTest` (regenerate with
+`-Plivery.capture.write=true`). `banner-bold` stays a placeholder: it reads a data-bound image,
+which `LiveryValues` can't capture yet.
+
+What the prototype taught, and what it doesn't do yet:
+
+- **The A2UI pin.** The port is `1.0.0-alpha01`, so the Android side pins the AndroidX
+  `1.0.0-alpha01` AARs too: `alpha02` changed `materialA2uiBasicCatalogV1` (one `Functions` in
+  place of `urlOpener`, `messageFormatter`, `localeProvider`). The component itself only uses
+  `A2uiComponent`, `A2uiCatalog` and the property API.
+- **Compose and Java.** A2UI pulls the Compose 1.13 alphas, ahead of the stable 1.12 line the core
+  builds on, and the published port is Java 21 bytecode: both costs land on this optional module
+  only.
+- **Semantics come through.** The player's text is in Compose semantics, so a UI test taps the CTA
+  by its label inside the A2UI surface.
+- **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
+  conformance fixture; events carry no `a2ui:<surface>/<component>` decision id; the
+  `createSurface` theme isn't read (theme roles come from the host's Material colours); no `set`,
+  `template` forms other than the design preference, or height rules beyond the template's own.
+
 ## Order of work
 
 1. `livery-a2ui`: projection, dataset assembly, event mapping, `conformance/a2ui.json`;
    `livery publish` writes `a2ui-catalog.json`.
-2. `livery-a2ui-compose` on Android against the AndroidX AARs, with a sample: the sample catalog's
-   `promo/banner` inside an A2UI surface, rendered in CI by `livery-render`.
-3. The same source on desktop and Wasm against the port.
+2. `livery-a2ui-compose` on Android against the AndroidX AARs and on the JVM against the port, with
+   the sample catalog's `promo/banner` inside an A2UI surface. *Prototyped* (above).
+3. Wasm against the port, and moving to the AndroidX release the port next follows.
 4. The `set` action kind (protocol level, Kotlin, Swift, fixtures), and two-way binding in A2UI.
 5. Documents named by the message: `sha256` (+ `url`) against the trusted manifests first, then the
    template signature (protocol, `livery sign-template`, `signing.json` cases) and `inline`; the
