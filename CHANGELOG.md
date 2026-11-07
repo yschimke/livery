@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/yschimke/livery/compare/v0.4.0...v0.5.0) (2026-11-07)
+
+
+### Features
+
+* @livery/a2ui, Livery components in A2UI's web renderer, over livery-web (Wasm) ([#31](https://github.com/yschimke/livery/issues/31)) ([9b5c1e6](https://github.com/yschimke/livery/commit/9b5c1e6b84d5b2148f01e05d1b450ef4f6d7d1b2))
+* livery-a2ui, the contract-to-A2UI projection, pinned by conformance/a2ui.json ([#26](https://github.com/yschimke/livery/issues/26)) ([1b8fc17](https://github.com/yschimke/livery/commit/1b8fc1727edf95c48cf22a2b7eae48814d43779d))
+* livery-catalog, the catalog build and checks in common Kotlin ([#27](https://github.com/yschimke/livery/issues/27)) ([4101000](https://github.com/yschimke/livery/commit/4101000afcd788c9f6b235fe477eabab28b7f241))
+* livery-mcp-core, the agent tools as a common, transport-free MCP server ([#29](https://github.com/yschimke/livery/issues/29)) ([5f65477](https://github.com/yschimke/livery/commit/5f65477c8e11437059c09b96a286ee106c71fbcf))
+* suspend MCP calls, and livery-uibuilder in common Kotlin ([#30](https://github.com/yschimke/livery/issues/30)) ([a5c4e4d](https://github.com/yschimke/livery/commit/a5c4e4d8a39e47c65ed808c1cf645f4473f5457f))
+* validate_a2ui and a2ui_component_schema, and an A2UI message validator for agents ([#32](https://github.com/yschimke/livery/issues/32)) ([f492e15](https://github.com/yschimke/livery/commit/f492e1512b804afd2fca06e0f317c91b83f8e0e9))
+
+
+### Bug Fixes
+
+* a malformed A2UI signature is refused, and a replaced document never plays on ([#24](https://github.com/yschimke/livery/issues/24)) ([dc9c240](https://github.com/yschimke/livery/commit/dc9c240f9ca378efead8d28444b60519cdad8fb5))
+
 ## [0.4.0](https://github.com/yschimke/livery/compare/v0.3.0...v0.4.0) (2026-11-07)
 
 
