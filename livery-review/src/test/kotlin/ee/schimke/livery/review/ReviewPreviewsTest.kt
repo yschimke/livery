@@ -76,6 +76,15 @@ class ReviewPreviewsTest {
     assertTrue(tile.shots.all { it.before != null && it.after == null }, tile.toString())
   }
 
+  @Test fun aTemplateWithOnlyAMaximumIsDrawnWithinIt() {
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"maxWidthDp\": 180, \"maxHeightDp\": 90 }"))
+    }
+    val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
+    assertEquals(180 to 90, tile.widthDp to tile.heightDp)
+  }
+
   @Test fun anUnchangedTreeDrawsNothing() {
     val copy = temp("copy").also { sample.copyRecursively(it) }
     assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))

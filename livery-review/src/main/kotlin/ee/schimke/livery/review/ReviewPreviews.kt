@@ -1,6 +1,8 @@
 package ee.schimke.livery.review
 
+import ee.schimke.composeai.rcplayer.compose.RcImageLoader
 import ee.schimke.livery.client.BindResult
+import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.Contract
@@ -28,7 +30,7 @@ class ReviewPreviews(
   private val size: Pair<Int, Int>? = null,
   private val density: Float = 2f,
   private val maxExamples: Int = 4,
-  private val render: (ByteArray, ee.schimke.livery.client.Bindings, RenderSpec) -> ByteArray = { rc, b, spec -> TemplateRenderer.png(rc, b, spec) },
+  private val render: (ByteArray, Bindings, RenderSpec, RcImageLoader) -> ByteArray = { rc, b, spec, images -> TemplateRenderer.png(rc, b, spec, images) },
 ) {
   fun render(c: CompatibilityCheck.Comparison): List<DesignPreview> {
     out.mkdirs()
@@ -42,7 +44,10 @@ class ReviewPreviews(
     // A size only the old tree covers (a variant this change removes) still draws its before.
     val chosen = pick(now) ?: pick(was) ?: return DesignPreview(design, "", 0, 0, emptyList(),
       if (size != null) "no template covers ${size.first}×${size.second} dp" else "no template is a Remote Compose document")
-    val (w, h) = size ?: (chosen.target.size.minWidthDp?.takeIf { it > 0 } ?: DEFAULT_W) to (chosen.target.size.minHeightDp?.takeIf { it > 0 } ?: DEFAULT_H)
+    // At its smallest size, or, with no minimum, the default within its maximum.
+    val r = chosen.target.size
+    val (w, h) = size ?: ((r.minWidthDp?.takeIf { it > 0 } ?: minOf(DEFAULT_W, r.maxWidthDp ?: DEFAULT_W)) to
+      (r.minHeightDp?.takeIf { it > 0 } ?: minOf(DEFAULT_H, r.maxHeightDp ?: DEFAULT_H)))
     fun same(list: List<TemplateEntry>) = list.firstOrNull { it.target == chosen.target } ?: list.firstOrNull { it.target.size.covers(w, h) && it.target.surface == chosen.target.surface }
     val a = same(now)?.let { it to after!! }
     val b = same(was)?.let { it to before!! }
@@ -60,7 +65,7 @@ class ReviewPreviews(
         fun draw(pair: Pair<TemplateEntry, CatalogBuilder.Output>?, side: String): ByteArray? {
           val (t, output) = pair ?: return null
           val rc = output.files["blobs/${t.sha256}.rc"] ?: return null
-          return render(rc, bindings, spec).also { File(out, file(design, name, side)).writeBytes(it) }
+          return render(rc, bindings, spec, CatalogImages(output, bindings)).also { File(out, file(design, name, side)).writeBytes(it) }
         }
         val after = draw(a, "after")
         // The same template on both sides draws the same: render it once.
