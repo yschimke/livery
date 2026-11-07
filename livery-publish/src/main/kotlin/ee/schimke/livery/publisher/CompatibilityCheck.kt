@@ -78,26 +78,46 @@ object CompatibilityCheck {
      * host fills).
      */
     val values: Map<String, String> = emptyMap(),
+    /** What a reviewer should look at in this template; each is in [Report.warnings] too, prefixed. */
+    val notes: List<String> = emptyList(),
+  )
+
+  /** A check, with the two trees it built: what [ReviewPreviews]-style tools render from. */
+  class Comparison(
+    val report: Report,
+    /** The tree it was compared with, or null when that has no catalog or doesn't build. */
+    val before: CatalogBuilder.Output?,
+    /** This tree, or null when it doesn't build (the report says why). */
+    val after: CatalogBuilder.Output?,
+    /** This tree's kept examples ([KeptExamples]), by contract ref: drawn and played as well. */
+    val kept: Map<String, Map<String, kotlinx.serialization.json.JsonObject>> = emptyMap(),
   )
 
   /**
    * Compares the tree at [src] with [against]: a directory, or a git revision of the repository [src]
    * is in. [inspect] decodes every document too (`livery build --inspect`): its reads, emits and types.
    */
-  fun check(src: File, against: String, inspect: Boolean = false): Report {
-    File(against).takeIf { it.isDirectory }?.let { return compare(src, it, against, inspect) }
+  fun check(src: File, against: String, inspect: Boolean = false): Report = checkTrees(src, against, inspect).report
+
+  /** [check], keeping the built trees. */
+  fun checkTrees(src: File, against: String, inspect: Boolean = false): Comparison {
+    File(against).takeIf { it.isDirectory }?.let { return compareTrees(src, it, against, inspect) }
     val (temp, old) = atRevision(src, against)
-    return try { compare(src, old, against, inspect) } finally { temp.deleteRecursively() }
+    return try { compareTrees(src, old, against, inspect) } finally { temp.deleteRecursively() }
   }
 
   /** Compares two source trees; [old] may be missing (nothing published yet) or not build. */
-  fun compare(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): Report {
+  fun compare(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): Report =
+    compareTrees(src, old, against, inspect).report
+
+  /** [compare], keeping the built trees. */
+  fun compareTrees(src: File, old: File?, against: String = old?.path ?: "nothing", inspect: Boolean = false): Comparison {
     val problems = mutableListOf<String>()
     val warnings = mutableListOf<String>()
     val new = try {
       (if (inspect) CatalogBuilder(now = { 0 }, inspect = CatalogBuilder.INSPECT) else CatalogBuilder(now = { 0 })).build(src, Layout.Static, serial = 0)
     } catch (e: CatalogProblems) {
-      return Report(against, emptyList(), emptyList(), problems = e.problems, warnings = emptyList())
+      return Comparison(Report(against, emptyList(), emptyList(), problems = e.problems, warnings = emptyList()), null, null)
     }
     val before = old?.takeIf { File(it, "catalog.json").isFile }?.let {
       runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
@@ -115,7 +135,22 @@ object CompatibilityCheck {
     val experiments = experimentReports(before, new, warnings)
     val placements = placementReports(before?.manifest, new.manifest)
     val designs = designReports(before?.manifest, new.manifest)
-    return Report(against, contracts, templates, designs, experiments, placements, problems, warnings)
+    // Preview data the base had stays checked: kept when it changes or goes, and still binding.
+    val kept = KeptExamples.load(src)
+    if (old != null) KeptExamples.missing(src, old).forEach { m ->
+      problems += "contract ${m.contract}: example '${m.name}' changed or was removed, and its old data isn't kept; " +
+        "keep it with `livery keep-examples <src> --against $against`"
+    }
+    for ((ref, examples) in kept) {
+      val c = new.manifest.contracts.filter { it.ref == ref }.maxByOrNull { it.minor }
+        ?: run { warnings += "kept examples for $ref, which this tree no longer has"; continue }
+      for ((label, data) in examples) {
+        (ee.schimke.livery.client.ContractBinder.bind(c, data) as? ee.schimke.livery.client.BindResult.Invalid)?.let {
+          problems += "contract $ref: kept example '$label' no longer binds: ${it.problems.map { p -> "${p.name}: ${p.message}" }}"
+        }
+      }
+    }
+    return Comparison(Report(against, contracts, templates, designs, experiments, placements, problems, warnings), before, new, kept)
   }
 
   private fun contractReports(old: Manifest?, new: Manifest): List<ContractReport> {
@@ -159,12 +194,15 @@ object CompatibilityCheck {
         a.sha256 == b.sha256 && a.reads == b.reads && a.emits == b.emits && a.requiresMinor == b.requiresMinor -> "unchanged"
         else -> "changed"
       }
+      val notes = mutableListOf<String>()
+      fun note(message: String) { notes += message; warnings += "${k.first} ${k.second}: $message" }
       // Only what this change brings in: an unchanged template's defaults were reviewed before.
-      values.filterValues { it == "document" }.keys.takeIf { it.isNotEmpty() && status != "unchanged" }?.let {
-        warnings += "${k.first} ${k.second}: ${it.sorted()} are optional with no contract default; only the template's own default draws when they're missing"
+      // One note per value, so a value missing defaults across many templates is said once.
+      if (status != "unchanged") values.filterValues { it == "document" }.keys.sorted().forEach {
+        note("`$it` is optional with no contract default; only the template's own default draws when it's missing")
       }
       if (a != null && b.requiresMinor > a.requiresMinor) {
-        warnings += "${k.first} ${k.second}: now requires minor ${b.requiresMinor} (was ${a.requiresMinor}); apps on an older minor no longer get this design here"
+        note("now requires minor ${b.requiresMinor} (was ${a.requiresMinor}); apps on an older minor no longer get this design here")
       }
       TemplateReport(
         k.first, k.second,
@@ -176,6 +214,7 @@ object CompatibilityCheck {
         requiresMinor = b.requiresMinor, previousRequiresMinor = a?.requiresMinor,
         bytes = b.bytes, previousBytes = a?.bytes,
         values = values,
+        notes = notes,
       )
     }
   }
@@ -363,18 +402,52 @@ object CompatibilityCheck {
     if (r.problems.isNotEmpty()) { appendLine("\nproblems"); r.problems.forEach { appendLine("  - $it") } }
   }
 
-  /** The report for a pull request comment or a CI job summary. */
-  fun markdown(r: Report): String = buildString {
-    appendLine("### Livery check against `${r.against}`: ${if (r.ok) "compatible" else "**not compatible**"}")
+  /**
+   * Images of one design for the review, drawn by a tool with a renderer (`livery review`): each
+   * contract example before and after the change, as the paths or URLs the comment shows.
+   */
+  data class DesignPreview(
+    val design: String,
+    /** The template drawn, as the report describes its target. */
+    val target: String,
+    val widthDp: Int,
+    val heightDp: Int,
+    val shots: List<Shot>,
+    /** Why nothing could be drawn, when nothing was. */
+    val failure: String? = null,
+  ) {
+    data class Shot(val example: String, val before: String?, val after: String?, val unchanged: Boolean = false)
+  }
+
+  /**
+   * The report for a pull request comment or a CI job summary: short enough to read. Templates are
+   * summed up per design (a design has one template per target, often dozens), notes that repeat
+   * across a design's templates are said once, and every template is listed in a collapsed section.
+   * [previews] adds before and after images.
+   */
+  fun markdown(r: Report, previews: List<DesignPreview> = emptyList()): String = buildString {
+    val against = r.against.takeUnless { HASH.matches(it) } ?: r.against.take(7)
+    appendLine("### Livery check against `$against`: ${if (r.ok) "compatible" else "**not compatible**"}")
     appendLine()
+    val changed = r.templates.filter { it.status != "unchanged" }
+    val byDesign = r.templates.groupBy { it.design }
+    val touched = changed.map { it.design }.distinct()
+    summary(r, changed, touched)?.let { appendLine(it); appendLine() }
     if (r.problems.isNotEmpty()) {
       appendLine("**Problems** (these fail the check)")
       r.problems.forEach { appendLine("- ${it.replace("\n", " ")}") }
       appendLine()
     }
-    if (r.warnings.isNotEmpty()) {
+    val templateWarnings = r.templates.flatMap { t -> t.notes.map { "${t.design} ${t.target}: $it" } }.toSet()
+    val grouped = r.templates.flatMap { t -> t.notes.map { it to t.design } }.groupBy({ it.first }, { it.second })
+    val other = r.warnings.filter { it !in templateWarnings }
+    if (grouped.isNotEmpty() || other.isNotEmpty()) {
       appendLine("**For review**")
-      r.warnings.forEach { appendLine("- $it") }
+      other.forEach { appendLine("- $it") }
+      for ((message, designs) in grouped) {
+        val counts = designs.groupingBy { it }.eachCount().entries.joinToString(", ") { (d, n) -> "`$d` (${templates(n)})" }
+        appendLine("- ${message.replace("|", "\\|")}: $counts")
+      }
       appendLine()
     }
     val contracts = r.contracts.filter { it.changes.isNotEmpty() || it.fromMinor != it.toMinor }
@@ -386,22 +459,53 @@ object CompatibilityCheck {
       }
       appendLine()
     }
-    val changed = r.templates.filter { it.status != "unchanged" }
-    if (changed.isNotEmpty()) {
+    if (touched.isNotEmpty()) {
       appendLine("**Templates**")
       appendLine()
-      appendLine("| | Design | Target | Reads | Emits | Minor | Bytes |")
-      appendLine("|---|---|---|---|---|---|---|")
-      for (t in changed) {
-        fun delta(add: List<String>, remove: List<String>) = (add.map { "+$it" } + remove.map { "-$it" }).joinToString(" ").ifEmpty { "" }
-        val minor = if (t.status == "removed") "" else "${t.requiresMinor}" + (t.previousRequiresMinor?.takeIf { it != t.requiresMinor }?.let { " (was $it)" } ?: "")
-        val bytes = if (t.status == "removed") "" else "${t.bytes}" + (t.previousBytes?.takeIf { it != t.bytes }?.let { " (was $it)" } ?: "")
-        appendLine("| ${t.status} | `${t.design}` | ${t.target} | ${delta(t.readsAdded, t.readsRemoved)} | ${delta(t.emitsAdded, t.emitsRemoved)} | $minor | $bytes |")
+      appendLine("| Design | Templates | Size | Reads | Emits | Minor |")
+      appendLine("|---|---|---|---|---|---|")
+      for (design in touched) {
+        val ts = byDesign.getValue(design)
+        val live = ts.filter { it.status != "removed" }
+        val statuses = ts.groupingBy { it.status }.eachCount().entries
+          .sortedBy { STATUS_ORDER.indexOf(it.key) }.joinToString(", ") { (s, n) -> "$n $s" }
+        val size = range(live.map { it.bytes }).let { now ->
+          val was = range(ts.filter { it.status != "added" }.mapNotNull { it.previousBytes })
+          when {
+            now == null -> was?.let { "was $it" } ?: ""
+            was == null || was == now -> now
+            else -> "$now (was $was, ${percent(ts)})"
+          }
+        }
+        fun delta(add: (TemplateReport) -> List<String>, remove: (TemplateReport) -> List<String>) =
+          (ts.flatMap(add).distinct().map { "+$it" } + ts.flatMap(remove).distinct().map { "-$it" }).joinToString(" ")
+        val minors = live.map { it.requiresMinor }.distinct().sorted()
+        val wasMinors = ts.mapNotNull { it.previousRequiresMinor }.distinct().sorted()
+        val minor = minors.joinToString("/") + (wasMinors.takeIf { it.isNotEmpty() && it != minors }?.let { " (was ${it.joinToString("/")})" } ?: "")
+        appendLine("| `$design` | $statuses | $size | ${delta({ it.readsAdded }, { it.readsRemoved })} | ${delta({ it.emitsAdded }, { it.emitsRemoved })} | $minor |")
       }
       appendLine()
     }
-    val same = r.templates.count { it.status == "unchanged" }
-    if (same > 0) { appendLine("$same template(s) unchanged."); appendLine() }
+    if (previews.isNotEmpty()) {
+      appendLine("**Previews** (the contract's examples)")
+      appendLine()
+      for (p in previews) {
+        appendLine("`${p.design}` · ${p.target} at ${p.widthDp}×${p.heightDp} dp")
+        appendLine()
+        if (p.failure != null || p.shots.isEmpty()) { appendLine("_not drawn: ${p.failure ?: "no examples"}_"); appendLine(); continue }
+        val same = p.shots.all { it.unchanged }
+        appendLine("| | " + p.shots.joinToString(" | ") { it.example } + " |")
+        appendLine("|---|" + p.shots.joinToString("") { "---|" })
+        fun img(src: String?) = src?.let { "<img src=\"$it\" width=\"${(p.widthDp * PREVIEW_SCALE).coerceAtMost(PREVIEW_MAX)}\">" } ?: "–"
+        if (same) {
+          appendLine("| unchanged | " + p.shots.joinToString(" | ") { img(it.after) } + " |")
+        } else {
+          if (p.shots.any { it.before != null }) appendLine("| before | " + p.shots.joinToString(" | ") { img(it.before) } + " |")
+          appendLine("| after | " + p.shots.joinToString(" | ") { img(it.after) } + " |")
+        }
+        appendLine()
+      }
+    }
     for ((title, rules) in listOf("Designs" to r.designs, "Experiments and seasons" to r.experiments, "Placement rules" to r.placements)) {
       if (rules.isEmpty()) continue
       appendLine("**$title**")
@@ -411,5 +515,59 @@ object CompatibilityCheck {
       }
       appendLine()
     }
+    if (changed.isNotEmpty()) {
+      appendLine("<details><summary>Every changed template (${changed.size})</summary>")
+      appendLine()
+      for ((design, ts) in changed.groupBy { it.design }) {
+        for ((status, group) in ts.groupBy { it.status }) {
+          val list = group.joinToString(", ") { t ->
+            val bytes = if (t.status == "removed") "" else " ${kb(t.bytes)}" + (t.previousBytes?.takeIf { it != t.bytes }?.let { " (was ${kb(it)})" } ?: "")
+            "${t.target}$bytes"
+          }
+          appendLine("- `$design` $status: $list")
+        }
+      }
+      appendLine()
+      appendLine("</details>")
+      appendLine()
+    }
   }
+
+  private fun summary(r: Report, changed: List<TemplateReport>, touched: List<String>): String? {
+    val same = r.templates.size - changed.size
+    val parts = buildList {
+      if (touched.isNotEmpty()) add("${touched.size} design${if (touched.size == 1) "" else "s"} with template changes")
+      changed.groupingBy { it.status }.eachCount().entries.sortedBy { STATUS_ORDER.indexOf(it.key) }
+        .forEach { (s, n) -> add("${templates(n)} $s") }
+      if (same > 0) add("$same unchanged")
+      listOf(Triple(r.designs, "design", "designs"), Triple(r.experiments, "experiment or season", "experiments or seasons"),
+        Triple(r.placements, "placement rule", "placement rules"))
+        .forEach { (rules, one, many) -> if (rules.isNotEmpty()) add("${rules.size} ${if (rules.size == 1) one else many} changed") }
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+  }
+
+  private fun templates(n: Int) = "$n template${if (n == 1) "" else "s"}"
+
+  private fun kb(bytes: Long): String = if (bytes < 1000) "$bytes B" else "%.1f KB".format(java.util.Locale.ROOT, bytes / 1000.0)
+
+  private fun range(bytes: List<Long>): String? {
+    if (bytes.isEmpty()) return null
+    val lo = bytes.min(); val hi = bytes.max()
+    return if (lo == hi) kb(lo) else "${kb(lo).removeSuffix(" KB").removeSuffix(" B")}–${kb(hi)}"
+  }
+
+  /** The change in total size of a design's templates that existed before and after. */
+  private fun percent(ts: List<TemplateReport>): String {
+    val both = ts.filter { it.status == "changed" && it.previousBytes != null }
+    val was = both.sumOf { it.previousBytes!! }.takeIf { it > 0 } ?: return ""
+    val now = both.sumOf { it.bytes }
+    val p = Math.round((now - was) * 100.0 / was)
+    return if (p > 0) "+$p%" else if (p < 0) "−${-p}%" else "±0%"
+  }
+
+  private val HASH = Regex("[0-9a-f]{40}")
+  private val STATUS_ORDER = listOf("added", "changed", "removed", "unchanged")
+  private const val PREVIEW_SCALE = 1
+  private const val PREVIEW_MAX = 280
 }

@@ -20,9 +20,12 @@ application {
 }
 
 // Optional commands (LiveryCommand), shipped in the CLI's distribution but not in this library's
-// dependencies: `livery ui-builder …`.
+// dependencies: `livery ui-builder …`, and `livery review` (which brings the renderer).
 val cliExtensions: Configuration by configurations.creating { isCanBeConsumed = false }
-dependencies { cliExtensions(project(":livery-uibuilder")) }
+dependencies {
+  cliExtensions(project(":livery-uibuilder"))
+  cliExtensions(project(":livery-review"))
+}
 tasks.named<CreateStartScripts>("startScripts") { classpath = classpath!! + cliExtensions }
 distributions { main { contents { into("lib") { from(cliExtensions) } } } }
 tasks.withType<Sync>().configureEach { duplicatesStrategy = DuplicatesStrategy.EXCLUDE }

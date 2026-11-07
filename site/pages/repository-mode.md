@@ -14,7 +14,7 @@ catalog/                 the source tree (see Getting started)
   catalog.json
   contracts/  designs/  placements/  experiments/  seasons/  themes/
 .github/workflows/
-  catalog-review.yml     on pull requests: build, inspect, compare with the base, comment
+  catalog-review.yml     on pull requests: build, inspect, compare with the base, draw, comment
   catalog-publish.yml    on main: build, sign, release
 ```
 
@@ -22,9 +22,12 @@ catalog/                 the source tree (see Getting started)
    request.
 2. **Review**: Livery's review workflow builds the tree, decodes every template, compares it with
    the pull request's base, and posts one comment (updated on every push) with what the change
-   does: contract changes, templates added or changed (reads, emits, minor, size), designs
-   (install policy, revocation), experiments and seasons (schedule, allocation, arms) and
-   placement rules (every field that changed). It fails when the change would break installed
+   does: contract changes, templates added or changed summed up per design (reads, emits, minor,
+   size range), designs (install policy, revocation), experiments and seasons (schedule,
+   allocation, arms) and placement rules (every field that changed). A note that applies to many
+   templates is said once, with the designs it applies to, and every template is listed in a
+   collapsed section. With `previews: true` the comment also shows each changed design drawn with
+   its contract's examples, before and after. It fails when the change would break installed
    apps.
 3. Reviewers read the comment and the diff, and approve. Make the review job a required check, and
    put the tree under `CODEOWNERS` so the right people approve.
@@ -72,6 +75,8 @@ jobs:
 | `livery-version` | both | the Livery CLI release to run |
 | `inspect` | both | decode every template (`--inspect`); default `true` |
 | `comment` | review | post the report on the pull request; default `true` |
+| `previews` | review | draw each changed design before and after with its contract's examples; default `false`. Needs `contents: write` (below) |
+| `preview-size` | review | draw the templates covering this size, `<w>x<h>` in dp; default each design's largest |
 | `key-id` | publish | the key id apps trust |
 | `tag` | publish | a rolling release tag (below); empty for a new `catalog-<run>` release marked latest |
 
@@ -133,16 +138,64 @@ A season swaps the design a contract's slots draw, for everyone, between two dat
 - Ship the season's design ahead of time: apps download `Always` designs with the catalog, so on
   the day it switches without the network.
 
+## Pictures in the review
+
+`previews: true` draws, for each design the change adds, changes or removes, one of its templates
+with every example in its contract (up to four), before and after: the template covering
+`preview-size`, or the one with the largest smallest size, drawn at that size. The data is the
+contract's own examples, so the same picture means the same pixels: a design whose templates
+changed but draw the same (an optimisation) shows one row marked unchanged. Placeholders and
+documents that don't decode are listed as not drawn.
+
+The comment shows images from GitHub, so the workflow commits them, alone, to a branch of their
+own, `livery-previews/pr-<number>`, replaced on every push, and cites that commit. That needs
+`contents: write`:
+
+```yaml
+  review:
+    uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0, previews: true }
+    permissions: { contents: write, pull-requests: write }
+```
+
+Without it (or from a fork) the comment names the files instead, and the run's `livery-previews`
+artifact has them. Delete the branches of closed pull requests whenever you like.
+
+## Older preview data
+
+A contract's `examples` are the data every template is previewed, reviewed and verified with. When a
+change edits or drops one, the old data doesn't stop mattering: an installed app may still send data
+shaped like it. So it is kept, beside the contract, and every template stays checked with it:
+
+```
+contracts/
+  status-tile.json
+  examples/
+    status-tile/
+      on-1a2b3c4d.json     the data `on` had before, named by its hash
+```
+
+`livery check` fails while the base has example data that is neither in the contract (under any
+name) nor kept, and when a kept example no longer binds to the contract. Keep it with:
+
+```bash
+livery keep-examples catalog --against origin/main
+```
+
+Review pictures draw each kept example after the current ones, labelled `on (kept 1a2b3c4d)`, and
+`livery-verify` plays every launcher widget with them too. The catalog build ignores the folder:
+kept examples are for checking, not for apps.
+
 ## Review tools
 
 | Tool | |
 |---|---|
 | `livery check <src> --against origin/main --inspect` | the review report in a terminal; `--markdown` for a comment, `--json` for other tools |
+| `livery review <src> --against origin/main --previews <dir>` | the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in `<dir>` (`--image-base <url>` for where they will be served, `--size <w>x<h>` to choose the template) |
 | `livery build <src> <out> --inspect` | everything the publish would refuse |
+| `livery keep-examples <src> --against origin/main` | keeps the example data the base had that the tree no longer has (above) |
 | `livery-mcp` | the same checks and `render_preview` for agents, with `list_history` and previews at a revision (see [AI workflows](ai-workflows.md)) |
 
 ## Planned
 
-- Pictures in the review comment: each changed template rendered before and after with the
-  contract's examples.
 - Preview channels per pull request, for a debug build to play before merging.

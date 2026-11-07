@@ -1,0 +1,34 @@
+{
+  "id": "cadence/headphone-controls", "major": 1, "title": "Headphone controls widget", "dataSource": "App",
+  "inputs": {
+    "title": { "type": "string", "required": true, "maxLength": 80, "description": "What is happening now: the track, playing from the headset, or not connected" },
+    "short_title": { "type": "string", "required": true, "maxLength": 24, "description": "The title in a word or two, for narrow one-row slots" },
+    "detail": { "type": "string", "maxLength": 80, "description": "What the user checks at a glance: the artist, or battery and playtime" },
+    "extra": { "type": "string", "maxLength": 80, "description": "Settings that rarely change: EQ, volume, playback order" },
+    "has_detail": { "type": "bool", "default": false },
+    "has_extra": { "type": "bool", "default": false },
+    "playing": { "type": "bool", "default": false, "description": "Shows Pause (and moving water in MP3 mode) instead of Play" },
+    "mode": { "type": "int", "min": 0, "max": 2, "default": 0, "description": "0: no mode switch; 1: switch to MP3; 2: switch to Bluetooth (MP3 mode, water styling)" },
+    "theme.background": { "type": "color", "role": "background" },
+    "theme.on_background": { "type": "color", "role": "onBackground" },
+    "theme.supporting": { "type": "color", "role": "onSurfaceVariant" },
+    "theme.tonal": { "type": "color", "role": "secondaryContainer" },
+    "theme.on_tonal": { "type": "color", "role": "onSecondaryContainer" },
+    "theme.primary": { "type": "color", "role": "primary" },
+    "theme.on_primary": { "type": "color", "role": "onPrimary" }
+  },
+  "actions": {
+    "open": { "kind": "app:open" },
+    "previous": { "kind": "app:headphones" },
+    "play": { "kind": "app:headphones" },
+    "pause": { "kind": "app:headphones" },
+    "next": { "kind": "app:headphones" },
+    "mode_mp3": { "kind": "app:headphones" },
+    "mode_bluetooth": { "kind": "app:headphones" }
+  },
+  "examples": {
+    "bluetooth": { "title": "Kanzi", "short_title": "Kanzi", "detail": "Swim playlist", "has_detail": true, "extra": "Bluetooth · Battery 80%", "has_extra": true, "playing": true, "mode": 1 },
+    "mp3": { "title": "Playing from headphones", "short_title": "Playing", "detail": "Battery 62% · 5 h left", "has_detail": true, "extra": "Shuffle · Pop EQ · Volume 60%", "has_extra": true, "playing": true, "mode": 2 },
+    "disconnected": { "title": "Headphones not connected", "short_title": "Not connected", "playing": false, "mode": 0 }
+  }
+}

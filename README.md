@@ -46,11 +46,13 @@ Early. In this repository today:
 | `livery-sentry` | `SentryBreadcrumbEventSink`: Livery events as Sentry breadcrumbs, and Sentry's tag on each slot |
 | `livery-amplitude` | `AmplitudeAnalyticsSink`: Livery events in Amplitude, arms as user properties |
 | `livery-notifications` | `LiveryNotifications`: notification bodies (Android 16+) from Livery templates, with taps through `LiveryNotificationReceiver` |
-| `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, `check` a change against what is published (`--markdown` for a pull request), and `import` a document from any authoring tool. Repository mode: reusable `catalog-review` / `catalog-publish` workflows run a catalog from a GitHub repository alone |
+| `livery-publish` | `livery` CLI: validate a source tree (`--inspect` reads every document), write a static or GitHub-release catalog, sign, verify, `check` a change against what is published (`--markdown` for a pull request; `review` adds before and after pictures), and `import` a document from any authoring tool. Repository mode: reusable `catalog-review` / `catalog-publish` workflows run a catalog from a GitHub repository alone |
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player |
 | `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
 | `livery-capture` | author templates in Compose: contract-typed named values (`LiveryValues`), capture per target, and a design folder a unit test writes or checks |
 | `livery-uibuilder` | optional: Compose UI Builder as an authoring tool: `livery ui-builder scaffold` / `import`, and `ui_builder_*` tools for `livery-mcp` |
+| `livery-review` | `livery review`: the pull request report with each changed design drawn before and after with its contract's examples (a CLI extension that brings `livery-render`) |
+| `livery-verify` | tests: plays every launcher widget template, with each contract example, on Android 16's own widget player under Robolectric, and fails on what a home screen would show as an error |
 | `livery-gradle-plugin` | `ee.schimke.composeai.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
 | `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |

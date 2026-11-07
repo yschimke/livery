@@ -10,6 +10,11 @@ name: Livery catalog review
 #       uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
 #       with: { source: catalog, livery-version: 0.3.0 }
 #       permissions: { contents: read, pull-requests: write }
+#
+# With `previews: true` the comment also shows each changed design drawn with its contract's
+# examples, before and after. The images go to a branch of their own (`livery-previews/pr-<n>`, one
+# commit, replaced on each push) so the comment can show them from GitHub, which needs
+# `contents: write`.
 on:
   workflow_call:
     inputs:
@@ -33,6 +38,14 @@ on:
         description: Post the report as a comment on the pull request (updated on each push).
         type: boolean
         default: true
+      previews:
+        description: Draw each changed design before and after with its contract's examples (needs contents write).
+        type: boolean
+        default: false
+      preview-size:
+        description: Draw the templates covering this size, <w>x<h> in dp; empty for each design's largest.
+        type: string
+        default: ''
 
 # The caller grants the token's permissions (a called job can't widen them): contents: read and
 # pull-requests: write to review, contents: write to publish.
@@ -70,28 +83,84 @@ jobs:
           fi
           chmod +x "$cli/bin/livery"
           echo "LIVERY=$cli/bin/livery" >> "$GITHUB_ENV"
+      - name: Renderer libraries
+        if: ${{ inputs.previews }}
+        # Skia links libGL and fontconfig; runner images usually have both.
+        run: |
+          if ! ldconfig -p | grep -q libGL.so.1 || ! ldconfig -p | grep -q libfontconfig.so.1; then
+            sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libgl1 libfontconfig1
+          fi
       - name: Check against the base
         id: check
         env:
           SOURCE: ${{ inputs.source }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           INSPECT: ${{ inputs.inspect && '--inspect' || '' }}
+          PREVIEWS: ${{ inputs.previews }}
+          PREVIEW_SIZE: ${{ inputs.preview-size }}
         run: |
           against="$BASE"
           if [ -z "$against" ] || [ -z "${against//0/}" ] || ! git cat-file -e "$against^{commit}" 2>/dev/null; then
             against="$(git rev-parse HEAD^ 2>/dev/null || true)"
           fi
-          set +e
-          if [ -n "$against" ]; then
-            "$LIVERY" check "$SOURCE" --against "$against" $INSPECT --markdown > "$RUNNER_TEMP/review.md"
-          else
+          if [ -z "$against" ]; then
             mkdir -p "$RUNNER_TEMP/empty"
-            "$LIVERY" check "$SOURCE" --against "$RUNNER_TEMP/empty" $INSPECT --markdown > "$RUNNER_TEMP/review.md"
+            against="$RUNNER_TEMP/empty"
+          fi
+          set +e
+          if [ "$PREVIEWS" = "true" ]; then
+            # Image paths start with a placeholder until the images have somewhere to live.
+            "$LIVERY" review "$SOURCE" --against "$against" $INSPECT --previews "$RUNNER_TEMP/previews" \
+              --image-base '@@LIVERY_PREVIEWS@@/' ${PREVIEW_SIZE:+--size "$PREVIEW_SIZE"} > "$RUNNER_TEMP/review.md"
+          else
+            "$LIVERY" check "$SOURCE" --against "$against" $INSPECT --markdown > "$RUNNER_TEMP/review.md"
           fi
           code=$?
           set -e
-          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Publish the previews
+        if: ${{ inputs.previews && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        id: previews
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          dir="$RUNNER_TEMP/previews"
+          if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then exit 0; fi
+          # One commit holding only the images, on a branch of their own; the comment cites it by hash.
+          export GIT_DIR="$RUNNER_TEMP/previews-repo/.git" GIT_WORK_TREE="$dir"
+          git init -q "$RUNNER_TEMP/previews-repo"
+          git add -A
+          tree="$(git write-tree)"
+          sha="$(GIT_AUTHOR_NAME='github-actions[bot]' GIT_AUTHOR_EMAIL='41898282+github-actions[bot]@users.noreply.github.com' \
+            GIT_COMMITTER_NAME='github-actions[bot]' GIT_COMMITTER_EMAIL='41898282+github-actions[bot]@users.noreply.github.com' \
+            git commit-tree "$tree" -m "Livery previews for #$PR")"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" push -q -f "https://github.com/$REPO.git" "$sha:refs/heads/livery-previews/pr-$PR"
+          echo "base=https://raw.githubusercontent.com/$REPO/$sha" >> "$GITHUB_OUTPUT"
+      - name: Report
+        env:
+          BASE_URL: ${{ steps.previews.outputs.base }}
+        run: |
+          if grep -q '@@LIVERY_PREVIEWS@@' "$RUNNER_TEMP/review.md"; then
+            if [ -n "$BASE_URL" ]; then
+              sed -i "s#@@LIVERY_PREVIEWS@@#$BASE_URL#g" "$RUNNER_TEMP/review.md"
+            else
+              # Nowhere to show them from (a fork, or no contents: write): the run's artifact has them.
+              sed -i -E 's#<img src="@@LIVERY_PREVIEWS@@/([^"]+)"[^>]*>#`\1`#g' "$RUNNER_TEMP/review.md"
+              printf '\n_The images are in this run'"'"'s `livery-previews` artifact._\n' >> "$RUNNER_TEMP/review.md"
+            fi
+          fi
+          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the previews
+        if: ${{ inputs.previews }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: livery-previews
+          path: ${{ runner.temp }}/previews
+          if-no-files-found: ignore
       - name: Comment on the pull request
         if: ${{ inputs.comment && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         env:

@@ -76,6 +76,36 @@ val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf("widgets"),
 TemplateRepository(..., targets = listOf(inApp, launcher))
 ```
 
+## 4. Fail the build when the launcher would show an error
+
+Android 16's widget player doesn't let a template's exception out: it catches it while drawing,
+disables itself and draws a red warning sign, on someone's home screen. `livery-verify` plays every
+launcher template in the catalog, with each of its contract's examples and the older preview data
+the catalog keeps (see [Repository mode](../repository-mode.md#older-preview-data)), on that player under
+Robolectric, and reports each one that crashes, that the player refuses, or that can't be written
+for a widget:
+
+```kotlin
+// testImplementation("ee.schimke.composeai:livery-verify:<version>"), with Robolectric
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36])
+class LauncherWidgetsPlayTest {
+  @Test fun everyTemplatePlaysOnAndroid16() = runBlocking {
+    val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+    val failures = WidgetCatalogCheck.launcherWidgets(activity, File("src/main/livery"), maxBytes = 500_000)
+    assertEquals(emptyList(), failures)
+  }
+}
+```
+
+A failure names the design, the template, the example and the exception, such as
+`crashed while drawing: RuntimeException: FloatExpression[63] = ([A_46] 24.0 / ) len = 3`, the
+text Android 16 shows. `PlatformWidgetPlayer.play` plays one document. Robolectric runs Android 16
+on Java 21 only; on JDK 17 and later it also needs
+`--add-opens=java.base/java.io=ALL-UNNAMED --add-exports=java.base/jdk.internal.access=ALL-UNNAMED`
+on the test JVM.
+
 ## Deployment checklist
 
 - [ ] A `launcher-widget` template per design and size tier; its instantiated document inside
@@ -83,6 +113,8 @@ TemplateRepository(..., targets = listOf(inApp, launcher))
 - [ ] Taps that open the app go through `tapIntent` as activities.
 - [ ] The launcher in the repository's `targets`.
 - [ ] A `RemoteViews` fallback for Android 15 and older, and for failures.
+- [ ] `WidgetCatalogCheck.launcherWidgets` in a test, so a template the launcher can't play fails
+      the build.
 - [ ] `updateAll` on data and catalog changes.
 - [ ] Images through `ImageResolver`; the widget can load nothing itself.
 
