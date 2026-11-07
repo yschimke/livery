@@ -28,6 +28,7 @@ val published = mapOf(
   ":livery-protocol" to ("Livery protocol" to "Wire types for server-driven Remote Compose templates: manifests, contracts, designs, targets, decisions, feeds, events"),
   ":livery-client" to ("Livery client" to "Fetch, verify, cache, select and bind Remote Compose templates: Kotlin Multiplatform"),
   ":livery-compose" to ("Livery Compose" to "LiveryTemplate and LiverySlot over rc-players' Compose player: Compose Multiplatform"),
+  ":livery-compose-material3" to ("Livery Compose Material 3" to "A Material 3 ColorScheme as Livery theme roles: Compose Multiplatform"),
   ":livery-catalog" to ("Livery catalog" to "Build, check and preview Livery catalogs from a source tree, with no file system: Kotlin Multiplatform"),
   ":livery-a2ui" to ("Livery A2UI" to "Livery contracts as A2UI components: their catalog schema, and the datasets and events that cross between A2UI and Livery"),
   ":livery-web" to ("Livery web" to "Livery's A2UI pipeline for the web, compiled to Wasm with a JSON API for JavaScript: what @livery/a2ui draws with"),
