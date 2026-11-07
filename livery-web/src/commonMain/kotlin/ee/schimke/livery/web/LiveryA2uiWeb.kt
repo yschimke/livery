@@ -18,7 +18,6 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.protocol.NamedValue
-import ee.schimke.livery.protocol.ValueType
 import ee.schimke.livery.instantiate.Admission
 import ee.schimke.livery.instantiate.CachedImages
 import ee.schimke.livery.instantiate.ImageRequest
@@ -151,8 +150,12 @@ class LiveryA2uiWeb(
     // What a playing document can't take as a named value is written in; the rest stays live.
     val written = Bindings(plan.bindings.values.filterValues { it is NamedValue.Image || it is NamedValue.L })
     val live = plan.bindings.values.filterValues { it !is NamedValue.Image && it !is NamedValue.L }.mapValues { (_, v) -> playerValue(v) }
-    val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" }
-    val draws = written.values.isNotEmpty() || contract.inputs.values.any { it.type == ValueType.Image }
+    // The names bound are part of the key: a value left out reloads the document, so it draws the
+    // template's own default instead of keeping the last value set.
+    val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" } +
+      "|" + live.keys.sorted().joinToString(",")
+    // Any image the document draws is written in: the web player draws none from a URL.
+    val draws = written.values.isNotEmpty() || drawsImages(plan.template.entry.sha256, plan.template.bytes)
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
@@ -239,6 +242,11 @@ class LiveryA2uiWeb(
     ActionRouter(kinds.associateWith { route }, urlAllowlist, events, clock).dispatch(state.plan, name, args)
     return routed ?: Routed.Dropped(ActionGate.check(contract, name, args).problem ?: "not handled")
   }
+
+  private val imagesBySha = HashMap<String, Boolean>()
+
+  private fun drawsImages(sha256: String, template: ByteArray): Boolean =
+    imagesBySha.getOrPut(sha256) { runCatching { TemplateInstantiator.bitmapUrls(template).isNotEmpty() }.getOrDefault(true) }
 
   /** A named value as the web player sets it: booleans as 1 or 0, colours as `#AARRGGBB`. */
   private fun playerValue(v: NamedValue): JsonElement = when (v) {

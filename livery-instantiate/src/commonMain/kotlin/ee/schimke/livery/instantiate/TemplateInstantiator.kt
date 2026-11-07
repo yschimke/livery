@@ -133,6 +133,9 @@ class TemplateInstantiator(
   companion object {
     const val VALUE_PREFIX: String = "livery:value/"
 
+    /** The bitmap URLs a template draws (`livery:value/<input>`, `asset:`, `https://`, `app:`). */
+    fun bitmapUrls(template: ByteArray): List<String> = RcDocumentCodec.decode(template, RcWireLimits()).bitmapUrls.distinct()
+
     /** The named values a template reads (without the `USER:` domain), e.g. to check a contract. */
     fun reads(template: ByteArray): Set<String> =
       RcDocumentCodec.decode(template, RcWireLimits()).namedVariables.map { it.name.removePrefix("USER:") }.toSet()

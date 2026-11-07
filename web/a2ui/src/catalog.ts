@@ -103,6 +103,8 @@ function propertySchema(p: LiveryPropertySpec): z.ZodTypeAny {
 }
 
 const DYNAMIC = new Set(['DynamicString', 'DynamicNumber', 'DynamicBoolean', 'DynamicValue']);
+const DESIGN = 'design';
+const TEMPLATE = 'template';
 
 /** Every Livery component's element: what it draws comes from its catalog entry ([LiveryComponentApi]). */
 class LiveryElement extends A2uiLitElement {
@@ -118,6 +120,9 @@ class LiveryElement extends A2uiLitElement {
     private request = '';
     private fallback?: string;
     private sequence = 0;
+    /** The agent's design failed to play: render the automatic choice instead, until the props change. */
+    private automatic = false;
+    private automaticFor?: string;
     private shownKey?: string;
     private resize?: ResizeObserver;
     private widthDp = 0;
@@ -187,6 +192,11 @@ class LiveryElement extends A2uiLitElement {
       // One player per element, for as long as the element lives: its document stays and values move.
       this.player ??= new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
       const props = this.props(spec);
+      // After the chosen design failed to play, this element renders the automatic choice, until
+      // the agent changes the component.
+      const asked = JSON.stringify(props);
+      if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
+      if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
       const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this) };
       const request = JSON.stringify([props, space]);
@@ -197,7 +207,8 @@ class LiveryElement extends A2uiLitElement {
       if (mine !== this.sequence) return; // a newer render is on its way
       if (!r.ok && r.waiting) {
         // An image isn't on the device: fetch it off the render path, then render again. Not the agent's problem.
-        if (await session.fetchImages()) { this.request = ''; this.requestUpdate(); }
+        session.whenImagesArrive(() => { this.request = ''; this.requestUpdate(); });
+        void session.fetchImages();
         return;
       }
       if (!r.ok) {
@@ -218,8 +229,19 @@ class LiveryElement extends A2uiLitElement {
         if (first || this.shownKey !== r.documentKey) session.shown(r.render);
         this.shownKey = r.documentKey;
       } catch (e) {
-        options.onProblem?.(spec.name, `the player could not play ${r.design}: ${(e as Error).message}`);
         this.player.forget();
+        const reason = `the player could not play ${r.design}: ${(e as Error).message}`;
+        options.onProblem?.(spec.name, reason);
+        // A chosen design that can't play falls back to the automatic choice, never to nothing. The
+        // agent's own document is never replaced (PROTOCOL.md §5.3): its fallback is the page's.
+        if (props[DESIGN] !== undefined && props[TEMPLATE] === undefined && !this.automatic) {
+          this.automatic = true;
+          this.request = '';
+          this.requestUpdate();
+        } else {
+          this.fallback = reason;
+          this.requestUpdate();
+        }
       }
       if (previous !== undefined) session.release(previous);
     }

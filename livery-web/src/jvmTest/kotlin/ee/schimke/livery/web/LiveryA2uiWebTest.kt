@@ -13,6 +13,7 @@ import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.instantiate.AgentBytesPolicy
 import ee.schimke.livery.instantiate.DocumentAdmission
 import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.instantiate.TemplateInstantiator
 import ee.schimke.livery.client.RedirectingFetcher
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
@@ -185,5 +186,39 @@ class LiveryA2uiWebTest {
     assertIs<LiveryA2uiWeb.Routed.Agent>(web.action(first.id, "cta", "string", """{"route":"/a"}"""), "no plan is dropped while its render is on screen")
     web.release(first.id)
     assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(first.id, "cta", "string", """{"route":"/a"}"""))
+  }
+
+  @Test fun aValueLeftOutReloadsTheDocumentSoItDrawsItsDefault() = runTest {
+    val web = web()
+    val withBody = web.render("PromoBanner", JsonObject(promo + ("body" to JsonPrimitive("Ends Sunday")))) as LiveryA2uiWeb.Rendered.Ready
+    val without = web.render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    assertTrue(withBody.documentKey != without.documentKey, "the playing document would keep the old body otherwise")
+    val again = web.render("PromoBanner", JsonObject(promo + ("headline" to JsonPrimitive("Summer sale")))) as LiveryA2uiWeb.Rendered.Ready
+    assertEquals(without.documentKey, again.documentKey, "a changed value is still only a value")
+  }
+
+  @Test fun aStaticImageIsWrittenInEvenWithNoImageInput() = runTest {
+    // A quantity document (no image input) that draws a fixed https image.
+    val chosen = web().render("ShopQuantity", props("""{"name":"Socks"}""")) as LiveryA2uiWeb.Rendered.Ready
+    val plain = built.files.entries.first { it.key.contains(chosen.sha256) }.value
+    val d = RcDocumentCodec.decode(plain, RcWireLimits())
+    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "https://img.example/logo.png".encodeToByteArray())) + d.operations))
+    val fetched = mutableListOf<String>()
+    val fetcher = object : RedirectingFetcher {
+      override suspend fun get(url: String, etag: String?) = get(url, etag, Long.MAX_VALUE) { false }
+      override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult {
+        fetched += url
+        return FetchResult.Ok(File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes(), null)
+      }
+    }
+    val web = web(
+      DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("shop/"), maxBytes = 1 shl 20)),
+      ImageResolver(repository, fetcher, JavaCrypto, directHosts = setOf("img.example")),
+    )
+    val p = props("""{"name":"Socks","template":{"inline":"${Base64.encode(withImage)}"}}""")
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("ShopQuantity", p), "the web player draws no image from a URL, so it is fetched and written in")
+    assertTrue(web.fetchImages())
+    val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", p))
+    assertTrue(TemplateInstantiator.bitmapUrls(ready.document).none { it.startsWith("https://") }, "the image is in the document now")
   }
 }

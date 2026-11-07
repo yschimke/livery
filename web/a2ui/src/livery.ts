@@ -117,9 +117,28 @@ export class LiverySession {
     return r.ok ? { ...r, document: base64ToBytes(r.document) } : r;
   }
 
-  /** Fetches the images a render was waiting for (`waiting: true`), off the render path; true when all arrived. */
-  async fetchImages(): Promise<boolean> {
-    return String(await this.lib.liveryFetchImages(this.id)) === 'true';
+  private fetching: Promise<unknown> = Promise.resolve();
+  private readonly waiting = new Set<() => void>();
+
+  /**
+   * Fetches the images renders were waiting for (`waiting: true`), off the render path, then calls
+   * every [whenImagesArrive] callback, whichever render asked: the session's misses are one queue,
+   * so one fetch can bring another component's image. Fetches run one after another.
+   */
+  fetchImages(): Promise<void> {
+    this.fetching = this.fetching.then(async () => {
+      const arrived = String(await this.lib.liveryFetchImages(this.id)) === 'true';
+      if (!arrived) return;
+      const callbacks = [...this.waiting];
+      this.waiting.clear();
+      callbacks.forEach((c) => c());
+    }).catch(() => {});
+    return this.fetching as Promise<void>;
+  }
+
+  /** [callback] runs once, the next time a fetch brings images: render again then. */
+  whenImagesArrive(callback: () => void): void {
+    this.waiting.add(callback);
   }
 
   shown(render: number): void {
