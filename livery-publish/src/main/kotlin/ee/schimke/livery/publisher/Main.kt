@@ -100,10 +100,7 @@ fun main(args: Array<String>) {
         val src = File(a.getOrNull(1) ?: usage())
         val checked = CompatibilityCheck.check(src, opt("--against") ?: usage(), inspect = "--inspect" in a)
         // A template gaining a risky feature is a note by default; a catalog that admits none fails on it.
-        val report = if ("--deny-new-features" !in a) checked else checked.copy(
-          problems = checked.problems + checked.templates.filter { it.featuresAdded.isNotEmpty() }
-            .map { "${it.design} ${it.target}: gains ${it.featuresAdded.joinToString()} (--deny-new-features)" },
-        )
+        val report = if ("--deny-new-features" in a) CompatibilityCheck.denyNewFeatures(checked) else checked
         if ("--json" in a) println(Json { prettyPrint = true; encodeDefaults = false }.encodeToString(CompatibilityCheck.Report.serializer(), report))
         else if ("--markdown" in a) print(CompatibilityCheck.markdown(report))
         else print(CompatibilityCheck.text(report))

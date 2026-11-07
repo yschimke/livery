@@ -389,6 +389,15 @@ object CompatibilityCheck {
    * across a design's templates are said once, and every template is listed in a collapsed section.
    * [previews] adds before and after images.
    */
+  /**
+   * [r] for a catalog that admits no new risky features (`livery check --deny-new-features`): a
+   * template that gains one, a reviewer note otherwise, is a problem.
+   */
+  fun denyNewFeatures(r: Report): Report = r.copy(
+    problems = r.problems + r.templates.filter { it.featuresAdded.isNotEmpty() }
+      .map { "${it.design} ${it.target}: gains ${it.featuresAdded.joinToString()} (--deny-new-features)" },
+  )
+
   fun markdown(r: Report, previews: List<DesignPreview> = emptyList()): String = buildString {
     val against = r.against.takeUnless { HASH.matches(it) } ?: r.against.take(7)
     appendLine("### Livery check against `$against`: ${if (r.ok) "compatible" else "**not compatible**"}")

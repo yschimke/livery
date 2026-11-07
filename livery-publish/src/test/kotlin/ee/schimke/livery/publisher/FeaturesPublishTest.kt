@@ -8,6 +8,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -44,6 +45,9 @@ class FeaturesPublishTest {
     assertTrue(t.notes.any { "shaders" in it }, t.notes.toString())
     assertTrue(r.warnings.any { "tile-default" in it && "shaders" in it })
     assertTrue(r.ok, "a note, not a problem: --deny-new-features makes it one")
+    val denied = CompatibilityCheck.denyNewFeatures(r)
+    assertFalse(denied.ok, "--deny-new-features fails on it")
+    assertTrue(denied.problems.any { "tile-default" in it && "shaders" in it }, denied.problems.toString())
     assertTrue(CompatibilityCheck.compare(tree, tree, "itself").templates.all { it.featuresAdded.isEmpty() }, "an unchanged feature isn't noted again")
   }
 }
