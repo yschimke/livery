@@ -31,6 +31,14 @@ class CatalogImagesTest {
     assertNull(CatalogImages(catalog, Bindings(emptyMap())).load(url("livery:value/hero")), "no value, no image")
   }
 
+  @Test fun aTemplatesFontsComeFromTheCatalog() {
+    val banner = catalog.manifest.templates.single { it.designId == "banner-bold" }
+    val fonts = CatalogFonts.forTemplate(catalog, banner)
+    kotlin.test.assertTrue("Placeholder Sans" in fonts.families, fonts.families.toString())
+    val tile = catalog.manifest.templates.first { it.designId == "tile-default" }
+    kotlin.test.assertTrue("Placeholder Sans" !in CatalogFonts.forTemplate(catalog, tile).families)
+  }
+
   @Test fun anAssetTheCatalogLacksDrawsNothing() = runBlocking {
     assertNull(CatalogImages(catalog, Bindings(emptyMap())).load(url("asset:" + "0".repeat(64))))
   }

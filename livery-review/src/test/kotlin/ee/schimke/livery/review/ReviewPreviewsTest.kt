@@ -85,6 +85,26 @@ class ReviewPreviewsTest {
     assertEquals(180 to 90, tile.widthDp to tile.heightDp)
   }
 
+  @Test fun eachSideBindsWithItsOwnContract() {
+    // The template is unchanged, a contract default isn't: the before is drawn with the old one.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/launcher.rc").writeText("changed placeholder")
+    File(tree, "contracts/status-tile.json").let { f ->
+      f.writeText(f.readText().replace("\"available\": { \"type\": \"bool\", \"default\": true }", "\"available\": { \"type\": \"bool\", \"default\": false }"))
+    }
+    val c = CompatibilityCheck.compareTrees(tree, sample, "main")
+    val tile = ReviewPreviews(temp("previews")).render(c).single { it.design == "tile-default" }
+    assertNull(tile.failure, tile.toString())
+    assertTrue(tile.shots.all { it.before!!.endsWith(".before.png") }, "drawn on its own, not reused: $tile")
+  }
+
+  @Test fun theSameTemplateAndContractDrawOnce() {
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/launcher.rc").writeText("changed placeholder")
+    val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
+    assertTrue(tile.shots.all { it.before == it.after && it.unchanged }, tile.toString())
+  }
+
   @Test fun anUnchangedTreeDrawsNothing() {
     val copy = temp("copy").also { sample.copyRecursively(it) }
     assertEquals(emptyList(), ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(sample, copy)))

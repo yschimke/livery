@@ -1,6 +1,7 @@
 package ee.schimke.livery.review
 
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
+import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ContractBinder
@@ -30,7 +31,8 @@ class ReviewPreviews(
   private val size: Pair<Int, Int>? = null,
   private val density: Float = 2f,
   private val maxExamples: Int = 4,
-  private val render: (ByteArray, Bindings, RenderSpec, RcImageLoader) -> ByteArray = { rc, b, spec, images -> TemplateRenderer.png(rc, b, spec, images) },
+  private val render: (ByteArray, Bindings, RenderSpec, RcImageLoader, RcTypefaceLoader) -> ByteArray =
+    { rc, b, spec, images, fonts -> TemplateRenderer.png(rc, b, spec, images, fonts) },
 ) {
   fun render(c: CompatibilityCheck.Comparison): List<DesignPreview> {
     out.mkdirs()
@@ -57,28 +59,37 @@ class ReviewPreviews(
     if (examples.isEmpty()) return DesignPreview(design, describe(chosen), w, h, emptyList(), "${contract.ref} has no examples")
     val spec = runCatching { RenderSpec(w, h, density) }.getOrElse { return DesignPreview(design, describe(chosen), w, h, emptyList(), "size out of range") }
     return try {
+      val beforeContract = b?.let { (t, output) -> contract(output, t) }
+      val afterContract = a?.let { (t, output) -> contract(output, t) }
       val shots = examples.map { (name, data) ->
-        val bindings = when (val r = ContractBinder.bind(contract, data)) {
+        // Each side binds the example with its own tree's contract: a changed default draws as it was.
+        fun bindings(c: Contract?): Bindings? = when (val r = c?.let { ContractBinder.bind(it, it.examples[name] ?: data) }) {
+          null -> null
           is BindResult.Ok -> r.bindings
-          is BindResult.Invalid -> return DesignPreview(design, describe(chosen), w, h, emptyList(), "example '$name' doesn't bind: ${r.problems.map { it.name }}")
+          is BindResult.Invalid -> throw NotBound("example '$name' doesn't bind to ${c.ref}: ${r.problems.map { it.name }}")
         }
-        fun draw(pair: Pair<TemplateEntry, CatalogBuilder.Output>?, side: String): ByteArray? {
+        fun draw(pair: Pair<TemplateEntry, CatalogBuilder.Output>?, c: Contract?, side: String): ByteArray? {
           val (t, output) = pair ?: return null
+          val bound = bindings(c) ?: return null
           val rc = output.files["blobs/${t.sha256}.rc"] ?: return null
-          return render(rc, bindings, spec, CatalogImages(output, bindings)).also { File(out, file(design, name, side)).writeBytes(it) }
+          return render(rc, bound, spec, CatalogImages(output, bound), CatalogFonts.forTemplate(output, t))
+            .also { File(out, file(design, name, side)).writeBytes(it) }
         }
-        val after = draw(a, "after")
-        // The same template on both sides draws the same: render it once.
-        val unchangedTemplate = a != null && b != null && a.first.sha256 == b.first.sha256
-        val before = if (unchangedTemplate) after else draw(b, "before")
+        val after = draw(a, afterContract, "after")
+        // The same template, contract and assets on both sides draw the same: render it once.
+        val same = a != null && b != null && a.first.sha256 == b.first.sha256 && beforeContract == afterContract &&
+          a.first.assets.all { sha -> asset(a.second, sha).contentEqualsOrNull(asset(b.second, sha)) }
+        val before = if (same) after else draw(b, beforeContract, "before")
         DesignPreview.Shot(
           example = name,
-          before = before?.let { url(design, name, if (unchangedTemplate) "after" else "before") },
+          before = before?.let { url(design, name, if (same) "after" else "before") },
           after = after?.let { url(design, name, "after") },
           unchanged = before != null && after != null && before.contentEquals(after),
         )
       }
       DesignPreview(design, describe(chosen), w, h, shots)
+    } catch (e: NotBound) {
+      DesignPreview(design, describe(chosen), w, h, emptyList(), e.message)
     } catch (e: Throwable) {
       val link = generateSequence(e) { it.cause }.firstOrNull { it is UnsatisfiedLinkError }
       DesignPreview(design, describe(chosen), w, h, emptyList(),
@@ -95,6 +106,9 @@ class ReviewPreviews(
   private fun pick(templates: List<TemplateEntry>): TemplateEntry? =
     if (size != null) templates.firstOrNull { it.target.size.covers(size.first, size.second) }
     else templates.maxWithOrNull(compareBy({ (it.target.size.minWidthDp ?: 0) * (it.target.size.minHeightDp ?: 0) }, { it.target.rcApiLevel }))
+
+  private fun ByteArray?.contentEqualsOrNull(other: ByteArray?): Boolean =
+    if (this == null || other == null) this == other else contentEquals(other)
 
   private fun contract(output: CatalogBuilder.Output, t: TemplateEntry): Contract? =
     output.manifest.contracts.filter { it.ref == t.contract }.maxByOrNull { it.minor }
@@ -122,6 +136,8 @@ class ReviewPreviews(
       append(" ${s.minWidthDp ?: 0}-${s.maxWidthDp ?: "max"}x${s.minHeightDp ?: 0}-${s.maxHeightDp ?: "max"}dp")
     }
   }
+
+  private class NotBound(override val message: String) : Exception(message)
 
   private companion object {
     const val DEFAULT_W = 360

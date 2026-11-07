@@ -28,8 +28,11 @@ internal class CatalogImages(
       (bindings.values[url.removePrefix(LiveryImageLoader.VALUE_PREFIX)] as? NamedValue.Image)?.ref ?: return null
     } else url
     val sha = ref.removePrefix("asset:").takeIf { it != ref } ?: return fallback.load(bitmap)
-    val bytes = catalog.files.entries.firstOrNull { (path, _) -> path.substringAfterLast('/').substringBefore('.') == sha }?.value
-      ?: return null
+    val bytes = asset(catalog, sha) ?: return null
     return runCatching { Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
   }
 }
+
+/** An asset's bytes in a built catalog, by its hash (files are named `<sha256>.<ext>`). */
+internal fun asset(catalog: CatalogBuilder.Output, sha256: String): ByteArray? =
+  catalog.files.entries.firstOrNull { (path, _) -> path.startsWith("assets/") && path.substringAfterLast('/').substringBefore('.') == sha256 }?.value
