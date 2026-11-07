@@ -29,12 +29,14 @@ private const val USAGE = """livery — build, sign and check a template catalog
                                        keeps the example data the base had that the tree no longer
                                        has, under contracts/examples/, so templates stay checked
                                        with it (livery check fails until it is kept)
-  livery check <src> --against <rev|dir> [--inspect] [--json | --markdown]
+  livery check <src> --against <rev|dir> [--inspect] [--deny-new-features] [--json | --markdown]
                                        compares <src> with a git revision of its repository (e.g.
                                        origin/main) or another source tree: contract changes,
                                        template reads, emits, types and the minor they require,
                                        experiments, seasons and placement rules (--markdown for a
-                                       pull request comment); exits 1 when something isn't compatible
+                                       pull request comment); exits 1 when something isn't compatible,
+                                       or, with --deny-new-features, when a template gains a risky
+                                       feature (shaders, haptics, sound, particles…)
   livery verify <out> --pub <file> --key-id <id>
   livery sign-template <doc.rc> --contract <id@major> --key <file> --key-id <id>
                                        signs one document to play as that contract, for sending
@@ -96,7 +98,9 @@ fun main(args: Array<String>) {
       }
       "check" -> {
         val src = File(a.getOrNull(1) ?: usage())
-        val report = CompatibilityCheck.check(src, opt("--against") ?: usage(), inspect = "--inspect" in a)
+        val checked = CompatibilityCheck.check(src, opt("--against") ?: usage(), inspect = "--inspect" in a)
+        // A template gaining a risky feature is a note by default; a catalog that admits none fails on it.
+        val report = if ("--deny-new-features" in a) CompatibilityCheck.denyNewFeatures(checked) else checked
         if ("--json" in a) println(Json { prettyPrint = true; encodeDefaults = false }.encodeToString(CompatibilityCheck.Report.serializer(), report))
         else if ("--markdown" in a) print(CompatibilityCheck.markdown(report))
         else print(CompatibilityCheck.text(report))
