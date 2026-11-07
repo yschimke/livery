@@ -336,7 +336,9 @@ required and checked as that input is checked by binding (§4.1: type, `min`, `m
 client passes it on as `true` or `false`. A publisher must refuse a `set` without an `input`, one
 whose `input` breaks these rules or that declares `args`, and an `input` on any other kind.
 
-The document computes `value` when tapped, so it needs no state of its own: a stepper's `+` sends
+A `set`'s text value is its `value` exactly as sent, never read as an arguments object: an empty
+string, spaces, or text that starts with `{` are values a person can type. The document computes
+`value` when tapped, so it needs no state of its own: a stepper's `+` sends
 `quantity + 1`. The host writes the value back to wherever the input's value comes from (the app's
 model, an A2UI data-model path) and the new value comes back into the document as the input, so
 the document and its source can't disagree. A value the input doesn't allow (a step past `max`) is

@@ -69,7 +69,9 @@ public struct LiveryTemplateView<Player: View>: View {
 
   public var body: some View {
     player(PlayerInput(document: plan.template.bytes, values: (plan.bindings + extra).playerValues, template: plan.template) { name, value in
-      guard let args = ActionRouter.arguments(fromText: value) else { return }
+      // §7.1: a `set`'s text is its value exactly as sent, never parsed.
+      let isSet = plan.contract.actions[name]?.kind == ActionKinds.set
+      guard let args = isSet ? value.map { ["value": $0] } ?? [:] : ActionRouter.arguments(fromText: value) else { return }
       let plan = plan, actions = actions
       Task { await actions.dispatch(plan, name, args) }
     })

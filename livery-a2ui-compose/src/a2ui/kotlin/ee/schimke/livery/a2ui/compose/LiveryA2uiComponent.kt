@@ -128,7 +128,11 @@ class LiveryA2uiComponent(
     // its kind.
     val liveryHost = remember(host, scope) {
       val kinds = contract.actions.values.map { it.kind }.toSet()
-      val route: suspend (RenderPlan, String, Map<String, String>) -> Unit = { plan, action, args ->
+      val route: suspend (RenderPlan, String, Map<String, String>) -> Unit = { plan, action, all ->
+        // The agent sees only the arguments the contract declares, as the gate checked them, never
+        // one the template added (which could also overwrite the agent's own context); the app's
+        // handlers still get them all, as everywhere else.
+        val args = ActionGate.check(plan.contract, action, all).args
         val wired = currentWiring[action]
         val spec = contract.actions[action]
         val kind = spec?.kind
@@ -148,7 +152,7 @@ class LiveryA2uiComponent(
           if (wired != null) scope.dispatchAction(withArguments(scope, wired, args))
         } else when {
           wired != null -> scope.dispatchAction(withArguments(scope, wired, args))
-          kind != null && host.appActions[kind] != null -> host.appActions.getValue(kind)(plan, action, args)
+          kind != null && host.appActions[kind] != null -> host.appActions.getValue(kind)(plan, action, all)
           kind != ActionKinds.TRACK -> host.events.emit(
             TemplateEvent(TemplateEvent.Type.Error, host.clock.nowEpochMs(), designId = plan.template.entry.designId, sha256 = plan.template.entry.sha256, action = action, detail = "no handler for $kind"),
           )
