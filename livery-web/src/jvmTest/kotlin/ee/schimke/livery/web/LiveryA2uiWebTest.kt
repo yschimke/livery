@@ -1,0 +1,133 @@
+package ee.schimke.livery.web
+
+import ee.schimke.livery.client.Clock
+import ee.schimke.livery.client.FetchResult
+import ee.schimke.livery.client.Fetcher
+import ee.schimke.livery.client.JavaCrypto
+import ee.schimke.livery.client.MemoryBlobStore
+import ee.schimke.livery.client.MemoryKeyValueStore
+import ee.schimke.livery.client.SlotPlanner
+import ee.schimke.livery.client.StaticSource
+import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.client.TrustPolicy
+import ee.schimke.livery.instantiate.AgentBytesPolicy
+import ee.schimke.livery.instantiate.DocumentAdmission
+import ee.schimke.livery.instantiate.TemplateInspector
+import ee.schimke.livery.instantiate.TemplateInstantiator
+import ee.schimke.livery.protocol.PlayerCapabilities
+import ee.schimke.livery.protocol.Surfaces
+import ee.schimke.livery.protocol.TemplateEvent
+import ee.schimke.livery.publisher.CatalogBuilder
+import ee.schimke.livery.publisher.Layout
+import ee.schimke.livery.publisher.build
+import java.io.File
+import java.nio.file.Files
+import kotlin.io.encoding.Base64
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+
+/** The web's Livery component pipeline over the sample catalogs, offline, as a first launch. */
+class LiveryA2uiWebTest {
+  private val samples = File("../samples")
+  private val tree = Files.createTempDirectory("livery-web").toFile().also { tree ->
+    File(samples, "catalog").copyRecursively(tree)
+    for (dir in listOf("contracts", "designs")) File(samples, "two-way/$dir").copyRecursively(File(tree, dir))
+  }
+  private val built = CatalogBuilder(now = { 0 }).build(tree, Layout.Static, serial = 0)
+  private val caps = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"), livePush = false)
+  private val clock = Clock { 1_000L }
+  private val events = mutableListOf<TemplateEvent>()
+  private val repository = TemplateRepository(
+    StaticSource("https://catalog.invalid/"),
+    Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+    JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+    TemplateRepository.Bundled(built.manifest) { sha -> built.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+  )
+  private fun web(documents: DocumentAdmission? = null) = LiveryA2uiWeb(
+    repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock,
+    TemplateInstantiator { _, _, _ -> null }, documents, appKinds = setOf("navigate", "app:vote"),
+  )
+
+  private fun props(json: String) = Json.parseToJsonElement(json).jsonObject
+
+  private val promo = props("""{"headline":"Spring sale","cta":"Shop now","actions":{"cta":{"event":{"name":"startTrial","context":{"from":"chat"}}}}}""")
+
+  @Test fun advertisesThePlayableContracts() = runTest {
+    val names = web().components().map { it.name }
+    assertTrue(listOf("PromoBanner", "SocialPoll", "ShopQuantity").all { it in names }, names.toString())
+  }
+
+  @Test fun rendersTheValuesIntoTheDocument() = runTest {
+    val web = web()
+    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", promo, LiveryA2uiWeb.Space(widthDp = 360)))
+    // The values are baked in: the document still decodes, and no longer reads the headline as a named value.
+    val facts = assertNotNull(TemplateInspector.facts(r.bytes))
+    assertTrue("headline" !in facts.declaredReads, facts.declaredReads.toString())
+    web.shown(r.id)
+    assertEquals(TemplateEvent.Type.Impression, events.last().type)
+    assertEquals(r.designId, events.last().designId)
+  }
+
+  @Test fun dataThatDoesNotBindFallsBack() = runTest {
+    val r = web().render("PromoBanner", props("""{"headline":"${"x".repeat(200)}","cta":"Go"}"""))
+    assertTrue(assertIs<LiveryA2uiWeb.Rendered.Fallback>(r).reason.contains("invalid data"), r.toString())
+    // As on every client, the reason for the agent is short; the per-input problems are in the event.
+    assertTrue(events.any { it.detail.orEmpty().contains("headline") }, events.toString())
+    assertIs<LiveryA2uiWeb.Rendered.Fallback>(web().render("Nope", promo))
+  }
+
+  @Test fun aWiredActionGoesToTheAgentWithItsCheckedArguments() = runTest {
+    val web = web()
+    val r = web.render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val routed = assertIs<LiveryA2uiWeb.Routed.Agent>(web.action(r.id, "cta", "string", """{"route":"/premium","extra":"x"}"""))
+    val context = routed.action["event"]!!.jsonObject["context"]!!.jsonObject
+    assertEquals(JsonPrimitive("/premium"), context["route"])
+    assertEquals(JsonPrimitive("chat"), context["from"])
+    assertTrue("extra" !in context, "an undeclared argument never reaches the agent")
+    assertEquals(TemplateEvent.Type.Action, events.last().type)
+  }
+
+  @Test fun anUnwiredActionGoesToThePageOrIsDropped() = runTest {
+    val web = web()
+    val r = web.render("PromoBanner", JsonObject(promo - "actions")) as LiveryA2uiWeb.Rendered.Ready
+    assertEquals(LiveryA2uiWeb.Routed.App("navigate", "cta", mapOf("route" to "/premium")), web.action(r.id, "cta", "string", """{"route":"/premium"}"""))
+    // `dismiss` has no handler on this page: dropped, and reported.
+    assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(r.id, "dismiss", "none", null))
+    assertEquals(TemplateEvent.Type.Error, events.last().type)
+    assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(r.id, "undeclared", "none", null))
+    assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(999, "cta", "none", null))
+  }
+
+  @Test fun aSetWritesTheInputBackAsItsType() = runTest {
+    val web = web()
+    val r = web.render("ShopQuantity", props("""{"name":"Socks","quantity":{"path":"/q"}}""".replace("""{"path":"/q"}""", "1")))
+      as LiveryA2uiWeb.Rendered.Ready
+    val set = assertIs<LiveryA2uiWeb.Routed.Set>(web.action(r.id, "setQuantity", "int", "3"))
+    assertEquals("quantity", set.input)
+    assertEquals(JsonPrimitive(3L), set.value)
+    assertEquals(null, set.agent)
+    assertEquals(JsonNull, (web.action(r.id, "setQuantity", "string", "three") as? LiveryA2uiWeb.Routed.Set)?.value ?: JsonNull)
+  }
+
+  @Test fun anInlineDocumentPlaysOnlyWhenAdmitted() = runTest {
+    // The document the catalog plays for this data (some sample files are placeholders, not documents).
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val bytes = built.files.entries.first { it.key.contains(chosen.sha256) }.value
+    val withDoc = JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes)}"}""")))
+    assertTrue("no documents" in (web().render("PromoBanner", withDoc) as LiveryA2uiWeb.Rendered.Fallback).reason)
+    val admitting = web(DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)))
+    val r = admitting.render("PromoBanner", withDoc).let { assertIs<LiveryA2uiWeb.Rendered.Ready>(it, it.toString()) }
+    assertEquals("a2ui:unsigned", r.designId)
+    val malformed = JsonObject(promo + ("template" to JsonPrimitive("nope")))
+    assertIs<LiveryA2uiWeb.Rendered.Fallback>(admitting.render("PromoBanner", malformed), "a malformed template is refused, never answered from the catalog")
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@livery/a2ui",
+  "version": "0.0.0",
+  "description": "Livery contracts as A2UI components on the web: Livery's own selection, trust and binding (compiled to Wasm), played by rc-players' Remote Compose web player",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/livery.git",
+    "directory": "web/a2ui"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./livery-web/*": "./dist/livery-web/*"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-livery-web.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node test/e2e.mjs"
+  },
+  "dependencies": {
+    "@a2ui/lit": "0.15.0",
+    "@a2ui/web_core": "0.15.0",
+    "@js-joda/core": "3.2.0",
+    "lit": "^3.3.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@yschimke/remote-compose-player-cmp": "2.27.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

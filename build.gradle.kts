@@ -30,6 +30,7 @@ val published = mapOf(
   ":livery-compose" to ("Livery Compose" to "LiveryTemplate and LiverySlot over rc-players' Compose player: Compose Multiplatform"),
   ":livery-catalog" to ("Livery catalog" to "Build, check and preview Livery catalogs from a source tree, with no file system: Kotlin Multiplatform"),
   ":livery-a2ui" to ("Livery A2UI" to "Livery contracts as A2UI components: their catalog schema, and the datasets and events that cross between A2UI and Livery"),
+  ":livery-web" to ("Livery web" to "Livery's A2UI pipeline for the web, compiled to Wasm with a JSON API for JavaScript: what @livery/a2ui draws with"),
   ":livery-instantiate" to ("Livery instantiate" to "Write a slot's values and images into a template for widget hosts and snapshots"),
   ":livery-launcher-widgets" to ("Livery launcher widgets" to "Android launcher AppWidgets drawn from Livery templates"),
   ":livery-wear-widgets" to ("Livery Wear widgets" to "Glance Wear widgets drawn from Livery templates"),
