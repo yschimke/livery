@@ -43,3 +43,8 @@ Ktor is a candidate for a later reduction, but this change retains it. A browser
 must preserve bounded streaming reads and the redirect policy in `RedirectingFetcher`. Manual
 cross-origin redirects expose opaque responses, so replacing Ktor with an automatic-follow fetch
 would silently bypass the image host gate. That needs a separate design and parity tests.
+
+CI uses Binaryen 130.0.0 from the npm lockfile with `-Plivery.wasmOpt=<path-to-wasm-opt>`.
+This keeps the same optimizer version and Kotlin arguments while avoiding the GitHub release
+asset endpoint, which repeatedly returned HTTP 504. Ordinary Gradle builds retain Kotlin's
+native Binaryen download unless an executable is supplied.

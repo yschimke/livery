@@ -177,3 +177,8 @@ When replacing a cached catalog, refresh keeps the previous manifest active unti
 replacement templates and assets finish downloading. Failed downloads keep the playable cache;
 the accepted serial watermark is still persisted immediately so rollback protection survives a
 failure or interruption. Kotlin and Swift use the same activation order.
+
+CI uses Binaryen 130.0.0 from the npm lockfile with `-Plivery.wasmOpt=<path-to-wasm-opt>`.
+This keeps the same optimizer version and Kotlin arguments while avoiding the GitHub release
+asset endpoint, which repeatedly returned HTTP 504. Ordinary Gradle builds retain Kotlin's
+native Binaryen download unless an executable is supplied.

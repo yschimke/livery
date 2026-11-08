@@ -165,12 +165,13 @@ jobs:
       - name: Android SDK platform
         working-directory: .
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Install web dependencies and pinned Binaryen
+        run: npm ci
       - name: livery-web's Wasm module and the livery CLI
         working-directory: .
-        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
-      - name: npm ci, check and build
+        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+      - name: Check and build npm package
         run: |
-          npm ci
           npm run check
           npm run build
           npm run pack:check

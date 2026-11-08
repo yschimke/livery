@@ -34,6 +34,16 @@ kotlin {
 
 // Ship the production link through Kotlin's pinned Binaryen toolchain.
 val webLink = tasks.named<org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink>("compileProductionLibraryKotlinWasmJs")
+// CI can use the same pinned Binaryen from npm when GitHub release assets are unavailable.
+val externalWasmOpt = providers.gradleProperty("livery.wasmOpt")
+if (externalWasmOpt.isPresent) {
+  apply<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenPlugin>()
+  @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+  extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenEnvSpec> {
+    download.set(false)
+    command.set(externalWasmOpt)
+  }
+}
 @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 val optimizeWebWasm = org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenExec.register(
   kotlin.targets.getByName("wasmJs").compilations.getByName("main") as org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation,
