@@ -26,6 +26,7 @@ import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.Bindings
+import ee.schimke.livery.client.FetchResult
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.instantiate.Admission
@@ -41,6 +42,7 @@ import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.TemplateEvent
+import ee.schimke.livery.protocol.TemplateRef
 import kotlin.io.encoding.Base64
 import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonElement
@@ -79,7 +81,10 @@ class LiveryA2uiWeb(
   private val urlAllowlist: (String) -> Boolean = { false },
   /** Action kinds the page handles itself (`navigate`, `dismiss`, `app:…`) when the agent didn't wire them. */
   private val appKinds: Set<String> = emptySet(),
-  documentFetcher: RedirectingFetcher? = null,
+  /** Signed document fetcher and optional app-configured catalog host policy. */
+  fetcher: RedirectingFetcher? = null,
+  documentHosts: ((String) -> Boolean)? = null,
+  documentFetcher: RedirectingFetcher? = fetcher,
   private val decider: Decider? = null,
   private val decisionContext: (() -> DecisionContext)? = null,
 ) {
@@ -136,7 +141,7 @@ class LiveryA2uiWeb(
     data class Dropped(val reason: String) : Routed
   }
 
-  private val named = NamedDocuments(repository, documents, documentFetcher)
+  private val named = NamedDocuments(repository, documents, documentFetcher, documentHosts)
   private data class NamedKey(val template: A2uiTemplate.Named, val query: TemplateQuery)
   private data class QueryKey(val component: String?, val request: DecisionRequest)
   private val namedAnswers = LinkedHashMap<NamedKey, LoadedTemplate?>()
@@ -153,15 +158,17 @@ class LiveryA2uiWeb(
     pendingNames.clear()
     val asked = pendingQueries.toList()
     pendingQueries.clear()
+    var documentsOk = true
     for ((key, contract) in names) {
       val t = key.template
       val loaded = named.load(t.sha256, t.url, t.signature, contract, key.query)
+      documentsOk = documentsOk && loaded != null
       // Catalog documents live in the repository, signed standalone ones in this bounded session cache.
       if (loaded == null || loaded.design == null) namedAnswers[key] = loaded
       trim(namedAnswers)
     }
     for (answer in asked) decider?.let { answer.fetch(it, repository, clock) }
-    return names.isNotEmpty() || asked.isNotEmpty()
+    return (names.isNotEmpty() || asked.isNotEmpty()) && documentsOk
   }
 
   private class Live(val plan: RenderPlan, val wiring: Map<String, JsonObject>)
@@ -195,6 +202,7 @@ class LiveryA2uiWeb(
     val wiring = (props[LiveryA2ui.ACTIONS] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonObject)?.let { k to it } }.toMap()
     val plan = when (val p = plan(contract, props, dataset, space)) {
       is RenderPlan -> p
+      is Rendered.Waiting -> return p
       else -> return Rendered.Fallback("$name (${contract.ref}): $p", hasPending())
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
@@ -230,15 +238,17 @@ class LiveryA2uiWeb(
   }
 
   /**
-   * Fetches the images earlier renders were [Rendered.Waiting] for, off the render path; true when
-   * there were some and all arrived, so a new [render] can draw.
+   * Fetches what earlier renders were [Rendered.Waiting] for, off the render path: images, and
+   * documents the agent named by `sha256`. True when there were some and all arrived, so a new
+   * [render] can draw.
    */
   suspend fun fetchImages(): Boolean {
-    val resolver = images ?: return false
     val asked = missing.toList()
     missing.clear()
-    // Each is attempted even after one fails; one that fails is asked for again by the next render.
-    return asked.isNotEmpty() && asked.map { resolver.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
+    val pending = hasPending()
+    val documentsOk = if (pending) fetchPending() else true
+    val imagesOk = asked.map { images?.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
+    return (asked.isNotEmpty() || pending) && documentsOk && imagesOk
   }
 
   /** The page shows render [id] (the player is ready): its impression, as `LiveryTemplate` reports after its first frame. */
@@ -338,14 +348,18 @@ class LiveryA2uiWeb(
         is A2uiTemplate.Named -> {
           val key = NamedKey(t, query)
           // Catalog plans are checked again on each render, including revocations and eligibility.
-          val local = withContext(CacheOnly()) { named.load(t.sha256, t.url, t.signature, contract, query, network = false) }
+          val cacheOnly = CacheOnly()
+          val local = withContext(cacheOnly) { named.load(t.sha256, t.url, t.signature, contract, query, network = false) }
           val loaded = local ?: namedAnswers[key]?.takeUnless { repository.current()?.templates?.any { entry -> entry.sha256 == t.sha256 } == true }
           if (loaded != null) return when (val b = ContractBinder.bind(contract, dataset)) {
             is BindResult.Ok -> RenderPlan(loaded, contract, b.bindings, decisionId = space.decisionId)
             is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
           }
-          if (key !in namedAnswers) pendingNames[key] = contract
-          return "named document unavailable or refused"
+          if (key in namedAnswers) return "named document unavailable or refused"
+          if (t.signature == null && cacheOnly.misses == 0) return "${t.sha256} is in no trusted catalog for ${contract.ref}"
+          if (t.signature != null && !named.allows(t.url ?: repository.documentUrl(t.sha256))) return "named document URL is not on a host the page's catalog uses"
+          pendingNames[key] = contract
+          return Rendered.Waiting("fetching ${t.sha256}", pending = true)
         }
         is A2uiTemplate.Query -> {
           val context = decisionContext?.invoke()?.copy(nowEpochMs = 0)
@@ -379,22 +393,35 @@ class LiveryA2uiWeb(
    * refused, and a signature that is there must verify.
    */
   private suspend fun inline(contract: Contract, template: JsonElement, dataset: JsonObject, decisionId: String?): Any {
-    val t = template as? JsonObject ?: return "template must be {\"inline\": <base64>, \"signature\"?}"
+    val t = template as? JsonObject ?: return "template must be {\"inline\": <base64>, \"signature\"?} or {\"sha256\", \"url\"?, \"signature\"?}"
     val text = t.str("inline") ?: return "template needs inline: the document as base64"
     val bytes = runCatching { Base64.decode(text) }.getOrNull() ?: return "inline is not base64"
-    val signature = if ("signature" !in t) null else {
-      val s = t["signature"] as? JsonObject ?: return "signature must be {\"keyId\", \"signature\", \"alg\"?}"
-      val alg = if ("alg" in s) s.str("alg") ?: return "signature alg must be a string" else "Ed25519"
-      val keyId = s.str("keyId")
-      val value = s.str("signature")
-      if (keyId == null || value == null) return "signature needs keyId and signature"
-      ManifestSignature(alg = alg, keyId = keyId, signature = value)
+    val signature = when (val s = signatureOf(t)) {
+      is String -> return s
+      else -> s as ManifestSignature?
     }
+    return admitted(contract, bytes, signature, dataset, decisionId)
+  }
+
+  /** `{"signature": {keyId, signature, alg?}}`'s signature, null when there is none, or why it is malformed. */
+  private fun signatureOf(t: JsonObject): Any? {
+    if ("signature" !in t) return null
+    val s = t["signature"] as? JsonObject ?: return "signature must be {\"keyId\", \"signature\", \"alg\"?}"
+    val alg = if ("alg" in s) s.str("alg") ?: return "signature alg must be a string" else "Ed25519"
+    val keyId = s.str("keyId")
+    val value = s.str("signature")
+    if (keyId == null || value == null) return "signature needs keyId and signature"
+    return ManifestSignature(alg = alg, keyId = keyId, signature = value)
+  }
+
+  /** [bytes] through [DocumentAdmission], then bound: the agent's own document, as it was sent. */
+  private suspend fun admitted(contract: Contract, bytes: ByteArray, signature: ManifestSignature?, dataset: JsonObject, decisionId: String?, expected: String? = null): Any {
     val admission = documents?.admit(bytes, contract, signature) ?: return "the page accepts no documents sent with a message"
     val admitted = when (admission) {
       is Admission.Refused -> return admission.reason
       is Admission.Admitted -> admission
     }
+    if (expected != null && admission.sha256 != expected) return "the document fetched is not $expected"
     val bindings = when (val b = ContractBinder.bind(contract, dataset)) {
       is BindResult.Invalid -> return "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
       is BindResult.Ok -> b.bindings
@@ -418,10 +445,16 @@ class LiveryA2uiWeb(
 
   private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
-  private companion object {
+  companion object {
     /** The image size to ask for when A2UI gives no bound: a phone-width card. */
-    const val DEFAULT_IMAGE_DP = 360
+    private const val DEFAULT_IMAGE_DP = 360
 
-    val NO_IMAGES = TemplateInstantiator { _, _, _ -> null }
+    private val NO_IMAGES = TemplateInstantiator { _, _, _ -> null }
+
+    private val SHA256 = Regex("^[0-9a-f]{64}$")
+
+    /** `https://host[:port]/…`'s host, lowercased. */
+    fun hostOf(url: String): String? =
+      Regex("^https://([^/:?#@]+)(:[0-9]+)?([/?#]|$)").find(url)?.groupValues?.get(1)?.lowercase()
   }
 }

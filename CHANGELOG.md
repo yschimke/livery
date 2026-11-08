@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/yschimke/livery/compare/v0.5.0...v0.6.0) (2026-11-08)
+
+
+### Features
+
+* livery check notes a template that gains a risky feature ([#34](https://github.com/yschimke/livery/issues/34)) ([8eb0d02](https://github.com/yschimke/livery/commit/8eb0d02da2980a16e80aa991574a7a353ecd6963))
+* **web:** a surface's createSurface primaryColor colours its Livery templates ([#37](https://github.com/yschimke/livery/issues/37)) ([8423978](https://github.com/yschimke/livery/commit/8423978bb17f0ed7c37529a3b457e79be0b5da79))
+* **web:** an A2UI component the page gives no height takes its template's ([#38](https://github.com/yschimke/livery/issues/38)) ([9d5f783](https://github.com/yschimke/livery/commit/9d5f783e3940e35df603619718bad25553422140))
+* **web:** events from an A2UI component carry its a2ui:&lt;surface&gt;/&lt;component&gt; decision id ([#36](https://github.com/yschimke/livery/issues/36)) ([af32e4c](https://github.com/yschimke/livery/commit/af32e4c729bc1c799660842cdb6509414cd447a8))
+
 ## [0.5.0](https://github.com/yschimke/livery/compare/v0.4.0...v0.5.0) (2026-11-07)
 
 

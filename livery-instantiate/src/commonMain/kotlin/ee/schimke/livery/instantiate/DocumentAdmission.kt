@@ -102,8 +102,12 @@ class DocumentAdmission(
   val signedFeatures: Set<RiskyFeature> = emptySet(),
   /** Unsigned documents: refused unless the app sets a policy. */
   val agentBytes: AgentBytesPolicy? = null,
+  /** The largest signed document [admit] accepts, and so the most a named one may download. */
   val maxSignedBytes: Int = 256 * 1024,
 ) {
+  /** [bytes]' sha256, as [admit] computes it: to check a fetched document is the one that was named. */
+  suspend fun sha256(bytes: ByteArray): String = crypto.sha256Hex(bytes)
+
   suspend fun admit(bytes: ByteArray, contract: Contract, signature: ManifestSignature?): Admission {
     val ref = contract.ref
     val limit = if (signature != null) maxSignedBytes else agentBytes?.maxBytes ?: 0

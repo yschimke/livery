@@ -10,17 +10,25 @@ class NamedDocuments(
   private val repository: TemplateRepository,
   private val documents: DocumentAdmission?,
   private val fetcher: RedirectingFetcher?,
+  private val documentHosts: ((String) -> Boolean)? = null,
 ) {
+  suspend fun allows(url: String): Boolean {
+    val host = ImageResolver.remoteHost(url) ?: return false
+    return documentHosts?.invoke(host) ?: (host in repository.documentHosts())
+  }
+
   suspend fun load(sha256: String, url: String?, signature: ManifestSignature?, contract: Contract, query: TemplateQuery, network: Boolean = true): LoadedTemplate? {
-    return try { loadChecked(sha256, url, signature, contract, query, network) }
+    return try {
+      if (network || kotlin.coroutines.coroutineContext[CacheOnly] != null) loadChecked(sha256, url, signature, contract, query, network)
+      else withContext(CacheOnly()) { loadChecked(sha256, url, signature, contract, query, network) }
+    }
     catch (e: CancellationException) { throw e }
     catch (_: Exception) { null }
   }
 
   private suspend fun loadChecked(sha256: String, url: String?, signature: ManifestSignature?, contract: Contract, query: TemplateQuery, network: Boolean): LoadedTemplate? {
     if (query.contract != contract.ref) return null
-    val listed = if (network) repository.ensure(TemplateRef(sha256 = sha256), query)
-      else withContext(CacheOnly()) { repository.ensure(TemplateRef(sha256 = sha256), query) }
+    val listed = repository.ensure(TemplateRef(sha256 = sha256), query) ?: repository.bundledTemplate(sha256, query)
     if (signature == null) return listed // A URL alone never grants authority.
     val admission = documents ?: return null
     val bytes = listed?.bytes ?: run {
@@ -28,7 +36,7 @@ class NamedDocuments(
       if (repository.current()?.templates?.any { it.sha256 == sha256 } == true) return null
       val target = url ?: repository.documentUrl(sha256)
       val hosts = repository.documentHosts()
-      val allowed = { to: String -> ImageResolver.remoteHost(to)?.let { it in hosts } == true }
+      val allowed = { to: String -> ImageResolver.remoteHost(to)?.let { documentHosts?.invoke(it) ?: (it in hosts) } == true }
       if (!allowed(target)) return null
       val response = fetcher?.get(target, null, minOf(admission.maxSignedBytes.toLong(), query.caps.maxBytes)) { allowed(it) }
         as? FetchResult.Ok ?: return null

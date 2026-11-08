@@ -3,7 +3,8 @@
 Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit renderer
 (`@a2ui/lit`). An agent places a component per contract and sends its data. The page then picks a
 reviewed, signed template for it, binds the data through the contract, and plays the template on a
-canvas in the page with the TypeScript Remote Compose player. A data change sets named values on the
+canvas in the page with the TypeScript Remote Compose player (the default), or Compose Multiplatform
+compiled to Wasm (`player: 'cmp'`). A data change sets named values on the
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
@@ -39,6 +40,34 @@ Then render surfaces with `<a2ui-surface>` as usual. `session.catalogSchema(cata
 the components' JSON schema to prompt an agent with. `livery build --a2ui` writes the same schema
 at publish time.
 
+### Player choice
+
+```ts
+const { catalog } = await liveryCatalog(session, {
+  catalogId: 'https://example.com/a2ui/catalog/v1',
+  player: 'cmp', // omit or use 'ts' for the default
+});
+```
+
+`'cmp'` prepares the optional `livery-web-compose` module, Skiko and bundled Roboto Flex / Noto
+Sans Symbols 2 fonts before returning the catalog. Rendering and value updates never fetch fonts.
+It mounts one Compose viewport in the component's DOM, with no iframe. Both players keep the
+same document loaded across data changes; changes to baked images or `long` values change its key.
+The theme, height rule, session, decision ID and action gate are shared.
+
+Each CMP viewport owns a Skia context. At most eight are reserved across the page; additional
+components use TS for their lifetime. Disconnecting releases the viewport and its reservation.
+This keeps long chats from exhausting browser WebGL contexts; it is not a performance guarantee.
+
+A custom `player: (box, onAction) => LiveryPlayer` implements `show`, `resize`, `forget`, `dispose`
+and `stats`. `show` resolves `false` when superseded or disposed; it resolves `true` after drawing.
+For the synchronous `liveryComponent` API, pass `player: await prepareCmpPlayer()` instead of the
+`'cmp'` shorthand. Runtime or font preparation failures reject `liveryCatalog`; a document the
+prepared CMP player cannot render follows the usual chosen-design/automatic fallback route.
+
+See [the comparison and measured costs](../../docs/A2UI-CMP.md). CMP uses the same Kotlin player
+as desktop, but no player is the specification or a promise of Android-identical pixels.
+
 ### Serving
 
 The page serves this package's `dist/livery-web/` (fetched beside `dist/livery.js`, `.wasm` as
@@ -46,7 +75,10 @@ The page serves this package's `dist/livery-web/` (fetched beside `dist/livery.j
 `vendor/remote-compose-player.mjs` (vendor/PROVENANCE.md).
 
 The module's glue imports `@js-joda/core`, a dependency of this package. A bundler resolves it; a
-page without one uses an import map.
+page without one uses an import map. For CMP, also serve `dist/livery-web-compose/` beside the
+package's JS modules, preserving its `fonts/` subdirectory. A TS-only page never requests it.
+`prepareCmpPlayer` and the catalog option compute asset URLs relative to their module; when
+bundling, copy both Wasm directories beside the resulting bundle. Serve `.wasm` as `application/wasm`.
 
 ### Theme and size
 
@@ -65,13 +97,13 @@ authored at.
 ## Develop
 
 ```sh
-./gradlew :livery-web:webDist :livery-publish:installDist   # the Wasm module, and the CLI the test builds a catalog with
+build-brief ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist   # the Wasm module, and the CLI the test builds a catalog with
 npm ci && npm run check && npm run build
 npm test                                                    # headless Chromium (Playwright)
 ```
 
 `npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-checks seven things:
+runs the same checks for both players:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
@@ -79,4 +111,10 @@ checks seven things:
 - Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
 - a surface's `primaryColor` colours its templates over the page's CSS theme;
 - a component takes its template's height unless the page sets one;
-- a second catalog's components keep their own session.
+- a second catalog's components keep their own session;
+- container resizing, disconnect/reconnect, queued shows and disposal during loading;
+- fifteen simultaneous components respect the eight-CMP-viewport bound.
+
+Use `LIVERY_TEST_PLAYER=ts` or `cmp` for one player, `LIVERY_RENDER_OUT=<directory>` to save
+screenshots and load measurements, and `PLAYWRIGHT_CHROMIUM_EXECUTABLE=<path>` for an installed
+Chromium. A TS-only build only needs `:livery-web:webDist`; the copy script includes CMP when built.

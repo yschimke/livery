@@ -73,8 +73,6 @@ class LiveryA2uiWebTest {
     val exact = JsonObject(promo + ("template" to props("""{"sha256":"${installed.sha256}"}""")))
     assertEquals(installed.sha256, assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", exact)).sha256)
     val missing = JsonObject(promo + ("template" to props("""{"sha256":"${"0".repeat(64)}"}""")))
-    assertTrue(assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", missing)).pending)
-    web.fetchPending()
     assertEquals(false, assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", missing)).pending)
   }
 
@@ -172,6 +170,106 @@ class LiveryA2uiWebTest {
     assertEquals(JsonPrimitive("chat"), context["from"])
     assertTrue("extra" !in context, "an undeclared argument never reaches the agent")
     assertEquals(TemplateEvent.Type.Action, events.last().type)
+  }
+
+  @Test fun aDocumentNamedByItsHashPlaysWhenACatalogListsIt() = runTest {
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val named = web().render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"${chosen.sha256}"}"""))))
+    assertEquals(chosen.sha256, assertIs<LiveryA2uiWeb.Rendered.Ready>(named, named.toString()).sha256)
+    assertEquals("banner-classic", named.designId, "the catalog's own entry: its design, its events")
+    // A hash no catalog lists, with nothing to vouch for it, is refused: never another template in its place.
+    val unknown = web().render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"${"0".repeat(64)}"}"""))))
+    assertTrue("no trusted catalog" in assertIs<LiveryA2uiWeb.Rendered.Fallback>(unknown).reason, unknown.toString())
+  }
+
+  @Test fun aHashNamesThatExactEntryNotItsDesignsPreferredOne() = runTest {
+    // banner-classic with a second, level-6 template (other bytes): a level-7 player prefers the
+    // level-7 one, but a message that names the level-6 hash gets exactly that.
+    val dir = Files.createTempDirectory("livery-web-levels").toFile().also { tree.copyRecursively(it) }
+    val design = File(dir, "designs/banner-classic")
+    val doc = RcDocumentCodec.decode(File(design, "in-app.rc").readBytes(), RcWireLimits())
+    File(design, "in-app-v6.rc").writeBytes(RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "level 6"))))
+    File(design, "in-app-v6.json").writeText(File(design, "in-app.json").readText().replace("\"rcApiLevel\": 7", "\"rcApiLevel\": 6"))
+    val levels = CatalogBuilder(now = { 0 }).build(dir, Layout.Static, serial = 0)
+    val v6 = levels.manifest.templates.single { it.designId == "banner-classic" && it.target.rcApiLevel == 6 }.sha256
+    val repo = TemplateRepository(
+      StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(levels.manifest) { sha -> levels.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    val web = LiveryA2uiWeb(repo, SlotPlanner(repo, { events += it }, clock), caps, { events += it }, clock)
+    val preferred = web.render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    assertTrue(preferred.sha256 != v6, "the player's own choice is the level-7 one")
+    val named = web.render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"$v6"}"""))))
+    assertEquals(v6, assertIs<LiveryA2uiWeb.Rendered.Ready>(named, named.toString()).sha256)
+
+    // A downloaded catalog that doesn't list it (the sample's own) doesn't make the bundled one unreachable.
+    val online = TemplateRepository(
+      StaticSource("https://catalog.invalid/"),
+      Fetcher { url, _ -> if (url.endsWith("/manifest.json")) FetchResult.Ok(built.manifestBytes, null) else built.files.entries.firstOrNull { url.endsWith("/" + it.key) }?.let { FetchResult.Ok(it.value, null) } ?: FetchResult.Failed(404, url) },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(levels.manifest) { sha -> levels.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    online.refresh()
+    assertTrue(online.current()!!.templates.none { it.sha256 == v6 }, "the downloaded catalog is in use, without v6")
+    val fromBundle = LiveryA2uiWeb(online, SlotPlanner(online, { events += it }, clock), caps, { events += it }, clock)
+      .render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"$v6"}"""))))
+    assertEquals(v6, assertIs<LiveryA2uiWeb.Rendered.Ready>(fromBundle, fromBundle.toString()).sha256)
+  }
+
+  @Test fun aSignedDocumentNamedByUrlIsFetchedOffTheRenderPathFromTheCatalogsHostOnly() = runTest {
+    val pair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    // Other bytes than any catalog lists (a per-request document): the catalog's banner with one unused text more.
+    val catalogBytes = built.files.entries.first { it.key.contains(chosen.sha256) }.value
+    val doc = RcDocumentCodec.decode(catalogBytes, RcWireLimits())
+    val bytes = RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "per request")))
+    val sha = JavaCrypto.sha256Hex(bytes)
+    val signature = Base64.encode(java.security.Signature.getInstance("Ed25519").run {
+      initSign(pair.private); update(ee.schimke.livery.client.TemplateSignatures.message("promo/banner@1", sha)); sign()
+    })
+    val admission = DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())))
+    val fetched = mutableListOf<String>()
+    val web = LiveryA2uiWeb(
+      repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null, admission,
+      fetcher = object : RedirectingFetcher {
+        override suspend fun get(url: String, etag: String?) = get(url, etag) { true }
+        override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult {
+          fetched += url
+          // The catalog host redirects to another host: never followed.
+          if (url.endsWith("/moved.rc")) return if (allowRedirect("https://elsewhere.example/doc.rc")) FetchResult.Ok(bytes, null) else FetchResult.Failed(null, "redirect refused")
+          return if (bytes.size > maxBytes) FetchResult.Failed(200, "too big") else FetchResult.Ok(bytes, null)
+        }
+      },
+      documentHosts = { it == "catalog.example" },
+    )
+    fun named(url: String) = JsonObject(promo + ("template" to props("""{"sha256":"$sha","url":"$url","signature":{"keyId":"app","signature":"$signature"}}""")))
+    // The agent names content; it never makes the page contact a host the app didn't configure.
+    assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", named("https://elsewhere.example/doc.rc")))
+    // A catalog-host URL that redirects elsewhere: the redirect isn't followed, so nothing arrives.
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/moved.rc")))
+    assertTrue(!web.fetchImages(), "a redirect off the catalog's hosts is refused")
+    fetched.clear()
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(fetched.isEmpty(), "nothing is fetched on the render path")
+    assertTrue(web.fetchImages())
+    assertEquals(listOf("https://catalog.example/doc.rc"), fetched)
+    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertEquals("a2ui:signed:app", r.designId)
+    assertEquals(1, fetched.size, "fetched once")
+    // A page whose signed limit is smaller than the document never keeps it.
+    val small = LiveryA2uiWeb(
+      repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null,
+      DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())), maxSignedBytes = 16),
+      fetcher = object : RedirectingFetcher {
+        override suspend fun get(url: String, etag: String?) = get(url, etag) { true }
+        override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult =
+          if (bytes.size > maxBytes) FetchResult.Failed(200, "more than $maxBytes bytes") else FetchResult.Ok(bytes, null)
+      },
+      documentHosts = { it == "catalog.example" },
+    )
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(small.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(!small.fetchImages(), "over the signed limit: not read, not kept")
   }
 
   @Test fun aTemplateSaysHowTallItIs() = runTest {

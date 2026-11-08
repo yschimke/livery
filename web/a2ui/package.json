@@ -14,7 +14,8 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./livery-web/*": "./dist/livery-web/*"
+    "./livery-web/*": "./dist/livery-web/*",
+    "./livery-web-compose/*": "./dist/livery-web-compose/*"
   },
   "files": [
     "dist",

@@ -34,9 +34,10 @@ sealed interface A2uiTemplate {
         return Inline(text, signature)
       }
       if (t.keys.any { it !in setOf("sha256", "url", "signature") }) return Invalid("unknown named template field")
-      val sha = t.text("sha256") ?: return Invalid("sha256 must be a string")
+      val sha = t.text("sha256")?.lowercase() ?: return Invalid("sha256 must be a string")
       if (!Regex("[0-9a-f]{64}").matches(sha)) return Invalid("sha256 must be 64 lowercase hex digits")
       val url = if ("url" in t) t.text("url") ?: return Invalid("url must be a string") else null
+      if (url != null && ee.schimke.livery.client.ImageResolver.remoteHost(url) == null) return Invalid("url must be HTTPS without user information")
       return Named(sha, url, signature)
     }
   }

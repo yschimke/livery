@@ -1,0 +1,27 @@
+{
+  "sampleReadyMs": 1015.1000000000931,
+  "heapBytes": 16327512,
+  "resources": [
+    {
+      "name": "livery-livery-web.mjs",
+      "bytes": 3366,
+      "ms": 42.5
+    },
+    {
+      "name": "livery-livery-web.import-object.mjs",
+      "bytes": 20095,
+      "ms": 6.599999999860302
+    },
+    {
+      "name": "livery-livery-web.js-builtins.mjs",
+      "bytes": 2095,
+      "ms": 10.699999999953434
+    },
+    {
+      "name": "livery-livery-web.wasm",
+      "bytes": 4749595,
+      "ms": 59.10000000009313
+    }
+  ],
+  "accessibility": ""
+}

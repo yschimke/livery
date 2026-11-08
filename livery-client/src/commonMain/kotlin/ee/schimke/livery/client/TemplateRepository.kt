@@ -234,6 +234,21 @@ class TemplateRepository(
   }
 
   /**
+   * The bundled catalog's template with exactly [sha256], when it passes [TemplateSelector.eligible]
+   * for [query] and its bytes and assets are bundled: an exact reference (an A2UI message's
+   * `sha256`) the app's own catalog vouches for, whatever the downloaded one lists. Never a design
+   * the downloaded catalog has revoked.
+   */
+  suspend fun bundledTemplate(sha256: String, query: TemplateQuery): LoadedTemplate? {
+    val b = bundled ?: return null
+    val e = b.manifest.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(b.manifest, it, query) } ?: return null
+    if (usable()?.design(e.designId)?.revoked == true) return null
+    val bytes = b.read(e.sha256) ?: return null
+    if (e.assets.any { b.read(it) == null }) return null
+    return loaded(b.manifest, e, bytes, LoadedTemplate.Origin.Bundled)
+  }
+
+  /**
    * Whether automatic selection may pick [designId]: live, and shipped by default (`Always`) or
    * installed. An experiment's design arm is automatic selection, so it uses this too.
    */
