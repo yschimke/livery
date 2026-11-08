@@ -4,6 +4,12 @@ Implementation date: 2026-11-08. These are local development changes, not deploy
 services or a published AT Protocol extension. Confetti work remains on hold until
 its relevant upstream PRs merge, including further investigation of the draft stack.
 
+Delivery: [Livery PR #46](https://github.com/yschimke/livery/pull/46). The branch is pushed,
+with current main (`10cef3a`) integrated in `dde2095`. The PR's required `gradle` check
+tracks the complete build, catalog workflows and rebuilt standalone/A2UI browser matrix.
+The local results below describe the initial implementation and integration checks;
+consult the PR for validation of its latest commit.
+
 ## Delivered scope
 
 - **00 — Shared fixture:** an experimental version-1 preview descriptor pins Livery's
@@ -67,9 +73,10 @@ The repository-wide `./gradlew build` was attempted with a single worker and bou
 compiler memory. Writable Kotlin tooling and test-JVM cache paths were needed in this
 sandbox. After those adjustments, all 33 existing A2UI Compose JVM tests also passed.
 The full build then stopped while creating Android dependency transforms because the
-workspace ran out of disk space (426 tasks considered). **The repository-wide build is
-not green.** Rerun it in CI or a workspace with more disk; the focused successful
-checks above do not substitute for that required gate. Swift/device tests were not run.
+workspace ran out of disk space (426 tasks considered). **That local repository-wide
+build did not complete.** PR #46 runs the full check on GitHub Actions; the focused
+successful checks above do not substitute for that required gate. Swift/device tests
+were not run locally.
 
 Heron is a separate checkout at `/workspace/rc-wave1/heron`, branch
 `agent/heron-incoming-share`, based on upstream `097a68215eb26f5eeed71c4e744897890f5afbf1`.
@@ -129,6 +136,13 @@ Next, 03 can implement revisioned public hosting and 07 can implement native pre
 rendering against the same fixture. 04 editor sharing and 05 Dokka can use mocks until
 hosting is available. Keep 01 and 08 parked until Confetti merges. AT schema design
 and standardisation follow evidence from working public integrations.
+
+Hosting readiness found that the server's current pinned builder release disables RC
+authoring/export at compile time. Existing authenticated revision-selected export APIs
+can be reused once an enabled RC build is available, but a publication route alone cannot
+enable that capability. Prebuilt fixture publication can proceed independently. Keep
+artifact publication separate from source-design visibility: public-design readers can
+expose document/history, which a component share should not implicitly publish.
 
 The complete ui.coo.ee → public preview URL → OS share sheet → Heron composer → post
 journey is still a later integration milestone. This wave supplies the local viewer
