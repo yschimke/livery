@@ -1,0 +1,19 @@
+{
+  "dataCases": [
+    { "name": "default", "data": { "name": "Oat milk, 1 l", "quantity": 1 }, "accepted": true },
+    { "name": "lower bound", "data": { "name": "Oat milk, 1 l", "quantity": 0 }, "accepted": true },
+    { "name": "upper bound", "data": { "name": "Oat milk, 1 l", "quantity": 9 }, "accepted": true },
+    { "name": "above bound", "data": { "name": "Oat milk, 1 l", "quantity": 10 }, "accepted": false },
+    { "name": "missing required name", "data": { "quantity": 1 }, "accepted": false },
+    { "name": "wrong quantity type", "data": { "name": "Oat milk, 1 l", "quantity": "two" }, "accepted": false }
+  ],
+  "actionTrace": [
+    { "session": "a", "action": "setQuantity", "args": { "value": "2" }, "accepted": true, "quantities": { "a": 2, "b": 1 } },
+    { "session": "b", "action": "setQuantity", "args": { "value": "3" }, "accepted": true, "quantities": { "a": 2, "b": 3 } },
+    { "session": "a", "action": "setQuantity", "args": { "value": "10" }, "accepted": false, "quantities": { "a": 2, "b": 3 } },
+    { "session": "a", "action": "bookmark", "args": {}, "accepted": false, "quantities": { "a": 2, "b": 3 } },
+    { "session": "b", "action": "setQuantity", "args": { "value": "three" }, "accepted": false, "quantities": { "a": 2, "b": 3 } },
+    { "session": "b", "action": "setQuantity", "args": {}, "accepted": false, "quantities": { "a": 2, "b": 3 } },
+    { "session": "a", "action": "setQuantity", "args": { "value": "0" }, "accepted": true, "quantities": { "a": 0, "b": 3 } }
+  ]
+}
