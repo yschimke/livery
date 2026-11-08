@@ -128,6 +128,46 @@ final class RepositoryTests: XCTestCase {
     XCTAssertEqual(retried, .updated(serial: 6), "pending replacement must bypass the old TTL")
   }
 
+  func testPendingReplacementWithdrawsDesignsAndTemplatesIncludingBundledFallback() async throws {
+    for revokeDesign in [true, false] {
+      let (original, blobs) = manifestJSON(serial: 5)
+      let bundledManifest = try JSONDecoder().decode(Manifest.self, from: original)
+      let store = MemoryBlobStore(), kv = MemoryKeyValueStore()
+      var files = blobs; files["manifest.json"] = original
+      let host = MutableHost(files)
+      func open() -> TemplateRepository {
+        TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
+          blobs: store, kv: kv, clock: { 1_000 }, targets: [caps],
+          bundled: .init(manifest: bundledManifest, read: { sha in blobs["blobs/\(sha).rc"] }))
+      }
+      let repo = open()
+      _ = await repo.refresh()
+      var next = bundledManifest
+      next.serial = 6
+      next.designs = next.designs.map { d in
+        var d = d
+        if d.id == "builtin" { d.revoked = revokeDesign } else { d.install = .always }
+        return d
+      }
+      next.templates = next.templates.map { t in var t = t; if t.designId == "builtin" { t.revoked = !revokeDesign }; return t }
+      files["manifest.json"] = try JSONEncoder().encode(next)
+      files.removeValue(forKey: "blobs/\(Hashing.sha256Hex(blob("b"))).rc")
+      await host.replace(files)
+      if case .failed = await repo.refresh(force: true) {} else { XCTFail("incomplete replacement activated") }
+      for reader in [repo, open()] {
+        let q = TemplateQuery(contract: "c/tile@1", caps: caps)
+        let resolved = await reader.resolve(q)
+        XCTAssertNil(resolved, "revoked content must not return through bundled fallback")
+        let exact = await reader.ensure(TemplateRef(sha256: Hashing.sha256Hex(blob("a"))), q)
+        XCTAssertNil(exact)
+        if revokeDesign {
+          let automatic = await reader.automaticallySelectable("builtin")
+          XCTAssertFalse(automatic)
+        }
+      }
+    }
+  }
+
   func testPlannerBindsAndRefusesBadData() async throws {
     let (m, blobs) = manifestJSON(serial: 1)
     var files = blobs

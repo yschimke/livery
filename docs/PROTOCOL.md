@@ -525,3 +525,7 @@ failure or interruption. Kotlin and Swift use the same activation order.
 A pending replacement bypasses the previous catalog’s freshness TTL after failure backoff expires.
 Browser sessions sharing persistent state serialize the complete refresh with an origin-wide Web Lock,
 so a stale response cannot lower the persisted accepted serial or replace a newer catalog.
+
+Verified design and template revocations apply immediately to the active snapshot and bundled
+fallback, before replacement downloads. These withdrawals persist across failed downloads,
+restarts and expiry of the previous catalog; unrelated playable content remains available.

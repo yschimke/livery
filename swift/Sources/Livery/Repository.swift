@@ -125,7 +125,25 @@ public actor TemplateRepository {
   /// install still has them, as selection already does.
   public func current() async -> Manifest? {
     if let m = await usable() { return m }
-    return bundled?.manifest
+    return await bundledManifest()
+  }
+
+  private func withRevocations(_ base: Manifest, _ accepted: Manifest?) -> Manifest {
+    guard let accepted else { return base }
+    let designs = Set(accepted.designs.filter { $0.revoked }.map { $0.id })
+    var result = base
+    result.designs = base.designs.map { d in var d = d; if designs.contains(d.id) { d.revoked = true }; return d }
+    result.templates = base.templates.map { t in
+      var t = t
+      if accepted.templates.contains(where: { $0.revoked && $0.designId == t.designId && $0.sha256 == t.sha256 }) { t.revoked = true }
+      return t
+    }
+    return result
+  }
+
+  private func bundledManifest() async -> Manifest? {
+    guard let b = bundled else { return nil }
+    return withRevocations(b.manifest, await manifest())
   }
 
   private func meta() async -> Meta {
@@ -188,6 +206,13 @@ public actor TemplateRepository {
         if next.serial < m.acceptedSerial { return await fail("rollback: serial \(next.serial) < \(m.acceptedSerial)") }
         if next.minClient > Self.protocolLevel { return await fail("needs client level \(next.minClient)") }
         // Refuse rollback even when downloading this accepted catalog fails or is cancelled.
+        if let previous = cached ?? bundled?.manifest {
+          let withdrawn = withRevocations(previous, next)
+          if withdrawn != previous, let data = try? JSONEncoder().encode(withdrawn) {
+            await kv.put(k("manifest"), String(decoding: data, as: UTF8.self))
+            current = withdrawn
+          }
+        }
         acceptedSerial = next.serial
         var accepted = m
         accepted.acceptedSerial = acceptedSerial
@@ -229,20 +254,20 @@ public actor TemplateRepository {
         return loaded(m, e, bytes, origin(m))
       }
     }
-    guard let b = bundled else { return nil }
+    guard let b = bundled, let bm = await bundledManifest() else { return nil }
     var plain = query
     plain.designId = nil
-    guard let e = TemplateSelector.select(b.manifest, query, automatic: automatic) ?? TemplateSelector.select(b.manifest, plain, automatic: automatic),
+    guard let e = TemplateSelector.select(bm, query, automatic: automatic) ?? TemplateSelector.select(bm, plain, automatic: automatic),
       let bytes = await b.read(e.sha256)
     else { return nil }
-    return loaded(b.manifest, e, bytes, .bundled)
+    return loaded(bm, e, bytes, .bundled)
   }
 
   /// Whether automatic selection may pick `designId` (§5.2): not revoked, and `Always` or installed.
   /// An experiment's design arm is automatic selection, so it uses this too.
   public func automaticallySelectable(_ designId: String) async -> Bool {
     let m: Manifest?
-    if let u = await usable() { m = u } else { m = bundled?.manifest }
+    if let u = await usable() { m = u } else { m = await bundledManifest() }
     guard let d = m?.design(designId), !d.revoked else { return false }
     if d.install == .always { return true }
     return await installedIds().contains(designId)

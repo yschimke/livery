@@ -160,6 +160,53 @@ class RepositoryTest {
     assertEquals(2, r.current()?.serial)
   }
 
+  @Test fun designRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(true) }
+
+  @Test fun templateRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(false) }
+
+  private suspend fun kotlinx.coroutines.CoroutineScope.checkPendingRevocation(design: Boolean) {
+    val original = Fx.manifest()
+    val host = Host(original)
+    val store = MemoryBlobStore()
+    val values = MemoryKeyValueStore()
+    val bundled = TemplateRepository.Bundled(original) { sha ->
+      listOf("default-v7", "default-v8", "default-launcher").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+    }
+    fun open() = TemplateRepository(StaticSource("https://cdn.example/catalog/main"), host, FakeCrypto,
+      TrustPolicy.Signed(listOf(TrustedKey("k", key))), store, values, { now }, listOf(Fx.inApp), bundled)
+    val r = open()
+    r.refresh()
+    val old = assertNotNull(r.resolve(q))
+    host.manifest = original.copy(serial = 2,
+      designs = original.designs.map {
+        when (it.id) {
+          "tile-default" -> it.copy(revoked = design)
+          else -> it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always)
+        }
+      },
+      templates = original.templates.map {
+        if (it.designId == "tile-default") it.copy(revoked = !design)
+        else it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing")))
+      })
+    host.blobRequested = CompletableDeferred()
+    host.resumeBlobs = CompletableDeferred()
+    val refreshing = async { r.refresh(force = true) }
+    host.blobRequested!!.await()
+    suspend fun withdrawn(repository: TemplateRepository) {
+      assertNull(repository.resolve(q), "withdrawn content must not return through bundled fallback")
+      assertNull(repository.ensure(TemplateRef(sha256 = old.entry.sha256), q))
+      assertNull(repository.bundledTemplate(old.entry.sha256, q))
+      if (design) assertFalse(repository.automaticallySelectable("tile-default"))
+    }
+    withdrawn(r)
+    withdrawn(open())
+    host.resumeBlobs!!.complete(Unit)
+    assertIs<RefreshResult.Failed>(refreshing.await())
+    withdrawn(open())
+    now = original.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+    withdrawn(open())
+  }
+
   @Test fun installIsExplicitAndPreviewDoesNotInstall() = runTest {
     val r = repo(Host(Fx.manifest()))
     r.refresh()

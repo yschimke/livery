@@ -116,7 +116,7 @@ class TemplateRepository(
    * Placement rules and theme packs read this rather than [manifest], so a fresh install (nothing
    * downloaded yet) or an offline one still has them, as selection already does.
    */
-  suspend fun current(): Manifest? = usable() ?: bundled?.manifest
+  suspend fun current(): Manifest? = usable() ?: bundledManifest()
 
   /**
    * A theme pack's named values from [current], to pass as a slot's `extra` bindings (themes are
@@ -130,6 +130,19 @@ class TemplateRepository(
     val text = kv.get(k("manifest")) ?: return null
     return runCatching { json.decodeFromString(Manifest.serializer(), text) }.getOrNull()?.also { current = it }
   }
+
+  /** Apply only withdrawals; replacement content still waits for prefetch. */
+  private fun withRevocations(base: Manifest, accepted: Manifest?): Manifest {
+    if (accepted == null) return base
+    val designs = accepted.designs.filter { it.revoked }.map { it.id }.toSet()
+    val templates = accepted.templates.filter { it.revoked }.map { it.designId to it.sha256 }.toSet()
+    return base.copy(
+      designs = base.designs.map { if (it.id in designs) it.copy(revoked = true) else it },
+      templates = base.templates.map { if ((it.designId to it.sha256) in templates) it.copy(revoked = true) else it },
+    )
+  }
+
+  private suspend fun bundledManifest(): Manifest? = bundled?.manifest?.let { withRevocations(it, manifest()) }
 
   private suspend fun meta(): Meta = kv.get(k("meta"))?.let { runCatching { json.decodeFromString(Meta.serializer(), it) }.getOrNull() } ?: Meta()
 
@@ -183,6 +196,15 @@ class TemplateRepository(
               else -> {
                 // Remember the verified serial immediately, even if downloads fail or are cancelled.
                 // Keep the old ETag and playable manifest until the replacement is ready.
+                val previous = cached ?: bundled?.manifest
+                val withdrawn = previous?.let { withRevocations(it, next) }
+                if (withdrawn != null && withdrawn != previous) {
+                  stateLock.withLock {
+                    kv.put(k("manifest"), json.encodeToString(Manifest.serializer(), withdrawn))
+                    current = withdrawn
+                  }
+                  _revision.update { it + 1 }
+                }
                 acceptedSerial = next.serial
                 putMeta(m.copy(acceptedSerial = acceptedSerial))
                 stateLock.withLock { preparing = next }
@@ -235,10 +257,11 @@ class TemplateRepository(
       }
     }
     val b = bundled ?: return null
-    val e = TemplateSelector.select(b.manifest, query, automatic = automatic)
-      ?: TemplateSelector.select(b.manifest, query.copy(designId = null), automatic = automatic)
+    val bm = bundledManifest() ?: return null
+    val e = TemplateSelector.select(bm, query, automatic = automatic)
+      ?: TemplateSelector.select(bm, query.copy(designId = null), automatic = automatic)
       ?: return null
-    return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
+    return b.read(e.sha256)?.let { loaded(bm, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
   /**
@@ -249,11 +272,11 @@ class TemplateRepository(
    */
   suspend fun bundledTemplate(sha256: String, query: TemplateQuery): LoadedTemplate? {
     val b = bundled ?: return null
-    val e = b.manifest.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(b.manifest, it, query) } ?: return null
-    if (usable()?.design(e.designId)?.revoked == true) return null
+    val bm = bundledManifest() ?: return null
+    val e = bm.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(bm, it, query) } ?: return null
     val bytes = b.read(e.sha256) ?: return null
     if (e.assets.any { b.read(it) == null }) return null
-    return loaded(b.manifest, e, bytes, LoadedTemplate.Origin.Bundled)
+    return loaded(bm, e, bytes, LoadedTemplate.Origin.Bundled)
   }
 
   /**
@@ -261,7 +284,7 @@ class TemplateRepository(
    * installed. An experiment's design arm is automatic selection, so it uses this too.
    */
   suspend fun automaticallySelectable(designId: String): Boolean {
-    val d = (usable() ?: bundled?.manifest)?.design(designId) ?: return false
+    val d = (usable() ?: bundledManifest())?.design(designId) ?: return false
     return !d.revoked && (d.install == InstallPolicy.Always || designId in installedIds())
   }
 
