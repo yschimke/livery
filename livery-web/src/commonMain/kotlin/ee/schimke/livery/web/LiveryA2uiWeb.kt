@@ -1,5 +1,15 @@
 package ee.schimke.livery.web
 
+import ee.schimke.livery.a2ui.A2uiTemplate
+import ee.schimke.livery.a2ui.A2uiDecision
+import ee.schimke.livery.client.Decider
+import ee.schimke.livery.client.DecisionContext
+import ee.schimke.livery.client.DecisionRequest
+import ee.schimke.livery.client.RedirectingFetcher
+import ee.schimke.livery.client.CacheOnly
+import ee.schimke.livery.instantiate.NamedDocuments
+import ee.schimke.livery.instantiate.templateHeightDp
+import kotlinx.coroutines.withContext
 import ee.schimke.livery.a2ui.A2uiComponentSpec
 import ee.schimke.livery.a2ui.LiveryA2ui
 import ee.schimke.livery.client.ActionArguments
@@ -16,9 +26,7 @@ import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.Bindings
-import ee.schimke.livery.client.CacheOnly
 import ee.schimke.livery.client.FetchResult
-import ee.schimke.livery.client.RedirectingFetcher
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.instantiate.Admission
@@ -35,10 +43,11 @@ import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.TemplateEvent
 import ee.schimke.livery.protocol.TemplateRef
-import kotlinx.coroutines.withContext
 import kotlin.io.encoding.Base64
 import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -74,13 +83,12 @@ class LiveryA2uiWeb(
   private val urlAllowlist: (String) -> Boolean = { false },
   /** Action kinds the page handles itself (`navigate`, `dismiss`, `app:…`) when the agent didn't wire them. */
   private val appKinds: Set<String> = emptySet(),
-  /** Fetches a signed document the agent names by `url` (docs/A2UI.md); null fetches none. */
-  private val fetcher: RedirectingFetcher? = null,
-  /**
-   * The hosts a named document's `url` may be on: those of the app's catalog sources. The agent
-   * names content; it never makes the page contact a host the app didn't configure.
-   */
-  private val documentHosts: (String) -> Boolean = { false },
+  /** Signed document fetcher and optional app-configured catalog host policy. */
+  fetcher: RedirectingFetcher? = null,
+  documentHosts: ((String) -> Boolean)? = null,
+  documentFetcher: RedirectingFetcher? = fetcher,
+  private val decider: Decider? = null,
+  private val decisionContext: (() -> DecisionContext)? = null,
 ) {
   /** The size and theme a render is for. */
   /**
@@ -88,7 +96,7 @@ class LiveryA2uiWeb(
    * `a2ui:<surfaceId>/<componentId>` (docs/A2UI.md), so analytics can tell agent-placed templates
    * from the app's own.
    */
-  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null)
+  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null, val theme: String? = null)
 
   sealed interface Rendered {
     /**
@@ -106,14 +114,18 @@ class LiveryA2uiWeb(
       val designId: String,
       val sha256: String,
       val heightDp: Int? = null,
+      /** A query is still loading; draw this automatic design, then call fetchPending and render again. */
+      val pending: Boolean = false,
+      /** Impression identity: a server decision can change while [documentKey] stays the same. */
+      val presentationKey: String = documentKey,
       val minHeightDp: Int? = null,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
-    data class Fallback(val reason: String) : Rendered
+    data class Fallback(val reason: String, val pending: Boolean = false) : Rendered
 
     /** An image isn't on the device yet ([reason]): call [fetchImages], then render again. Not the agent's problem. */
-    data class Waiting(val reason: String) : Rendered
+    data class Waiting(val reason: String, val pending: Boolean = false) : Rendered
   }
 
   /** Where a template's host action goes. */
@@ -134,16 +146,44 @@ class LiveryA2uiWeb(
     data class Dropped(val reason: String) : Routed
   }
 
+  private val named = NamedDocuments(repository, documents, documentFetcher, documentHosts)
+  private data class NamedKey(val template: A2uiTemplate.Named, val query: TemplateQuery)
+  private data class NamedAnswer(val template: LoadedTemplate?, val retryAtEpochMs: Long = Long.MAX_VALUE)
+  private data class QueryKey(val component: String?, val request: DecisionRequest)
+  private val namedAnswers = LinkedHashMap<NamedKey, NamedAnswer>()
+  private val pendingNames = LinkedHashMap<NamedKey, Contract>()
+  private val queries = LinkedHashMap<QueryKey, A2uiDecision>()
+  private val pendingQueries = LinkedHashSet<A2uiDecision>()
+
+  private fun hasPending() = pendingNames.isNotEmpty() || pendingQueries.isNotEmpty()
+  private fun <K, V> trim(map: MutableMap<K, V>) { while (map.size > 128) map.remove(map.keys.first()) }
+
+  /** Fetches queued documents/decisions off the render path; render again after completion. */
+  suspend fun fetchPending(): Boolean {
+    val names = pendingNames.toMap()
+    pendingNames.clear()
+    val asked = pendingQueries.toList()
+    pendingQueries.clear()
+    var documentsOk = true
+    for ((key, contract) in names) {
+      val t = key.template
+      val loaded = named.load(t.sha256, t.url, t.signature, contract, key.query)
+      documentsOk = documentsOk && loaded != null
+      // Catalog documents live in the repository, signed standalone ones in this bounded session cache.
+      if (loaded == null) namedAnswers[key] = NamedAnswer(null, clock.nowEpochMs() + NAMED_RETRY_MS)
+      else if (loaded.design == null) namedAnswers[key] = NamedAnswer(loaded)
+      trim(namedAnswers)
+    }
+    for (answer in asked) decider?.let { answer.fetch(it, repository, clock) }
+    return (names.isNotEmpty() || asked.isNotEmpty()) && documentsOk
+  }
+
   private class Live(val plan: RenderPlan, val wiring: Map<String, JsonObject>)
 
   /** Plans by render id, until the page [release]s them: every one on screen can still act. */
   private val live = LinkedHashMap<Int, Live>()
   private var next = 1
   private val missing = LinkedHashSet<ImageRequest>()
-  /** Downloads renders skipped (a named document not on the device yet), run by [fetchImages]. */
-  private val owed = ArrayList<suspend () -> Boolean>()
-  /** Signed documents fetched by `url`, by sha256: bytes only, admitted again on every render. */
-  private val fetched = HashMap<String, ByteArray>()
 
   /**
    * The contracts worth advertising: one per major, those the repository can resolve a template for
@@ -170,7 +210,7 @@ class LiveryA2uiWeb(
     val plan = when (val p = plan(contract, props, dataset, space)) {
       is RenderPlan -> p
       is Rendered.Waiting -> return p
-      else -> return Rendered.Fallback("$name (${contract.ref}): $p")
+      else -> return Rendered.Fallback("$name (${contract.ref}): $p", hasPending())
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
     // What a playing document can't take as a named value is written in; the rest stays live.
@@ -180,12 +220,15 @@ class LiveryA2uiWeb(
     // template's own default instead of keeping the last value set.
     val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" } +
       "|" + live.keys.sorted().joinToString(",")
+    // The original server id distinguishes a decision from the automatic plan even when event
+    // decisionId is overridden by the component's stable a2ui:<surface>/<component> id.
+    val presentationKey = JsonArray(listOf(JsonPrimitive(key), plan.decision?.let { JsonPrimitive(it.decisionId) } ?: JsonNull)).toString()
     // Any image the document draws is written in: the web player draws none from a URL.
     val draws = written.values.isNotEmpty() || drawsImages(plan.template.entry.sha256, plan.template.bytes)
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), plan.template.entry.target.size.minHeightDp)
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey, minHeightDp = plan.template.entry.target.size.minHeightDp)
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -194,12 +237,12 @@ class LiveryA2uiWeb(
         val misses = cached?.misses.orEmpty()
         if (misses.isEmpty()) return Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
         missing += misses
-        Rendered.Waiting("$name (${contract.ref}): ${i.reason}")
+        Rendered.Waiting("$name (${contract.ref}): ${i.reason}", hasPending())
       }
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), plan.template.entry.target.size.minHeightDp)
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey, minHeightDp = plan.template.entry.target.size.minHeightDp)
       }
     }
   }
@@ -212,14 +255,10 @@ class LiveryA2uiWeb(
   suspend fun fetchImages(): Boolean {
     val asked = missing.toList()
     missing.clear()
-    val downloads = owed.toList()
-    owed.clear()
-    if (asked.isEmpty() && downloads.isEmpty()) return false
-    // Each is attempted even after one fails; one that fails is asked for again by the next render.
-    val resolver = images
-    val imagesOk = asked.map { resolver?.resolve(it.ref, it.widthPx, it.heightPx) != null }
-    val documentsOk = downloads.map { runCatching { it() }.getOrDefault(false) }
-    return (imagesOk + documentsOk).all { it }
+    val pending = hasPending()
+    val documentsOk = if (pending) fetchPending() else true
+    val imagesOk = asked.map { images?.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
+    return (asked.isNotEmpty() || pending) && documentsOk && imagesOk
   }
 
   /** The page shows render [id] (the player is ready): its impression, as `LiveryTemplate` reports after its first frame. */
@@ -283,9 +322,8 @@ class LiveryA2uiWeb(
    * declares, else the height its document was authored at.
    */
   private fun heightDp(plan: RenderPlan): Int? {
-    val entry = plan.template.entry
-    entry.target.size.minHeightDp?.let { return it }
-    return heightBySha.getOrPut(entry.sha256) { runCatching { TemplateInstantiator.authoredHeightDp(plan.template.bytes) }.getOrNull() }
+    plan.template.entry.target.size.minHeightDp?.let { return it }
+    return heightBySha.getOrPut(plan.template.entry.sha256) { plan.templateHeightDp() }
   }
 
   private fun drawsImages(sha256: String, template: ByteArray): Boolean =
@@ -310,12 +348,50 @@ class LiveryA2uiWeb(
   /** A [RenderPlan], or why there is none. */
   private suspend fun plan(contract: Contract, props: JsonObject, dataset: JsonObject, space: Space): Any {
     val query = TemplateQuery(
-      contract.ref, capabilities, widthDp = space.widthDp,
+      contract.ref, capabilities, widthDp = space.widthDp, heightDp = space.heightDp, theme = space.theme,
       designId = props.str(LiveryA2ui.DESIGN), variant = props.str(LiveryA2ui.VARIANT), minor = contract.minor,
     )
-    props[LiveryA2ui.TEMPLATE]?.let { t ->
-      if (t is JsonObject && "sha256" in t && "inline" !in t) return named(contract, t, dataset, query, space.decisionId)
-      return inline(contract, t, dataset, space.decisionId)
+    if (LiveryA2ui.TEMPLATE in props) {
+      when (val t = A2uiTemplate.parse(props.getValue(LiveryA2ui.TEMPLATE))) {
+        is A2uiTemplate.Invalid -> return t.reason
+        is A2uiTemplate.Inline -> return inline(contract, props.getValue(LiveryA2ui.TEMPLATE), dataset, space.decisionId)
+        is A2uiTemplate.Named -> {
+          val key = NamedKey(t, query)
+          // Catalog plans are checked again on each render, including revocations and eligibility.
+          val cacheOnly = CacheOnly()
+          val local = withContext(cacheOnly) { named.load(t.sha256, t.url, t.signature, contract, query, network = false) }
+          val answer = namedAnswers[key]?.takeUnless { it.template == null && clock.nowEpochMs() >= it.retryAtEpochMs }
+          if (answer == null) namedAnswers.remove(key)
+          val loaded = local ?: answer?.template?.takeUnless { repository.current()?.templates?.any { entry -> entry.sha256 == t.sha256 } == true }
+          if (loaded != null) return when (val b = ContractBinder.bind(contract, dataset)) {
+            is BindResult.Ok -> RenderPlan(loaded, contract, b.bindings, decisionId = space.decisionId)
+            is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
+          }
+          if (answer != null) return "named document unavailable or refused"
+          if (t.signature == null && cacheOnly.misses == 0) return "${t.sha256} is in no trusted catalog for ${contract.ref}"
+          if (t.signature != null && !named.allows(t.url ?: repository.documentUrl(t.sha256))) return "named document URL is not on a host the page's catalog uses"
+          pendingNames[key] = contract
+          return Rendered.Waiting("fetching ${t.sha256}", pending = true)
+        }
+        is A2uiTemplate.Query -> {
+          val context = decisionContext?.invoke()?.copy(nowEpochMs = 0)
+          if (decider != null && context != null) {
+            val key = QueryKey(space.decisionId, DecisionRequest(query, t.params, context))
+            val answer = queries[key]?.takeUnless { it.expired(clock.nowEpochMs()) }
+              ?: A2uiDecision(key.request).also { queries[key] = it; trim(queries) }
+            if (!answer.completed) pendingQueries += answer
+            answer.decision?.let { d ->
+              val themed = d.copy(data = JsonObject(d.data + LiveryA2ui.themeValues(contract, space.themeArgb)))
+              val chosen = withContext(CacheOnly()) { planner.forDecision(query, themed, decisionId = space.decisionId ?: d.decisionId) }
+              if (chosen is PlanResult.Ready) return chosen.plan
+            }
+          }
+          return when (val auto = planner.forAppData(query.copy(designId = null), dataset, decisionId = space.decisionId)) {
+            is PlanResult.Ready -> auto.plan
+            is PlanResult.Fallback -> auto.reason
+          }
+        }
+      }
     }
     return when (val r = planner.forAppData(query, dataset, decisionId = space.decisionId)) {
       is PlanResult.Ready -> r.plan
@@ -350,52 +426,6 @@ class LiveryA2uiWeb(
     return ManifestSignature(alg = alg, keyId = keyId, signature = value)
   }
 
-  /**
-   * A document the agent names by `sha256` (docs/A2UI.md): exactly it or nothing, never another
-   * template in its place. A trusted catalog that lists the hash vouches for it, and it comes from
-   * that catalog's blobs; otherwise a template signature must, and it comes from `url`, on one of
-   * [documentHosts]. Nothing is downloaded here: a document not on the device yet answers
-   * [Rendered.Waiting], and [fetchImages] fetches it.
-   */
-  private suspend fun named(contract: Contract, t: JsonObject, dataset: JsonObject, query: TemplateQuery, decisionId: String?): Any {
-    val sha = t.str("sha256")?.lowercase()?.takeIf { SHA256.matches(it) } ?: return "sha256 must be 64 hex digits"
-    val cacheOnly = CacheOnly()
-    val listed = withContext(cacheOnly) { repository.ensure(TemplateRef(sha256 = sha, contract = contract.ref), query) }
-      ?: repository.bundledTemplate(sha, query)
-    if (listed != null) {
-      return when (val b = ContractBinder.bind(contract, dataset)) {
-        is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
-        is BindResult.Ok -> RenderPlan(listed, contract, b.bindings, decisionId = decisionId)
-      }
-    }
-    if (cacheOnly.misses > 0) {
-      owed += { cacheOnly.fetchMissed() }
-      return Rendered.Waiting("$sha is in the catalog, not on the device yet")
-    }
-    val signature = when (val s = signatureOf(t)) {
-      is String -> return s
-      null -> return "$sha is in no trusted catalog for ${contract.ref}, and has no template signature"
-      else -> s as ManifestSignature
-    }
-    fetched[sha]?.let { return admitted(contract, it, signature, dataset, decisionId, expected = sha) }
-    val url = t.str("url") ?: return "$sha is in no trusted catalog: name its url, on a host the page's catalog uses"
-    val host = hostOf(url)
-    if (!url.startsWith("https://") || host == null || !documentHosts(host)) return "$url is not on a host the page's catalog uses"
-    val fetch = fetcher ?: return "the page fetches no named documents"
-    val admission = documents ?: return "the page accepts no documents sent with a message"
-    owed += {
-      // Every hop stays on the catalog's hosts, and nothing past the signed limit is read.
-      val allowed = { to: String -> to.startsWith("https://") && hostOf(to)?.let(documentHosts) == true }
-      val bytes = (fetch.get(url, null, admission.maxSignedBytes.toLong(), allowed) as? FetchResult.Ok)?.bytes
-        ?.takeIf { it.size <= admission.maxSignedBytes }
-      // Kept only when it is what the agent named; admission checks the signature on every render.
-      val ok = bytes != null && admission.sha256(bytes) == sha
-      if (ok) fetched[sha] = bytes!!
-      ok
-    }
-    return Rendered.Waiting("fetching $sha")
-  }
-
   /** [bytes] through [DocumentAdmission], then bound: the agent's own document, as it was sent. */
   private suspend fun admitted(contract: Contract, bytes: ByteArray, signature: ManifestSignature?, dataset: JsonObject, decisionId: String?, expected: String? = null): Any {
     val admission = documents?.admit(bytes, contract, signature) ?: return "the page accepts no documents sent with a message"
@@ -428,6 +458,7 @@ class LiveryA2uiWeb(
   private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
   companion object {
+    private const val NAMED_RETRY_MS = 30_000L
     /** The image size to ask for when A2UI gives no bound: a phone-width card. */
     private const val DEFAULT_IMAGE_DP = 360
 

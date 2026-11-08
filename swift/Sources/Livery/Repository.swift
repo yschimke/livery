@@ -284,10 +284,18 @@ public actor TemplateRepository {
     let m = await usable()
     if let sha = ref.sha256 {
       // The same bytes may be listed for several targets or designs: any matching, eligible entry will do.
-      guard let m, let e = m.templates.first(where: { $0.sha256 == sha && (ref.designId == nil || $0.designId == ref.designId) && TemplateSelector.eligible(m, $0, query) }),
-        let bytes = await obtain(m, e)
-      else { return nil }
-      return loaded(m, e, bytes, origin(m))
+      let catalog: Manifest?
+      if let m { catalog = m } else { catalog = await bundledManifest() }
+      guard let catalog,
+        let e = catalog.templates.first(where: { $0.sha256 == sha && (ref.designId == nil || $0.designId == ref.designId) && TemplateSelector.eligible(catalog, $0, query) }) else { return nil }
+      if let m {
+        guard let bytes = await obtain(m, e) else { return nil }
+        return loaded(m, e, bytes, origin(m))
+      }
+      guard let b = bundled else { return nil }
+      for asset in e.assets { if await b.read(asset) == nil { return nil } }
+      guard let bytes = await b.read(sha) else { return nil }
+      return loaded(catalog, e, bytes, .bundled)
     }
     guard let designId = ref.designId else { return await resolve(query) }
     var q = query

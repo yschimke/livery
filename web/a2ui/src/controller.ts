@@ -56,7 +56,7 @@ export class LiveryController {
       if (this.render_ !== undefined) this.livery?.session.release(this.render_);
       this.render_ = undefined;
       this.player?.dispose(); this.player = undefined;
-      this.shownKey = undefined; this.request = '';
+      this.shownPresentation = undefined; this.request = '';
       this.automatic = false; this.automaticFor = undefined; this.imagesFailed = false;
     }
     private player?: LiveryPlayer;
@@ -72,7 +72,7 @@ export class LiveryController {
     private automaticFor?: string;
     /** A fetch for this element's images failed: if it renders waiting again, it can't draw. */
     private imagesFailed = false;
-    private shownKey?: string;
+    private shownPresentation?: string;
     private resize?: ResizeObserver;
     private widthDp = 0;
 
@@ -123,9 +123,9 @@ export class LiveryController {
       // the agent changes the component.
       const asked = JSON.stringify(props);
       if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
-      if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
+      if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; delete props[TEMPLATE]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
-      const space = { widthDp: this.widthDp || Math.round(this.element.clientWidth) || undefined, heightDp: this.pageHeight() ? Math.round(this.element.clientHeight) || undefined : undefined, density, theme: themeOf(this.element, this.context?.theme), decisionId: this.decisionId() };
+      const space = { widthDp: this.widthDp || Math.round(this.element.clientWidth) || undefined, heightDp: this.pageHeight() ? Math.round(this.element.clientHeight) || undefined : undefined, density, colorScheme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', theme: themeOf(this.element, this.context?.theme), decisionId: this.decisionId() };
       this.lastTheme = space.theme;
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
@@ -138,6 +138,19 @@ export class LiveryController {
         // A newer render is on its way: this one is never shown, so the session can drop its plan.
         if (r.ok) session.release(r.render);
         return;
+      }
+      if (r.pending) {
+        // Draw the automatic plan while decisions and documents load off the render path.
+        void session.fetchPending().then(() => {
+          if (mine !== this.sequence || !this.connected) return;
+          this.request = '';
+          this.invalidate();
+        });
+        if (!r.ok) {
+          this.fallback = r.reason;
+          this.invalidate();
+          return;
+        }
       }
       if (!r.ok && r.waiting && !this.imagesFailed) {
         // An image isn't on the device: fetch it off the render path, then render again. Not the agent's problem.
@@ -174,10 +187,9 @@ export class LiveryController {
           this.element.style.setProperty('--livery-template-height', `${height}px`);
           player.resize(this.element.clientWidth, height, density);
         }
-        // An impression per document shown, as LiveryTemplate reports after its first frame. A
-        // show a newer one replaced, or one the element left the page during, isn't one.
-        if (shown && mine === this.sequence && (first || this.shownKey !== r.documentKey)) session.shown(r.render);
-        if (shown && mine === this.sequence) this.shownKey = r.documentKey;
+        // A decision can reuse the automatic document and still needs its own impression.
+        if (shown && mine === this.sequence && (first || this.shownPresentation !== r.presentationKey)) session.shown(r.render);
+        if (shown && mine === this.sequence) this.shownPresentation = r.presentationKey;
       } catch (e) {
         player.forget();
         if (mine === this.sequence) this.cannotPlay(props, `the player could not play ${r.design}: ${(e as Error).message}`);
@@ -192,7 +204,7 @@ export class LiveryController {
      */
     private cannotPlay(props: Record<string, unknown>, reason: string): void {
       this.livery?.options.onProblem?.(this.livery.spec.name, reason);
-      if (props[DESIGN] !== undefined && props[TEMPLATE] === undefined && !this.automatic) {
+      if (!this.automatic && ((props[DESIGN] !== undefined && props[TEMPLATE] === undefined) || (props[TEMPLATE] && typeof props[TEMPLATE] === 'object' && 'query' in (props[TEMPLATE] as object)))) {
         this.automatic = true;
         this.request = '';
       } else {

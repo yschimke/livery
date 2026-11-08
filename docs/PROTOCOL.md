@@ -297,6 +297,12 @@ reference must pass §5.1 and must be played exactly or not at all: a client mus
 another template for it, whether because it is missing, ineligible, revoked or not downloadable. A
 decision must draw only in the template it names.
 
+An exact hash may also resolve from the app's bundled catalog when no downloaded manifest is
+usable. The bundled entry must pass the same eligibility gate, match any requested design id,
+and have its document and all declared assets present. Accepted revocations still apply after
+the downloaded catalog expires. Missing or incompatible exact hashes
+never substitute another template.
+
 ## 6. Resources
 
 ### 6.1 Image references
@@ -496,12 +502,69 @@ The host writes `livery.inset.top`, `livery.inset.bottom`, `livery.inset.start` 
 `livery.inset.end` (floats, dp) into a screen's template, the safe-area insets of the window it
 draws in; a contract needn't declare them, and a template may read them.
 
+### 8.3 Contract decision requests
+
+A client may request a decision for a contract without a placement. The app configures the full
+HTTPS endpoint (recommended path: `/v1/decisions/query`). It accepts `POST` with
+`Content-Type: application/json` and a `DecisionRequest`:
+
+```json
+{
+  "query": {
+    "contract": "promo/banner@1",
+    "caps": {"surface": "in-app", "maxRcApiLevel": 7, "profiles": ["androidx"]},
+    "widthDp": 360,
+    "theme": "dark",
+    "minor": 1
+  },
+  "params": {"offer": "summer"},
+  "context": {
+    "nowEpochMs": 1000,
+    "platform": "web",
+    "locale": "en-GB",
+    "appVersion": 4,
+    "bucketingId": "app-scoped"
+  }
+}
+```
+
+`query` is the device's `TemplateQuery`; its optional fields and defaults are the same as §5.
+`context` is supplied by the app, with optional `segments` (default empty) and `nowEpochMs`
+(default 0, replaced with the current time before sending). Only `params` comes from the agent:
+for A2UI `template: {"query": {...}}`, the inner object is `params`. A key such as `url` in params
+is opaque data, never a destination. Clients must not follow endpoint redirects. The app owns
+endpoint authentication and the server's selection logic; Livery does not run a server.
+
+A `200` response is the normal §8 `Decision`, including `placement`, `decisionId`, `template` and
+`data`. `204` means no decision. Other statuses, malformed or oversized answers mean no decision;
+the reference HTTP adapter caps the response at 256 KiB. Unknown response fields are ignored.
+The response's template must fit the requested contract, capabilities, size and minor. A supplied
+`template.contract` that differs from `query.contract` is refused. Decisions with a nonpositive
+TTL are not used.
+
+A render must not await this request or a template download. A2UI draws the installed automatic
+design with its resolved component data while fetching. After the answer and document arrive,
+`SlotPlanner.forDecision` validates the server's data and exact choice; if either fails, the
+component keeps the automatic design and its original data. Host theme inputs override server
+values for those roles. Cached answers expire after their TTL (the adapters cap retention at one
+day); a subsequent render requests a fresh answer. No-answer results may be retained for 30 seconds.
+A changed request or app context must not display an earlier request's answer.
+
+When the host knows the A2UI component identity, `a2ui:<surfaceId>/<componentId>` is the event
+`decisionId`, including planner errors and fallbacks. The original server decision remains in the
+render plan, with its placement, tracking and experiments. A host without that identity uses the
+server decision id. The Kotlin `Decider` query overload defaults to no answer, preserving existing
+placement implementations. This is an additive request API; manifest schema and `minClient` do
+not change.
+
 ## Conformance
 
 `conformance/` holds inputs and the reference answers:
 
 | File | Checks |
 | --- | --- |
+| `decision-request.json` | §8.3: request wire shape, shared by Kotlin and Swift |
+| `exact-bundled.json` | §5.3: exact hashes in the bundled catalog, including unavailable and incompatible requests |
 | `selection.json` | §5: a manifest and queries (with installed designs and the player's allowed `features`), and the `sha256` chosen or `null` |
 | `binding.json` | §4.1: a contract and datasets, and the bindings or the sorted names of the problems |
 | `resources.json` | §1 URL resolution, §6.1 image references, §6.2 proxied and direct URLs |

@@ -12,7 +12,7 @@ const actions: unknown[] = [];
 const problems: [string, string][] = [];
 const app: unknown[] = [];
 
-const openSession = () => LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'] });
+const openSession = () => LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'], decisionEndpoint: 'https://decisions.example/v1/decisions/query', decisionContext: { platform: 'web', locale: 'en-GB', appVersion: 1, bucketingId: 'browser-test' } });
 const session = await openSession();
 let peer: LiverySession;
 const { catalog, components } = await adapter.catalog(session, {

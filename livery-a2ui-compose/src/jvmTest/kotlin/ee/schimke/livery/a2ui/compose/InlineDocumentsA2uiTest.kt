@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.a2ui.A2uiSurface
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
@@ -54,7 +55,7 @@ object InlineFixtures {
 
 /** Shared: a banner whose document is the [template] JSON the agent sent. */
 @OptIn(ExperimentalTestApi::class)
-abstract class InlineSurfaceTest(documents: DocumentAdmission?) : LiveryA2uiSurfaceTest(documents) {
+abstract class InlineSurfaceTest(documents: DocumentAdmission?, decider: ee.schimke.livery.client.Decider? = null) : LiveryA2uiSurfaceTest(documents, decider) {
   protected fun components(template: String) =
     """
     {"version":"v0.9","updateComponents":{"surfaceId":"$SURFACE","components":[
@@ -169,5 +170,45 @@ class InlineDocumentsSignedOnlyA2uiTest : InlineSurfaceTest(DocumentAdmission(Ja
 
   @Test fun aPlainSignedDocumentPlays() = runComposeUiTest {
     assertEquals("a2ui:signed:app", plays(inline(InlineFixtures.banner, InlineFixtures.signature(InlineFixtures.banner))))
+  }
+}
+
+/** Exact catalog documents need no inline-document policy, including on an offline first launch. */
+@OptIn(ExperimentalTestApi::class)
+class NamedDocumentsA2uiTest : InlineSurfaceTest(null) {
+  @Test fun exactBundledDocumentPlays() = runComposeUiTest {
+    val sha = MessageDigest.getInstance("SHA-256").digest(InlineFixtures.banner).joinToString("") { "%02x".format(it) }
+    assertEquals("banner-classic", plays("""{"sha256":"$sha"}"""))
+  }
+
+  @Test fun missingHashNeverDrawsAnotherDesign() = runComposeUiTest {
+    assertTrue("named document" in refuses("""{"sha256":"${"0".repeat(64)}"}"""))
+  }
+}
+
+class DeferredDecision : ee.schimke.livery.client.Decider {
+  val answer = kotlinx.coroutines.CompletableDeferred<ee.schimke.livery.protocol.Decision?>()
+  val requests = mutableListOf<ee.schimke.livery.client.DecisionRequest>()
+  override suspend fun decide(placement: String, context: ee.schimke.livery.client.DecisionContext) = null
+  override suspend fun decide(request: ee.schimke.livery.client.DecisionRequest): ee.schimke.livery.protocol.Decision? {
+    requests += request
+    return answer.await()
+  }
+}
+
+@OptIn(ExperimentalTestApi::class)
+class QueryDocumentsA2uiTest private constructor(private val remote: DeferredDecision) : InlineSurfaceTest(null, remote) {
+  constructor() : this(DeferredDecision())
+  @Test fun automaticDrawsWhileTheDecisionWaitsThenTheServerDataArrives() = runComposeUiTest {
+    send(create, components("""{"query":{"offer":"sale"}}"""))
+    show()
+    onNodeWithText("Try Premium free").assertExists()
+    assertTrue(!remote.answer.isCompleted, "rendering did not wait for the server")
+    assertEquals("promo/banner@1", remote.requests.single().query.contract)
+    remote.answer.complete(ee.schimke.livery.protocol.Decision("chat", "server:1",
+      ee.schimke.livery.protocol.TemplateRef(designId = "banner-classic"),
+      kotlinx.serialization.json.Json.parseToJsonElement("""{"headline":"Server offer","cta":"Go"}""") as kotlinx.serialization.json.JsonObject))
+    waitUntil(timeoutMillis = 10_000) { events.any { it.type == TemplateEvent.Type.Impression && it.decisionId == "server:1" } }
+    onNodeWithText("Server offer").assertExists()
   }
 }

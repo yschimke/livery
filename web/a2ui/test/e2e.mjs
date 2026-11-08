@@ -68,6 +68,20 @@ for (const player of players) {
 console.log(`Player: ${player}`);
 const context = await browser.newContext({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_DENSITY ?? process.env.LIVERY_TEST_DPR ?? 1) });
 const page = await context.newPage();
+let releaseDecision;
+const decisionGate = new Promise((resolve) => { releaseDecision = resolve; });
+await page.route('https://decisions.example/v1/decisions/query', async (route) => {
+  if (route.request().method() === 'OPTIONS') {
+    await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type' } });
+    return;
+  }
+  await decisionGate;
+  await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({
+    placement: 'assistant-offer', decisionId: 'server:browser', template: { designId: 'banner-classic' },
+    data: { headline: 'Server offer', cta: 'Go' }, ttlSeconds: 60,
+    experiments: { 'offer-copy': 'treatment' },
+  }) });
+});
 const logs = [];
 const requests = [];
 page.on('request', (r) => requests.push(r.url()));
@@ -276,6 +290,43 @@ try {
   check(lifecycle.cancelled === false && lifecycle.remaining === 0, 'dispose cancels an in-flight show and leaves no canvas');
   check(!logs.some((l) => l.startsWith('pageerror:')), `no uncaught browser errors: ${logs.filter((l) => l.startsWith('pageerror:'))}`);
 
+  // The automatic banner remains visible during a delayed contract decision, then gets server data.
+  const queryBefore = await statsOf('#app [data-livery-component="PromoBanner"]');
+  const querySent = page.waitForRequest((request) => request.url() === 'https://decisions.example/v1/decisions/query' && request.method() === 'POST');
+  await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateComponents: { surfaceId: 'chat-1', components: [
+    { id: 'promo', component: 'PromoBanner', headline: 'Waiting offer', cta: 'Wait', template: { query: { offer: 'summer' } } },
+  ] } }]));
+  await page.waitForFunction((n) => document.querySelector('#app [data-livery-component="PromoBanner"]')?.liveryStats?.sets > n, queryBefore.sets);
+  const decisionRequest = (await querySent).postDataJSON();
+  check(decisionRequest?.query?.contract === 'promo/banner@1' && decisionRequest?.params?.offer === 'summer' && decisionRequest?.context?.locale === 'en-GB',
+    `query sends device context and agent params: ${JSON.stringify(decisionRequest)}`);
+  const waiting = await statsOf('#app [data-livery-component="PromoBanner"]');
+  check((await page.locator('#app [data-livery-component="PromoBanner"] canvas').count()) > 0, 'automatic canvas draws while the server waits');
+  await page.evaluate(() => { window.__livery.events(); window.__queryEvents = []; });
+  releaseDecision();
+  await page.waitForFunction((n) => document.querySelector('#app [data-livery-component="PromoBanner"]')?.liveryStats?.sets > n, waiting.sets);
+  await page.waitForFunction(() => {
+    window.__queryEvents.push(...window.__livery.events());
+    return window.__queryEvents.some((e) => e.type === 'Impression' && e.placement === 'assistant-offer');
+  }, null, { timeout: 10_000 });
+  const decided = await statsOf('#app [data-livery-component="PromoBanner"]');
+  check(decided.loads === waiting.loads, 'the decided presentation reuses the automatic document without reloading');
+  await hostAction('#app [data-livery-component="PromoBanner"]', { name: 'cta', valueType: 'string', value: '{"route":"/sale"}' });
+  const queryEvents = await page.evaluate(() => [...window.__queryEvents, ...window.__livery.events()]);
+  check(queryEvents.some((e) => e.type === 'Action' && e.placement === 'assistant-offer' && e.decisionId === 'a2ui:chat-1/promo'), 'decided actions retain the A2UI event id and server placement');
+  const decidedImpressions = queryEvents.filter((e) => e.type === 'Impression' && e.placement === 'assistant-offer');
+  check(decidedImpressions.length === 1 && decidedImpressions[0].decisionId === 'a2ui:chat-1/promo' && decidedImpressions[0].experiments?.['offer-copy'] === 'treatment',
+    'the reused document reports one decision impression with its placement and experiment attribution');
+
+  // Changing fallback props re-renders the cached decision; it is still the same presentation.
+  await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateComponents: { surfaceId: 'chat-1', components: [
+    { id: 'promo', component: 'PromoBanner', headline: 'Updated fallback', cta: 'Wait', template: { query: { offer: 'summer' } } },
+  ] } }]));
+  await page.waitForTimeout(300);
+  const repeatedEvents = await page.evaluate(() => window.__livery.events());
+  check(!repeatedEvents.some((e) => e.type === 'Impression' && e.placement === 'assistant-offer') && (await statsOf('#app [data-livery-component="PromoBanner"]')).loads === decided.loads,
+    'updating the cached decision neither repeats its impression nor reloads its document');
+
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
   const memoryOnline = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
@@ -401,6 +452,7 @@ try {
   check(false, String(e));
   console.log(logs.join('\n'));
 } finally {
+  releaseDecision();
   await context.close();
 }
 }

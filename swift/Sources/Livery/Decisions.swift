@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DecisionContext: Sendable {
+public struct DecisionContext: Codable, Sendable {
   public var nowEpochMs: Int64
   public var platform: String
   public var locale: String
@@ -13,6 +13,15 @@ public struct DecisionContext: Sendable {
     self.nowEpochMs = nowEpochMs; self.platform = platform; self.locale = locale
     self.appVersion = appVersion; self.bucketingId = bucketingId; self.segments = segments
   }
+  private enum CodingKeys: String, CodingKey { case nowEpochMs, platform, locale, appVersion, bucketingId, segments }
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    nowEpochMs = try c.decodeIfPresent(Int64.self, forKey: .nowEpochMs) ?? 0
+    platform = try c.decode(String.self, forKey: .platform); locale = try c.decode(String.self, forKey: .locale)
+    appVersion = try c.decode(Int64.self, forKey: .appVersion); bucketingId = try c.decode(String.self, forKey: .bucketingId)
+    segments = try c.decodeIfPresent(Set<String>.self, forKey: .segments) ?? []
+  }
+
 }
 
 public protocol FrequencyStore: Sendable {
@@ -208,4 +217,23 @@ public final class Experiments: @unchecked Sendable {
     guard LocalBucketing.running(e, ctx), let id = await assigner.assign(e, context: ctx), e.arms.contains(where: { $0.id == id }) else { return nil }
     return id
   }
+}
+
+/// Contract query request (§8.3): device query and app context, with opaque agent parameters.
+public struct DecisionRequest: Codable, Sendable {
+  public var query: TemplateQuery
+  public var params: [String: JSONValue]
+  public var context: DecisionContext
+  public init(query: TemplateQuery, params: [String: JSONValue], context: DecisionContext) {
+    self.query = query; self.params = params; self.context = context
+  }
+}
+
+public protocol Decider: Sendable {
+  func decide(_ placement: String, context: DecisionContext) async -> Decision?
+  func decide(_ request: DecisionRequest) async -> Decision?
+}
+
+public extension Decider {
+  func decide(_ request: DecisionRequest) async -> Decision? { nil }
 }
