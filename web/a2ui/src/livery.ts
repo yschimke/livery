@@ -46,6 +46,8 @@ export interface LiverySpace {
   density?: number;
   /** Theme roles (`primary`, `surface`, `onSurface`, …) as `#RRGGBB` or `#AARRGGBB`. */
   theme?: Record<string, string>;
+  /** What the render's events carry as `decisionId`: `a2ui:<surfaceId>/<componentId>` for an A2UI component. */
+  decisionId?: string;
 }
 
 export type Rendered =

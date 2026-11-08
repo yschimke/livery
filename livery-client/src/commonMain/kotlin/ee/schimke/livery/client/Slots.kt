@@ -19,6 +19,11 @@ data class RenderPlan(
   val feedItem: FeedItem? = null,
   /** Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event. */
   val experiments: Map<String, String> = decision?.experiments.orEmpty(),
+  /**
+   * The id every event of this plan carries: the decision's, or where the template was placed when
+   * no decision placed it (an A2UI component's `a2ui:<surfaceId>/<componentId>`).
+   */
+  val decisionId: String? = decision?.decisionId,
 )
 
 /**
@@ -52,25 +57,29 @@ class SlotPlanner(
   private val clock: Clock,
   private val experiments: Experiments? = null,
 ) {
-  /** App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change. */
-  suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY): PlanResult {
+  /**
+   * App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change.
+   * [decisionId] is what every event of the plan carries, the planner's own included (an A2UI
+   * component's `a2ui:<surfaceId>/<componentId>`); no decision placed it.
+   */
+  suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult {
     val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
     val design = arm?.designId
     if (arm != null && design == null) {
       // An arm without a design (a control) draws the usual choice, tagged with its arm.
-      val t = repository.resolve(query) ?: return fallback(query, "no template", null)
-      return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+      val t = repository.resolve(query) ?: return fallback(query, "no template", null, decisionId)
+      return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm), decisionId)
     }
     // An arm's design is automatic selection: never a skin nobody installed (AGENTS.md).
     if (arm != null && design != null && repository.automaticallySelectable(design)) {
       // The arm's design, when it has a template for this slot; otherwise the usual choice, and the
       // user wasn't exposed to the arm here.
       repository.resolve(query.copy(designId = design))?.takeIf { it.entry.designId == design }?.let { t ->
-        return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm))
+        return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm), decisionId)
       }
     }
-    val t = repository.resolve(query) ?: return fallback(query, "no template", null)
-    return plan(t, data, extra, null, null)
+    val t = repository.resolve(query) ?: return fallback(query, "no template", null, decisionId)
+    return plan(t, data, extra, null, null, decisionId = decisionId)
   }
 
   suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY): PlanResult {
@@ -89,20 +98,23 @@ class SlotPlanner(
     return plan(t, item.data, extra, null, item)
   }
 
-  private suspend fun plan(t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?, arms: Map<String, String> = emptyMap()): PlanResult {
+  private suspend fun plan(
+    t: LoadedTemplate, data: JsonObject, extra: Bindings, d: Decision?, f: FeedItem?, arms: Map<String, String> = emptyMap(),
+    decisionId: String? = d?.decisionId,
+  ): PlanResult {
     val contract = t.contract ?: return PlanResult.Fallback("contract ${t.entry.contract} unknown")
     val experiments = d?.experiments.orEmpty() + arms
     return when (val b = ContractBinder.bind(contract, data)) {
-      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f, experiments))
+      is BindResult.Ok -> PlanResult.Ready(RenderPlan(t, contract, b.bindings + extra, d, f, experiments, decisionId))
       is BindResult.Invalid -> {
-        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, d?.decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }, experiments = experiments))
+        events.emit(TemplateEvent(TemplateEvent.Type.Error, clock.nowEpochMs(), d?.placement, decisionId, f?.id, t.entry.designId, t.entry.sha256, detail = b.problems.joinToString { "${it.name}: ${it.message}" }, experiments = experiments))
         PlanResult.Fallback("invalid data")
       }
     }
   }
 
-  private fun fallback(q: TemplateQuery, reason: String, d: Decision?): PlanResult {
-    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, d?.decisionId, detail = "${q.contract}: $reason", experiments = d?.experiments.orEmpty()))
+  private fun fallback(q: TemplateQuery, reason: String, d: Decision?, decisionId: String? = d?.decisionId): PlanResult {
+    events.emit(TemplateEvent(TemplateEvent.Type.Fallback, clock.nowEpochMs(), d?.placement, decisionId, detail = "${q.contract}: $reason", experiments = d?.experiments.orEmpty()))
     return PlanResult.Fallback(reason)
   }
 }
@@ -122,7 +134,7 @@ class ActionRouter(
 ) {
   suspend fun dispatch(plan: RenderPlan, action: String, args: Map<String, String>) {
     val check = ActionGate.check(plan.contract, action, args)
-    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decision?.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
+    val base = TemplateEvent(TemplateEvent.Type.Action, clock.nowEpochMs(), plan.decision?.placement, plan.decisionId, plan.feedItem?.id, plan.template.entry.designId, plan.template.entry.sha256, action, experiments = plan.experiments, args = check.args)
     val spec = check.spec
     if (spec == null || check.problem != null) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = check.problem)); return }
     if (spec.kind == "open-url" && args["url"]?.let(urlAllowlist) != true) { events.emit(base.copy(type = TemplateEvent.Type.Error, detail = "url not allowed")); return }

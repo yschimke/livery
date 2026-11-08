@@ -65,7 +65,7 @@ internal data class WebConfig(
 }
 
 @Serializable
-internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap())
+internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null)
 
 private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>)
 
@@ -152,7 +152,7 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = asyn
 fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = async {
   val s = json.decodeFromString(WebSpace.serializer(), space)
   val theme = s.theme.mapNotNull { (role, hex) -> argb(hex)?.let { role to it } }.toMap()
-  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme))
+  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId))
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)

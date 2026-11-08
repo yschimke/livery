@@ -68,9 +68,10 @@ npm test                                                    # headless Chromium 
 ```
 
 `npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-checks four things:
+checks five things:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
 - a data change sets values on the playing document without reloading it, and redraws it;
+- Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
 - a second catalog's components keep their own session.
