@@ -137,12 +137,24 @@ class LiveryA2uiWebTest {
     val fetched = mutableListOf<String>()
     val web = LiveryA2uiWeb(
       repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null, admission,
-      fetcher = Fetcher { url, _ -> fetched += url; FetchResult.Ok(bytes, null) },
+      fetcher = object : RedirectingFetcher {
+        override suspend fun get(url: String, etag: String?) = get(url, etag) { true }
+        override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult {
+          fetched += url
+          // The catalog host redirects to another host: never followed.
+          if (url.endsWith("/moved.rc")) return if (allowRedirect("https://elsewhere.example/doc.rc")) FetchResult.Ok(bytes, null) else FetchResult.Failed(null, "redirect refused")
+          return if (bytes.size > maxBytes) FetchResult.Failed(200, "too big") else FetchResult.Ok(bytes, null)
+        }
+      },
       documentHosts = { it == "catalog.example" },
     )
     fun named(url: String) = JsonObject(promo + ("template" to props("""{"sha256":"$sha","url":"$url","signature":{"keyId":"app","signature":"$signature"}}""")))
     // The agent names content; it never makes the page contact a host the app didn't configure.
     assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", named("https://elsewhere.example/doc.rc")))
+    // A catalog-host URL that redirects elsewhere: the redirect isn't followed, so nothing arrives.
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/moved.rc")))
+    assertTrue(!web.fetchImages(), "a redirect off the catalog's hosts is refused")
+    fetched.clear()
     assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
     assertTrue(fetched.isEmpty(), "nothing is fetched on the render path")
     assertTrue(web.fetchImages())
@@ -150,6 +162,19 @@ class LiveryA2uiWebTest {
     val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
     assertEquals("a2ui:signed:app", r.designId)
     assertEquals(1, fetched.size, "fetched once")
+    // A page whose signed limit is smaller than the document never keeps it.
+    val small = LiveryA2uiWeb(
+      repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null,
+      DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())), maxSignedBytes = 16),
+      fetcher = object : RedirectingFetcher {
+        override suspend fun get(url: String, etag: String?) = get(url, etag) { true }
+        override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult =
+          if (bytes.size > maxBytes) FetchResult.Failed(200, "more than $maxBytes bytes") else FetchResult.Ok(bytes, null)
+      },
+      documentHosts = { it == "catalog.example" },
+    )
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(small.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(!small.fetchImages(), "over the signed limit: not read, not kept")
   }
 
   @Test fun aTemplateSaysHowTallItIs() = runTest {

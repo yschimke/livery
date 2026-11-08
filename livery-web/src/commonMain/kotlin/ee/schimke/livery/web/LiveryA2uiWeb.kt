@@ -18,7 +18,7 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.CacheOnly
 import ee.schimke.livery.client.FetchResult
-import ee.schimke.livery.client.Fetcher
+import ee.schimke.livery.client.RedirectingFetcher
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.instantiate.Admission
@@ -75,7 +75,7 @@ class LiveryA2uiWeb(
   /** Action kinds the page handles itself (`navigate`, `dismiss`, `app:…`) when the agent didn't wire them. */
   private val appKinds: Set<String> = emptySet(),
   /** Fetches a signed document the agent names by `url` (docs/A2UI.md); null fetches none. */
-  private val fetcher: Fetcher? = null,
+  private val fetcher: RedirectingFetcher? = null,
   /**
    * The hosts a named document's `url` may be on: those of the app's catalog sources. The agent
    * names content; it never makes the page contact a host the app didn't configure.
@@ -381,10 +381,14 @@ class LiveryA2uiWeb(
     val host = hostOf(url)
     if (!url.startsWith("https://") || host == null || !documentHosts(host)) return "$url is not on a host the page's catalog uses"
     val fetch = fetcher ?: return "the page fetches no named documents"
+    val admission = documents ?: return "the page accepts no documents sent with a message"
     owed += {
-      val bytes = (fetch.get(url, null) as? FetchResult.Ok)?.bytes
+      // Every hop stays on the catalog's hosts, and nothing past the signed limit is read.
+      val allowed = { to: String -> to.startsWith("https://") && hostOf(to)?.let(documentHosts) == true }
+      val bytes = (fetch.get(url, null, admission.maxSignedBytes.toLong(), allowed) as? FetchResult.Ok)?.bytes
+        ?.takeIf { it.size <= admission.maxSignedBytes }
       // Kept only when it is what the agent named; admission checks the signature on every render.
-      val ok = bytes != null && documents?.sha256(bytes) == sha
+      val ok = bytes != null && admission.sha256(bytes) == sha
       if (ok) fetched[sha] = bytes!!
       ok
     }
