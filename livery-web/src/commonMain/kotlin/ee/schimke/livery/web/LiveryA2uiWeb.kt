@@ -1,10 +1,9 @@
 package ee.schimke.livery.web
 
+import ee.schimke.livery.web.core.LiveryWeb
 import ee.schimke.livery.a2ui.A2uiComponentSpec
 import ee.schimke.livery.a2ui.LiveryA2ui
-import ee.schimke.livery.client.ActionArguments
 import ee.schimke.livery.client.ActionGate
-import ee.schimke.livery.client.ActionRouter
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.ContractBinder
@@ -15,24 +14,17 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
-import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
-import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.instantiate.Admission
 import ee.schimke.livery.instantiate.CachedImages
-import ee.schimke.livery.instantiate.ImageRequest
 import ee.schimke.livery.instantiate.DocumentAdmission
-import ee.schimke.livery.instantiate.InstantiateResult
 import ee.schimke.livery.instantiate.TemplateInstantiator
-import ee.schimke.livery.protocol.ActionKinds
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.ManifestSignature
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
-import ee.schimke.livery.protocol.TemplateEvent
 import kotlin.io.encoding.Base64
-import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -121,12 +113,9 @@ class LiveryA2uiWeb(
     data class Dropped(val reason: String) : Routed
   }
 
-  private class Live(val plan: RenderPlan, val wiring: Map<String, JsonObject>)
-
-  /** Plans by render id, until the page [release]s them: every one on screen can still act. */
-  private val live = LinkedHashMap<Int, Live>()
-  private var next = 1
-  private val missing = LinkedHashSet<ImageRequest>()
+  private val core = LiveryWeb(repository, planner, capabilities, events, clock, images, urlAllowlist, appKinds)
+  private val wiringByRender = mutableMapOf<Int, Map<String, JsonObject>>()
+  private fun Space.core() = LiveryWeb.Space(widthDp, heightDp, density, themeArgb, decisionId)
 
   /**
    * The contracts worth advertising: one per major, those the repository can resolve a template for
@@ -154,128 +143,24 @@ class LiveryA2uiWeb(
       is RenderPlan -> p
       else -> return Rendered.Fallback("$name (${contract.ref}): $p")
     }
-    val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
-    // What a playing document can't take as a named value is written in; the rest stays live.
-    val written = Bindings(plan.bindings.values.filterValues { it is NamedValue.Image || it is NamedValue.L })
-    val live = plan.bindings.values.filterValues { it !is NamedValue.Image && it !is NamedValue.L }.mapValues { (_, v) -> playerValue(v) }
-    // The names bound are part of the key: a value left out reloads the document, so it draws the
-    // template's own default instead of keeping the last value set.
-    val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" } +
-      "|" + live.keys.sorted().joinToString(",")
-    // Any image the document draws is written in: the web player draws none from a URL.
-    val draws = written.values.isNotEmpty() || drawsImages(plan.template.entry.sha256, plan.template.bytes)
-    if (!draws) {
-      val id = next++
-      this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
-    }
-    val cached = images?.let(::CachedImages)
-    val instantiator = cached?.instantiator ?: NO_IMAGES
-    return when (val i = instantiator.instantiate(plan.template.bytes, written, px(space.widthDp), px(space.heightDp), capabilities.maxBytes)) {
-      is InstantiateResult.Failed -> {
-        val misses = cached?.misses.orEmpty()
-        if (misses.isEmpty()) return Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
-        missing += misses
-        Rendered.Waiting("$name (${contract.ref}): ${i.reason}")
-      }
-      is InstantiateResult.Ok -> {
-        val id = next++
-        this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
-      }
+    return when (val r = core.prepare(plan, space.core(), wiring.keys)) {
+      is LiveryWeb.Rendered.Ready -> { wiringByRender[r.id] = wiring; Rendered.Ready(r.id, r.document, r.documentKey, r.values, r.designId, r.sha256, r.heightDp) }
+      is LiveryWeb.Rendered.Waiting -> Rendered.Waiting(r.reason)
+      is LiveryWeb.Rendered.Fallback -> Rendered.Fallback(r.reason)
     }
   }
 
-  /**
-   * Fetches the images earlier renders were [Rendered.Waiting] for, off the render path; true when
-   * there were some and all arrived, so a new [render] can draw.
-   */
-  suspend fun fetchImages(): Boolean {
-    val resolver = images ?: return false
-    val asked = missing.toList()
-    missing.clear()
-    // Each is attempted even after one fails; one that fails is asked for again by the next render.
-    return asked.isNotEmpty() && asked.map { resolver.resolve(it.ref, it.widthPx, it.heightPx) != null }.all { it }
-  }
-
-  /** The page shows render [id] (the player is ready): its impression, as `LiveryTemplate` reports after its first frame. */
-  fun shown(id: Int) {
-    val plan = live[id]?.plan ?: return
-    events.emit(event(TemplateEvent.Type.Impression, plan))
-  }
-
-  /** The page stopped showing render [id]: [action] no longer answers for it. */
-  fun release(id: Int) {
-    live.remove(id)
-  }
-
-  /**
-   * A host named action from render [id]'s document: its [name] and value as the player reported
-   * it ([valueType] `none`, `string`, `int`, `float`; [value] its text). Livery's convention
-   * (PROTOCOL.md §7, as `livery-compose`'s `toTemplateAction`): nothing, a JSON object of
-   * arguments, or one `value`; a `set`'s text is its value exactly as sent.
-   */
+  suspend fun fetchImages(): Boolean = core.fetchImages()
+  fun shown(id: Int) = core.shown(id)
+  fun release(id: Int) { core.release(id); wiringByRender.remove(id) }
+  fun close() { core.close(); wiringByRender.clear() }
   suspend fun action(id: Int, name: String, valueType: String, value: String?): Routed {
-    val state = live[id] ?: return Routed.Dropped("render $id is not on screen")
-    val contract = state.plan.contract
-    val isSet = contract.actions[name]?.kind == ActionKinds.SET
-    val args: Map<String, String> = when (valueType) {
-      "string" -> if (isSet) mapOf(ActionGate.VALUE to value.orEmpty()) else ActionArguments.parse(value) ?: return Routed.Dropped("malformed arguments")
-      "int", "float" -> value?.let { mapOf(ActionGate.VALUE to it) } ?: emptyMap()
-      "none" -> emptyMap()
-      else -> return Routed.Dropped("not a Livery action ($valueType)")
+    val wiring = wiringByRender[id].orEmpty()
+    return when (val r = core.action(id, name, valueType, value)) {
+      is LiveryWeb.Routed.Set -> Routed.Set(r.input, r.value, wiring[name]?.let { agent(it, r.checked) })
+      is LiveryWeb.Routed.App -> wiring[name]?.let { agent(it, r.checked) } ?: Routed.App(r.kind, r.action, r.args)
+      is LiveryWeb.Routed.Dropped -> Routed.Dropped(r.reason)
     }
-    var routed: Routed? = null
-    val route: suspend (RenderPlan, String, Map<String, String>) -> Unit = { plan, action, all ->
-      // The agent sees only the arguments the contract declares, as the gate checked them; the
-      // page's own handler gets them all (as LiveryA2uiComponent does).
-      val checked = ActionGate.check(plan.contract, action, all).args
-      val wired = state.wiring[action]?.let { agent(it, checked) }
-      val spec = plan.contract.actions.getValue(action)
-      routed = when {
-        spec.kind == ActionKinds.SET -> {
-          val input = spec.input!!
-          val type = plan.contract.inputs.getValue(input).type
-          Routed.Set(input, LiveryA2ui.toJson(LiveryA2ui.writable(checked[ActionGate.VALUE], type)), wired)
-        }
-        wired != null -> wired
-        spec.kind in appKinds -> Routed.App(spec.kind, action, all)
-        else -> null
-      }
-      if (routed == null && spec.kind != ActionKinds.TRACK) {
-        events.emit(event(TemplateEvent.Type.Error, plan).copy(action = action, detail = "no handler for ${spec.kind}"))
-      }
-    }
-    val kinds = contract.actions.values.map { it.kind }.toSet()
-    ActionRouter(kinds.associateWith { route }, urlAllowlist, events, clock).dispatch(state.plan, name, args)
-    return routed ?: Routed.Dropped(ActionGate.check(contract, name, args).problem ?: "not handled")
-  }
-
-  private val imagesBySha = HashMap<String, Boolean>()
-  private val heightBySha = HashMap<String, Int?>()
-
-  /**
-   * The template's own height, for a component the page gives none: the smallest height its target
-   * declares, else the height its document was authored at.
-   */
-  private fun heightDp(plan: RenderPlan): Int? {
-    val entry = plan.template.entry
-    entry.target.size.minHeightDp?.let { return it }
-    return heightBySha.getOrPut(entry.sha256) { runCatching { TemplateInstantiator.authoredHeightDp(plan.template.bytes) }.getOrNull() }
-  }
-
-  private fun drawsImages(sha256: String, template: ByteArray): Boolean =
-    imagesBySha.getOrPut(sha256) { runCatching { TemplateInstantiator.bitmapUrls(template).isNotEmpty() }.getOrDefault(true) }
-
-  /** A named value as the web player sets it: booleans as 1 or 0, colours as `#AARRGGBB`. */
-  private fun playerValue(v: NamedValue): JsonElement = when (v) {
-    is NamedValue.Str -> JsonPrimitive(v.value)
-    is NamedValue.I -> JsonPrimitive(v.value)
-    is NamedValue.L -> JsonPrimitive(v.value)
-    is NamedValue.F -> JsonPrimitive(v.value)
-    is NamedValue.B -> JsonPrimitive(if (v.value) 1 else 0)
-    is NamedValue.Color -> JsonPrimitive("#" + (v.argb and 0xFFFFFFFFL).toString(16).uppercase().padStart(8, '0'))
-    is NamedValue.Image -> JsonPrimitive(v.ref)
   }
 
   private fun agent(action: JsonObject, args: Map<String, String>): Routed.Agent {
@@ -328,23 +213,5 @@ class LiveryA2uiWeb(
     return RenderPlan(LoadedTemplate(entry, null, admitted.bytes, LoadedTemplate.Origin.Fresh, contract), contract, bindings, decisionId = decisionId)
   }
 
-  private fun event(type: TemplateEvent.Type, plan: RenderPlan) = TemplateEvent(
-    type = type,
-    atEpochMs = clock.nowEpochMs(),
-    placement = plan.decision?.placement,
-    decisionId = plan.decisionId,
-    feedItemId = plan.feedItem?.id,
-    designId = plan.template.entry.designId,
-    sha256 = plan.template.entry.sha256,
-    experiments = plan.experiments,
-  )
-
   private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
-
-  private companion object {
-    /** The image size to ask for when A2UI gives no bound: a phone-width card. */
-    const val DEFAULT_IMAGE_DP = 360
-
-    val NO_IMAGES = TemplateInstantiator { _, _, _ -> null }
-  }
 }

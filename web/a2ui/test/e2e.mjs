@@ -55,7 +55,7 @@ await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE_PATH });
 const page = await browser.newPage({ viewport: { width: 480, height: 700 } });
 const logs = [];
 page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));

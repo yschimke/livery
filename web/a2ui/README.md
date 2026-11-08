@@ -43,7 +43,7 @@ at publish time.
 
 The page serves this package's `dist/livery-web/` (fetched beside `dist/livery.js`, `.wasm` as
 `application/wasm`) and the catalog (its `manifest.json` and blobs). The player is in the bundle:
-`vendor/remote-compose-player.mjs` (vendor/PROVENANCE.md).
+`@livery/web` (../core/vendor/PROVENANCE.md).
 
 The module's glue imports `@js-joda/core`, a dependency of this package. A bundler resolves it; a
 page without one uses an import map.
@@ -65,7 +65,8 @@ authored at.
 ## Develop
 
 ```sh
-./gradlew :livery-web:webDist :livery-publish:installDist   # the Wasm module, and the CLI the test builds a catalog with
+./gradlew :livery-web-core:webDist :livery-web:webDist :livery-publish:installDist   # the Wasm module, and the CLI the test builds a catalog with
+(cd ../core && npm ci && npm run build)                 # neutral player package
 npm ci && npm run check && npm run build
 npm test                                                    # headless Chromium (Playwright)
 ```

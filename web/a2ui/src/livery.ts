@@ -75,6 +75,7 @@ export type Routed =
 /** The `livery-web` module's exports (`livery-livery-web.mjs`). */
 export interface LiveryWebModule {
   liveryOpen(config: string): Promise<unknown>;
+  liveryClose(session: number): void;
   liveryRefresh(session: number): Promise<unknown>;
   liveryComponents(session: number): Promise<unknown>;
   liveryCatalogSchema(session: number, catalogId: string): Promise<unknown>;
@@ -101,6 +102,9 @@ export class LiverySession {
     const m = lib ?? (await loadLiveryWeb());
     return new LiverySession(m, Number(await m.liveryOpen(JSON.stringify(config))));
   }
+
+  /** Close after removing the session's components. Cancels pending work and clears listeners. */
+  close(): void { this.waiting.clear(); this.lib.liveryClose(this.id); }
 
   async refresh(): Promise<string> {
     return String(await this.lib.liveryRefresh(this.id));

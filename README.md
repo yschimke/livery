@@ -53,6 +53,7 @@ Early. In this repository today:
 | `livery-mcp-core` | the agent tools as a transport-free MCP server in common Kotlin, over any Okio file system; renders, git history and revision checks come from an `McpHost` |
 | `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
 | `livery-capture` | author templates in Compose: contract-typed named values (`LiveryValues`), capture per target, and a design folder a unit test writes or checks |
+| `livery-web-core` / `web/core` | experimental: standalone Kotlin/Wasm component-preview pipeline and browser player, with a runnable local quantity-stepper demo; see [web preview](web/core/README.md) |
 | `livery-uibuilder` | optional: Compose UI Builder as an authoring tool: `livery ui-builder scaffold` / `import`, and `ui_builder_*` tools for `livery-mcp` |
 | `livery-review` | `livery review`: the pull request report with each changed design drawn before and after with its contract's examples (a CLI extension that brings `livery-render`) |
 | `livery-verify` | tests: plays every launcher widget template, with each contract example, on Android 16's own widget player under Robolectric, and fails on what a home screen would show as an error |

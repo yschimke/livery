@@ -142,7 +142,7 @@ jobs:
   # `@livery/a2ui` (web/a2ui) in headless Chromium: livery-web's Wasm module, A2UI's own Lit
   # renderer and rc-players' web player, drawing the sample catalog in an A2UI surface.
   web:
-    name: Web (A2UI)
+    name: Web (standalone and A2UI)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -162,18 +162,22 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: livery-web's Wasm module and the livery CLI
         working-directory: .
-        run: ./gradlew :livery-web:webDist :livery-publish:installDist
+        run: ./gradlew :livery-web-core:webDist :livery-web:webDist :livery-publish:installDist
+      - name: Standalone package
+        working-directory: web/core
+        run: npm ci && npm run check && npm run build
       - name: npm ci, check and build
         run: |
           npm ci
           npm run check
           npm run build
-      # Not a dependency of the package: the test's browser, installed for this run only.
       - name: Playwright's Chromium
         run: |
-          npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
-      - name: End-to-end in Chromium
+      - name: Standalone end-to-end in Chromium
+        working-directory: web/core
+        run: npm test
+      - name: A2UI end-to-end in Chromium
         run: npm test
 
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).

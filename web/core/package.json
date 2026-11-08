@@ -1,0 +1,17 @@
+{
+  "name": "@livery/web",
+  "version": "0.0.0",
+  "description": "Standalone Remote Compose previews using Livery's Kotlin/Wasm gates",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "vendor", "README.md"],
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
+    "test": "node test/e2e.mjs",
+    "demo": "node test/e2e.mjs --serve"
+  },
+  "dependencies": { "@js-joda/core": "3.2.0" },
+  "devDependencies": { "typescript": "5.9.3", "esbuild": "0.28.2", "playwright": "1.58.2" }
+}

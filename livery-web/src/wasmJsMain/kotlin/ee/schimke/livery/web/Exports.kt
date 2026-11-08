@@ -2,6 +2,12 @@
 
 package ee.schimke.livery.web
 
+import ee.schimke.livery.client.defaultHttpClient
+import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.KtorFetcher
@@ -67,7 +73,10 @@ internal data class WebConfig(
 @Serializable
 internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null)
 
-private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>)
+private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>, val http: HttpClient) {
+  val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  fun close() { scope.cancel(); web.close(); events.clear(); http.close() }
+}
 
 private val sessions = mutableMapOf<Int, Session>()
 private var nextSession = 1
@@ -76,6 +85,7 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 private fun session(id: Int): Session = sessions[id] ?: error("no Livery session $id")
 
 private fun <T> async(block: suspend () -> T): Promise<JsAny?> = GlobalScope.promise { block()?.toString()?.toJsString() }
+private fun <T> inSession(id: Int, block: suspend () -> T): Promise<JsAny?> = session(id).scope.promise { block()?.toString()?.toJsString() }
 
 /** Opens a session on a catalog (refreshing it once) and resolves to its handle. */
 @JsExport
@@ -86,7 +96,8 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   val clock = Clock { kotlin.time.Clock.System.now().toEpochMilliseconds() }
   val events = mutableListOf<TemplateEvent>()
   val sink = ee.schimke.livery.client.EventSink { events += it }
-  val fetcher = KtorFetcher()
+  val http = defaultHttpClient()
+  val fetcher = KtorFetcher(http)
   val repository = TemplateRepository(
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
     MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(c.capabilities),
@@ -103,20 +114,20 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     documents, urlAllowlist = { url -> c.urlAllowlist.any(url::startsWith) }, appKinds = c.appKinds,
   )
   val id = nextSession++
-  sessions[id] = Session(web, repository, events)
+  sessions[id] = Session(web, repository, events, http)
   id
 }
 
 /** Fetches the catalog again; resolves to what changed (`updated`, `notModified`, a failure). */
 @JsExport
-fun liveryRefresh(session: Int): Promise<JsAny?> = async { session(session).repository.refresh(force = true)::class.simpleName }
+fun liveryRefresh(session: Int): Promise<JsAny?> = inSession(session) { session(session).repository.refresh(force = true)::class.simpleName }
 
 /**
  * The components to register: a JSON array of `{name, contract, description, schema, properties,
  * setInputs}`, each `properties` entry `{key, kind, required}` in `livery-a2ui`'s terms.
  */
 @JsExport
-fun liveryComponents(session: Int): Promise<JsAny?> = async {
+fun liveryComponents(session: Int): Promise<JsAny?> = inSession(session) {
   buildJsonArray {
     for (spec in session(session).web.components()) add(buildJsonObject {
       put("name", spec.name)
@@ -136,7 +147,7 @@ fun liveryComponents(session: Int): Promise<JsAny?> = async {
 
 /** The A2UI catalog JSON of the session's playable contracts, as `livery build --a2ui` writes it. */
 @JsExport
-fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = async {
+fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = inSession(session) {
   LiveryA2ui.catalogSchema(catalogId, session(session).web.playable())
 }
 
@@ -149,7 +160,7 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = asyn
  * yet: call [liveryFetchImages], then render again.
  */
 @JsExport
-fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = async {
+fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = inSession(session) {
   val s = json.decodeFromString(WebSpace.serializer(), space)
   val theme = s.theme.mapNotNull { (role, hex) -> argb(hex)?.let { role to it } }.toMap()
   val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId))
@@ -166,7 +177,7 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
 
 /** Fetches the images renders were waiting for (off the render path); resolves to whether all arrived. */
 @JsExport
-fun liveryFetchImages(session: Int): Promise<JsAny?> = async { session(session).web.fetchImages() }
+fun liveryFetchImages(session: Int): Promise<JsAny?> = inSession(session) { session(session).web.fetchImages() }
 
 /** The player shows render [render]: its impression. */
 @JsExport
@@ -183,7 +194,7 @@ fun liveryRelease(session: Int, render: Int) = session(session).web.release(rend
  * `{route: "dropped", reason}`.
  */
 @JsExport
-fun liveryAction(session: Int, render: Int, name: String, valueType: String, value: String?): Promise<JsAny?> = async {
+fun liveryAction(session: Int, render: Int, name: String, valueType: String, value: String?): Promise<JsAny?> = inSession(session) {
   fun agent(a: LiveryA2uiWeb.Routed.Agent) = buildJsonObject {
     put("route", "agent"); put("action", a.action); put("shadowed", JsonArray(a.shadowed.map(::JsonPrimitive)))
   }
@@ -214,3 +225,7 @@ private fun argb(hex: String): Long? {
   val v = h.toLongOrNull(16) ?: return null
   return when (h.length) { 6 -> 0xFF000000L or v; 8 -> v; else -> null }
 }
+
+/** Releases a page's A2UI session when its host is disposed. */
+@JsExport
+fun liveryClose(id: Int) { sessions.remove(id)?.close() }
