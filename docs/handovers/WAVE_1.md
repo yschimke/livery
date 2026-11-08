@@ -73,6 +73,11 @@ checks above do not substitute for that required gate. Swift/device tests were n
 Heron is a separate checkout at `/workspace/rc-wave1/heron`, branch
 `agent/heron-incoming-share`, based on upstream `097a68215eb26f5eeed71c4e744897890f5afbf1`.
 Implementation commit: `5a337c0` (`feat(android): open incoming text shares in the post composer`).
+The branch is preserved in [yschimke/heron](https://github.com/yschimke/heron/tree/agent/heron-incoming-share)
+at [the tested commit](https://github.com/yschimke/heron/commit/5a337c083640f11f68937415fad098b5e6ef27a5).
+Keep this work in the fork while upstream integration is deferred; recheck upstream
+changes and rerun validation before proposing it there. No upstream PR has been opened.
+
 Its scaffold desktop tests pass: 36 total, including 11 new incoming-share cases.
 Both new composer tests pass, covering initial Unicode URL formatting/link-preview
 seeding and the ordinary empty composer. Desktop production compilation and repository
