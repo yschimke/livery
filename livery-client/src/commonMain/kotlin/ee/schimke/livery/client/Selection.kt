@@ -16,6 +16,7 @@ import ee.schimke.livery.protocol.themeFits
  * doesn't fill, an action it can't route) are skipped, so an older version of the same design plays
  * instead. Null accepts any minor, as clients did before minors were tracked.
  */
+@kotlinx.serialization.Serializable
 data class TemplateQuery(
   val contract: String,
   val caps: PlayerCapabilities,

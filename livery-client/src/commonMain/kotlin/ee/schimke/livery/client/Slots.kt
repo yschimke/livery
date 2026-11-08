@@ -20,8 +20,8 @@ data class RenderPlan(
   /** Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event. */
   val experiments: Map<String, String> = decision?.experiments.orEmpty(),
   /**
-   * The id every event of this plan carries: the decision's, or where the template was placed when
-   * no decision placed it (an A2UI component's `a2ui:<surfaceId>/<componentId>`).
+   * The id every event carries: the decision's by default, or a host override such as an A2UI
+   * component's `a2ui:<surfaceId>/<componentId>`. [decision] retains the original server identity.
    */
   val decisionId: String? = decision?.decisionId,
 )
@@ -102,14 +102,16 @@ class SlotPlanner(
     return plan(t, data, extra, null, null, decisionId = decisionId)
   }
 
-  suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY): PlanResult {
-    val t = repository.ensure(decision.template, query) ?: return fallback(query, "no template for ${decision.template}", decision)
+  /** The server's exact choice and data; [decisionId] also overrides planner error/fallback events. */
+  suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY, decisionId: String? = decision.decisionId): PlanResult {
+    if (decision.template.contract != null && decision.template.contract != query.contract) return fallback(query, "decision contract mismatch", decision, decisionId)
+    val t = repository.ensure(decision.template, query) ?: return fallback(query, "no template for ${decision.template}", decision, decisionId)
     val ref = decision.template
     if ((ref.sha256 != null && t.entry.sha256 != ref.sha256) || (ref.designId != null && t.entry.designId != ref.designId)) {
       // A decision draws as decided or not at all: its data and tracking belong to that creative.
-      return fallback(query, "decided template $ref unavailable", decision)
+      return fallback(query, "decided template $ref unavailable", decision, decisionId)
     }
-    return plan(t, decision.data, extra, decision, null)
+    return plan(t, decision.data, extra, decision, null, decisionId = decisionId)
   }
 
   suspend fun forFeedItem(query: TemplateQuery, item: FeedItem, extra: Bindings = Bindings.EMPTY): PlanResult {

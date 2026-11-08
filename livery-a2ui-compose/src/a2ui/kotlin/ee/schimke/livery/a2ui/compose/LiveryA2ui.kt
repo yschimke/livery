@@ -41,7 +41,14 @@ class LiveryA2uiHost(
    * refuses every one: the component then draws only reviewed designs from the catalog.
    */
   val documents: DocumentAdmission? = null,
-)
+  val documentFetcher: ee.schimke.livery.client.RedirectingFetcher? = null,
+  val decider: ee.schimke.livery.client.Decider? = null,
+  /** App-owned context; never taken from the agent's query params. */
+  val decisionContext: (() -> ee.schimke.livery.client.DecisionContext)? = null,
+) {
+  internal val namedDocuments = ee.schimke.livery.instantiate.NamedDocuments(repository, documents, documentFetcher)
+
+}
 
 object LiveryA2uiCompose {
   /**

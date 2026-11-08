@@ -58,6 +58,41 @@ class ConformanceTest {
     assertEquals(file.readText(), text, "conformance/$name drifted: rerun with -Plivery.conformance.update=true if intended")
   }
 
+  @Test fun decisionRequest() {
+    val request = DecisionRequest(TemplateQuery("promo/banner@1", PlayerCapabilities(Surfaces.IN_APP, 7, setOf("androidx")), widthDp = 360, theme = "dark", minor = 1),
+      buildJsonObject { put("offer", "summer") }, DecisionContext(1_000, "test", "en-GB", 4, "app-scoped"))
+    check("decision-request.json", json.encodeToJsonElement(DecisionRequest.serializer(), request))
+  }
+
+  @Test fun exactBundledDocuments() = runBlocking {
+    val m = Fx.manifest()
+    val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
+    val blobs = names.associate { FakeCrypto.sha(Fx.blob(it)) to Fx.blob(it).decodeToString() }
+    val repository = TemplateRepository(StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> error("no network") }, FakeCrypto,
+      TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), Clock { 1_000 }, listOf(Fx.inApp),
+      TemplateRepository.Bundled(m) { blobs[it]?.encodeToByteArray() })
+    val q = TemplateQuery(Fx.tile.ref, Fx.inApp)
+    val cases = listOf(
+      "installed exact" to ee.schimke.livery.protocol.TemplateRef(sha256 = m.templates[0].sha256),
+      "on request exact" to ee.schimke.livery.protocol.TemplateRef(sha256 = m.templates[5].sha256),
+      "too new" to ee.schimke.livery.protocol.TemplateRef(sha256 = m.templates[2].sha256),
+      "unknown hash" to ee.schimke.livery.protocol.TemplateRef(sha256 = "0".repeat(64)),
+      "wrong design" to ee.schimke.livery.protocol.TemplateRef(sha256 = m.templates[0].sha256, designId = "tile-retro"),
+    )
+    check("exact-bundled.json", buildJsonObject {
+      put("manifest", json.encodeToJsonElement(Manifest.serializer(), m))
+      put("blobs", buildJsonObject { blobs.forEach { (key, value) -> put(key, value) } })
+      put("query", json.encodeToJsonElement(TemplateQuery.serializer(), q))
+      put("cases", kotlinx.serialization.json.JsonArray(cases.map { (name, ref) ->
+        val loaded = repository.ensure(ref, q)
+        buildJsonObject {
+          put("name", name); put("ref", json.encodeToJsonElement(ee.schimke.livery.protocol.TemplateRef.serializer(), ref))
+          put("expect", loaded?.entry?.sha256?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        }
+      }))
+    })
+  }
+
   // --- selection ------------------------------------------------------------------------------
 
   /** With [fallbacks], the first of [query] and then each of them that has a template decides (§5.4). */

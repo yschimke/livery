@@ -24,6 +24,15 @@ class LiveryA2uiMessagesTest {
   private fun problems(m: JsonElement, data: String? = null, designs: Map<String, Set<String>>? = null) =
     LiveryA2uiMessages.validate(m, contracts, data?.let(Json::parseToJsonElement), designs)
 
+  @Test fun queryAndNamedFormsAreValidatedBeforeRendering() {
+    for (template in listOf("""{"query":{"offer":"sale"}}""", """{"sha256":"${"a".repeat(64)}"}""")) {
+      assertEquals(emptyList(), problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")))
+    }
+    for (template in listOf("""{"query":42}""", """{"query":{},"url":"https://agent.invalid/"}""", """{"sha256":"bad"}""", """{"query":{},"inline":"eA=="}""")) {
+      assertTrue(problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")).isNotEmpty())
+    }
+  }
+
   @Test fun aGoodComponentHasNoProblems() {
     val m = message("""{"id":"root","component":"Column","children":["promo"],"anything":1}""",
       """{"id":"promo","component":"PromoBanner","headline":{"path":"/t"},"cta":"Shop","actions":{"cta":{"event":{"name":"go"}}},"design":"banner-bold"}""")

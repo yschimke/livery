@@ -11,6 +11,35 @@ final class ConformanceTests: XCTestCase {
     return try Data(contentsOf: root.appendingPathComponent("conformance").appendingPathComponent(name))
   }
 
+  func testDecisionRequest() throws {
+    let request = try JSONDecoder().decode(DecisionRequest.self, from: fixture("decision-request.json"))
+    XCTAssertEqual(request.query.contract, "promo/banner@1")
+    XCTAssertEqual(request.query.widthDp, 360)
+    XCTAssertEqual(request.query.minor, 1)
+    XCTAssertEqual(request.query.theme, "dark")
+    XCTAssertEqual(request.params["offer"], .string("summer"))
+    XCTAssertEqual(request.context.locale, "en-GB")
+    let again = try JSONDecoder().decode(DecisionRequest.self, from: JSONEncoder().encode(request))
+    XCTAssertEqual(again.query, request.query)
+    XCTAssertEqual(again.params, request.params)
+  }
+
+  struct ExactBundledFixture: Decodable, Sendable {
+    struct Case: Decodable, Sendable { var name: String; var ref: TemplateRef; var expect: String? }
+    var manifest: Manifest; var blobs: [String: String]; var query: TemplateQuery; var cases: [Case]
+  }
+
+  func testExactBundledDocuments() async throws {
+    let f = try JSONDecoder().decode(ExactBundledFixture.self, from: fixture("exact-bundled.json"))
+    let repo = TemplateRepository(source: StaticSource("https://catalog.invalid/"), fetcher: RepositoryTests.Host(files: [:]), trust: .allowUnsigned,
+      blobs: MemoryBlobStore(), kv: MemoryKeyValueStore(), clock: { 1_000 }, targets: [f.query.caps],
+      bundled: .init(manifest: f.manifest) { sha in f.blobs[sha].map { Data($0.utf8) } })
+    for c in f.cases {
+      let loaded = await repo.ensure(c.ref, f.query)
+      XCTAssertEqual(loaded?.entry.sha256, c.expect, c.name)
+    }
+  }
+
   struct SelectionFixture: Decodable {
     struct Query: Decodable {
       var contract: String; var caps: PlayerCapabilities; var widthDp: Int?; var heightDp: Int?

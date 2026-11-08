@@ -7,6 +7,8 @@ public struct RenderPlan: Sendable {
   public var bindings: Bindings
   public var decision: Decision?
   public var feedItem: FeedItem?
+  public var decisionIdOverride: String? = nil
+  public var decisionId: String? { decisionIdOverride ?? decision?.decisionId }
   /// Experiment → arm for every experiment that shaped this plan (the decision's, a design arm's): on every event.
   public var experiments: [String: String] = [:]
   /// The `PresentedScreen` this plan is drawn in, set by `LiveryScreens`: which screen an action
@@ -18,7 +20,7 @@ extension RenderPlan {
   /// One identity per rendered item: a different template, decision or feed item in the same slot
   /// is a different item, measured on its own (PROTOCOL.md §8). Views key themselves on it.
   public var renderIdentity: String {
-    "\(template.entry.sha256)|\(decision?.decisionId ?? "")|\(feedItem?.id ?? "")"
+    "\(template.entry.sha256)|\(decisionId ?? "")|\(feedItem?.id ?? "")"
   }
 
   /// A stable tag for the view a plan draws in, for UI tests and tap-tracking tools:
@@ -89,13 +91,14 @@ public struct SlotPlanner: Sendable {
     return plan(t, data, extra, nil, nil)
   }
 
-  public func forDecision(_ query: TemplateQuery, _ decision: Decision, extra: Bindings = Bindings()) async -> PlanResult {
-    guard let t = await repository.ensure(decision.template, query) else { return fallback(query, "no template for the decision", decision) }
+  public func forDecision(_ query: TemplateQuery, _ decision: Decision, extra: Bindings = Bindings(), decisionId: String? = nil) async -> PlanResult {
+    if let contract = decision.template.contract, contract != query.contract { return fallback(query, "decision contract mismatch", decision, decisionId) }
+    guard let t = await repository.ensure(decision.template, query) else { return fallback(query, "no template for the decision", decision, decisionId) }
     let ref = decision.template
     if (ref.sha256 != nil && t.entry.sha256 != ref.sha256) || (ref.designId != nil && t.entry.designId != ref.designId) {
-      return fallback(query, "decided template unavailable", decision)
+      return fallback(query, "decided template unavailable", decision, decisionId)
     }
-    return plan(t, decision.data, extra, decision, nil)
+    return plan(t, decision.data, extra, decision, nil, decisionId: decisionId)
   }
 
   public func forFeedItem(_ query: TemplateQuery, _ item: FeedItem, extra: Bindings = Bindings()) async -> PlanResult {
@@ -105,20 +108,20 @@ public struct SlotPlanner: Sendable {
     return plan(t, item.data, extra, nil, item)
   }
 
-  private func plan(_ t: LoadedTemplate, _ data: [String: JSONValue], _ extra: Bindings, _ d: Decision?, _ f: FeedItem?, _ arms: [String: String] = [:]) -> PlanResult {
+  private func plan(_ t: LoadedTemplate, _ data: [String: JSONValue], _ extra: Bindings, _ d: Decision?, _ f: FeedItem?, _ arms: [String: String] = [:], decisionId: String? = nil) -> PlanResult {
     guard let contract = t.contract else { return .fallback("contract \(t.entry.contract) unknown") }
     let experiments = (d?.experiments ?? [:]).merging(arms) { _, arm in arm }
     switch ContractBinder.bind(contract, data) {
-    case .ok(let b): return .ready(RenderPlan(template: t, contract: contract, bindings: b + extra, decision: d, feedItem: f, experiments: experiments))
+    case .ok(let b): return .ready(RenderPlan(template: t, contract: contract, bindings: b + extra, decision: d, feedItem: f, decisionIdOverride: decisionId, experiments: experiments))
     case .invalid(let problems):
-      events(TemplateEvent(type: .error, atEpochMs: clock(), placement: d?.placement, decisionId: d?.decisionId, feedItemId: f?.id,
+      events(TemplateEvent(type: .error, atEpochMs: clock(), placement: d?.placement, decisionId: decisionId ?? d?.decisionId, feedItemId: f?.id,
         designId: t.entry.designId, sha256: t.entry.sha256, detail: problems.map { "\($0.name): \($0.message)" }.joined(separator: ", "), experiments: experiments))
       return .fallback("invalid data")
     }
   }
 
-  private func fallback(_ q: TemplateQuery, _ reason: String, _ d: Decision?) -> PlanResult {
-    events(TemplateEvent(type: .fallback, atEpochMs: clock(), placement: d?.placement, decisionId: d?.decisionId, detail: "\(q.contract): \(reason)", experiments: d?.experiments ?? [:]))
+  private func fallback(_ q: TemplateQuery, _ reason: String, _ d: Decision?, _ decisionId: String? = nil) -> PlanResult {
+    events(TemplateEvent(type: .fallback, atEpochMs: clock(), placement: d?.placement, decisionId: decisionId ?? d?.decisionId, detail: "\(q.contract): \(reason)", experiments: d?.experiments ?? [:]))
     return .fallback(reason)
   }
 }
@@ -140,7 +143,7 @@ public struct ActionRouter: Sendable {
   /// needs no handler; every event carries only the declared arguments, and a handler gets them all.
   public func dispatch(_ plan: RenderPlan, _ action: String, _ args: [String: String]) async {
     let check = ActionGate.check(plan.contract, action, args)
-    let base = TemplateEvent(type: .action, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decision?.decisionId,
+    let base = TemplateEvent(type: .action, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decisionId,
       feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, action: action,
       experiments: plan.experiments, args: check.args)
     func error(_ detail: String) { var e = base; e.type = .error; e.detail = detail; events(e) }

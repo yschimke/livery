@@ -1,0 +1,210 @@
+{
+  "manifest": {
+    "catalog": "test",
+    "serial": 1,
+    "generatedAtEpochMs": 0,
+    "expiresAtEpochMs": 10000000,
+    "ttlSeconds": 60,
+    "contracts": [
+      {
+        "id": "live/status-tile",
+        "major": 1,
+        "inputs": {
+          "name": {
+            "type": "string",
+            "required": true,
+            "maxLength": 10
+          },
+          "is_on": {
+            "type": "bool"
+          },
+          "level": {
+            "type": "float",
+            "min": 0.0,
+            "max": 1.0
+          }
+        }
+      }
+    ],
+    "designs": [
+      {
+        "id": "tile-default",
+        "contract": "live/status-tile@1",
+        "title": "Built-in",
+        "install": "Always"
+      },
+      {
+        "id": "tile-retro",
+        "contract": "live/status-tile@1",
+        "title": "Retro",
+        "variant": "retro",
+        "install": "OnRequest"
+      }
+    ],
+    "templates": [
+      {
+        "sha256": "5213a03cb045bac95213a03cb045bac95213a03cb045bac95213a03cb045bac9",
+        "bytes": 13,
+        "designId": "tile-default",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 7,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "5213a93cb045ca145213a93cb045ca145213a93cb045ca145213a93cb045ca14",
+        "bytes": 13,
+        "designId": "tile-default",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "5213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc7",
+        "bytes": 13,
+        "designId": "tile-default",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 9,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "c03793b39cffadcec03793b39cffadcec03793b39cffadcec03793b39cffadce",
+        "bytes": 19,
+        "designId": "tile-default",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "launcher-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "size": {
+            "minWidthDp": 110,
+            "maxWidthDp": 400,
+            "minHeightDp": 40,
+            "maxHeightDp": 400
+          }
+        }
+      },
+      {
+        "sha256": "74d207293c037aef74d207293c037aef74d207293c037aef74d207293c037aef",
+        "bytes": 21,
+        "designId": "tile-default",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "wear-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "glance-wear"
+          ],
+          "theme": "baked:dark",
+          "container": "wear:small"
+        }
+      },
+      {
+        "sha256": "c314724fb29fad4ec314724fb29fad4ec314724fb29fad4ec314724fb29fad4e",
+        "bytes": 11,
+        "designId": "tile-retro",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 7,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "7d3085139dd46c957d3085139dd46c957d3085139dd46c957d3085139dd46c95",
+        "bytes": 17,
+        "designId": "tile-retro",
+        "contract": "live/status-tile@1",
+        "target": {
+          "surface": "launcher-widget",
+          "rcApiLevel": 7,
+          "profiles": [
+            "widgets"
+          ],
+          "size": {
+            "minWidthDp": 110,
+            "maxWidthDp": 400,
+            "minHeightDp": 40,
+            "maxHeightDp": 400
+          }
+        }
+      }
+    ]
+  },
+  "blobs": {
+    "5213a03cb045bac95213a03cb045bac95213a03cb045bac95213a03cb045bac9": "rc:default-v7",
+    "5213a93cb045ca145213a93cb045ca145213a93cb045ca145213a93cb045ca14": "rc:default-v8",
+    "5213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc7": "rc:default-v9",
+    "c03793b39cffadcec03793b39cffadcec03793b39cffadcec03793b39cffadce": "rc:default-launcher",
+    "74d207293c037aef74d207293c037aef74d207293c037aef74d207293c037aef": "rc:default-wear-small",
+    "c314724fb29fad4ec314724fb29fad4ec314724fb29fad4ec314724fb29fad4e": "rc:retro-v7",
+    "7d3085139dd46c957d3085139dd46c957d3085139dd46c957d3085139dd46c95": "rc:retro-launcher"
+  },
+  "query": {
+    "contract": "live/status-tile@1",
+    "caps": {
+      "surface": "in-app",
+      "maxRcApiLevel": 8,
+      "profiles": [
+        "androidx",
+        "core"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "installed exact",
+      "ref": {
+        "sha256": "5213a03cb045bac95213a03cb045bac95213a03cb045bac95213a03cb045bac9"
+      },
+      "expect": "5213a03cb045bac95213a03cb045bac95213a03cb045bac95213a03cb045bac9"
+    },
+    {
+      "name": "on request exact",
+      "ref": {
+        "sha256": "c314724fb29fad4ec314724fb29fad4ec314724fb29fad4ec314724fb29fad4e"
+      },
+      "expect": "c314724fb29fad4ec314724fb29fad4ec314724fb29fad4ec314724fb29fad4e"
+    },
+    {
+      "name": "too new",
+      "ref": {
+        "sha256": "5213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc75213aa3cb045cbc7"
+      },
+      "expect": null
+    },
+    {
+      "name": "unknown hash",
+      "ref": {
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": null
+    },
+    {
+      "name": "wrong design",
+      "ref": {
+        "designId": "tile-retro",
+        "sha256": "5213a03cb045bac95213a03cb045bac95213a03cb045bac95213a03cb045bac9"
+      },
+      "expect": null
+    }
+  ]
+}

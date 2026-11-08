@@ -204,9 +204,9 @@ final class RepositoryTests: XCTestCase {
       let store = MemoryBlobStore(), kv = MemoryKeyValueStore()
       var files = blobs; files["manifest.json"] = original
       let host = MutableHost(files)
-      func open() -> TemplateRepository {
+      func open(at now: Int64 = 1_000) -> TemplateRepository {
         TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
-          blobs: store, kv: kv, clock: { 1_000 }, targets: [caps],
+          blobs: store, kv: kv, clock: { now }, targets: [caps],
           bundled: .init(manifest: bundledManifest, read: { sha in blobs["blobs/\(sha).rc"] }))
       }
       let repo = open()
@@ -223,7 +223,7 @@ final class RepositoryTests: XCTestCase {
       files.removeValue(forKey: "blobs/\(Hashing.sha256Hex(blob("b"))).rc")
       await host.replace(files)
       if case .failed = await repo.refresh(force: true) {} else { XCTFail("incomplete replacement activated") }
-      for reader in [repo, open()] {
+      for reader in [repo, open(), open(at: bundledManifest.expiresAtEpochMs + TemplateRepository.staleGraceMs + 1)] {
         let q = TemplateQuery(contract: "c/tile@1", caps: caps)
         let resolved = await reader.resolve(q)
         XCTAssertNil(resolved, "revoked content must not return through bundled fallback")

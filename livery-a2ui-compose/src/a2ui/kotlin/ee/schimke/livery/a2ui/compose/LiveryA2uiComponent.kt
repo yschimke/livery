@@ -8,7 +8,14 @@ import androidx.a2ui.compose.runtime.StaticA2uiProperty
 import androidx.a2ui.compose.ui.A2uiComponent
 import androidx.a2ui.model.protocol.A2uiException
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
+import ee.schimke.livery.a2ui.A2uiTemplate
+import ee.schimke.livery.a2ui.A2uiDecision
+import ee.schimke.livery.client.CacheOnly
+import ee.schimke.livery.client.DecisionRequest
+import ee.schimke.livery.instantiate.templateHeightDp
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
@@ -170,25 +177,65 @@ class LiveryA2uiComponent(
       )
     }
 
-    val inline = inlineDocument(properties)
-    if (inline != null) {
-      InlineContent(scope, inline, dataset, liveryHost, modifier)
-      return
-    }
-
+    val template = if (templateProperty in properties) A2uiTemplate.parse(LiveryA2ui.toJson(properties[templateProperty])) else null
     BoxWithConstraints(modifier) {
       val widthDp = if (constraints.hasBoundedWidth) maxWidth.value.toInt() else null
-      val query = TemplateQuery(contract.ref, host.capabilities, widthDp = widthDp, designId = design, variant = variant, minor = contract.minor)
+      val heightDp = if (constraints.hasBoundedHeight) maxHeight.value.toInt() else null
+      val theme = when (host.theme) {
+        ee.schimke.composeai.rcplayer.compose.RcPlayerTheme.Dark -> "dark"
+        ee.schimke.composeai.rcplayer.compose.RcPlayerTheme.Light -> "light"
+        else -> if (androidx.compose.foundation.isSystemInDarkTheme()) "dark" else "light"
+      }
+      val query = TemplateQuery(
+        contract.ref, host.capabilities, widthDp = widthDp, heightDp = heightDp,
+        designId = design, variant = variant, minor = contract.minor, theme = theme,
+      )
+      if (template is A2uiTemplate.Inline || template is A2uiTemplate.Invalid) {
+        val inline = when (template) {
+          is A2uiTemplate.Inline -> InlineDocument(template.base64, kotlin.io.encoding.Base64.decode(template.base64), template.signature, null)
+          is A2uiTemplate.Invalid -> InlineDocument(null, null, null, template.reason)
+        }
+        InlineContent(scope, inline, dataset, liveryHost, Modifier, constraints.hasBoundedHeight)
+        return@BoxWithConstraints
+      }
       val revision by host.repository.revision.collectAsState()
-      // Kept across updates: a new dataset replans, and LiveryTemplate pushes the new values into
-      // the document already playing instead of starting it again.
-      var result by remember { mutableStateOf<PlanResult?>(null) }
-      LaunchedEffect(query, dataset, revision) { result = host.planner.forAppData(query, dataset) }
+      val namedAnswer by produceState<Pair<Pair<A2uiTemplate.Named, TemplateQuery>, LoadedTemplate?>?>(null, template, query, revision) {
+        if (template is A2uiTemplate.Named) value = (template to query) to host.namedDocuments.load(template.sha256, template.url, template.signature, contract, query)
+      }
+      val context = host.decisionContext?.invoke()?.copy(nowEpochMs = 0)
+      val request = (template as? A2uiTemplate.Query)?.let { t -> context?.let { DecisionRequest(query, t.params, it) } }
+      var answer by remember(request) { mutableStateOf(request?.let(::A2uiDecision)) }
+      if (answer?.expired(host.clock.nowEpochMs()) == true) SideEffect { answer = request?.let(::A2uiDecision) }
+      var fetched by remember(answer) { mutableStateOf(false) }
+      LaunchedEffect(answer, host.decider) {
+        val current = answer
+        if (current != null && host.decider != null) {
+          current.fetch(host.decider, host.repository, host.clock)
+          fetched = true
+        }
+      }
+      // Keyed by the request: a changed exact document never keeps the previous one's plan alive.
+      var result by remember(template, query, context) { mutableStateOf<PlanResult?>(null) }
+      LaunchedEffect(template, query, dataset, revision, fetched, answer, namedAnswer) {
+        result = when (template) {
+          is A2uiTemplate.Named -> {
+            val current = namedAnswer?.takeIf { it.first == (template to query) }
+            val loaded = current?.second
+            if (current == null) null else if (loaded == null) PlanResult.Fallback("named document unavailable or refused") else bind(loaded, dataset)
+          }
+          else -> {
+            val decided = answer?.decision?.let { decision ->
+              val themed = decision.copy(data = JsonObject(decision.data + dataset.filterKeys { contract.inputs[it]?.role != null }))
+              withContext(CacheOnly()) { host.planner.forDecision(query, themed) }
+            }
+            if (decided is PlanResult.Ready) decided else host.planner.forAppData(query.copy(designId = if (template is A2uiTemplate.Query) null else design), dataset)
+          }
+        }
+      }
       when (val r = result) {
-        null -> {}
-        is PlanResult.Ready -> LiveryTemplate(r.plan, liveryHost)
+        null -> if (template is A2uiTemplate.Named) host.fallback(contract, "waiting for named document")
+        is PlanResult.Ready -> LiveryTemplate(r.plan, liveryHost, heightModifier(r.plan, constraints.hasBoundedHeight))
         is PlanResult.Fallback -> {
-          // Tell the agent, so it can correct itself; the app decides what draws instead.
           SideEffect { scope.reportError(A2uiException.A2uiRuntimeException("$name (${contract.ref}): ${r.reason}")) }
           host.fallback(contract, r.reason)
         }
@@ -196,40 +243,18 @@ class LiveryA2uiComponent(
     }
   }
 
+  private fun bind(loaded: LoadedTemplate, dataset: JsonObject): PlanResult = when (val b = ContractBinder.bind(contract, dataset)) {
+    is BindResult.Ok -> PlanResult.Ready(RenderPlan(loaded, contract, b.bindings))
+    is BindResult.Invalid -> PlanResult.Fallback("invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" })
+  }
+
+  private fun heightModifier(plan: RenderPlan, bounded: Boolean): Modifier =
+    if (bounded) Modifier else plan.templateHeightDp()?.let { Modifier.height(it.dp) } ?: Modifier
+
   /** A document the agent sent with the message (PROTOCOL.md §3.4), as given: its bytes, its signature. */
   private class InlineDocument(val text: String?, val bytes: ByteArray?, val signature: ManifestSignature?, val problem: String?) {
     /** The document as sent, compared whole: a different document is always admitted afresh. */
     val key: Any = listOf(text, signature, problem)
-  }
-
-  /**
-   * Null only when the agent sent no `template`: then the catalog chooses. A `template` that is
-   * there but malformed is a document request all the same, so it is refused, never answered with a
-   * catalog design (PROTOCOL.md §3.5).
-   */
-  private fun inlineDocument(properties: A2uiComponentProperties): InlineDocument? {
-    if (templateProperty !in properties) return null
-    val template = properties[templateProperty] as? Map<*, *>
-      ?: return InlineDocument(null, null, null, "template must be {\"inline\": <base64>, \"signature\"?}")
-    if ("sha256" in template && "inline" !in template) {
-      return InlineDocument(null, null, null, "a template named by sha256 isn't supported on Compose yet: send it inline")
-    }
-    val text = template["inline"] as? String
-      ?: return InlineDocument(null, null, null, "template needs inline: the document as base64")
-    val bytes = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()
-      ?: return InlineDocument(text, null, null, "inline is not base64")
-    // A signature that is there must verify or refuse: never read a malformed one as "unsigned",
-    // which an agent-bytes policy might then play (PROTOCOL.md §3.5).
-    val sig = if ("signature" !in template) null else {
-      val s = template["signature"] as? Map<*, *>
-        ?: return InlineDocument(text, null, null, "signature must be {\"keyId\", \"signature\", \"alg\"?}")
-      val keyId = s["keyId"] as? String
-      val value = s["signature"] as? String
-      val alg = if ("alg" in s) s["alg"] as? String ?: return InlineDocument(text, null, null, "signature alg must be a string") else "Ed25519"
-      if (keyId == null || value == null) return InlineDocument(text, null, null, "signature needs keyId and signature")
-      ManifestSignature(alg = alg, keyId = keyId, signature = value)
-    }
-    return InlineDocument(text, bytes, sig, null)
   }
 
   /**
@@ -239,7 +264,7 @@ class LiveryA2uiComponent(
    * template in its place, and never kept: it lives only in this surface.
    */
   @Composable
-  private fun InlineContent(scope: A2uiComponentScope, inline: InlineDocument, dataset: JsonObject, liveryHost: LiveryHost, modifier: Modifier) {
+  private fun InlineContent(scope: A2uiComponentScope, inline: InlineDocument, dataset: JsonObject, liveryHost: LiveryHost, modifier: Modifier, boundedHeight: Boolean) {
     // Each answer is kept with the request it answers: while a new document is being admitted, the
     // previous one doesn't play on with the new request's data and actions; nothing draws.
     val answer by produceState<Pair<Any, Admission>?>(null, inline.key, host.documents) {
@@ -263,9 +288,9 @@ class LiveryA2uiComponent(
         }
       }
     }
-    Box(modifier) {
+    androidx.compose.foundation.layout.Box(modifier) {
       when (plan) {
-        is RenderPlan -> LiveryTemplate(plan, liveryHost)
+        is RenderPlan -> LiveryTemplate(plan, liveryHost, heightModifier(plan, boundedHeight))
         is String -> {
           SideEffect { scope.reportError(A2uiException.A2uiRuntimeException("$name (${contract.ref}): $plan")) }
           host.fallback(contract, plan)

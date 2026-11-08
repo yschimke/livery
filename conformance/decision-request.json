@@ -1,0 +1,25 @@
+{
+  "query": {
+    "contract": "promo/banner@1",
+    "caps": {
+      "surface": "in-app",
+      "maxRcApiLevel": 7,
+      "profiles": [
+        "androidx"
+      ]
+    },
+    "widthDp": 360,
+    "theme": "dark",
+    "minor": 1
+  },
+  "params": {
+    "offer": "summer"
+  },
+  "context": {
+    "nowEpochMs": 1000,
+    "platform": "test",
+    "locale": "en-GB",
+    "appVersion": 4,
+    "bucketingId": "app-scoped"
+  }
+}
