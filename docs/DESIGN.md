@@ -378,6 +378,8 @@ one producer among others.
 8. **`livery-mcp`** and **`livery-render`**: agent tools and headless previews over a source tree.
    *Done*; live sessions come with `livery-server`.
 9. **`livery-server`** (with an image proxy and agent sessions).
+10. **Shareable RC components**: Confetti previews, documentation embeds, Bluesky sharing and
+    Heron integration, followed by AT Protocol interoperability. *Planned*: [staged delivery plan](RC_TILES_PLAN.md).
 
 ## Open questions
 
