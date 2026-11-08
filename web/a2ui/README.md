@@ -52,9 +52,10 @@ page without one uses an import map.
 
 Each theme role (`primary`, `surface`, `onSurface`, …) comes from the first of these that is set:
 
-1. `--livery-<role>`, for example `--livery-on-surface`.
-2. A2UI's `--a2ui-color-<role>`.
-3. Material 3's baseline colour.
+1. For `primary`, the agent's `createSurface` theme: `primaryColor`.
+2. `--livery-<role>`, for example `--livery-on-surface`.
+3. A2UI's `--a2ui-color-<role>`.
+4. Material 3's baseline colour.
 
 Templates therefore match the basic components around them. The width the element gets selects
 the design. The height is `--livery-a2ui-height`, 200px by default.
@@ -68,10 +69,11 @@ npm test                                                    # headless Chromium 
 ```
 
 `npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-checks five things:
+checks six things:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
 - a data change sets values on the playing document without reloading it, and redraws it;
 - Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
+- a surface's `primaryColor` colours its templates over the page's CSS theme;
 - a second catalog's components keep their own session.

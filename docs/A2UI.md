@@ -191,10 +191,12 @@ in place and the first frame already shows current data.
 
 ### Theme
 
-A theme role input (`"role": "primary"`) is filled, in order, from the agent's literal or binding,
-from the surface theme the agent sent in `createSurface` (`primaryColor` → `theme.primary`), and
-from the host's Material colour scheme. So a Livery component matches the A2UI components around
-it without the agent saying anything.
+A theme role input (`"role": "primary"`) isn't one of the component's properties, so the agent
+doesn't set it per component. It is filled, in order, from the surface theme the agent sent in
+`createSurface` (`primaryColor` → `primary`), then from the host's colours. So a Livery component
+matches the A2UI components around it without the agent saying anything, and takes the agent's
+brand colour when the agent gives one. *Built* on the web; A2UI's Compose runtime doesn't give a
+component its surface's theme, so on Compose the roles come from the host's Material colours.
 
 ### Choosing and drawing the template
 
@@ -332,8 +334,9 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
 - **Events.** Every event of a component carries `decisionId` `a2ui:<surfaceId>/<componentId>`,
   from `componentModel.id` and `dataContext.surface.id`; the page reads them with
   `session.events()`.
-- **Theme.** Each role (`primary`, `surface`, `onSurface`, …) from `--livery-<role>`, else A2UI's
-  own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
+- **Theme.** `primary` from the surface's `createSurface` theme (`primaryColor`) when the agent
+  sent one; each role (`primary`, `surface`, `onSurface`, …) otherwise from `--livery-<role>`, else
+  A2UI's own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
   components beside it.
 - **Size.** The width the element gets selects the design (and redraws on a resize); the height
   is `--livery-a2ui-height`, until the height rule below.
@@ -429,7 +432,8 @@ What the prototype taught, and what it doesn't do yet:
 - **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
   conformance fixture; events carry no `a2ui:<surface>/<component>` decision id (A2UI's `A2uiComponentScope` exposes
   neither id; the web has it); the
-  `createSurface` theme isn't read (theme roles come from the host's Material colours); no
+  `createSurface` theme isn't read (theme roles come from the host's Material colours; the web
+  reads it); no
   `template` forms other than the design preference, or height rules beyond the template's own.
 
 ## Order of work
