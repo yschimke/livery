@@ -250,7 +250,9 @@ class LiveryElement extends A2uiLitElement {
       this.fallback = undefined;
       if (wasFallback) { this.requestUpdate(); await this.updateComplete; }
       // The height rule: the page's --livery-a2ui-height when it sets one, else the template's own.
+      // A template that doesn't say takes the default, never the last template's height.
       if (r.heightDp) this.style.setProperty('--livery-template-height', `${r.heightDp}px`);
+      else this.style.removeProperty('--livery-template-height');
       const previous = this.render_;
       this.render_ = r.render;
       const player = this.player;
