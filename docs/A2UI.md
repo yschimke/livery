@@ -526,7 +526,8 @@ policy, blob eviction and image-cache metadata. Browser storage can be cleared o
 the browser; this is a cache, not durable application data.
 
 Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (also useful in
-hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
+hosts that deny IndexedDB or Web Locks). Persistent caching requires a secure origin
+(HTTPS or localhost) and Web Locks; refreshes sharing a namespace are serialized across sessions and tabs. Cache namespaces include the catalog and trust configuration:
 switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
 The browser suite reloads with all catalog requests blocked and checks that cached templates
 draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration

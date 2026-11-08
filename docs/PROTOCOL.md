@@ -523,3 +523,5 @@ the accepted serial watermark is still persisted immediately so rollback protect
 failure or interruption. Kotlin and Swift use the same activation order.
 
 A pending replacement bypasses the previous catalog’s freshness TTL after failure backoff expires.
+Browser sessions sharing persistent state serialize the complete refresh with an origin-wide Web Lock,
+so a stale response cannot lower the persisted accepted serial or replace a newer catalog.

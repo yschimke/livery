@@ -30,6 +30,7 @@ internal class BrowserStores private constructor(private val db: JsAny, private 
 }
 
 private fun openDatabase(): Promise<JsAny> = js("""new Promise((resolve, reject) => {
+  if (!globalThis.navigator?.locks) { reject(new Error('Persistent Livery caching requires Web Locks on a secure origin; use persistentCache: false otherwise')); return; }
   const request = indexedDB.open('livery-v1', 1);
   request.onupgradeneeded = () => request.result.createObjectStore('entries');
   request.onerror = () => reject(request.error);
