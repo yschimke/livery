@@ -9,6 +9,8 @@ export interface LiveryConfig {
   keys?: { keyId: string; publicKey: string; contracts?: string[] }[];
   /** Accept an unsigned catalog: development only. */
   unsigned?: boolean;
+  /** Persist catalog state and blobs in IndexedDB (default true); false uses session memory. */
+  persistentCache?: boolean;
   /** Documents an agent sends with a message (`template.inline`): refused unless set. */
   agentBytes?: { contracts: string[]; maxBytes?: number; allowedKinds?: string[] };
   /** Risky features a signed inline document may use (`shaders`, …). */
@@ -63,6 +65,8 @@ export type Rendered =
       sha256: string;
       /** The template's own height in dp: what to draw it at when the page gives the component none. */
       heightDp?: number;
+      /** An authored target minimum, retained when sizing to the measured root. */
+      minHeightDp?: number;
     }
   | { ok: false; reason: string; waiting?: boolean };
 

@@ -10,6 +10,8 @@ export interface NamedAction {
 
 /** A persistent in-page renderer. Superseded shows resolve false; dispose cancels pending work. */
 export interface LiveryPlayer {
+  /** Finite wrap-content height when supported by this player. */
+  readonly measuredHeightDp?: number;
   show(key: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean>;
   resize(widthPx: number, heightPx: number, density: number): void;
   forget(): void;
@@ -32,6 +34,8 @@ export class RcCanvasPlayer implements LiveryPlayer {
   /** Shows run one after another; one asked for while another runs replaces any still queued. */
   private queue: Promise<unknown> = Promise.resolve();
   private latest = 0;
+  /** Last root layout height, in dp, after applying named values. */
+  measuredHeightDp?: number;
   private disposed = false;
   private epoch = 0;
   /** Documents loaded and values set, for tests and debugging. */
@@ -87,6 +91,9 @@ export class RcCanvasPlayer implements LiveryPlayer {
       this.values.set(name, text);
       this.stats.sets++;
     }
+    this.handle.player.repaint();
+    const measured = this.handle.player.measureSize();
+    this.measuredHeightDp = measured ? measured.height / density : undefined;
   }
 
   /** The canvas at [widthPx] × [heightPx] CSS pixels. */

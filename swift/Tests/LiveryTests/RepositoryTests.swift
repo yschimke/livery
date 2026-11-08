@@ -62,6 +62,45 @@ final class RepositoryTests: XCTestCase {
     if case .failed(let reason) = rolled { XCTAssertTrue(reason.contains("rollback")) } else { XCTFail("rollback accepted: \(rolled)") }
   }
 
+  actor MutableHost: Fetcher {
+    var files: [String: Data]
+    init(_ files: [String: Data]) { self.files = files }
+    func replace(_ files: [String: Data]) { self.files = files }
+    func get(_ url: String, etag: String?) async -> FetchResult {
+      files.first { url.hasSuffix($0.key) }.map { .ok($0.value, etag: nil) } ?? .failed(status: 404, message: "missing")
+    }
+  }
+
+  func testFailedReplacementPreservesPlayableCacheAndRollbackWatermark() async throws {
+    let (original, blobs) = manifestJSON(serial: 5)
+    let store = MemoryBlobStore(), kv = MemoryKeyValueStore()
+    var files = blobs; files["manifest.json"] = original
+    let host = MutableHost(files)
+    let repo = TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
+      blobs: store, kv: kv, clock: { 1_000 }, targets: [caps])
+    let first = await repo.refresh()
+    XCTAssertEqual(first, .updated(serial: 5))
+    let q = TemplateQuery(contract: "c/tile@1", caps: caps)
+    let oldHash = Hashing.sha256Hex(blob("a")), newHash = Hashing.sha256Hex(blob("b"))
+    let (next, _) = manifestJSON(serial: 6)
+    let replacement = Data(String(decoding: next, as: UTF8.self).replacingOccurrences(of: oldHash, with: newHash).utf8)
+    files["manifest.json"] = replacement; files.removeValue(forKey: "blobs/\(newHash).rc")
+    await host.replace(files)
+    let failed = await repo.refresh(force: true)
+    if case .failed = failed {} else { XCTFail("replacement with missing blobs activated") }
+    let stillPlayable = await repo.resolve(q)
+    XCTAssertEqual(stillPlayable?.entry.sha256, oldHash)
+    files["manifest.json"] = original; await host.replace(files)
+    let rollback = await repo.refresh(force: true)
+    if case .failed(let reason) = rollback { XCTAssertTrue(reason.contains("rollback")) } else { XCTFail("rollback accepted") }
+    files["manifest.json"] = replacement; files["blobs/\(newHash).rc"] = blob("b")
+    await host.replace(files)
+    let repaired = await repo.refresh(force: true)
+    XCTAssertEqual(repaired, .updated(serial: 6))
+    let latest = await repo.resolve(q)
+    XCTAssertEqual(latest?.entry.sha256, newHash)
+  }
+
   func testPlannerBindsAndRefusesBadData() async throws {
     let (m, blobs) = manifestJSON(serial: 1)
     var files = blobs

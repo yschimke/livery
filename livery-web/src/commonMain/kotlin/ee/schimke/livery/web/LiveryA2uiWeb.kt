@@ -106,6 +106,7 @@ class LiveryA2uiWeb(
       val designId: String,
       val sha256: String,
       val heightDp: Int? = null,
+      val minHeightDp: Int? = null,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
@@ -184,7 +185,7 @@ class LiveryA2uiWeb(
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), plan.template.entry.target.size.minHeightDp)
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -198,7 +199,7 @@ class LiveryA2uiWeb(
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), plan.template.entry.target.size.minHeightDp)
       }
     }
   }

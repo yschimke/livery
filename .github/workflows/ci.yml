@@ -38,7 +38,9 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: Build and test every target, then build the sample catalog
         run: |
-          ./gradlew build :livery-publish:installDist :livery-mcp:installDist
+          # Compose/Wasm test linking exceeds the default 2 GiB Kotlin daemon heap.
+          # Keep parallel work bounded while giving that compiler a dedicated 4 GiB heap.
+          ./gradlew build :livery-publish:installDist :livery-mcp:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
           livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
       # `livery play` from the installed CLI, outside Gradle: a template Android 16's widget player
       # disables must fail, and its fix must play.
@@ -152,6 +154,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -160,21 +165,26 @@ jobs:
       - name: Android SDK platform
         working-directory: .
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Install web dependencies and pinned Binaryen
+        run: npm ci
       - name: livery-web's Wasm module and the livery CLI
         working-directory: .
-        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist
-      - name: npm ci, check and build
+        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+      - name: Check and build npm package
         run: |
-          npm ci
           npm run check
           npm run build
+          npm run pack:check
       # Not a dependency of the package: the test's browser, installed for this run only.
       - name: Playwright's Chromium
         run: |
-          npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: End-to-end in Chromium
         run: npm test
+      - name: React 18 peer compatibility
+        run: |
+          npm install --prefix "$RUNNER_TEMP/livery-react18" --no-package-lock react@18.3.1 react-dom@18.3.1
+          LIVERY_RENDERER=react LIVERY_REACT_ROOT="$RUNNER_TEMP/livery-react18/node_modules" node test/e2e.mjs
 
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
   # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
