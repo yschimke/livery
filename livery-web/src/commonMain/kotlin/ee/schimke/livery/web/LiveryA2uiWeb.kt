@@ -15,7 +15,6 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
-import ee.schimke.livery.client.TemplateSelector
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.CacheOnly
 import ee.schimke.livery.client.FetchResult
@@ -361,7 +360,7 @@ class LiveryA2uiWeb(
     val sha = t.str("sha256")?.lowercase()?.takeIf { SHA256.matches(it) } ?: return "sha256 must be 64 hex digits"
     val cacheOnly = CacheOnly()
     val listed = withContext(cacheOnly) { repository.ensure(TemplateRef(sha256 = sha, contract = contract.ref), query) }
-      ?: bundled(sha, contract, query)
+      ?: repository.bundledTemplate(sha, query)
     if (listed != null) {
       return when (val b = ContractBinder.bind(contract, dataset)) {
         is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
@@ -394,20 +393,6 @@ class LiveryA2uiWeb(
       ok
     }
     return Rendered.Waiting("fetching $sha")
-  }
-
-  /**
-   * [sha]'s template from the catalog the page has without downloading one (an app's bundled
-   * catalog), when that lists it for [contract]: still that catalog's vouching, still those bytes.
-   */
-  private suspend fun bundled(sha: String, contract: Contract, query: TemplateQuery): LoadedTemplate? {
-    val m = repository.current() ?: return null
-    // That exact entry, through the same eligibility gate as any template: not the design's
-    // preferred one, which may be another version of it.
-    val entry = m.templates.firstOrNull { it.sha256 == sha && it.contract == contract.ref && TemplateSelector.eligible(m, it, query) } ?: return null
-    val bytes = repository.asset(sha) ?: return null
-    if (entry.assets.any { repository.asset(it) == null }) return null
-    return LoadedTemplate(entry, m.design(entry.designId), bytes, LoadedTemplate.Origin.Bundled, m.contract(entry.contract), m.assetsFor(entry))
   }
 
   /** [bytes] through [DocumentAdmission], then bound: the agent's own document, as it was sent. */

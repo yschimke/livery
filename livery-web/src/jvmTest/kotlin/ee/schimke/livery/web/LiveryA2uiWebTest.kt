@@ -142,6 +142,19 @@ class LiveryA2uiWebTest {
     assertTrue(preferred.sha256 != v6, "the player's own choice is the level-7 one")
     val named = web.render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"$v6"}"""))))
     assertEquals(v6, assertIs<LiveryA2uiWeb.Rendered.Ready>(named, named.toString()).sha256)
+
+    // A downloaded catalog that doesn't list it (the sample's own) doesn't make the bundled one unreachable.
+    val online = TemplateRepository(
+      StaticSource("https://catalog.invalid/"),
+      Fetcher { url, _ -> if (url.endsWith("/manifest.json")) FetchResult.Ok(built.manifestBytes, null) else built.files.entries.firstOrNull { url.endsWith("/" + it.key) }?.let { FetchResult.Ok(it.value, null) } ?: FetchResult.Failed(404, url) },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(levels.manifest) { sha -> levels.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    online.refresh()
+    assertTrue(online.current()!!.templates.none { it.sha256 == v6 }, "the downloaded catalog is in use, without v6")
+    val fromBundle = LiveryA2uiWeb(online, SlotPlanner(online, { events += it }, clock), caps, { events += it }, clock)
+      .render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"$v6"}"""))))
+    assertEquals(v6, assertIs<LiveryA2uiWeb.Rendered.Ready>(fromBundle, fromBundle.toString()).sha256)
   }
 
   @Test fun aSignedDocumentNamedByUrlIsFetchedOffTheRenderPathFromTheCatalogsHostOnly() = runTest {
