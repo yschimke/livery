@@ -1,6 +1,6 @@
 {
   "name": "@livery/a2ui",
-  "version": "0.0.0",
+  "version": "0.6.0",
   "description": "Livery contracts as A2UI components on the web: Livery's own selection, trust and binding (compiled to Wasm), drawn in the page by the TypeScript Remote Compose player with live named values",
   "license": "Apache-2.0",
   "type": "module",
@@ -15,6 +15,14 @@
       "default": "./dist/index.js"
     },
     "./livery-web/*": "./dist/livery-web/*",
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./angular": {
+      "types": "./dist/angular.d.ts",
+      "default": "./dist/angular.js"
+    },
     "./livery-web-compose/*": "./dist/livery-web-compose/*"
   },
   "files": [
@@ -23,9 +31,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-livery-web.mjs",
+    "build": "tsc -p tsconfig.json && ngc -p tsconfig.angular.json && node scripts/copy-livery-web.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "node test/e2e.mjs"
+    "test": "node test/all.mjs",
+    "pack:check": "node scripts/check-pack.mjs"
   },
   "dependencies": {
     "@a2ui/lit": "0.15.0",
@@ -35,7 +44,57 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@a2ui/angular": "^0.14.0",
+    "@a2ui/react": "^0.15.0",
+    "@angular/common": "^21.2.5",
+    "@angular/compiler": "^21.2.5",
+    "@angular/compiler-cli": "^21.2.5",
+    "@angular/core": "^21.2.5",
+    "@angular/platform-browser": "^21.2.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "binaryen": "130.0.0",
     "esbuild": "0.28.2",
+    "playwright": "^1.63.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.9.1",
     "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@a2ui/angular": "^0.14.0",
+    "@a2ui/react": "^0.15.0",
+    "@angular/common": "^21.2.5",
+    "@angular/core": "^21.2.5",
+    "@angular/platform-browser": "^21.2.5",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@a2ui/angular": {
+      "optional": true
+    },
+    "@a2ui/react": {
+      "optional": true
+    },
+    "@angular/common": {
+      "optional": true
+    },
+    "@angular/core": {
+      "optional": true
+    },
+    "@angular/platform-browser": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   }
 }

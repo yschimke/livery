@@ -1,14 +1,13 @@
 # @livery/a2ui
 
-Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit renderer
-(`@a2ui/lit`). An agent places a component per contract and sends its data. The page then picks a
+Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit, React and Angular renderers. An agent places a component per contract and sends its data. The page then picks a
 reviewed, signed template for it, binds the data through the contract, and plays the template on a
 canvas in the page with the TypeScript Remote Compose player (the default), or Compose Multiplatform
 compiled to Wasm (`player: 'cmp'`). A data change sets named values on the
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
-The player is vendored from rc-players `main`, which has two fixes this package needs
+The player is vendored from the commit recorded in `vendor/PROVENANCE.md`, with the fixes this package needs
 ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829)): without them, these
 templates lay out at `NaN` and their buttons don't fire.
 
@@ -91,8 +90,9 @@ Each theme role (`primary`, `surface`, `onSurface`, …) comes from the first of
 
 Templates therefore match the basic components around them. The width the element gets selects
 the design. The height is `--livery-a2ui-height` when the page sets it; otherwise it's the
-template's own: the smallest height its target declares, else the height its document was
-authored at.
+measured root content at that width, clamped to the target's `minHeightDp` when declared.
+Documents without a finite root measurement use their authored height as the fallback.
+The sample banner wraps to 112dp instead of its 160dp authored viewport.
 
 ## Develop
 
@@ -102,19 +102,83 @@ npm ci && npm run check && npm run build
 npm test                                                    # headless Chromium (Playwright)
 ```
 
-`npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-runs the same checks for both players:
+`npm test` serves the sample catalog to a page that runs A2UI's own engine with each of the Lit, React and Angular renderers, then
+checks rendering, interactions and offline behavior for both players:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
 - a data change sets values on the playing document without reloading it, and redraws it;
 - Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
 - a surface's `primaryColor` colours its templates over the page's CSS theme;
-- a component takes its template's height unless the page sets one;
+- a component wraps measured content unless the page sets its height;
 - a second catalog's components keep their own session;
 - container resizing, disconnect/reconnect, queued shows and disposal during loading;
 - fifteen simultaneous components respect the eight-CMP-viewport bound.
 
-Use `LIVERY_TEST_PLAYER=ts` or `cmp` for one player, `LIVERY_RENDER_OUT=<directory>` to save
-screenshots and load measurements, and `PLAYWRIGHT_CHROMIUM_EXECUTABLE=<path>` for an installed
-Chromium. A TS-only build only needs `:livery-web:webDist`; the copy script includes CMP when built.
+### npm releases
+
+`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
+The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
+first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
+with its provenance until rc-players publishes a supported npm package.
+
+### React and Angular
+
+The same session and controller power all three web renderers. Use
+`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
+React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
+Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
+The Angular entry ships partial compilation for the application's Angular linker.
+
+`options.base` extends the selected renderer's catalog. Actions, data-model paths, themes,
+decision ids, retry and height behavior are shared. `fallback` returns a Lit template for Lit,
+a React node for React, or a DOM node/string for Angular. `npm test` runs the same sample catalog
+and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local Chromium binary.
+
+### Persistent browser cache
+
+Web sessions default to IndexedDB for blobs and small named documents. A session with playable cached templates reads
+its catalog immediately and refreshes in the background. A cached manifest without playable
+blobs first retries prefetch, so an interrupted download cannot register an empty component catalog.
+Template rendering does not
+wait for a network response. The existing repository still owns expiry, stale grace, install
+policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
+the browser; this is a cache, not durable application data.
+
+Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (also useful in
+hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
+switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
+The browser suite reloads with all catalog requests blocked and checks that cached templates
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
+cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
+host application's responsibility.
+
+### Wasm distribution size
+
+`webDist` runs Kotlin's pinned Binaryen optimizer before packaging. On the 0.6.0 baseline this
+reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
+its fetch and redirect contract. `docs/WASM-SIZE.md` records section and dependency measurements;
+`scripts/wasm-size.py` reproduces the breakdown for subsequent builds.
+
+`LIVERY_TEST_PLAYER=ts` or `cmp` selects one player; `LIVERY_RENDERER=lit`, `react` or `angular`
+selects a framework when running `node test/e2e.mjs` directly. `LIVERY_RENDER_OUT` saves screenshots
+and load measurements. `CHROMIUM_PATH` (or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`) selects an installed
+Chromium. CMP retains authored height when it cannot expose a finite root measurement.
+
+Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.
+
+When replacing a cached catalog, refresh keeps the previous manifest active until its required
+replacement templates and assets finish downloading. Failed downloads keep the playable cache;
+the accepted serial watermark is still persisted immediately so rollback protection survives a
+failure or interruption. Kotlin and Swift use the same activation order.
+
+CI uses Binaryen 130.0.0 from the npm lockfile with `-Plivery.wasmOpt=<path-to-wasm-opt>`.
+This keeps the same optimizer version and Kotlin arguments while avoiding the GitHub release
+asset endpoint, which repeatedly returned HTTP 504. Ordinary Gradle builds retain Kotlin's
+native Binaryen download unless an executable is supplied.

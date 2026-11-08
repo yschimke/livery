@@ -118,6 +118,7 @@ class LiveryA2uiWeb(
       val pending: Boolean = false,
       /** Impression identity: a server decision can change while [documentKey] stays the same. */
       val presentationKey: String = documentKey,
+      val minHeightDp: Int? = null,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
@@ -147,8 +148,9 @@ class LiveryA2uiWeb(
 
   private val named = NamedDocuments(repository, documents, documentFetcher, documentHosts)
   private data class NamedKey(val template: A2uiTemplate.Named, val query: TemplateQuery)
+  private data class NamedAnswer(val template: LoadedTemplate?, val retryAtEpochMs: Long = Long.MAX_VALUE)
   private data class QueryKey(val component: String?, val request: DecisionRequest)
-  private val namedAnswers = LinkedHashMap<NamedKey, LoadedTemplate?>()
+  private val namedAnswers = LinkedHashMap<NamedKey, NamedAnswer>()
   private val pendingNames = LinkedHashMap<NamedKey, Contract>()
   private val queries = LinkedHashMap<QueryKey, A2uiDecision>()
   private val pendingQueries = LinkedHashSet<A2uiDecision>()
@@ -168,7 +170,8 @@ class LiveryA2uiWeb(
       val loaded = named.load(t.sha256, t.url, t.signature, contract, key.query)
       documentsOk = documentsOk && loaded != null
       // Catalog documents live in the repository, signed standalone ones in this bounded session cache.
-      if (loaded == null || loaded.design == null) namedAnswers[key] = loaded
+      if (loaded == null) namedAnswers[key] = NamedAnswer(null, clock.nowEpochMs() + NAMED_RETRY_MS)
+      else if (loaded.design == null) namedAnswers[key] = NamedAnswer(loaded)
       trim(namedAnswers)
     }
     for (answer in asked) decider?.let { answer.fetch(it, repository, clock) }
@@ -225,7 +228,7 @@ class LiveryA2uiWeb(
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey)
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey, minHeightDp = plan.template.entry.target.size.minHeightDp)
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -239,7 +242,7 @@ class LiveryA2uiWeb(
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey)
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey, minHeightDp = plan.template.entry.target.size.minHeightDp)
       }
     }
   }
@@ -357,12 +360,14 @@ class LiveryA2uiWeb(
           // Catalog plans are checked again on each render, including revocations and eligibility.
           val cacheOnly = CacheOnly()
           val local = withContext(cacheOnly) { named.load(t.sha256, t.url, t.signature, contract, query, network = false) }
-          val loaded = local ?: namedAnswers[key]?.takeUnless { repository.current()?.templates?.any { entry -> entry.sha256 == t.sha256 } == true }
+          val answer = namedAnswers[key]?.takeUnless { it.template == null && clock.nowEpochMs() >= it.retryAtEpochMs }
+          if (answer == null) namedAnswers.remove(key)
+          val loaded = local ?: answer?.template?.takeUnless { repository.current()?.templates?.any { entry -> entry.sha256 == t.sha256 } == true }
           if (loaded != null) return when (val b = ContractBinder.bind(contract, dataset)) {
             is BindResult.Ok -> RenderPlan(loaded, contract, b.bindings, decisionId = space.decisionId)
             is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
           }
-          if (key in namedAnswers) return "named document unavailable or refused"
+          if (answer != null) return "named document unavailable or refused"
           if (t.signature == null && cacheOnly.misses == 0) return "${t.sha256} is in no trusted catalog for ${contract.ref}"
           if (t.signature != null && !named.allows(t.url ?: repository.documentUrl(t.sha256))) return "named document URL is not on a host the page's catalog uses"
           pendingNames[key] = contract
@@ -453,6 +458,7 @@ class LiveryA2uiWeb(
   private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
   companion object {
+    private const val NAMED_RETRY_MS = 30_000L
     /** The image size to ask for when A2UI gives no bound: a phone-width card. */
     private const val DEFAULT_IMAGE_DP = 360
 

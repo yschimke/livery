@@ -6,7 +6,8 @@ name: Release
 # this workflow publishes it: the libraries to Maven Central as
 # `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin
 # `ee.schimke.composeai.livery.catalog`), the `livery` and `livery-mcp` CLIs to the release. The
-# release is un-drafted only once both succeed.
+# release is un-drafted only once Maven, CLI and npm publishing succeed.
+# NPM_TOKEN needs publish access to the @livery/a2ui package.
 #
 # There is no `push: tags` trigger: release-please makes the tag itself, so a tag trigger would
 # publish twice, and Maven Central refuses a version it already has.
@@ -177,10 +178,56 @@ jobs:
       - name: Attach the CLIs to the release
         run: gh release upload "$TAG" livery-publish/build/distributions/*.zip livery-mcp/build/distributions/*.zip --clobber
 
+  publish-npm:
+    name: Publish npm
+    needs: release-please
+    if: ${{ needs.release-please.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.publish_tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Install web dependencies and pinned Binaryen
+        working-directory: web/a2ui
+        run: npm ci
+      - name: Build Wasm
+        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+      - name: Build and inspect npm package
+        working-directory: web/a2ui
+        env:
+          TAG: ${{ needs.release-please.outputs.publish_tag }}
+        run: |
+          npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+          npm run check
+          npm run build
+          npm run pack:check
+      - name: Publish package
+        working-directory: web/a2ui
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NPM_TOKEN" || { echo '::error::Set the repository NPM_TOKEN secret with publish access to @livery/a2ui'; exit 1; }
+          config=$(mktemp)
+          trap 'rm -f "$config"' EXIT
+          printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$config"
+          NPM_CONFIG_USERCONFIG="$config" npm publish --access public
+
   # Un-drafts the release once everything it promises is published.
   finish-release:
-    needs: [release-please, publish]
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    needs: [release-please, publish, publish-npm]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.publish-npm.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

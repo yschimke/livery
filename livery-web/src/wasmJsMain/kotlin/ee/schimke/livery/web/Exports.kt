@@ -24,6 +24,8 @@ import kotlin.io.encoding.Base64
 import kotlin.js.Promise
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.promise
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -47,6 +49,8 @@ internal data class WebConfig(
   val keys: List<Key> = emptyList(),
   /** Accept an unsigned catalog: a development build only. */
   val unsigned: Boolean = false,
+  /** Persist verified catalog state and blobs in IndexedDB; false uses session memory. */
+  val persistentCache: Boolean = true,
   val capabilities: PlayerCapabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx")),
   /** Documents an agent sends with a message: refused unless set. */
   val agentBytes: AgentBytes? = null,
@@ -89,11 +93,13 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   val events = mutableListOf<TemplateEvent>()
   val sink = ee.schimke.livery.client.EventSink { events += it }
   val fetcher = KtorFetcher()
+  // Trust configuration is part of the namespace: an unsigned cache can never become a signed one.
+  val cacheNamespace = WebCrypto.sha256Hex(json.encodeToString(WebConfig.serializer(), c).encodeToByteArray())
+  val stores = if (c.persistentCache) BrowserStores.open(cacheNamespace) else null
   val repository = TemplateRepository(
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
-    MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(c.capabilities),
+    stores?.blobs ?: MemoryBlobStore(), stores?.values ?: MemoryKeyValueStore(), clock, listOf(c.capabilities),
   )
-  repository.refresh()
   val documents = if (c.agentBytes == null && keys.isEmpty()) null else DocumentAdmission(
     WebCrypto, keys,
     signedFeatures = c.signedFeatures.mapNotNull(RiskyFeature::fromWire).toSet(),
@@ -107,6 +113,17 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     decider = c.decisionEndpoint?.let { ee.schimke.livery.client.KtorDecider(it) },
     decisionContext = c.decisionContext?.let { context -> { context.copy(nowEpochMs = clock.nowEpochMs()) } },
   )
+  suspend fun refresh() {
+    repository.refresh()
+  }
+  // A saved manifest alone is not a warm cache: interrupted prefetch can leave every blob missing.
+  // Catalog adapters register components once, so repair downloads before returning an empty set.
+  if (web.components().isEmpty()) refresh()
+  else GlobalScope.launch {
+    try { refresh() }
+    catch (e: CancellationException) { throw e }
+    catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
+  }
   val id = nextSession++
   sessions[id] = Session(web, repository, events)
   id
@@ -165,6 +182,7 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
       put("pending", r.pending)
       r.heightDp?.let { put("heightDp", it) }
+      r.minHeightDp?.let { put("minHeightDp", it) }
     }
     is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason); put("pending", r.pending) }
     is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason); put("pending", r.pending) }

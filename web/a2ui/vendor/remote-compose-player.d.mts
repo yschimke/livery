@@ -12,6 +12,8 @@ export interface HostApi {
 
 export interface RcdPlayer {
   setDensity(density: number): void;
+  repaint(): void;
+  measureSize(): { width: number; height: number } | null;
   resize(width: number, height: number): void;
   setTheme(theme: 'light' | 'dark' | 'auto'): void;
 }

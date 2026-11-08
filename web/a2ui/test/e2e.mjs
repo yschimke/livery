@@ -36,12 +36,16 @@ cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: tru
 
 if (players.includes('cmp')) cpSync(join(root, 'dist/livery-web-compose'), join(site, 'livery-web-compose'), { recursive: true });
 
+// Allow the same browser suite to exercise each supported React major without changing the lockfile.
+const reactRoot = process.env.LIVERY_REACT_ROOT;
+const reactAliases = reactRoot ? { react: join(reactRoot, 'react'), 'react-dom': join(reactRoot, 'react-dom') } : undefined;
+
 // The page, bundled; @js-joda/core (imported by the Wasm module's glue) through an import map.
-await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js'), external: ['./livery-web/*'], logLevel: 'warning' });
+await build({ entryPoints: [join(here, 'app.ts')], alias: reactAliases, bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js'), external: ['./livery-web/*'], logLevel: 'warning' });
 await build({ stdin: { contents: "export * from '@js-joda/core';", resolveDir: root }, bundle: true, format: 'esm', outfile: join(site, 'js-joda.mjs'), logLevel: 'warning' });
 writeFileSync(join(site, 'index.html'), `<!doctype html><meta charset="utf-8">
 <script type="importmap">{"imports": {"@js-joda/core": "./js-joda.mjs"}}</script>
-<style>body { font-family: sans-serif; width: 420px; } livery-shop-quantity { --livery-a2ui-height: 120px; }</style>
+<style>body { font-family: sans-serif; width: 420px; } [data-livery-component="ShopQuantity"] { --livery-a2ui-height: 120px; }</style>
 <div id="app"></div><div id="second"></div><script type="module" src="./app.js"></script>`);
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.rc': 'application/octet-stream', '.png': 'image/png', '.ttf': 'font/ttf' };
@@ -58,11 +62,11 @@ await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
-const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
 let failed = 0;
 for (const player of players) {
 console.log(`Player: ${player}`);
-const page = await browser.newPage({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_TEST_DPR ?? 1) });
+const page = await browser.newPage({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_DENSITY ?? process.env.LIVERY_TEST_DPR ?? 1) });
 let decisionRequest;
 let releaseDecision;
 const decisionGate = new Promise((resolve) => { releaseDecision = resolve; });
@@ -88,7 +92,7 @@ page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
 page.on('response', (r) => { if (r.status() >= 400) logs.push(`${r.status()} ${r.url()}`); });
 const check = (ok, what) => { console.log(`${ok ? 'ok' : 'FAIL'} - ${what}`); if (!ok) failed++; };
 try {
-  await page.goto(`${base}?player=${player}`);
+  await page.goto(`${base}?player=${player}&renderer=${process.env.LIVERY_RENDERER ?? 'lit'}`);
   await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
   const components = await page.evaluate(() => window.__livery.components);
   check(components.includes('PromoBanner') && components.includes('ShopQuantity'), `components advertised: ${components}`);
@@ -112,14 +116,14 @@ try {
     };
     return (find(document)?.liveryStats?.loads ?? 0) > 0;
   }, selector, { timeout: 60_000 });
-  await loaded('#app livery-promo-banner');
-  await loaded('#app livery-shop-quantity');
-  const promoStats = await statsOf('#app livery-promo-banner');
+  await loaded('#app [data-livery-component="PromoBanner"]');
+  await loaded('#app [data-livery-component="ShopQuantity"]');
+  const promoStats = await statsOf('#app [data-livery-component="PromoBanner"]');
   check(promoStats.iframes === 0 && promoStats.canvases === 1, `drawn on a canvas in the page, no iframe: ${JSON.stringify(promoStats)}`);
   await page.waitForTimeout(300);
   const initialRequests = requests.length;
   const timing = await page.evaluate(() => ({ sampleReadyMs: performance.now(), heapBytes: performance.memory?.usedJSHeapSize, resources: performance.getEntriesByType('resource').filter((r) => r.name.includes('/livery-web')).map((r) => ({ name: r.name.split('/').pop(), bytes: r.decodedBodySize, ms: r.duration })) }));
-  timing.accessibility = await page.locator('#app livery-promo-banner').ariaSnapshot();
+  timing.accessibility = await page.locator('#app [data-livery-component="PromoBanner"]').ariaSnapshot();
   console.log(`metrics ${player}: ${JSON.stringify(timing)}`);
   if (player === 'cmp') check(await page.evaluate(() => performance.getEntriesByType('resource')
     .filter((r) => r.name.includes('/livery-web-compose/'))
@@ -143,7 +147,7 @@ try {
     }, shot.toString('base64'));
   };
   // Drawn, not just loaded: the banner has its surface and its text.
-  const banner = await colours('#app livery-promo-banner');
+  const banner = await colours('#app [data-livery-component="PromoBanner"]');
   check(banner.notWhite > 0.5 && banner.distinct > 8, `the banner draws its surface and text: ${JSON.stringify(banner)}`);
 
   // Where a template draws a button: the centre of its saturated pixels (the right-most button's, with `right`).
@@ -179,13 +183,13 @@ try {
   }, { sel: selector, a });
 
   // A real tap on the drawn "Shop now": the template's host action, through the gate, to the agent.
-  await tap('#app livery-promo-banner');
+  await tap('#app [data-livery-component="PromoBanner"]');
   await page.waitForFunction(() => window.__livery.actions.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const action = await page.evaluate(() => window.__livery.actions[0]);
   check(action?.name === 'startTrial' && action?.sourceComponentId === 'promo' && action?.context?.from === 'chat' && typeof action?.context?.route === 'string',
     `tapping the CTA sends the agent its event, with the agent's context and the template's declared route: ${JSON.stringify(action)}`);
   // An argument the contract doesn't declare never reaches the agent (delivered as the player would).
-  await hostAction('#app livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/premium","extra":"x"}' });
+  await hostAction('#app [data-livery-component="PromoBanner"]', { name: 'cta', valueType: 'string', value: '{"route":"/premium","extra":"x"}' });
   await page.waitForFunction(() => window.__livery.actions.length > 1, null, { timeout: 10_000 }).catch(() => {});
   const undeclared = await page.evaluate(() => window.__livery.actions[1]);
   check(undeclared?.context?.route === '/premium' && !('extra' in (undeclared?.context ?? {})), `nothing undeclared reaches the agent: ${JSON.stringify(undeclared)}`);
@@ -196,33 +200,33 @@ try {
     `events carry the A2UI decision id: ${JSON.stringify(events.map((e) => [e.type, e.decisionId, e.action]))}`);
 
   // A real tap on "+": the template's `set` writes the data model, and the same document takes the new value.
-  const before = await statsOf('#app livery-shop-quantity');
-  await tap('#app livery-shop-quantity', 'right');
+  const before = await statsOf('#app [data-livery-component="ShopQuantity"]');
+  await tap('#app [data-livery-component="ShopQuantity"]', 'right');
   await page.waitForFunction(() => window.__livery.data('/cart/quantity') === 2, null, { timeout: 10_000 }).catch(() => {});
   check(await page.evaluate(() => window.__livery.data('/cart/quantity')) === 2, 'tapping + wrote /cart/quantity = 2');
   await page.waitForTimeout(300);
-  const after = await statsOf('#app livery-shop-quantity');
+  const after = await statsOf('#app [data-livery-component="ShopQuantity"]');
   check(after.loads === before.loads && after.sets > before.sets, `and the document stayed, its value set: ${JSON.stringify({ before, after })}`);
 
   // The agent changes the data: the banner's headline moves, in the same document.
-  const promoBefore = await statsOf('#app livery-promo-banner');
+  const promoBefore = await statsOf('#app [data-livery-component="PromoBanner"]');
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/offer/title', value: 'Summer sale' } }]));
   await page.waitForFunction((n) => {
-    const find = (root) => { const hit = root.querySelector('#app livery-promo-banner'); if (hit) return hit; for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; } return null; };
+    const find = (root) => { const hit = root.querySelector('#app [data-livery-component="PromoBanner"]'); if (hit) return hit; for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; } return null; };
     return (find(document)?.liveryStats?.sets ?? 0) > n;
   }, promoBefore.sets, { timeout: 10_000 }).catch(() => {});
   await page.waitForTimeout(300);
-  const promoAfter = await statsOf('#app livery-promo-banner');
-  const redrawn = await colours('#app livery-promo-banner');
+  const promoAfter = await statsOf('#app [data-livery-component="PromoBanner"]');
+  const redrawn = await colours('#app [data-livery-component="PromoBanner"]');
   check(promoAfter.loads === promoBefore.loads && promoAfter.sets > promoBefore.sets && redrawn.hash !== banner.hash,
     `a data-model update sets the headline on the playing document, which redraws: ${JSON.stringify({ promoBefore, promoAfter })}`);
   if (out) await page.screenshot({ path: join(out, `a2ui-web-${player}-updated.png`) });
 
   // A second catalog with the same component names draws with its own session, and its actions reach
   // its own processor, not the first one's.
-  await loaded('#second livery-promo-banner');
+  await loaded('#second [data-livery-component="PromoBanner"]');
   const firstCount = await page.evaluate(() => window.__livery.actions.length);
-  await tap('#second livery-promo-banner');
+  await tap('#second [data-livery-component="PromoBanner"]');
   await page.waitForFunction(() => window.__livery.actions2.length > 0, null, { timeout: 10_000 }).catch(() => {});
   const second = await page.evaluate(() => window.__livery.actions2[0]);
   check(second?.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
@@ -230,11 +234,11 @@ try {
   // The agent's createSurface theme colours its templates over the page's CSS theme; a surface
   // without one takes the page's.
   const themes = await page.evaluate(() => ({
-    agent: document.querySelector('#app livery-shop-quantity')?.liveryTheme?.primary,
-    page: document.querySelector('#second livery-promo-banner')?.liveryTheme?.primary,
+    agent: document.querySelector('#app [data-livery-component="ShopQuantity"]')?.liveryTheme?.primary,
+    page: document.querySelector('#second [data-livery-component="PromoBanner"]')?.liveryTheme?.primary,
   }));
   check(themes.agent === '#FF00897B' && typeof themes.page === 'string' && themes.page !== themes.agent, `a surface's primaryColor is its templates' primary: ${JSON.stringify(themes)}`);
-  const shot = await (await page.$('#app livery-shop-quantity')).screenshot();
+  const shot = await (await page.$('#app [data-livery-component="ShopQuantity"]')).screenshot();
   const teal = await page.evaluate(async (b64) => {
     const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
@@ -248,10 +252,10 @@ try {
 
   // The height rule: the template's own height when the page gives none, the page's when it does.
   const heights = await page.evaluate(() => ({
-    banner: document.querySelector('#app livery-promo-banner').clientHeight,
-    stepper: document.querySelector('#app livery-shop-quantity').clientHeight,
+    banner: document.querySelector('#app [data-livery-component="PromoBanner"]').clientHeight,
+    stepper: document.querySelector('#app [data-livery-component="ShopQuantity"]').clientHeight,
   }));
-  check(heights.banner === 160 && heights.stepper === 120, `the banner takes its template's 160dp, the stepper the page's 120px: ${JSON.stringify(heights)}`);
+  check(heights.banner === (player === 'ts' ? 112 : 160) && heights.stepper === 120, `the banner takes its player's measured or authored height, the stepper the page's 120px: ${JSON.stringify(heights)}`);
 
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/offer/title', value: 'Unavailable glyph: 𐀀' } }]));
   await page.waitForTimeout(800);
@@ -261,25 +265,24 @@ try {
   await page.evaluate(() => { document.body.style.width = '380px'; });
   await page.waitForTimeout(400);
   const resizedCount = await page.evaluate(() => window.__livery.actions.length);
-  await tap('#app livery-promo-banner');
+  await tap('#app [data-livery-component="PromoBanner"]');
   await page.waitForFunction((n) => window.__livery.actions.length > n, resizedCount);
-  check((await statsOf('#app livery-promo-banner')).loads === 1, 'resizing preserves the document and real taps still work');
+  check((await statsOf('#app [data-livery-component="PromoBanner"]')).loads === 1, 'resizing preserves the document and real taps still work');
 
   // Detach and reconnect the same surface: release its viewport and create exactly one new one.
   await page.evaluate(() => {
-    window.__detachedSurface = document.querySelector('#second a2ui-surface');
-    window.__detachedSurface.remove();
+    window.__livery.detachSecond();
   });
   await page.waitForTimeout(100);
   check(await page.evaluate(() => {
     const count = (r) => [...r.querySelectorAll('*')].reduce((n, e) => n + (e.tagName === 'CANVAS' ? 1 : 0) + (e.shadowRoot ? count(e.shadowRoot) : 0), 0);
-    return count(window.__detachedSurface) === 0;
+    return count(document.querySelector('#second')) === 0;
   }), 'disconnect releases every canvas');
-  await page.evaluate(() => document.querySelector('#second').append(window.__detachedSurface));
-  await loaded('#second livery-promo-banner');
-  check((await statsOf('#second livery-promo-banner')).canvases === 1, 'reconnect creates exactly one fresh canvas');
+  await page.evaluate(() => window.__livery.reconnectSecond());
+  await loaded('#second [data-livery-component="PromoBanner"]');
+  check((await statsOf('#second [data-livery-component="PromoBanner"]')).canvases === 1, 'reconnect creates exactly one fresh canvas');
   const reconnectCount = await page.evaluate(() => window.__livery.actions2.length);
-  await tap('#second livery-promo-banner');
+  await tap('#second [data-livery-component="PromoBanner"]');
   await page.waitForFunction((n) => window.__livery.actions2.length > n, reconnectCount);
   check(true, 'the reconnected component still routes real taps');
   const lifecycle = await page.evaluate(() => window.__livery.exercisePlayers());
@@ -289,27 +292,27 @@ try {
   check(!logs.some((l) => l.startsWith('pageerror:')), `no uncaught browser errors: ${logs.filter((l) => l.startsWith('pageerror:'))}`);
 
   // The automatic banner remains visible during a delayed contract decision, then gets server data.
-  const queryBefore = await statsOf('#app livery-promo-banner');
+  const queryBefore = await statsOf('#app [data-livery-component="PromoBanner"]');
   const querySent = page.waitForRequest('https://decisions.example/v1/decisions/query');
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateComponents: { surfaceId: 'chat-1', components: [
     { id: 'promo', component: 'PromoBanner', headline: 'Waiting offer', cta: 'Wait', template: { query: { offer: 'summer' } } },
   ] } }]));
-  await page.waitForFunction((n) => document.querySelector('#app livery-promo-banner')?.liveryStats?.sets > n, queryBefore.sets);
+  await page.waitForFunction((n) => document.querySelector('#app [data-livery-component="PromoBanner"]')?.liveryStats?.sets > n, queryBefore.sets);
   await querySent;
   check(decisionRequest?.query?.contract === 'promo/banner@1' && decisionRequest?.params?.offer === 'summer' && decisionRequest?.context?.locale === 'en-GB',
     `query sends device context and agent params: ${JSON.stringify(decisionRequest)}`);
-  const waiting = await statsOf('#app livery-promo-banner');
-  check((await page.locator('#app livery-promo-banner canvas').count()) > 0, 'automatic canvas draws while the server waits');
+  const waiting = await statsOf('#app [data-livery-component="PromoBanner"]');
+  check((await page.locator('#app [data-livery-component="PromoBanner"] canvas').count()) > 0, 'automatic canvas draws while the server waits');
   await page.evaluate(() => { window.__livery.events(); window.__queryEvents = []; });
   releaseDecision();
-  await page.waitForFunction((n) => document.querySelector('#app livery-promo-banner')?.liveryStats?.sets > n, waiting.sets);
+  await page.waitForFunction((n) => document.querySelector('#app [data-livery-component="PromoBanner"]')?.liveryStats?.sets > n, waiting.sets);
   await page.waitForFunction(() => {
     window.__queryEvents.push(...window.__livery.events());
     return window.__queryEvents.some((e) => e.type === 'Impression' && e.placement === 'assistant-offer');
   }, null, { timeout: 10_000 });
-  const decided = await statsOf('#app livery-promo-banner');
+  const decided = await statsOf('#app [data-livery-component="PromoBanner"]');
   check(decided.loads === waiting.loads, 'the decided presentation reuses the automatic document without reloading');
-  await hostAction('#app livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/sale"}' });
+  await hostAction('#app [data-livery-component="PromoBanner"]', { name: 'cta', valueType: 'string', value: '{"route":"/sale"}' });
   const queryEvents = await page.evaluate(() => [...window.__queryEvents, ...window.__livery.events()]);
   check(queryEvents.some((e) => e.type === 'Action' && e.placement === 'assistant-offer' && e.decisionId === 'a2ui:chat-1/promo'), 'decided actions retain the A2UI event id and server placement');
   const decidedImpressions = queryEvents.filter((e) => e.type === 'Impression' && e.placement === 'assistant-offer');
@@ -322,11 +325,61 @@ try {
   ] } }]));
   await page.waitForTimeout(300);
   const repeatedEvents = await page.evaluate(() => window.__livery.events());
-  check(!repeatedEvents.some((e) => e.type === 'Impression' && e.placement === 'assistant-offer') && (await statsOf('#app livery-promo-banner')).loads === decided.loads,
+  check(!repeatedEvents.some((e) => e.type === 'Impression' && e.placement === 'assistant-offer') && (await statsOf('#app [data-livery-component="PromoBanner"]')).loads === decided.loads,
     'updating the cached decision neither repeats its impression nor reloads its document');
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
+  const memoryOnline = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
+  check(memoryOnline?.includes('PromoBanner'), 'memory-only sessions work while online');
+
+  // Simulate an interrupted prefetch: keep the manifest and metadata, remove all template blobs.
+  const removedBlobs = await page.evaluate(() => new Promise((resolve, reject) => {
+    const open = indexedDB.open('livery-v1', 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('entries', 'readwrite');
+      const store = tx.objectStore('entries');
+      const request = store.getAllKeys();
+      let removed = 0;
+      request.onsuccess = () => {
+        for (const key of request.result) if (String(key).includes('/blob/')) { store.delete(key); removed++; }
+      };
+      tx.oncomplete = () => { db.close(); resolve(removed); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  }));
+  check(removedBlobs > 0, 'the partial-cache regression retains metadata but removes downloaded blobs');
+  let resumeBlobs;
+  const blobsBlocked = new Promise((resolve) => { resumeBlobs = resolve; });
+  const delayedBlobs = async (route) => { await blobsBlocked; await route.continue(); };
+  await page.route('**/catalog/**/*.rc', delayedBlobs);
+  const repairing = page.waitForRequest((request) => request.url().includes('/catalog/') && request.url().endsWith('.rc'));
+  await page.reload({ waitUntil: 'commit' });
+  await repairing;
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => !window.__livery), 'opening waits for repairs instead of registering an empty catalog');
+  resumeBlobs();
+  await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
+  await loaded('#app [data-livery-component="PromoBanner"]');
+  await loaded('#app [data-livery-component="ShopQuantity"]');
+  check(await page.evaluate(() => window.__livery.components.includes('PromoBanner')), 'opening a partial cache repairs blobs before advertising components');
+  await page.unrouteAll({ behavior: 'wait' });
+
+  // Keep the app shell available, but make every catalog/blob/image request fail as if offline.
+  await page.route('**/catalog/**', (route) => route.abort('internetdisconnected'));
+  await page.reload();
+  await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
+  await loaded('#app [data-livery-component="PromoBanner"]');
+  await loaded('#app [data-livery-component="ShopQuantity"]');
+  check((await colours('#app [data-livery-component="PromoBanner"]')).notWhite > 0.5, 'reload draws cached templates with catalog networking disabled');
+  const memory = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
+  check(memory === null || memory.length === 0, 'memory-only sessions cannot read the persistent cache');
+  const changedTrust = await page.evaluate(() => window.__livery.cachedComponents({
+    unsigned: false, keys: [{ keyId: 'different-trust', publicKey: btoa('x'.repeat(32)) }],
+  }));
+  check(changedTrust === null || changedTrust.length === 0, 'a signed session cannot reuse an unsigned cached manifest');
 } catch (e) {
   check(false, String(e));
   console.log(logs.join('\n'));

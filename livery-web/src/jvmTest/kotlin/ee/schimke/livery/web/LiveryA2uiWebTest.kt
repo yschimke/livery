@@ -49,7 +49,8 @@ class LiveryA2uiWebTest {
   }
   private val built = CatalogBuilder(now = { 0 }).build(tree, Layout.Static, serial = 0)
   private val caps = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"), livePush = false)
-  private val clock = Clock { 1_000L }
+  private var now = 1_000L
+  private val clock = Clock { now }
   private val events = mutableListOf<TemplateEvent>()
   private val repository = TemplateRepository(
     StaticSource("https://catalog.invalid/"),
@@ -236,6 +237,7 @@ class LiveryA2uiWebTest {
     })
     val admission = DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())))
     val fetched = mutableListOf<String>()
+    var available = false
     val web = LiveryA2uiWeb(
       repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null, admission,
       fetcher = object : RedirectingFetcher {
@@ -244,6 +246,7 @@ class LiveryA2uiWebTest {
           fetched += url
           // The catalog host redirects to another host: never followed.
           if (url.endsWith("/moved.rc")) return if (allowRedirect("https://elsewhere.example/doc.rc")) FetchResult.Ok(bytes, null) else FetchResult.Failed(null, "redirect refused")
+          if (!available) return FetchResult.Failed(503, "temporarily offline")
           return if (bytes.size > maxBytes) FetchResult.Failed(200, "too big") else FetchResult.Ok(bytes, null)
         }
       },
@@ -258,11 +261,24 @@ class LiveryA2uiWebTest {
     fetched.clear()
     assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
     assertTrue(fetched.isEmpty(), "nothing is fetched on the render path")
-    assertTrue(web.fetchImages())
+    assertTrue(!web.fetchImages(), "a transient failure shows the app's fallback")
     assertEquals(listOf("https://catalog.example/doc.rc"), fetched)
+    available = true
+    now += 29_999
+    assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(!web.fetchPending(), "failed requests back off instead of retrying on every render")
+    assertEquals(1, fetched.size)
+    now++
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertEquals(1, fetched.size, "the retry still runs off the render path")
+    assertTrue(web.fetchImages())
+    assertEquals(listOf("https://catalog.example/doc.rc", "https://catalog.example/doc.rc"), fetched)
     val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
     assertEquals("a2ui:signed:app", r.designId)
-    assertEquals(1, fetched.size, "fetched once")
+    now += 30_000
+    assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(!web.fetchPending(), "a successful signed document stays cached")
+    assertEquals(2, fetched.size, "one failed attempt followed by one successful retry")
     // A page whose signed limit is smaller than the document never keeps it.
     val small = LiveryA2uiWeb(
       repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null,
@@ -279,11 +295,27 @@ class LiveryA2uiWebTest {
   }
 
   @Test fun aTemplateSaysHowTallItIs() = runTest {
-    // The height rule: no height from the page, so the template's own, the height it was authored at.
+    // Authored fallback remains available when the player cannot measure a root.
     val r = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
     val bytes = built.files.entries.first { it.key.contains(r.sha256) }.value
     assertEquals(ee.schimke.livery.instantiate.TemplateInstantiator.authoredHeightDp(bytes), r.heightDp)
     assertEquals(160, r.heightDp, "banner-classic is authored at 360x160")
+    assertEquals(null, r.minHeightDp, "authored fallback is not a target minimum")
+  }
+
+  @Test fun anExplicitMinimumRemainsSeparateFromMeasuredContent() = runTest {
+    val manifest = built.manifest.copy(templates = built.manifest.templates.map { entry ->
+      entry.copy(target = entry.target.copy(size = entry.target.size.copy(minHeightDp = 150)))
+    })
+    val repo = TemplateRepository(
+      StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(manifest) { sha -> built.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    val web = LiveryA2uiWeb(repo, SlotPlanner(repo, { events += it }, clock), caps, { events += it }, clock)
+    val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", promo))
+    assertEquals(150, ready.minHeightDp)
+    assertEquals(150, ready.heightDp)
   }
 
   @Test fun itsEventsCarryWhereTheAgentPlacedIt() = runTest {

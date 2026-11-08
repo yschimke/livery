@@ -278,7 +278,7 @@ action kind.
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` *(built)* | any MCP host (`livery-mcp-core`) | `a2ui_component_schema(contract?)` and `validate_a2ui(message, data_model?)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
-| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
+| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one component per contract for Lit, React or Angular, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -354,8 +354,8 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
 A2UI's web renderers share `@a2ui/web_core` (`MessageProcessor`, `Catalog`, `DataContext`). A
 custom component is an API object (a name, a tag and a Zod schema) plus an implementation per
 renderer: a subclass of `A2uiLitElement` in `@a2ui/lit` (built), `createComponentImplementation(Api,
-…)` in `@a2ui/react` and a `CatalogComponent` in `@a2ui/angular` (*planned*: the same API objects
-over the same session).
+…)` in `@a2ui/react` and a `CatalogComponent` in `@a2ui/angular` (all built over a shared renderer-neutral
+controller and the same session).
 
 On the wire, a client action is `{name, surfaceId, sourceComponentId, timestamp, context}`, so a
 Livery action arrives at the agent with `sourceComponentId` naming the Livery component and the
@@ -472,8 +472,9 @@ What the prototype taught, and what it doesn't do yet:
    the app implements the endpoint described in PROTOCOL.md §8.3 (no Livery server module required).
    See [the handler example](../samples/a2ui-query/README.md).
 6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
-   a Lit component per contract, drawing in the page with the TypeScript player and live named
-   values (above). Still to do: React and Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
+   Lit, React and Angular components per contract, drawing with the TypeScript player and live
+   named values. IndexedDB caching and Binaryen optimization are built. npm release automation
+   is prepared; publishing needs the owner's token.
 
 ## Open questions
 
@@ -485,12 +486,70 @@ What the prototype taught, and what it doesn't do yet:
 - **Lists of components versus lists in a template.** A feed can be an A2UI `List` of Livery
   components (one template per item, as Livery feeds do) or one template with a list input. The
   first is better for viewability per item; worth a sample of each.
-- **Size.** A2UI layouts measure children; a Remote Compose document lays itself out within the
-  constraints it is given. The rule, for a component given no height: the smallest height its
-  template's target declares (`minHeightDp`), else the height its document was authored at (the
-  header's height over its density at generation). *Built* on the web (`Rendered.Ready.heightDp`) and Compose (`constraints.hasBoundedHeight`);
-  a page's `--livery-a2ui-height` still wins. Measuring a document's laid-out content height
-  instead would need the player to expose it.
+- **Size.** A page's `--livery-a2ui-height` wins. Otherwise the web controller uses the player's
+  measured root content height at the current width, at least the target's `minHeightDp`.
+  `Rendered.Ready.heightDp` supplies the authored fallback when no finite root measurement is
+  available; `minHeightDp` keeps an explicit target minimum distinct from that fallback.
+  Measurement uses the destination bounds of layout animations, so a transient frame cannot
+  clip the final card. The sample banner is 112dp high rather than its 160dp authored viewport.
+
+### npm releases
+
+`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
+The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
+first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
+with its provenance until rc-players publishes a supported npm package.
+
+### React and Angular
+
+The same session and controller power all three web renderers. Use
+`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
+React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
+Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
+The Angular entry ships partial compilation for the application's Angular linker.
+
+`options.base` extends the selected renderer's catalog. Actions, data-model paths, themes,
+decision ids, retry and height behavior are shared. `fallback` returns a Lit template for Lit,
+a React node for React, or a DOM node/string for Angular. `npm test` runs the same sample catalog
+and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local Chromium binary.
+
+### Persistent browser cache
+
+Web sessions default to IndexedDB for blobs and small named documents. A session with playable cached templates reads
+its catalog immediately and refreshes in the background. A cached manifest without playable
+blobs first retries prefetch, so an interrupted download cannot register an empty component catalog.
+Template rendering does not
+wait for a network response. The existing repository still owns expiry, stale grace, install
+policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
+the browser; this is a cache, not durable application data.
+
+Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (also useful in
+hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
+switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
+The browser suite reloads with all catalog requests blocked and checks that cached templates
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
+cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
+host application's responsibility.
+
+### Wasm distribution size
+
+`webDist` runs Kotlin's pinned Binaryen optimizer before packaging. On the 0.6.0 baseline this
+reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
+its fetch and redirect contract. `docs/WASM-SIZE.md` records section and dependency measurements;
+`scripts/wasm-size.py` reproduces the breakdown for subsequent builds.
+
+Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.
+
+When replacing a cached catalog, refresh keeps the previous manifest active until its required
+replacement templates and assets finish downloading. Failed downloads keep the playable cache;
+the accepted serial watermark is still persisted immediately so rollback protection survives a
+failure or interruption. Kotlin and Swift use the same activation order.
 
 ## Configuring contract queries
 
@@ -503,6 +562,8 @@ For `@livery/a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySe
 The Lit adapter calls `fetchPending()` after rendering a result marked `pending`. Hosts using
 `LiveryA2uiWeb` directly must do the same, then render again. `Ready.pending` means the automatic
 design can draw immediately. A pending exact document shows the app's fallback until it arrives.
+Failed named-document fetches back off for 30 seconds. A subsequent render can then queue another
+background attempt with the same template and query; successfully admitted documents stay cached.
 
 A custom web host reports `shown(render.id)` after drawing each new `Ready.presentationKey`.
 This key changes when a server decision replaces the automatic plan, even if `documentKey`
