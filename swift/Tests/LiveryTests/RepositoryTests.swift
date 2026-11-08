@@ -128,6 +128,35 @@ final class RepositoryTests: XCTestCase {
     XCTAssertEqual(retried, .updated(serial: 6), "pending replacement must bypass the old TTL")
   }
 
+  func testWithdrawalsReloadTheLatestPersistedSnapshot() async throws {
+    let (original, blobs) = manifestJSON(serial: 5)
+    let store = MemoryBlobStore(), kv = MemoryKeyValueStore()
+    var files = blobs; files["manifest.json"] = original
+    let host = MutableHost(files)
+    func open() -> TemplateRepository {
+      TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
+        blobs: store, kv: kv, clock: { 1_000 }, targets: [caps])
+    }
+    let first = open()
+    _ = await first.refresh()
+    let second = open()
+    let initial = await second.manifest()
+    XCTAssertEqual(initial?.serial, 5)
+    var latest = try JSONDecoder().decode(Manifest.self, from: original)
+    latest.serial = 6
+    files["manifest.json"] = try JSONEncoder().encode(latest); await host.replace(files)
+    _ = await first.refresh(force: true)
+    var next = latest
+    next.serial = 7
+    next.designs = next.designs.map { d in var d = d; if d.id == "skin" { d.revoked = true }; return d }
+    next.templates = next.templates.map { t in var t = t; if t.designId == "builtin" { t.sha256 = "missing" }; return t }
+    files["manifest.json"] = try JSONEncoder().encode(next); await host.replace(files)
+    if case .failed = await second.refresh(force: true) {} else { XCTFail("incomplete replacement activated") }
+    let saved = await open().manifest()
+    XCTAssertEqual(saved?.serial, 6)
+    XCTAssertEqual(saved?.design("skin")?.revoked, true)
+  }
+
   func testPendingReplacementWithdrawsDesignsAndTemplatesIncludingBundledFallback() async throws {
     for revokeDesign in [true, false] {
       let (original, blobs) = manifestJSON(serial: 5)

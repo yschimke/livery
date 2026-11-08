@@ -160,6 +160,28 @@ class RepositoryTest {
     assertEquals(2, r.current()?.serial)
   }
 
+  @Test fun refreshWithdrawalsUseTheLatestPersistedPlayableSnapshot() = runTest {
+    val host = Host(Fx.manifest())
+    val first = repo(host)
+    first.refresh()
+    val second = repo(host)
+    assertEquals(1, second.manifest()?.serial)
+    host.manifest = replacement()
+    assertEquals(RefreshResult.Updated(2), first.refresh(force = true))
+    val latest = assertNotNull(first.resolve(q))
+    host.manifest = replacement().copy(serial = 3,
+      designs = replacement().designs.map { it.copy(revoked = it.id != "tile-default") },
+      templates = replacement().templates.map {
+        if (it.target.surface == "launcher-widget") it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing"))) else it
+      })
+    assertIs<RefreshResult.Failed>(second.refresh(force = true))
+    assertEquals(2, second.manifest()?.serial, "withdrawals must retain the newest activated snapshot")
+    val reopened = repo(host)
+    assertEquals(2, reopened.manifest()?.serial)
+    assertEquals(latest.entry.sha256, reopened.resolve(q)?.entry?.sha256)
+    assertTrue(reopened.manifest()!!.designs.filter { it.id != "tile-default" }.all { it.revoked })
+  }
+
   @Test fun designRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(true) }
 
   @Test fun templateRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(false) }

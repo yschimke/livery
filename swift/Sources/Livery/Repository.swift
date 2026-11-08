@@ -171,6 +171,7 @@ public actor TemplateRepository {
   private func doRefresh(force: Bool) async -> RefreshResult {
     let now = clock()
     let m = await meta()
+    current = nil // Reload a snapshot another repository may have activated.
     let cached = await manifest()
     var acceptedSerial = m.acceptedSerial
     if !force {

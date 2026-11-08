@@ -158,7 +158,8 @@ class TemplateRepository(
   suspend fun refresh(force: Boolean = false): RefreshResult = refreshLock.withLock {
     val now = clock.nowEpochMs()
     val m = meta()
-    val cached = manifest()
+    // Another session may have activated a newer snapshot since this instance last read it.
+    val cached = stateLock.withLock { current = null; loadCachedLocked() }
     var acceptedSerial = m.acceptedSerial
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")

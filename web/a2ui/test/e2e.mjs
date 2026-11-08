@@ -343,6 +343,16 @@ try {
     await tab.goto(`${base}?player=${player}&renderer=${process.env.LIVERY_RENDERER ?? 'lit'}`);
     await tab.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
     const manifest = JSON.parse(await readFile(join(site, 'catalog/manifest.json'), 'utf8'));
+    const persistedState = () => page.evaluate(() => new Promise((resolve, reject) => {
+        const open = indexedDB.open('livery-v1', 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const request = db.transaction('entries').objectStore('entries').getAll();
+          request.onsuccess = () => { db.close(); resolve(request.result.filter((v) => typeof v === 'string').map((v) => JSON.parse(v))); };
+          request.onerror = () => { db.close(); reject(request.error); };
+        };
+      }));
     // The first response is held while another session tries to refresh the same namespace.
     // After it commits the higher serial, a queued older response must be rejected.
     for (const other of ['session', 'tab']) {
@@ -365,21 +375,26 @@ try {
       } finally { release(); }
       const results = await Promise.all([first, second]);
       check(results[0] === 'Updated' && results[1] === 'Failed', `older queued ${other} response cannot replace the accepted serial: ${results}`);
-      const saved = await page.evaluate(() => new Promise((resolve, reject) => {
-        const open = indexedDB.open('livery-v1', 1);
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const db = open.result;
-          const request = db.transaction('entries').objectStore('entries').getAll();
-          request.onsuccess = () => { db.close(); resolve(request.result.filter((v) => typeof v === 'string').map((v) => JSON.parse(v))); };
-          request.onerror = () => { db.close(); reject(request.error); };
-        };
-      }));
+      const saved = await persistedState();
       check(Math.max(...saved.map((v) => v.acceptedSerial ?? 0)) === higher && Math.max(...saved.map((v) => v.serial ?? 0)) === higher,
         `persistent manifest and watermark retain the higher serial across ${other}s`);
       manifest.serial = higher;
       await page.context().unrouteAll({ behavior: 'wait' });
     }
+    // The tab still memoized the original serial before either successful activation.
+    // A later withdrawal with an unrelated broken download must preserve the latest disk snapshot.
+    const candidate = { ...manifest, serial: manifest.serial + 1,
+      designs: manifest.designs.map((d) => d.id === 'article-card' ? { ...d, revoked: true } : d),
+      templates: manifest.templates.map((t) => t.designId === 'quantity-stepper' ? { ...t, sha256: '0'.repeat(64) } : t),
+    };
+    await page.context().route('**/catalog/manifest.json', (route) => route.fulfill({ json: candidate }));
+    check(await tab.evaluate(() => window.__livery.refresh()) === 'Failed', 'unrelated missing replacement blob keeps activation pending');
+    const saved = await persistedState();
+    const active = saved.find((v) => v.serial === manifest.serial);
+    check(active?.designs.find((d) => d.id === 'article-card')?.revoked === true,
+      'stale tab applies revocations to the latest persisted playable snapshot');
+    check(Math.max(...saved.map((v) => v.acceptedSerial ?? 0)) === candidate.serial,
+      'pending replacement retains its accepted serial independently of activation');
   } finally { await tab.close(); await page.context().unrouteAll({ behavior: 'wait' }); }
 
 } catch (e) {
