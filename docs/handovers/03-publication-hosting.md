@@ -3,6 +3,12 @@
 Read [coordination](README.md). **Goal:** turn a selected artifact/revision into a stable,
 publicly fetchable preview with metadata and an admitted native-host descriptor.
 
+First-wave input now exists: [the experimental descriptor](../../samples/component-preview/README.md)
+and [standalone viewer](../../web/core/README.md). The viewer currently takes a descriptor
+URL directly and requires same-origin HTTPS references. This stream must define how a
+public HTML page exposes its descriptor to native clients, and serve the pinned assets
+under that origin. The local fixture does not establish publication persistence or discovery.
+
 ## Repositories and existing code
 
 Livery: `livery-publish`, `livery-render`,

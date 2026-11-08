@@ -3,6 +3,10 @@
 Read [coordination](README.md). **Goal:** share a normal preview URL from a browser into
 Heron's editable composer. This can be implemented and tested without Remote Compose.
 
+First-wave status: implemented locally; [the wave report](WAVE_1.md) records the branch,
+current upstream base and verification. Device share-sheet/OAuth/recreation checks remain
+open. The evidence below is the planning snapshot, not the implementation checkout's base.
+
 ## Evidence and first inspection
 
 Inspected upstream: `tunjid/heron@dfe4ba961a825fe23d6a788c1edcc9d75dd4f121`.

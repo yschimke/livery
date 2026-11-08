@@ -6,6 +6,11 @@ supported preview origin becomes a native Compose RC preview, with normal link f
 Use the existing Livery quantity-stepper fixture while Confetti's PRs are pending. The
 Confetti artifact/font acceptance checks below become active after 01's merge gate opens.
 
+The first-wave [descriptor and cases](../../samples/component-preview/README.md) are now
+executable fixtures. Incoming sharing is implemented separately; see [the wave report](WAVE_1.md)
+for its current Heron checkout/base and validation. This native-rendering stream has not
+started and must agree public-page discovery with 03 before resolving real shared URLs.
+
 ## Source and entry points
 
 Inspect current `tunjid/heron` and its AGENTS.md; baseline was

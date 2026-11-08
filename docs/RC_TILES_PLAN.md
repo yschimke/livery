@@ -1,7 +1,9 @@
 # Shareable Remote Compose components: delivery plan
 
-Status: **Proposed / Planned**. This is a delivery plan, not a supported API or AT Protocol
-standard. Source inspection: 2026-11-08. “RC tile” remains a provisional format name.
+Status: **Staged delivery; first wave implemented locally.** See the
+[implementation report](handovers/WAVE_1.md) for completed work and validation.
+This is a delivery plan, not a supported publication API or AT Protocol standard.
+Source inspection: 2026-11-08. “RC tile” remains a provisional format name.
 
 Implementation assignments: [parallel handover notes](handovers/README.md), with owners,
 shared interface checkpoints, dependencies and acceptance checks.

@@ -4,6 +4,10 @@ Read [coordination and baseline](README.md) and the [plan](../RC_TILES_PLAN.md).
 **Goal:** give all hosts one small experimental publication contract without prematurely
 standardising a new protocol. Owner: Livery docs/sample fixtures, not app-specific core logic.
 
+First-wave status: [the quantity-stepper descriptor and executable cases](../../samples/component-preview/README.md)
+are implemented. See [the wave report](WAVE_1.md) for checks and remaining publication
+semantics. Continue from this fixture rather than inventing a separate descriptor per host.
+
 ## Start here
 
 Read `docs/PROTOCOL.md`, especially contracts/actions, signing, resource verification,

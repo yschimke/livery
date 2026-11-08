@@ -1,6 +1,6 @@
 # Parallel handovers: shareable RC components
 
-Status: **Planned work. Read-only readiness checks completed for 00/01/02; no implementation started.**
+Status: **First wave implemented locally; see the [implementation report](WAVE_1.md) for validation and remaining work.**
 Baseline plan commit: `23a0c09`. Read the [delivery plan](../RC_TILES_PLAN.md) first.
 These notes are independently assignable briefs. Read the target repository's current
 `AGENTS.md` before implementation and recheck all external branch heads.

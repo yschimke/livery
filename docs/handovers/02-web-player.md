@@ -3,6 +3,11 @@
 Read [coordination](README.md). **Goal:** render the real Confetti RC artifact in a lightweight
 web preview without an A2UI runtime dependency. Own player extraction and viewer assets.
 
+First-wave status: the standalone path is implemented with the quantity-stepper fixture;
+see [results and limits](WAVE_1.md) and the [package API](../../web/core/README.md).
+Confetti integration remains deferred. Continue from `livery-web-core` and `web/core`;
+the paths below describe the extraction's original starting point.
+
 ## Starting points in Livery
 
 - `livery-web/src/commonMain/kotlin/ee/schimke/livery/web/LiveryA2uiWeb.kt`
@@ -10,7 +15,7 @@ web preview without an A2UI runtime dependency. Own player extraction and viewer
 - `web/a2ui/src/player.ts`, `livery.ts`, `catalog.ts`
 - `livery-web/build.gradle.kts`, `web/a2ui/package.json`
 
-The web module currently depends on `livery-a2ui`; hiding UI elements is not sufficient
+The original web module depended on `livery-a2ui`; hiding UI elements is not sufficient
 decoupling. Its KMP pipeline already supplies core validation/selection. Extract reusable
 logic while preserving the A2UI wrapper and public behaviour; avoid a parallel TS engine.
 
