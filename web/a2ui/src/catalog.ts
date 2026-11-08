@@ -109,7 +109,7 @@ const TEMPLATE = 'template';
 /** Every Livery component's element: what it draws comes from its catalog entry ([LiveryComponentApi]). */
 class LiveryElement extends A2uiLitElement {
     static styles = css`
-      :host { display: block; width: 100%; height: var(--livery-a2ui-height, 200px); }
+      :host { display: block; width: 100%; height: var(--livery-a2ui-height, var(--livery-template-height, 200px)); }
       .player { width: 100%; height: 100%; overflow: hidden; }
     `;
 
@@ -194,6 +194,11 @@ class LiveryElement extends A2uiLitElement {
       return out;
     }
 
+    /** Whether the page sets the component's height (`--livery-a2ui-height`), so selection can use it. */
+    private pageHeight(): boolean {
+      return getComputedStyle(this).getPropertyValue('--livery-a2ui-height').trim() !== '';
+    }
+
     /** `a2ui:<surfaceId>/<componentId>`: on every event of this component, so analytics can tell agent-placed templates from the app's own. */
     private decisionId(): string | undefined {
       const component = this.context?.componentModel.id;
@@ -214,7 +219,7 @@ class LiveryElement extends A2uiLitElement {
       if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
       if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
-      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this, this.context?.theme), decisionId: this.decisionId() };
+      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: this.pageHeight() ? Math.round(this.clientHeight) || undefined : undefined, density, theme: themeOf(this, this.context?.theme), decisionId: this.decisionId() };
       this.lastTheme = space.theme;
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
@@ -244,6 +249,10 @@ class LiveryElement extends A2uiLitElement {
       const wasFallback = this.fallback !== undefined;
       this.fallback = undefined;
       if (wasFallback) { this.requestUpdate(); await this.updateComplete; }
+      // The height rule: the page's --livery-a2ui-height when it sets one, else the template's own.
+      // A template that doesn't say takes the default, never the last template's height.
+      if (r.heightDp) this.style.setProperty('--livery-template-height', `${r.heightDp}px`);
+      else this.style.removeProperty('--livery-template-height');
       const previous = this.render_;
       this.render_ = r.render;
       const player = this.player;

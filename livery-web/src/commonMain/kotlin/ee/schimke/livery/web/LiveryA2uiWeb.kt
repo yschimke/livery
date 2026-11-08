@@ -82,7 +82,9 @@ class LiveryA2uiWeb(
     /**
      * Play [document] with [values] (its named values: strings, numbers, booleans as 1 or 0, colours
      * as `#AARRGGBB`); pass [id] to [action] and [shown]. While [documentKey] is the one already
-     * playing, only the values changed: set them, don't load the document again.
+     * playing, only the values changed: set them, don't load the document again. [heightDp] is
+     * the template's own height (docs/A2UI.md, the height rule): what to draw it at when the page
+     * gives the component none.
      */
     data class Ready(
       val id: Int,
@@ -91,6 +93,7 @@ class LiveryA2uiWeb(
       val values: Map<String, JsonElement>,
       val designId: String,
       val sha256: String,
+      val heightDp: Int? = null,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
@@ -164,7 +167,7 @@ class LiveryA2uiWeb(
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256)
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -178,7 +181,7 @@ class LiveryA2uiWeb(
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256)
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
       }
     }
   }
@@ -249,6 +252,17 @@ class LiveryA2uiWeb(
   }
 
   private val imagesBySha = HashMap<String, Boolean>()
+  private val heightBySha = HashMap<String, Int?>()
+
+  /**
+   * The template's own height, for a component the page gives none: the smallest height its target
+   * declares, else the height its document was authored at.
+   */
+  private fun heightDp(plan: RenderPlan): Int? {
+    val entry = plan.template.entry
+    entry.target.size.minHeightDp?.let { return it }
+    return heightBySha.getOrPut(entry.sha256) { runCatching { TemplateInstantiator.authoredHeightDp(plan.template.bytes) }.getOrNull() }
+  }
 
   private fun drawsImages(sha256: String, template: ByteArray): Boolean =
     imagesBySha.getOrPut(sha256) { runCatching { TemplateInstantiator.bitmapUrls(template).isNotEmpty() }.getOrDefault(true) }

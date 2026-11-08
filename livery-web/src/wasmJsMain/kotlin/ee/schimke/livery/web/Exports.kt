@@ -157,6 +157,7 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
+      r.heightDp?.let { put("heightDp", it) }
     }
     is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason) }
     is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason) }

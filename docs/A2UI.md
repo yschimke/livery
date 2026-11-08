@@ -338,8 +338,9 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   sent one; each role (`primary`, `surface`, `onSurface`, …) otherwise from `--livery-<role>`, else
   A2UI's own `--a2ui-color-<role>`, else Material 3's baseline, so a template matches the basic
   components beside it.
-- **Size.** The width the element gets selects the design (and redraws on a resize); the height
-  is `--livery-a2ui-height`, until the height rule below.
+- **Size.** The width the element gets selects the design (and redraws on a resize). The height
+  is the page's `--livery-a2ui-height` when it sets one (which selection then also uses), else the
+  template's own height (the height rule below).
 
 A2UI's web renderers share `@a2ui/web_core` (`MessageProcessor`, `Catalog`, `DataContext`). A
 custom component is an API object (a name, a tag and a Zod schema) plus an implementation per
@@ -434,7 +435,7 @@ What the prototype taught, and what it doesn't do yet:
   neither id; the web has it); the
   `createSurface` theme isn't read (theme roles come from the host's Material colours; the web
   reads it); no
-  `template` forms other than the design preference, or height rules beyond the template's own.
+  `template` forms other than the design preference, or the height rule (the web has it).
 
 ## Order of work
 
@@ -470,5 +471,8 @@ What the prototype taught, and what it doesn't do yet:
   components (one template per item, as Livery feeds do) or one template with a list input. The
   first is better for viewability per item; worth a sample of each.
 - **Size.** A2UI layouts measure children; a Remote Compose document lays itself out within the
-  constraints it is given. A component with no height constraint needs a rule (the template's
-  intrinsic height, or the smallest `minHeightDp` of its size range).
+  constraints it is given. The rule, for a component given no height: the smallest height its
+  template's target declares (`minHeightDp`), else the height its document was authored at (the
+  header's height over its density at generation). *Built* on the web (`Rendered.Ready.heightDp`);
+  a page's `--livery-a2ui-height` still wins. Measuring a document's laid-out content height
+  instead would need the player to expose it.

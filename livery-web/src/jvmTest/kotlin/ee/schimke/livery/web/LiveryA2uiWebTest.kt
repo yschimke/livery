@@ -112,6 +112,14 @@ class LiveryA2uiWebTest {
     assertEquals(TemplateEvent.Type.Action, events.last().type)
   }
 
+  @Test fun aTemplateSaysHowTallItIs() = runTest {
+    // The height rule: no height from the page, so the template's own, the height it was authored at.
+    val r = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val bytes = built.files.entries.first { it.key.contains(r.sha256) }.value
+    assertEquals(ee.schimke.livery.instantiate.TemplateInstantiator.authoredHeightDp(bytes), r.heightDp)
+    assertEquals(160, r.heightDp, "banner-classic is authored at 360x160")
+  }
+
   @Test fun itsEventsCarryWhereTheAgentPlacedIt() = runTest {
     val web = web()
     val r = web.render("PromoBanner", promo, LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/promo")) as LiveryA2uiWeb.Rendered.Ready
