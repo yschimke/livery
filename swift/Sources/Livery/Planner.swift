@@ -59,7 +59,9 @@ public struct SlotPlanner: Sendable {
   public func forAppData(_ queries: [TemplateQuery], data: [String: JSONValue], extra: Bindings = Bindings()) async -> PlanResult {
     precondition(!queries.isEmpty, "no queries")
     precondition(queries.allSatisfy { $0.contract == queries[0].contract }, "queries for more than one contract")
-    guard let found = await repository.resolveFirst(queries) else { return fallback(queries[queries.count - 1], "no template", nil) }
+    // Nothing automatic for any query: the plain one still draws an arm's design that only an arm
+    // may pick (`automatic = false`), exactly as forAppData(query) does.
+    guard let found = await repository.resolveFirst(queries) else { return await appData(queries[queries.count - 1], nil, data, extra) }
     return await appData(queries[found.index], found.template, data, extra)
   }
 

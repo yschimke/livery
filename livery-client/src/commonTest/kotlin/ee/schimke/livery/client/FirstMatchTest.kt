@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import ee.schimke.livery.protocol.Arm
+import ee.schimke.livery.protocol.Experiment
 import ee.schimke.livery.protocol.InstallPolicy
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.TemplateEvent
@@ -48,6 +50,35 @@ class FirstMatchTest {
   @Test fun noQueryWithATemplateFallsBackOnce() = runTest {
     assertIs<PlanResult.Fallback>(planner.forAppData(listOf(track("ios"), track("wear")), data))
     assertEquals(1, events.count { it.type == TemplateEvent.Type.Fallback })
+  }
+
+  @Test fun anArmsDesignThatOnlyAnArmMayPickStillDraws() = runTest {
+    // A season: shipped, never picked automatically, and the only design here.
+    val season = Experiment("season", listOf(Arm("winter", designs = mapOf("live/status-tile@1" to "tile-retro"))))
+    val m = Fx.manifest().let { m ->
+      m.copy(
+        experiments = listOf(season),
+        designs = m.designs.mapNotNull {
+          when (it.id) {
+            "tile-retro" -> it.copy(install = InstallPolicy.Always, automatic = false)
+            else -> null
+          }
+        },
+      )
+    }
+    val repo = TemplateRepository(
+      StaticSource("https://cdn.example/c"), { _, _ -> FetchResult.Failed(503, "down") }, FakeCrypto, TrustPolicy.AllowUnsigned,
+      MemoryBlobStore(), MemoryKeyValueStore(), { 1_000 }, listOf(Fx.inApp),
+      TemplateRepository.Bundled(m) { sha -> listOf("retro-v7").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha } },
+    )
+    val ctx = DecisionContext(1_000, "android", "en-GB", 10, "u")
+    val experiments = Experiments({ m }, { ctx }, { _, _ -> "winter" }, EventSink {})
+    val planner = SlotPlanner(repo, {}, { 1_000 }, experiments)
+    val single = assertIs<PlanResult.Ready>(planner.forAppData(plain, data)).plan
+    val first = assertIs<PlanResult.Ready>(planner.forAppData(listOf(track("android"), plain), data)).plan
+    assertEquals("tile-retro", single.template.entry.designId)
+    assertEquals(single.template.entry.designId, first.template.entry.designId)
+    assertEquals(mapOf("season" to "winter"), first.experiments)
   }
 
   @Test fun queriesMustShareOneContract() = runTest {

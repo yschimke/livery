@@ -74,7 +74,9 @@ class SlotPlanner(
   suspend fun forAppData(queries: List<TemplateQuery>, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult {
     require(queries.isNotEmpty()) { "no queries" }
     require(queries.all { it.contract == queries[0].contract }) { "queries for more than one contract" }
-    val found = repository.resolveFirst(queries) ?: return fallback(queries.last(), "no template", null, decisionId)
+    // Nothing automatic for any query: the plain one still draws an arm's design that only an arm
+    // may pick (`automatic = false`), exactly as forAppData(query) does.
+    val found = repository.resolveFirst(queries) ?: return appData(queries.last(), null, data, extra, decisionId)
     return appData(queries[found.index], found.value, data, extra, decisionId)
   }
 
