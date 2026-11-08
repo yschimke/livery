@@ -60,7 +60,10 @@ class ConformanceTest {
 
   // --- selection ------------------------------------------------------------------------------
 
-  @Serializable data class SelectionCase(val name: String, val query: Query, val installed: List<String> = emptyList(), val expect: String?)
+  /** With [fallbacks], the first of [query] and then each of them that has a template decides (§5.4). */
+  @Serializable data class SelectionCase(
+    val name: String, val query: Query, val fallbacks: List<Query> = emptyList(), val installed: List<String> = emptyList(), val expect: String?,
+  )
   @Serializable data class Query(
     val contract: String, val caps: PlayerCapabilities, val widthDp: Int? = null, val heightDp: Int? = null,
     val designId: String? = null, val variant: String? = null, val theme: String? = null, val tags: Map<String, String> = emptyMap(),
@@ -85,6 +88,9 @@ class ConformanceTest {
         Design("winter", "c/tile@1", "Winter", variant = "winter", install = InstallPolicy.Always, automatic = false),
         // Its only template uses a shader (§5.1): it plays only where the player allows shaders.
         Design("fx", "c/tile@1", "Effects", variant = "fx", install = InstallPolicy.Always),
+        // Tagged for one item (a talk's track), with a variant of its own so the plain query's
+        // default still wins everywhere else (§5.4).
+        Design("android", "c/tile@1", "Android track", variant = "track", install = InstallPolicy.Always, tags = mapOf("track" to "android")),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -103,6 +109,7 @@ class ConformanceTest {
         // Sorts first on a tie, so only the byte budget keeps it out.
         t('0', "builtin", inApp(8), bytes = 900_000),
         t('f', "fx", inApp(8), features = listOf("shaders")),
+        t('c', "android", inApp(8)),
       ),
     )
     val app8 = PlayerCapabilities(Surfaces.IN_APP, 8, setOf("androidx"))
@@ -133,10 +140,14 @@ class ConformanceTest {
       SelectionCase("a risky feature the player doesn't allow: the design falls back", q(app8).copy(designId = "fx"), expect = null),
       SelectionCase("the player allows that feature", q(app8.copy(features = setOf("shaders"))).copy(designId = "fx"), expect = null),
       SelectionCase("allowing another feature isn't enough", q(app8.copy(features = setOf("haptics"))).copy(designId = "fx"), expect = null),
+      SelectionCase("the most specific query with a template decides", q(app8).copy(tags = mapOf("track" to "android")), fallbacks = listOf(q(app8)), expect = null),
+      SelectionCase("one without falls back to the next", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8)), expect = null),
+      SelectionCase("the plain query still draws the default, not the tagged design", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8).copy(tags = mapOf("style" to "round")), q(app8)), expect = null),
+      SelectionCase("no query has a template", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8).copy(tags = mapOf("style" to "round"))), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
-      val qq = c.query
-      val got = TemplateSelector.select(m, TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor), automatic = auto)
+      val queries = (listOf(c.query) + c.fallbacks).map { qq -> TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor) }
+      val got = if (c.fallbacks.isEmpty()) TemplateSelector.select(m, queries.single(), automatic = auto) else TemplateSelector.selectFirst(m, queries, automatic = auto)?.value
       c.copy(expect = got?.sha256)
     }
     check("selection.json", json.encodeToJsonElement(SelectionFixture.serializer(), SelectionFixture(m, cases)))

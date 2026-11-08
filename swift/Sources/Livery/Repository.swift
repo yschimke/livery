@@ -247,26 +247,37 @@ public actor TemplateRepository {
   /// From disk only: the usable cached manifest, choosing among what is downloaded, else the
   /// bundled catalog. Nil means the app draws its own fallback.
   public func resolve(_ query: TemplateQuery) async -> LoadedTemplate? {
+    await resolveFirst([query])?.template
+  }
+
+  /// §5.4: `resolve` for the first of `queries` that has a template, with that query's index. The
+  /// downloaded catalog answers every query before the bundled one is asked.
+  public func resolveFirst(_ queries: [TemplateQuery]) async -> (index: Int, template: LoadedTemplate)? {
     let installed = await installedIds()
     let automatic: (Design) -> Bool = { $0.install == .always || installed.contains($0.id) }
     if let m = await usable() {
       let have = await blobs.keys()
       var cached = m
       cached.templates = m.templates.filter { t in have.contains(t.sha256) && t.assets.allSatisfy(have.contains) }
-      var queries = [query]
-      if query.designId != nil { var q = query; q.designId = nil; queries.append(q) }
-      for q in queries {
-        guard let e = TemplateSelector.select(cached, q, automatic: automatic), let bytes = await blobs.get(e.sha256) else { continue }
-        return loaded(m, e, bytes, origin(m))
+      for (i, query) in queries.enumerated() {
+        var tries = [query]
+        if query.designId != nil { var q = query; q.designId = nil; tries.append(q) }
+        for q in tries {
+          guard let e = TemplateSelector.select(cached, q, automatic: automatic), let bytes = await blobs.get(e.sha256) else { continue }
+          return (i, loaded(m, e, bytes, origin(m)))
+        }
       }
     }
     guard let b = bundled, let bm = await bundledManifest() else { return nil }
-    var plain = query
-    plain.designId = nil
-    guard let e = TemplateSelector.select(bm, query, automatic: automatic) ?? TemplateSelector.select(bm, plain, automatic: automatic),
-      let bytes = await b.read(e.sha256)
-    else { return nil }
-    return loaded(bm, e, bytes, .bundled)
+    for (i, query) in queries.enumerated() {
+      var plain = query
+      plain.designId = nil
+      guard let e = TemplateSelector.select(bm, query, automatic: automatic) ?? TemplateSelector.select(bm, plain, automatic: automatic),
+        let bytes = await b.read(e.sha256)
+      else { continue }
+      return (i, loaded(bm, e, bytes, .bundled))
+    }
+    return nil
   }
 
   /// Whether automatic selection may pick `designId` (§5.2): not revoked, and `Always` or installed.

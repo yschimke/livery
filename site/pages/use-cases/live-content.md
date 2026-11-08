@@ -42,7 +42,27 @@ DesignPicker(designs, onChoose = { d ->
 `repository.preview(designId, query)` plays a design once without installing it, so the picker can
 show it live with the person's own data.
 
-## 3. Bundle a fallback catalog
+## 3. A design for one item
+
+A design can be tagged for one item or group (a keynote, a track) and drawn only there. Pass the
+queries most specific first: the first that has a template decides, in one pass over the catalog,
+and the plain query draws everything else.
+
+```kotlin
+planner.forAppData(
+  listOf(
+    query.copy(tags = mapOf("session" to session.id)),
+    query.copy(tags = mapOf("track" to session.track)),
+    query,
+  ),
+  data,
+)
+```
+
+Give each tagged design a variant of its own (`variant = "track"`), so the plain query's `default`
+design still wins for every other item. See [PROTOCOL.md §5.4](https://github.com/yschimke/livery/blob/main/docs/PROTOCOL.md#54-most-specific-first).
+
+## 4. Bundle a fallback catalog
 
 Build the same catalog into the app's assets with the `ee.schimke.composeai.livery.catalog` Gradle plugin,
 and pass `AndroidBundled.fromAssets(context)` as the repository's `bundled`. A first launch with no

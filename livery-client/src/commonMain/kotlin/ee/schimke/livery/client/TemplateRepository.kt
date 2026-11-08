@@ -254,7 +254,14 @@ class TemplateRepository(
    * past [STALE_GRACE_MS] beyond its expiry), else the bundled catalog. Null means the app draws its
    * native fallback. Never touches the network; [ensure] does for on-demand designs.
    */
-  suspend fun resolve(query: TemplateQuery): LoadedTemplate? {
+  suspend fun resolve(query: TemplateQuery): LoadedTemplate? = resolveFirst(listOf(query))?.value
+
+  /**
+   * The template for the first of [queries] that has one, with that query's index: [resolve] for a
+   * slot that asks most specific first (PROTOCOL.md §5.4). The downloaded catalog answers every
+   * query before the bundled one is asked, as for a single query.
+   */
+  suspend fun resolveFirst(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? {
     val installed = installedIds()
     // Never draw a skin nobody installed, from the downloaded catalog or the bundled one; a design
     // the query names explicitly is still allowed.
@@ -266,17 +273,22 @@ class TemplateRepository(
       // a playable cached one. The chosen design first, else the automatic one: never nothing.
       val have = blobs.keys()
       val cached = m.copy(templates = m.templates.filter { t -> t.sha256 in have && t.assets.all { it in have } })
-      for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
-        val e = TemplateSelector.select(cached, q, automatic = automatic) ?: continue
-        blobs.get(e.sha256)?.let { return loaded(m, e, it, origin) }
+      for ((i, query) in queries.withIndex()) {
+        for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
+          val e = TemplateSelector.select(cached, q, automatic = automatic) ?: continue
+          blobs.get(e.sha256)?.let { return IndexedValue(i, loaded(m, e, it, origin)) }
+        }
       }
     }
     val b = bundled ?: return null
     val bm = bundledManifest() ?: return null
-    val e = TemplateSelector.select(bm, query, automatic = automatic)
-      ?: TemplateSelector.select(bm, query.copy(designId = null), automatic = automatic)
-      ?: return null
-    return b.read(e.sha256)?.let { loaded(bm, e, it, LoadedTemplate.Origin.Bundled) }
+    for ((i, query) in queries.withIndex()) {
+      val e = TemplateSelector.select(bm, query, automatic = automatic)
+        ?: TemplateSelector.select(bm, query.copy(designId = null), automatic = automatic)
+        ?: continue
+      b.read(e.sha256)?.let { return IndexedValue(i, loaded(bm, e, it, LoadedTemplate.Origin.Bundled)) }
+    }
+    return null
   }
 
   /**

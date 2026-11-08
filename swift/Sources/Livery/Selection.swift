@@ -56,4 +56,13 @@ public enum TemplateSelector {
     if let e = best(byVariant(Design.defaultVariant)) { return e }
     return best(auto)
   }
+
+  /// §5.4: the first of `queries` that has a template, with its index (most specific first: this
+  /// talk, its track, its category, then none).
+  public static func selectFirst(_ manifest: Manifest, _ queries: [TemplateQuery], automatic: (Design) -> Bool = { _ in true }) -> (index: Int, entry: TemplateEntry)? {
+    for (i, q) in queries.enumerated() {
+      if let e = select(manifest, q, automatic: automatic) { return (i, e) }
+    }
+    return nil
+  }
 }

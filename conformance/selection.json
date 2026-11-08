@@ -54,6 +54,16 @@
         "title": "Effects",
         "variant": "fx",
         "install": "Always"
+      },
+      {
+        "id": "android",
+        "contract": "c/tile@1",
+        "title": "Android track",
+        "variant": "track",
+        "tags": {
+          "track": "android"
+        },
+        "install": "Always"
       }
     ],
     "templates": [
@@ -243,6 +253,19 @@
         "features": [
           "shaders"
         ]
+      },
+      {
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "bytes": 100,
+        "designId": "android",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
       }
     ]
   },
@@ -614,6 +637,138 @@
         "designId": "fx"
       },
       "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "the most specific query with a template decides",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "tags": {
+          "track": "android"
+        }
+      },
+      "fallbacks": [
+        {
+          "contract": "c/tile@1",
+          "caps": {
+            "surface": "in-app",
+            "maxRcApiLevel": 8,
+            "profiles": [
+              "androidx"
+            ]
+          }
+        }
+      ],
+      "expect": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "name": "one without falls back to the next",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "tags": {
+          "track": "ios"
+        }
+      },
+      "fallbacks": [
+        {
+          "contract": "c/tile@1",
+          "caps": {
+            "surface": "in-app",
+            "maxRcApiLevel": 8,
+            "profiles": [
+              "androidx"
+            ]
+          }
+        }
+      ],
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "the plain query still draws the default, not the tagged design",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "tags": {
+          "track": "ios"
+        }
+      },
+      "fallbacks": [
+        {
+          "contract": "c/tile@1",
+          "caps": {
+            "surface": "in-app",
+            "maxRcApiLevel": 8,
+            "profiles": [
+              "androidx"
+            ]
+          },
+          "tags": {
+            "style": "round"
+          }
+        },
+        {
+          "contract": "c/tile@1",
+          "caps": {
+            "surface": "in-app",
+            "maxRcApiLevel": 8,
+            "profiles": [
+              "androidx"
+            ]
+          }
+        }
+      ],
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "no query has a template",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "tags": {
+          "track": "ios"
+        }
+      },
+      "fallbacks": [
+        {
+          "contract": "c/tile@1",
+          "caps": {
+            "surface": "in-app",
+            "maxRcApiLevel": 8,
+            "profiles": [
+              "androidx"
+            ]
+          },
+          "tags": {
+            "style": "round"
+          }
+        }
+      ],
+      "expect": null
     }
   ]
 }
