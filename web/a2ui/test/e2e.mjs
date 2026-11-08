@@ -221,6 +221,23 @@ try {
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
+
+  const memoryOnline = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
+  check(memoryOnline?.includes('PromoBanner'), 'memory-only sessions work while online');
+
+  // Keep the app shell available, but make every catalog/blob/image request fail as if offline.
+  await page.route('**/catalog/**', (route) => route.abort('internetdisconnected'));
+  await page.reload();
+  await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
+  await loaded('#app [data-livery-component="PromoBanner"]');
+  await loaded('#app [data-livery-component="ShopQuantity"]');
+  check((await colours('#app [data-livery-component="PromoBanner"]')).notWhite > 0.5, 'reload draws cached templates with catalog networking disabled');
+  const memory = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
+  check(memory === null || memory.length === 0, 'memory-only sessions cannot read the persistent cache');
+  const changedTrust = await page.evaluate(() => window.__livery.cachedComponents({
+    unsigned: false, keys: [{ keyId: 'different-trust', publicKey: btoa('x'.repeat(32)) }],
+  }));
+  check(changedTrust === null || changedTrust.length === 0, 'a signed session cannot reuse an unsigned cached manifest');
 } catch (e) {
   check(false, String(e));
   console.log(logs.join('\n'));

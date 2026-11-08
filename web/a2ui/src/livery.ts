@@ -9,6 +9,8 @@ export interface LiveryConfig {
   keys?: { keyId: string; publicKey: string; contracts?: string[] }[];
   /** Accept an unsigned catalog: development only. */
   unsigned?: boolean;
+  /** Persist catalog state and blobs in IndexedDB (default true); false uses session memory. */
+  persistentCache?: boolean;
   /** Documents an agent sends with a message (`template.inline`): refused unless set. */
   agentBytes?: { contracts: string[]; maxBytes?: number; allowedKinds?: string[] };
   /** Risky features a signed inline document may use (`shaders`, …). */

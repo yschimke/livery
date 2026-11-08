@@ -508,3 +508,19 @@ The Angular entry ships partial compilation for the application's Angular linker
 decision ids, retry and height behavior are shared. `fallback` returns a Lit template for Lit,
 a React node for React, or a DOM node/string for Angular. `npm test` runs the same sample catalog
 and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local Chromium binary.
+
+### Persistent browser cache
+
+Web sessions default to IndexedDB for blobs and small named documents. A warm session reads
+its cached catalog immediately and refreshes in the background, so template rendering does not
+wait for a network response. The existing repository still owns expiry, stale grace, install
+policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
+the browser; this is a cache, not durable application data.
+
+Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (also useful in
+hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
+switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
+The browser suite reloads with all catalog requests blocked and checks that cached templates
+draw, that memory-only sessions are empty offline, and that a different trust configuration
+cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
+host application's responsibility.

@@ -24,6 +24,8 @@ import kotlin.io.encoding.Base64
 import kotlin.js.Promise
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.promise
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -47,6 +49,8 @@ internal data class WebConfig(
   val keys: List<Key> = emptyList(),
   /** Accept an unsigned catalog: a development build only. */
   val unsigned: Boolean = false,
+  /** Persist verified catalog state and blobs in IndexedDB; false uses session memory. */
+  val persistentCache: Boolean = true,
   val capabilities: PlayerCapabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx")),
   /** Documents an agent sends with a message: refused unless set. */
   val agentBytes: AgentBytes? = null,
@@ -87,11 +91,19 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   val events = mutableListOf<TemplateEvent>()
   val sink = ee.schimke.livery.client.EventSink { events += it }
   val fetcher = KtorFetcher()
+  // Trust configuration is part of the namespace: an unsigned cache can never become a signed one.
+  val cacheNamespace = WebCrypto.sha256Hex(json.encodeToString(WebConfig.serializer(), c).encodeToByteArray())
+  val stores = if (c.persistentCache) BrowserStores.open(cacheNamespace) else null
   val repository = TemplateRepository(
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
-    MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(c.capabilities),
+    stores?.blobs ?: MemoryBlobStore(), stores?.values ?: MemoryKeyValueStore(), clock, listOf(c.capabilities),
   )
-  repository.refresh()
+  if (repository.current() == null) repository.refresh()
+  else GlobalScope.launch {
+    try { repository.refresh() }
+    catch (e: CancellationException) { throw e }
+    catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
+  }
   val documents = if (c.agentBytes == null && keys.isEmpty()) null else DocumentAdmission(
     WebCrypto, keys,
     signedFeatures = c.signedFeatures.mapNotNull(RiskyFeature::fromWire).toSet(),

@@ -51,6 +51,9 @@ processor2.processMessages([
 adapter.mount(processor2, 'chat-2', document.getElementById('second')!);
 
 (window as any).__livery = {
+  cachedComponents: async (options: Record<string, unknown>) => { try { return (await (await LiverySession.open({
+    catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'], ...options,
+  })).components()).map((c) => c.name); } catch { return null; } },
   actions2,
   components: components.map((c) => c.name),
   actions, problems, app,
