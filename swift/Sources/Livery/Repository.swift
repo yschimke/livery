@@ -153,28 +153,30 @@ public actor TemplateRepository {
     let now = clock()
     let m = await meta()
     let cached = await manifest()
+    var acceptedSerial = m.acceptedSerial
     if !force {
       if now < m.nextAttemptEpochMs { return .skipped("backing off") }
       if let cached, now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000, now < cached.expiresAtEpochMs {
-        await prefetch(cached)
+        _ = await prefetch(cached)
         return .skipped("fresh")
       }
     }
     func fail(_ reason: String, _ retryAfter: Int64? = nil) async -> RefreshResult {
       var next = m
+      next.acceptedSerial = acceptedSerial
       next.failures += 1
       next.nextAttemptEpochMs = now + (retryAfter.map { $0 * 1000 } ?? Self.backoffMs[min(next.failures - 1, Self.backoffMs.count - 1)])
       await putMeta(next)
       return .failed(reason)
     }
-    switch await fetcher.get(source.manifestURL, etag: cached != nil ? m.etag : nil) {
+    switch await fetcher.get(source.manifestURL, etag: cached?.serial == m.acceptedSerial ? m.etag : nil) {
     case .failed(let status, let message, let retry):
       return await fail("manifest: \(status.map(String.init) ?? "-") \(message)", retry)
     case .notModified:
       var next = m
       next.fetchedAtEpochMs = now; next.failures = 0; next.nextAttemptEpochMs = 0
       await putMeta(next)
-      if let cached { await prefetch(cached) }
+      if let cached { _ = await prefetch(cached) }
       return .unchanged
     case .ok(let bytes, let etag):
       var signature: ManifestSignature?
@@ -184,10 +186,16 @@ public actor TemplateRepository {
       case .accepted(let next, _):
         if next.serial < m.acceptedSerial { return await fail("rollback: serial \(next.serial) < \(m.acceptedSerial)") }
         if next.minClient > Self.protocolLevel { return await fail("needs client level \(next.minClient)") }
+        // Refuse rollback even when downloading this accepted catalog fails or is cancelled.
+        acceptedSerial = next.serial
+        var accepted = m
+        accepted.acceptedSerial = acceptedSerial
+        await putMeta(accepted)
+        let complete = await prefetch(next)
+        if cached != nil && !complete { return await fail("template downloads incomplete; keeping the previous catalog") }
         await kv.put(k("manifest"), String(decoding: bytes, as: UTF8.self))
         current = next
         await putMeta(Meta(etag: etag, acceptedSerial: next.serial, fetchedAtEpochMs: now))
-        await prefetch(next)
         return .updated(serial: next.serial)
       }
     }
@@ -331,11 +339,13 @@ public actor TemplateRepository {
     m.templates(for: designId).filter { e in !e.revoked && targets.contains { e.target.fits($0) && e.bytes <= $0.maxBytes } }
   }
 
-  private func prefetch(_ m: Manifest) async {
+  private func prefetch(_ m: Manifest) async -> Bool {
     let installed = await installedIds()
+    var complete = true
     for d in m.designs where !d.revoked && (d.install == .always || installed.contains(d.id)) {
-      for e in entries(m, d.id) { _ = await obtain(m, e) }
+      for e in entries(m, d.id) { if await obtain(m, e) == nil { complete = false } }
     }
+    return complete
   }
 
   /// The template's bytes once it and all its assets are on disk, downloading what is missing.

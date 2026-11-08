@@ -142,25 +142,26 @@ class TemplateRepository(
     val now = clock.nowEpochMs()
     val m = meta()
     val cached = manifest()
+    var acceptedSerial = m.acceptedSerial
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
       if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
         // A retry of downloads an earlier refresh couldn't finish: new bytes can change an answer.
-        if (prefetch(cached)) _revision.update { it + 1 }
+        if (prefetch(cached).added) _revision.update { it + 1 }
         return RefreshResult.Skipped("fresh")
       }
     }
     suspend fun fail(reason: String, retryAfter: Long? = null): RefreshResult.Failed {
       val failures = m.failures + 1
       val backoff = retryAfter?.times(1000) ?: BACKOFF_MS[minOf(failures - 1, BACKOFF_MS.lastIndex)]
-      putMeta(m.copy(failures = failures, nextAttemptEpochMs = now + backoff))
+      putMeta(m.copy(acceptedSerial = acceptedSerial, failures = failures, nextAttemptEpochMs = now + backoff))
       return RefreshResult.Failed(reason)
     }
-    when (val r = fetcher.get(source.manifestUrl, if (cached != null) m.etag else null)) {
+    when (val r = fetcher.get(source.manifestUrl, if (cached != null && cached.serial == m.acceptedSerial) m.etag else null)) {
       is FetchResult.Failed -> fail("manifest: ${r.status} ${r.message}", r.retryAfterSeconds)
       FetchResult.NotModified -> {
         putMeta(m.copy(fetchedAtEpochMs = now, failures = 0, nextAttemptEpochMs = 0))
-        if (cached != null && prefetch(cached)) _revision.update { it + 1 }
+        if (cached != null && prefetch(cached).added) _revision.update { it + 1 }
         RefreshResult.Unchanged
       }
       is FetchResult.Ok -> {
@@ -176,12 +177,20 @@ class TemplateRepository(
               next.serial < m.acceptedSerial -> fail("rollback: serial ${next.serial} < ${m.acceptedSerial}")
               next.minClient > PROTOCOL_LEVEL -> fail("needs client level ${next.minClient}")
               else -> {
+                // Remember the verified serial immediately, even if downloads fail or are cancelled.
+                // Keep the old ETag and playable manifest until the replacement is ready.
+                acceptedSerial = next.serial
+                putMeta(m.copy(acceptedSerial = acceptedSerial))
+                val prepared = prefetch(next)
+                if (cached != null && !prepared.complete) {
+                  if (prepared.added) _revision.update { it + 1 }
+                  return@withLock fail("template downloads incomplete; keeping the previous catalog")
+                }
                 stateLock.withLock {
                   kv.put(k("manifest"), r.bytes.decodeToString())
                   current = next
                 }
                 putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
-                prefetch(next)
                 _revision.update { it + 1 }
                 RefreshResult.Updated(next.serial)
               }
@@ -368,17 +377,22 @@ class TemplateRepository(
 
   // --- internals ------------------------------------------------------------------------------
 
-  /** Downloads what the install policy asks for; true when a template became available. */
-  private suspend fun prefetch(m: Manifest): Boolean {
+  private data class Prefetched(val added: Boolean, val complete: Boolean)
+
+  /** Downloads what the install policy asks for without publishing a partially ready catalog. */
+  private suspend fun prefetch(m: Manifest): Prefetched {
     val installed = installedIds()
     var added = false
+    var complete = true
     m.designs.filter { !it.revoked && (it.install == InstallPolicy.Always || it.id in installed) }
       .flatMap { entriesForTargets(m, it.id) }
       .forEach { e ->
         val had = blobs.get(e.sha256) != null && e.assets.all { blobs.get(it) != null }
-        if (!had && obtain(m, e) != null) added = true
+        if (!had) {
+          if (obtain(m, e) != null) added = true else complete = false
+        }
       }
-    return added
+    return Prefetched(added, complete)
   }
 
 

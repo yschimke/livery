@@ -14,6 +14,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 
@@ -26,6 +28,8 @@ class RepositoryTest {
     val requests = mutableListOf<String>()
     var down = false
     var blobsDown = false
+    var blobRequested: CompletableDeferred<Unit>? = null
+    var resumeBlobs: CompletableDeferred<Unit>? = null
     override suspend fun get(url: String, etag: String?): FetchResult {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
@@ -36,6 +40,8 @@ class RepositoryTest {
         url.endsWith("manifest.sig.json") -> if (!signed) FetchResult.Failed(404, "none") else
           FetchResult.Ok(json.encodeToString(ManifestSignature.serializer(), ManifestSignature(keyId = "k", signature = Base64.encode(key + bytes.size.toString().encodeToByteArray()))).encodeToByteArray(), null)
         else -> {
+          blobRequested?.complete(Unit)
+          resumeBlobs?.await()
           val sha = url.substringAfterLast('/').removeSuffix(".rc")
           val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
           names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
@@ -90,6 +96,47 @@ class RepositoryTest {
     assertIs<RefreshResult.Failed>(r.refresh())
     assertEquals(RefreshResult.Skipped("backing off"), r.refresh())
     assertNotNull(r.resolve(q))
+  }
+
+  private fun replacement(): Manifest {
+    val bytes = Fx.blob("retro-v7")
+    return Fx.manifest(serial = 2).let { m -> m.copy(templates = m.templates.map { entry ->
+      if (entry.designId == "tile-default") entry.copy(sha256 = FakeCrypto.sha(bytes), bytes = bytes.size.toLong()) else entry
+    }) }
+  }
+
+  @Test fun refreshKeepsThePlayableSnapshotUntilReplacementDownloadsFinish() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    val original = assertNotNull(r.resolve(q))
+    host.manifest = replacement()
+    host.blobRequested = CompletableDeferred()
+    host.resumeBlobs = CompletableDeferred()
+    val refreshing = async { r.refresh(force = true) }
+    host.blobRequested!!.await()
+    assertEquals(1, r.current()?.serial)
+    assertEquals(original.entry.sha256, r.resolve(q)?.entry?.sha256)
+    assertEquals(1, repo(host).current()?.serial, "a concurrently opened repository sees the playable disk snapshot")
+    host.resumeBlobs!!.complete(Unit)
+    assertEquals(RefreshResult.Updated(2), refreshing.await())
+    assertEquals(2, r.current()?.serial)
+    assertEquals(FakeCrypto.sha(Fx.blob("retro-v7")), r.resolve(q)?.entry?.sha256)
+  }
+
+  @Test fun failedReplacementKeepsCacheButStillRecordsTheAcceptedSerial() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    host.manifest = replacement(); host.blobsDown = true
+    assertIs<RefreshResult.Failed>(r.refresh(force = true))
+    assertEquals(1, r.current()?.serial)
+    assertNotNull(r.resolve(q))
+    val rollback = repo(Host(Fx.manifest()))
+    assertIs<RefreshResult.Failed>(rollback.refresh(force = true)).also { assertTrue("rollback" in it.reason) }
+    host.blobsDown = false
+    assertEquals(RefreshResult.Updated(2), r.refresh(force = true))
+    assertEquals(2, r.current()?.serial)
   }
 
   @Test fun installIsExplicitAndPreviewDoesNotInstall() = runTest {

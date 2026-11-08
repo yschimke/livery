@@ -543,3 +543,8 @@ its fetch and redirect contract. `docs/WASM-SIZE.md` records section and depende
 Content height is read from the player's normal layout at the current viewport constraints.
 The size query does not run a second measure pass or alter expressions, animations or scroll
 state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.
+
+When replacing a cached catalog, refresh keeps the previous manifest active until its required
+replacement templates and assets finish downloading. Failed downloads keep the playable cache;
+the accepted serial watermark is still persisted immediately so rollback protection survives a
+failure or interruption. Kotlin and Swift use the same activation order.
