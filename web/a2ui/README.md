@@ -58,7 +58,9 @@ Each theme role (`primary`, `surface`, `onSurface`, …) comes from the first of
 4. Material 3's baseline colour.
 
 Templates therefore match the basic components around them. The width the element gets selects
-the design. The height is `--livery-a2ui-height`, 200px by default.
+the design. The height is `--livery-a2ui-height` when the page sets it; otherwise it's the
+template's own: the smallest height its target declares, else the height its document was
+authored at.
 
 ## Develop
 
@@ -69,11 +71,12 @@ npm test                                                    # headless Chromium 
 ```
 
 `npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-checks six things:
+checks seven things:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
 - a data change sets values on the playing document without reloading it, and redraws it;
 - Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
 - a surface's `primaryColor` colours its templates over the page's CSS theme;
+- a component takes its template's height unless the page sets one;
 - a second catalog's components keep their own session.

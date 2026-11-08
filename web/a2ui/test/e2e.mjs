@@ -38,7 +38,7 @@ await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', 
 await build({ stdin: { contents: "export * from '@js-joda/core';", resolveDir: root }, bundle: true, format: 'esm', outfile: join(site, 'js-joda.mjs'), logLevel: 'warning' });
 writeFileSync(join(site, 'index.html'), `<!doctype html><meta charset="utf-8">
 <script type="importmap">{"imports": {"@js-joda/core": "./js-joda.mjs"}}</script>
-<style>body { font-family: sans-serif; width: 420px; } livery-promo-banner { --livery-a2ui-height: 180px; } livery-shop-quantity { --livery-a2ui-height: 120px; }</style>
+<style>body { font-family: sans-serif; width: 420px; } livery-shop-quantity { --livery-a2ui-height: 120px; }</style>
 <div id="app"></div><div id="second"></div><script type="module" src="./app.js"></script>`);
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.rc': 'application/octet-stream', '.png': 'image/png', '.ttf': 'font/ttf' };
@@ -211,6 +211,13 @@ try {
     return n;
   }, shot.toString('base64'));
   check(teal > 200, `and the stepper draws in it: ${teal} pixels of #00897B`);
+
+  // The height rule: the template's own height when the page gives none, the page's when it does.
+  const heights = await page.evaluate(() => ({
+    banner: document.querySelector('#app livery-promo-banner').clientHeight,
+    stepper: document.querySelector('#app livery-shop-quantity').clientHeight,
+  }));
+  check(heights.banner === 160 && heights.stepper === 120, `the banner takes its template's 160dp, the stepper the page's 120px: ${JSON.stringify(heights)}`);
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);

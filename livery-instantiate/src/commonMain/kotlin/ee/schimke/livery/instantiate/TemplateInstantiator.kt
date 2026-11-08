@@ -136,6 +136,17 @@ class TemplateInstantiator(
     /** The bitmap URLs a template draws (`livery:value/<input>`, `asset:`, `https://`, `app:`). */
     fun bitmapUrls(template: ByteArray): List<String> = RcDocumentCodec.decode(template, RcWireLimits()).bitmapUrls.distinct()
 
+    /**
+     * The height a template was authored at, in dp (its header's height over the density it was
+     * generated at), or null when its header doesn't say: what a host with no height to give it
+     * draws it at.
+     */
+    fun authoredHeightDp(template: ByteArray): Int? {
+      val header = RcDocumentCodec.decode(template, RcWireLimits()).header
+      if (!header.modern || header.height <= 0) return null
+      return (header.height / header.density.takeIf { it > 0f }.let { it ?: 1f }).toInt().takeIf { it > 0 }
+    }
+
     /** The named values a template reads (without the `USER:` domain), e.g. to check a contract. */
     fun reads(template: ByteArray): Set<String> =
       RcDocumentCodec.decode(template, RcWireLimits()).namedVariables.map { it.name.removePrefix("USER:") }.toSet()

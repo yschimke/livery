@@ -61,6 +61,8 @@ export type Rendered =
       values: Record<string, string | number>;
       design: string;
       sha256: string;
+      /** The template's own height in dp: what to draw it at when the page gives the component none. */
+      heightDp?: number;
     }
   | { ok: false; reason: string; waiting?: boolean };
 
