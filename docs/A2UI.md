@@ -323,6 +323,10 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
   read as the agent wrote them. A `set` writes through `dataContext.set(path, value)`; an agent's
   action goes out through `dispatchAction` with the template's checked arguments in its context.
+- **Documents named by hash.** `template: {"sha256", "url"?, "signature"?}` plays exactly that
+  document or the page's fallback: from a trusted catalog that lists it, else fetched from `url`
+  (a host the catalog uses) and admitted with its signature by `DocumentAdmission`. A document not
+  on the device yet answers *waiting* like an image, and the same `fetchImages` fetches it.
 - **Images.** Rendering never waits on the network: a render uses only images already on the
   device, and one that misses answers *waiting*; the element fetches them (`fetchImages`, off the
   render path) and renders again, as widget hosts do with `CachedImages`. One fetch serves every
@@ -454,8 +458,12 @@ What the prototype taught, and what it doesn't do yet:
    Catalog templates are held to the same features (*done*, protocol level 8): the publisher
    records each template's `features`, and selection skips one the player's
    `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
-   inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
-   `query` form with `livery-server`'s decision endpoint.
+   inline path agree. `sha256` (+ `url`, + `signature`) is *done on the web*: a hash a trusted
+   catalog lists plays from that catalog's blobs; any other needs a template signature and comes
+   from `url`, on a host the app's catalog uses; neither is downloaded on the render path. Still to
+   do: that form on Compose, and the `query` form, which needs a decision API that takes the
+   contract and the agent's params (the app's `Decider` takes only a placement) and a server to
+   answer it.
 6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
    a Lit component per contract, drawing in the page with the TypeScript player and live named
    values (above). Still to do: React and Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).

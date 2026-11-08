@@ -104,10 +104,20 @@ object LiveryA2uiMessages {
   }
 
   private fun templateProblems(t: JsonElement): List<String> {
-    if (t !is JsonObject) return listOf("template must be {\"inline\": <base64>, \"signature\"?}")
-    val inline = t["inline"] as? JsonPrimitive
-    if (inline == null || !inline.isString) return listOf("template needs inline: the document as base64")
-    if (runCatching { kotlin.io.encoding.Base64.decode(inline.content) }.isFailure) return listOf("inline is not base64")
+    if (t !is JsonObject) return listOf("template must be {\"inline\": <base64>, \"signature\"?} or {\"sha256\", \"url\"?, \"signature\"?}")
+    if ("sha256" in t && "inline" !in t) {
+      // A document named by its hash (docs/A2UI.md): a catalog lists it, or a signature vouches for it.
+      val sha = (t["sha256"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+      if (sha == null || !Regex("^[0-9a-fA-F]{64}$").matches(sha)) return listOf("sha256 must be 64 hex digits")
+      if ("url" in t) {
+        val url = (t["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (url == null || !url.startsWith("https://")) return listOf("url must be an https URL, on a host the app's catalog uses")
+      }
+    } else {
+      val inline = t["inline"] as? JsonPrimitive
+      if (inline == null || !inline.isString) return listOf("template needs inline (the document as base64) or sha256")
+      if (runCatching { kotlin.io.encoding.Base64.decode(inline.content) }.isFailure) return listOf("inline is not base64")
+    }
     val s = t["signature"] ?: return emptyList()
     if (s !is JsonObject) return listOf("signature must be {\"keyId\", \"signature\", \"alg\"?}")
     // As the clients read it (LiveryA2uiComponent.inlineDocument): each field a string.

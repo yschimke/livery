@@ -104,6 +104,9 @@ class DocumentAdmission(
   val agentBytes: AgentBytesPolicy? = null,
   private val maxSignedBytes: Int = 256 * 1024,
 ) {
+  /** [bytes]' sha256, as [admit] computes it: to check a fetched document is the one that was named. */
+  suspend fun sha256(bytes: ByteArray): String = crypto.sha256Hex(bytes)
+
   suspend fun admit(bytes: ByteArray, contract: Contract, signature: ManifestSignature?): Admission {
     val ref = contract.ref
     val limit = if (signature != null) maxSignedBytes else agentBytes?.maxBytes ?: 0

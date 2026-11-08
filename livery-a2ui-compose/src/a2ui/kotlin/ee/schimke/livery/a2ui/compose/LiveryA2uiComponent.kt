@@ -211,6 +211,9 @@ class LiveryA2uiComponent(
     if (templateProperty !in properties) return null
     val template = properties[templateProperty] as? Map<*, *>
       ?: return InlineDocument(null, null, null, "template must be {\"inline\": <base64>, \"signature\"?}")
+    if ("sha256" in template && "inline" !in template) {
+      return InlineDocument(null, null, null, "a template named by sha256 isn't supported on Compose yet: send it inline")
+    }
     val text = template["inline"] as? String
       ?: return InlineDocument(null, null, null, "template needs inline: the document as base64")
     val bytes = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()

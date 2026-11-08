@@ -112,6 +112,46 @@ class LiveryA2uiWebTest {
     assertEquals(TemplateEvent.Type.Action, events.last().type)
   }
 
+  @Test fun aDocumentNamedByItsHashPlaysWhenACatalogListsIt() = runTest {
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    val named = web().render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"${chosen.sha256}"}"""))))
+    assertEquals(chosen.sha256, assertIs<LiveryA2uiWeb.Rendered.Ready>(named, named.toString()).sha256)
+    assertEquals("banner-classic", named.designId, "the catalog's own entry: its design, its events")
+    // A hash no catalog lists, with nothing to vouch for it, is refused: never another template in its place.
+    val unknown = web().render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"${"0".repeat(64)}"}"""))))
+    assertTrue("no trusted catalog" in assertIs<LiveryA2uiWeb.Rendered.Fallback>(unknown).reason, unknown.toString())
+  }
+
+  @Test fun aSignedDocumentNamedByUrlIsFetchedOffTheRenderPathFromTheCatalogsHostOnly() = runTest {
+    val pair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    // Other bytes than any catalog lists (a per-request document): the catalog's banner with one unused text more.
+    val catalogBytes = built.files.entries.first { it.key.contains(chosen.sha256) }.value
+    val doc = RcDocumentCodec.decode(catalogBytes, RcWireLimits())
+    val bytes = RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "per request")))
+    val sha = JavaCrypto.sha256Hex(bytes)
+    val signature = Base64.encode(java.security.Signature.getInstance("Ed25519").run {
+      initSign(pair.private); update(ee.schimke.livery.client.TemplateSignatures.message("promo/banner@1", sha)); sign()
+    })
+    val admission = DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())))
+    val fetched = mutableListOf<String>()
+    val web = LiveryA2uiWeb(
+      repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null, admission,
+      fetcher = Fetcher { url, _ -> fetched += url; FetchResult.Ok(bytes, null) },
+      documentHosts = { it == "catalog.example" },
+    )
+    fun named(url: String) = JsonObject(promo + ("template" to props("""{"sha256":"$sha","url":"$url","signature":{"keyId":"app","signature":"$signature"}}""")))
+    // The agent names content; it never makes the page contact a host the app didn't configure.
+    assertIs<LiveryA2uiWeb.Rendered.Fallback>(web.render("PromoBanner", named("https://elsewhere.example/doc.rc")))
+    assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertTrue(fetched.isEmpty(), "nothing is fetched on the render path")
+    assertTrue(web.fetchImages())
+    assertEquals(listOf("https://catalog.example/doc.rc"), fetched)
+    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", named("https://catalog.example/doc.rc")))
+    assertEquals("a2ui:signed:app", r.designId)
+    assertEquals(1, fetched.size, "fetched once")
+  }
+
   @Test fun aTemplateSaysHowTallItIs() = runTest {
     // The height rule: no height from the page, so the template's own, the height it was authored at.
     val r = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
