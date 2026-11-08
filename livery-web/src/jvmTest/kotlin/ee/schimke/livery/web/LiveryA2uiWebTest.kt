@@ -122,6 +122,28 @@ class LiveryA2uiWebTest {
     assertTrue("no trusted catalog" in assertIs<LiveryA2uiWeb.Rendered.Fallback>(unknown).reason, unknown.toString())
   }
 
+  @Test fun aHashNamesThatExactEntryNotItsDesignsPreferredOne() = runTest {
+    // banner-classic with a second, level-6 template (other bytes): a level-7 player prefers the
+    // level-7 one, but a message that names the level-6 hash gets exactly that.
+    val dir = Files.createTempDirectory("livery-web-levels").toFile().also { tree.copyRecursively(it) }
+    val design = File(dir, "designs/banner-classic")
+    val doc = RcDocumentCodec.decode(File(design, "in-app.rc").readBytes(), RcWireLimits())
+    File(design, "in-app-v6.rc").writeBytes(RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "level 6"))))
+    File(design, "in-app-v6.json").writeText(File(design, "in-app.json").readText().replace("\"rcApiLevel\": 7", "\"rcApiLevel\": 6"))
+    val levels = CatalogBuilder(now = { 0 }).build(dir, Layout.Static, serial = 0)
+    val v6 = levels.manifest.templates.single { it.designId == "banner-classic" && it.target.rcApiLevel == 6 }.sha256
+    val repo = TemplateRepository(
+      StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(levels.manifest) { sha -> levels.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    val web = LiveryA2uiWeb(repo, SlotPlanner(repo, { events += it }, clock), caps, { events += it }, clock)
+    val preferred = web.render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
+    assertTrue(preferred.sha256 != v6, "the player's own choice is the level-7 one")
+    val named = web.render("PromoBanner", JsonObject(promo + ("template" to props("""{"sha256":"$v6"}"""))))
+    assertEquals(v6, assertIs<LiveryA2uiWeb.Rendered.Ready>(named, named.toString()).sha256)
+  }
+
   @Test fun aSignedDocumentNamedByUrlIsFetchedOffTheRenderPathFromTheCatalogsHostOnly() = runTest {
     val pair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
