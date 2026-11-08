@@ -33,8 +33,12 @@ execFileSync(cli, ['build', src, join(site, 'catalog')], { stdio: 'inherit' });
 const require = createRequire(import.meta.url);
 cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: true });
 
+// Allow the same browser suite to exercise each supported React major without changing the lockfile.
+const reactRoot = process.env.LIVERY_REACT_ROOT;
+const reactAliases = reactRoot ? { react: join(reactRoot, 'react'), 'react-dom': join(reactRoot, 'react-dom') } : undefined;
+
 // The page, bundled; @js-joda/core (imported by the Wasm module's glue) through an import map.
-await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js'), external: ['./livery-web/*'], logLevel: 'warning' });
+await build({ entryPoints: [join(here, 'app.ts')], alias: reactAliases, bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js'), external: ['./livery-web/*'], logLevel: 'warning' });
 await build({ stdin: { contents: "export * from '@js-joda/core';", resolveDir: root }, bundle: true, format: 'esm', outfile: join(site, 'js-joda.mjs'), logLevel: 'warning' });
 writeFileSync(join(site, 'index.html'), `<!doctype html><meta charset="utf-8">
 <script type="importmap">{"imports": {"@js-joda/core": "./js-joda.mjs"}}</script>
@@ -224,6 +228,40 @@ try {
 
   const memoryOnline = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
   check(memoryOnline?.includes('PromoBanner'), 'memory-only sessions work while online');
+
+  // Simulate an interrupted prefetch: keep the manifest and metadata, remove all template blobs.
+  const removedBlobs = await page.evaluate(() => new Promise((resolve, reject) => {
+    const open = indexedDB.open('livery-v1', 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('entries', 'readwrite');
+      const store = tx.objectStore('entries');
+      const request = store.getAllKeys();
+      let removed = 0;
+      request.onsuccess = () => {
+        for (const key of request.result) if (String(key).includes('/blob/')) { store.delete(key); removed++; }
+      };
+      tx.oncomplete = () => { db.close(); resolve(removed); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  }));
+  check(removedBlobs > 0, 'the partial-cache regression retains metadata but removes downloaded blobs');
+  let resumeBlobs;
+  const blobsBlocked = new Promise((resolve) => { resumeBlobs = resolve; });
+  const delayedBlobs = async (route) => { await blobsBlocked; await route.continue(); };
+  await page.route('**/catalog/**/*.rc', delayedBlobs);
+  const repairing = page.waitForRequest((request) => request.url().includes('/catalog/') && request.url().endsWith('.rc'));
+  await page.reload({ waitUntil: 'commit' });
+  await repairing;
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => !window.__livery), 'opening waits for repairs instead of registering an empty catalog');
+  resumeBlobs();
+  await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
+  await loaded('#app [data-livery-component="PromoBanner"]');
+  await loaded('#app [data-livery-component="ShopQuantity"]');
+  check(await page.evaluate(() => window.__livery.components.includes('PromoBanner')), 'opening a partial cache repairs blobs before advertising components');
+  await page.unrouteAll({ behavior: 'wait' });
 
   // Keep the app shell available, but make every catalog/blob/image request fail as if offline.
   await page.route('**/catalog/**', (route) => route.abort('internetdisconnected'));

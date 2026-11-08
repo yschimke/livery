@@ -107,8 +107,10 @@ and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local
 
 ### Persistent browser cache
 
-Web sessions default to IndexedDB for blobs and small named documents. A warm session reads
-its cached catalog immediately and refreshes in the background, so template rendering does not
+Web sessions default to IndexedDB for blobs and small named documents. A session with playable cached templates reads
+its catalog immediately and refreshes in the background. A cached manifest without playable
+blobs first retries prefetch, so an interrupted download cannot register an empty component catalog.
+Template rendering does not
 wait for a network response. The existing repository still owns expiry, stale grace, install
 policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
 the browser; this is a cache, not durable application data.

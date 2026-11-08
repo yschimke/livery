@@ -98,18 +98,12 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
     stores?.blobs ?: MemoryBlobStore(), stores?.values ?: MemoryKeyValueStore(), clock, listOf(c.capabilities),
   )
-  if (repository.current() == null) repository.refresh()
-  else GlobalScope.launch {
-    try { repository.refresh() }
-    catch (e: CancellationException) { throw e }
-    catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
-  }
   val documents = if (c.agentBytes == null && keys.isEmpty()) null else DocumentAdmission(
     WebCrypto, keys,
     signedFeatures = c.signedFeatures.mapNotNull(RiskyFeature::fromWire).toSet(),
     agentBytes = c.agentBytes?.let { AgentBytesPolicy(it.contracts, it.maxBytes, it.allowedKinds) },
   )
-  val catalogHosts = setOfNotNull(LiveryA2uiWeb.hostOf(c.catalog), repository.current()?.blobBase?.let(LiveryA2uiWeb::hostOf))
+  var catalogHosts = setOfNotNull(LiveryA2uiWeb.hostOf(c.catalog), repository.current()?.blobBase?.let(LiveryA2uiWeb::hostOf))
   val web = LiveryA2uiWeb(
     repository, SlotPlanner(repository, sink, clock), c.capabilities, sink, clock,
     ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts),
@@ -118,6 +112,18 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     // A named document's url: only on a host the catalog itself uses (its manifest's, its blobs').
     documentHosts = { host -> host in catalogHosts },
   )
+  suspend fun refresh() {
+    repository.refresh()
+    catalogHosts = setOfNotNull(LiveryA2uiWeb.hostOf(c.catalog), repository.current()?.blobBase?.let(LiveryA2uiWeb::hostOf))
+  }
+  // A saved manifest alone is not a warm cache: interrupted prefetch can leave every blob missing.
+  // Catalog adapters register components once, so repair downloads before returning an empty set.
+  if (web.components().isEmpty()) refresh()
+  else GlobalScope.launch {
+    try { refresh() }
+    catch (e: CancellationException) { throw e }
+    catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
+  }
   val id = nextSession++
   sessions[id] = Session(web, repository, events)
   id

@@ -38,7 +38,9 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: Build and test every target, then build the sample catalog
         run: |
-          ./gradlew build :livery-publish:installDist :livery-mcp:installDist
+          # Compose/Wasm test linking exceeds the default 2 GiB Kotlin daemon heap.
+          # Keep parallel work bounded while giving that compiler a dedicated 4 GiB heap.
+          ./gradlew build :livery-publish:installDist :livery-mcp:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
           livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
       # `livery play` from the installed CLI, outside Gradle: a template Android 16's widget player
       # disables must fail, and its fix must play.
@@ -178,6 +180,10 @@ jobs:
           npx playwright install --with-deps chromium
       - name: End-to-end in Chromium
         run: npm test
+      - name: React 18 peer compatibility
+        run: |
+          npm install --prefix "$RUNNER_TEMP/livery-react18" --no-package-lock react@18.3.1 react-dom@18.3.1
+          LIVERY_RENDERER=react LIVERY_REACT_ROOT="$RUNNER_TEMP/livery-react18/node_modules" node test/e2e.mjs
 
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
   # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
