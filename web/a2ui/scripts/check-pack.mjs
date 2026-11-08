@@ -14,6 +14,13 @@ try {
     'vendor/remote-compose-player.d.mts', 'vendor/PROVENANCE.md', 'README.md']) {
     assert(files.has(file), `missing runtime file: ${file}`);
   }
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+  function checkExports(value) {
+    if (typeof value === 'string') {
+      if (value.startsWith('./') && !value.includes('*')) assert(files.has(value.slice(2)), `missing export: ${value}`);
+    } else if (value && typeof value === 'object') Object.values(value).forEach(checkExports);
+  }
+  checkExports(manifest.exports);
   for (const file of files) {
     assert(/^(dist\/|vendor\/|README.md$|LICENSE(?:\..*)?$|package.json$)/.test(file), `unexpected file: ${file}`);
     assert(!/\.(map|tgz)$/.test(file), `development artifact: ${file}`);
