@@ -10,6 +10,7 @@ import ee.schimke.livery.client.MemoryKeyValueStore
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.client.RefreshResult
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.client.TrustedKey
 import ee.schimke.livery.client.WebCrypto
@@ -25,6 +26,7 @@ import kotlin.js.Promise
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.promise
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.await
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -73,7 +75,7 @@ internal data class WebConfig(
 @Serializable
 internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null, val colorScheme: String? = null)
 
-private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>)
+private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>, val cacheNamespace: String?)
 
 private val sessions = mutableMapOf<Int, Session>()
 private var nextSession = 1
@@ -82,6 +84,21 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 private fun session(id: Int): Session = sessions[id] ?: error("no Livery session $id")
 
 private fun <T> async(block: suspend () -> T): Promise<JsAny?> = GlobalScope.promise { block()?.toString()?.toJsString() }
+
+// Web Locks are origin-wide: they cover separate sessions, workers and tabs sharing IndexedDB.
+private suspend fun refreshRepository(repository: TemplateRepository, namespace: String?, force: Boolean = false): RefreshResult {
+  if (namespace == null) return repository.refresh(force)
+  var result: RefreshResult? = null
+  browserRefreshLock("livery-refresh/$namespace") {
+    GlobalScope.promise<JsAny?> { result = repository.refresh(force); null }
+  }.await()
+  return checkNotNull(result)
+}
+
+private fun browserRefreshLock(name: String, block: () -> Promise<JsAny?>): Promise<JsAny?> = js("""{
+  if (!globalThis.navigator?.locks) throw new Error('Persistent Livery caching requires Web Locks on a secure origin; use persistentCache: false otherwise');
+  return navigator.locks.request(name, {mode: 'exclusive'}, () => block());
+}""")
 
 /** Opens a session on a catalog (refreshing it once) and resolves to its handle. */
 @JsExport
@@ -114,7 +131,7 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     decisionContext = c.decisionContext?.let { context -> { context.copy(nowEpochMs = clock.nowEpochMs()) } },
   )
   suspend fun refresh() {
-    repository.refresh()
+    refreshRepository(repository, if (stores != null) cacheNamespace else null)
   }
   // A saved manifest alone is not a warm cache: interrupted prefetch can leave every blob missing.
   // Catalog adapters register components once, so repair downloads before returning an empty set.
@@ -125,13 +142,16 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
   }
   val id = nextSession++
-  sessions[id] = Session(web, repository, events)
+  sessions[id] = Session(web, repository, events, if (stores != null) cacheNamespace else null)
   id
 }
 
 /** Fetches the catalog again; resolves to what changed (`updated`, `notModified`, a failure). */
 @JsExport
-fun liveryRefresh(session: Int): Promise<JsAny?> = async { session(session).repository.refresh(force = true)::class.simpleName }
+fun liveryRefresh(session: Int): Promise<JsAny?> = async {
+  val s = session(session)
+  refreshRepository(s.repository, s.cacheNamespace, force = true)::class.simpleName
+}
 
 /**
  * The components to register: a JSON array of `{name, contract, description, schema, properties,

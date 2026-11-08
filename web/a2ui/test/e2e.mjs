@@ -66,8 +66,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 let failed = 0;
 for (const player of players) {
 console.log(`Player: ${player}`);
-const page = await browser.newPage({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_DENSITY ?? process.env.LIVERY_TEST_DPR ?? 1) });
-let decisionRequest;
+const context = await browser.newContext({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_DENSITY ?? process.env.LIVERY_TEST_DPR ?? 1) });
+const page = await context.newPage();
 let releaseDecision;
 const decisionGate = new Promise((resolve) => { releaseDecision = resolve; });
 await page.route('https://decisions.example/v1/decisions/query', async (route) => {
@@ -75,7 +75,6 @@ await page.route('https://decisions.example/v1/decisions/query', async (route) =
     await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type' } });
     return;
   }
-  decisionRequest = route.request().postDataJSON();
   await decisionGate;
   await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({
     placement: 'assistant-offer', decisionId: 'server:browser', template: { designId: 'banner-classic' },
@@ -293,12 +292,12 @@ try {
 
   // The automatic banner remains visible during a delayed contract decision, then gets server data.
   const queryBefore = await statsOf('#app [data-livery-component="PromoBanner"]');
-  const querySent = page.waitForRequest('https://decisions.example/v1/decisions/query');
+  const querySent = page.waitForRequest((request) => request.url() === 'https://decisions.example/v1/decisions/query' && request.method() === 'POST');
   await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateComponents: { surfaceId: 'chat-1', components: [
     { id: 'promo', component: 'PromoBanner', headline: 'Waiting offer', cta: 'Wait', template: { query: { offer: 'summer' } } },
   ] } }]));
   await page.waitForFunction((n) => document.querySelector('#app [data-livery-component="PromoBanner"]')?.liveryStats?.sets > n, queryBefore.sets);
-  await querySent;
+  const decisionRequest = (await querySent).postDataJSON();
   check(decisionRequest?.query?.contract === 'promo/banner@1' && decisionRequest?.params?.offer === 'summer' && decisionRequest?.context?.locale === 'en-GB',
     `query sends device context and agent params: ${JSON.stringify(decisionRequest)}`);
   const waiting = await statsOf('#app [data-livery-component="PromoBanner"]');
@@ -332,6 +331,13 @@ try {
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
   const memoryOnline = await page.evaluate(() => window.__livery.cachedComponents({ persistentCache: false }));
   check(memoryOnline?.includes('PromoBanner'), 'memory-only sessions work while online');
+  const withoutLocks = await page.evaluate(async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    try { return { persistent: await window.__livery.cachedComponents({}), memory: await window.__livery.cachedComponents({ persistentCache: false }) }; }
+    finally { delete navigator.locks; }
+  });
+  check(withoutLocks.persistent === null && withoutLocks.memory?.includes('PromoBanner'), 'without Web Locks persistent sessions fail closed and memory-only sessions work');
+
 
   // Simulate an interrupted prefetch: keep the manifest and metadata, remove all template blobs.
   const removedBlobs = await page.evaluate(() => new Promise((resolve, reject) => {
@@ -380,12 +386,74 @@ try {
     unsigned: false, keys: [{ keyId: 'different-trust', publicKey: btoa('x'.repeat(32)) }],
   }));
   check(changedTrust === null || changedTrust.length === 0, 'a signed session cannot reuse an unsigned cached manifest');
+
+  await page.unrouteAll({ behavior: 'wait' });
+  await page.evaluate(() => window.__livery.openPeer());
+  const tab = await page.context().newPage();
+  try {
+    await tab.goto(`${base}?player=${player}&renderer=${process.env.LIVERY_RENDERER ?? 'lit'}`);
+    await tab.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
+    const manifest = JSON.parse(await readFile(join(site, 'catalog/manifest.json'), 'utf8'));
+    const persistedState = () => page.evaluate(() => new Promise((resolve, reject) => {
+        const open = indexedDB.open('livery-v1', 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const request = db.transaction('entries').objectStore('entries').getAll();
+          request.onsuccess = () => { db.close(); resolve(request.result.filter((v) => typeof v === 'string').map((v) => JSON.parse(v))); };
+          request.onerror = () => { db.close(); reject(request.error); };
+        };
+      }));
+    // The first response is held while another session tries to refresh the same namespace.
+    // After it commits the higher serial, a queued older response must be rejected.
+    for (const other of ['session', 'tab']) {
+      let requests = 0, started, release;
+      const firstStarted = new Promise((resolve) => { started = resolve; });
+      const blocked = new Promise((resolve) => { release = resolve; });
+      const higher = manifest.serial + 2;
+      await page.context().route('**/catalog/manifest.json', async (route) => {
+        const first = ++requests === 1;
+        if (first) { started(); await blocked; }
+        await route.fulfill({ json: { ...manifest, serial: first ? higher : higher - 1 } });
+      });
+      const first = page.evaluate(() => window.__livery.refresh());
+      await firstStarted;
+      const second = other === 'tab' ? tab.evaluate(() => window.__livery.refresh())
+        : page.evaluate(() => window.__livery.refreshPeer());
+      try {
+        await page.waitForTimeout(150);
+        check(requests === 1, `shared persistent refresh waits for the lock across ${other}s`);
+      } finally { release(); }
+      const results = await Promise.all([first, second]);
+      check(results[0] === 'Updated' && results[1] === 'Failed', `older queued ${other} response cannot replace the accepted serial: ${results}`);
+      const saved = await persistedState();
+      check(Math.max(...saved.map((v) => v.acceptedSerial ?? 0)) === higher && Math.max(...saved.map((v) => v.serial ?? 0)) === higher,
+        `persistent manifest and watermark retain the higher serial across ${other}s`);
+      manifest.serial = higher;
+      await page.context().unrouteAll({ behavior: 'wait' });
+    }
+    // The tab still memoized the original serial before either successful activation.
+    // A later withdrawal with an unrelated broken download must preserve the latest disk snapshot.
+    const candidate = { ...manifest, serial: manifest.serial + 1,
+      designs: manifest.designs.map((d) => d.id === 'article-card' ? { ...d, revoked: true } : d),
+      templates: manifest.templates.map((t) => t.designId === 'quantity-stepper' ? { ...t, sha256: '0'.repeat(64) } : t),
+    };
+    await page.context().route('**/catalog/manifest.json', (route) => route.fulfill({ json: candidate }));
+    check(await tab.evaluate(() => window.__livery.refresh()) === 'Failed', 'unrelated missing replacement blob keeps activation pending');
+    const saved = await persistedState();
+    const active = saved.find((v) => v.serial === manifest.serial);
+    check(active?.designs.find((d) => d.id === 'article-card')?.revoked === true,
+      'stale tab applies revocations to the latest persisted playable snapshot');
+    check(Math.max(...saved.map((v) => v.acceptedSerial ?? 0)) === candidate.serial,
+      'pending replacement retains its accepted serial independently of activation');
+  } finally { await tab.close(); await page.context().unrouteAll({ behavior: 'wait' }); }
+
 } catch (e) {
   check(false, String(e));
   console.log(logs.join('\n'));
 } finally {
   releaseDecision();
-  await page.close();
+  await context.close();
 }
 }
 await browser.close();

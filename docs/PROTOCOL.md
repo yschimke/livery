@@ -299,7 +299,8 @@ decision must draw only in the template it names.
 
 An exact hash may also resolve from the app's bundled catalog when no downloaded manifest is
 usable. The bundled entry must pass the same eligibility gate, match any requested design id,
-and have its document and all declared assets present. Missing or incompatible exact hashes
+and have its document and all declared assets present. Accepted revocations still apply after
+the downloaded catalog expires. Missing or incompatible exact hashes
 never substitute another template.
 
 ## 6. Resources
@@ -583,3 +584,13 @@ When replacing a cached catalog, refresh keeps the previous manifest active unti
 replacement templates and assets finish downloading. Failed downloads keep the playable cache;
 the accepted serial watermark is still persisted immediately so rollback protection survives a
 failure or interruption. Kotlin and Swift use the same activation order.
+
+A pending replacement bypasses the previous catalog’s freshness TTL after failure backoff expires.
+Browser sessions sharing persistent state serialize the complete refresh with an origin-wide Web Lock,
+so a stale response cannot lower the persisted accepted serial or replace a newer catalog.
+
+Verified design and template revocations apply immediately to the active snapshot and bundled
+fallback, before replacement downloads. These withdrawals persist across failed downloads,
+restarts and expiry of the previous catalog; unrelated playable content remains available.
+Accepted withdrawals are stored independently of the active snapshot, including revoked hashes
+and design IDs present only in the bundled catalog.

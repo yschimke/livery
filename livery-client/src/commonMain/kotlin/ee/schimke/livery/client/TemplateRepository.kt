@@ -13,6 +13,8 @@ import ee.schimke.livery.protocol.TemplateRef
 import ee.schimke.livery.protocol.fits
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,6 +97,8 @@ class TemplateRepository(
   /** Serialises refreshes. Held across the network; nothing on the render path takes it. */
   private val refreshLock = Mutex()
   private var current: Manifest? = null
+  /** Replacement blobs remain retained while the previous manifest serves readers. */
+  private var preparing: Manifest? = null
 
   @Serializable
   private data class Meta(
@@ -122,7 +126,7 @@ class TemplateRepository(
    * Placement rules and theme packs read this rather than [manifest], so a fresh install (nothing
    * downloaded yet) or an offline one still has them, as selection already does.
    */
-  suspend fun current(): Manifest? = usable() ?: bundled?.manifest
+  suspend fun current(): Manifest? = usable() ?: bundledManifest()
 
   /**
    * A theme pack's named values from [current], to pass as a slot's `extra` bindings (themes are
@@ -135,6 +139,25 @@ class TemplateRepository(
     current?.let { return it }
     val text = kv.get(k("manifest")) ?: return null
     return runCatching { json.decodeFromString(Manifest.serializer(), text) }.getOrNull()?.also { current = it }
+  }
+
+  /** Apply only withdrawals; replacement content still waits for prefetch. */
+  private fun withRevocations(base: Manifest, accepted: Manifest?): Manifest {
+    if (accepted == null) return base
+    val designs = accepted.designs.filter { it.revoked }.map { it.id }.toSet()
+    val templates = accepted.templates.filter { it.revoked }.map { it.designId to it.sha256 }.toSet()
+    return base.copy(
+      designs = base.designs.map { if (it.id in designs) it.copy(revoked = true) else it },
+      templates = base.templates.map { if ((it.designId to it.sha256) in templates) it.copy(revoked = true) else it },
+    )
+  }
+
+  private suspend fun bundledManifest(): Manifest? = bundled?.manifest?.let { base ->
+    // Accepted withdrawals can name bundled content absent from the active downloaded snapshot.
+    val accepted = kv.get(k("withdrawals"))?.let {
+      runCatching { json.decodeFromString(Manifest.serializer(), it) }.getOrNull()
+    }
+    withRevocations(withRevocations(base, manifest()), accepted)
   }
 
   private suspend fun meta(): Meta = kv.get(k("meta"))?.let { runCatching { json.decodeFromString(Meta.serializer(), it) }.getOrNull() } ?: Meta()
@@ -151,11 +174,16 @@ class TemplateRepository(
   suspend fun refresh(force: Boolean = false): RefreshResult = refreshLock.withLock {
     val now = clock.nowEpochMs()
     val m = meta()
-    val cached = manifest()
+    // Another session may have activated a newer snapshot since this instance last read it.
+    val cached = stateLock.withLock {
+      val previous = current
+      current = null
+      loadCachedLocked().also { if (previous != null && it != previous) _revision.update { it + 1 } }
+    }
     var acceptedSerial = m.acceptedSerial
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
-      if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
+      if (cached != null && cached.serial == m.acceptedSerial && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
         // A retry of downloads an earlier refresh couldn't finish: new bytes can change an answer.
         if (prefetch(cached).added) _revision.update { it + 1 }
         return RefreshResult.Skipped("fresh")
@@ -189,20 +217,38 @@ class TemplateRepository(
               else -> {
                 // Remember the verified serial immediately, even if downloads fail or are cancelled.
                 // Keep the old ETag and playable manifest until the replacement is ready.
+                val bundledBefore = bundledManifest()
+                // Persist all accepted withdrawals, even those matching only bundled content.
+                kv.put(k("withdrawals"), r.bytes.decodeToString())
+                val previous = cached ?: bundled?.manifest
+                val withdrawn = previous?.let { withRevocations(it, next) }
+                if (withdrawn != null && withdrawn != previous) {
+                  stateLock.withLock {
+                    kv.put(k("manifest"), json.encodeToString(Manifest.serializer(), withdrawn))
+                    current = withdrawn
+                  }
+                }
+                // Bundle-only withdrawals also change what an already displayed slot may draw.
+                if (withdrawn != previous || bundledBefore != bundledManifest()) _revision.update { it + 1 }
                 acceptedSerial = next.serial
                 putMeta(m.copy(acceptedSerial = acceptedSerial))
-                val prepared = prefetch(next)
-                if (cached != null && !prepared.complete) {
-                  if (prepared.added) _revision.update { it + 1 }
-                  return@withLock fail("template downloads incomplete; keeping the previous catalog")
+                stateLock.withLock { preparing = next }
+                try {
+                  val prepared = prefetch(next)
+                  if (cached != null && !prepared.complete) {
+                    if (prepared.added) _revision.update { it + 1 }
+                    return@withLock fail("template downloads incomplete; keeping the previous catalog")
+                  }
+                  stateLock.withLock {
+                    kv.put(k("manifest"), r.bytes.decodeToString())
+                    current = next
+                  }
+                  putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
+                  _revision.update { it + 1 }
+                  RefreshResult.Updated(next.serial)
+                } finally {
+                  withContext(NonCancellable) { stateLock.withLock { preparing = null } }
                 }
-                stateLock.withLock {
-                  kv.put(k("manifest"), r.bytes.decodeToString())
-                  current = next
-                }
-                putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
-                _revision.update { it + 1 }
-                RefreshResult.Updated(next.serial)
               }
             }
           }
@@ -236,10 +282,11 @@ class TemplateRepository(
       }
     }
     val b = bundled ?: return null
-    val e = TemplateSelector.select(b.manifest, query, automatic = automatic)
-      ?: TemplateSelector.select(b.manifest, query.copy(designId = null), automatic = automatic)
+    val bm = bundledManifest() ?: return null
+    val e = TemplateSelector.select(bm, query, automatic = automatic)
+      ?: TemplateSelector.select(bm, query.copy(designId = null), automatic = automatic)
       ?: return null
-    return b.read(e.sha256)?.let { loaded(b.manifest, e, it, LoadedTemplate.Origin.Bundled) }
+    return b.read(e.sha256)?.let { loaded(bm, e, it, LoadedTemplate.Origin.Bundled) }
   }
 
   /**
@@ -250,11 +297,11 @@ class TemplateRepository(
    */
   suspend fun bundledTemplate(sha256: String, query: TemplateQuery): LoadedTemplate? {
     val b = bundled ?: return null
-    val e = b.manifest.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(b.manifest, it, query) } ?: return null
-    if (usable()?.design(e.designId)?.revoked == true) return null
+    val bm = bundledManifest() ?: return null
+    val e = bm.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(bm, it, query) } ?: return null
     val bytes = b.read(e.sha256) ?: return null
     if (e.assets.any { b.read(it) == null }) return null
-    return loaded(b.manifest, e, bytes, LoadedTemplate.Origin.Bundled)
+    return loaded(bm, e, bytes, LoadedTemplate.Origin.Bundled)
   }
 
   /**
@@ -262,7 +309,7 @@ class TemplateRepository(
    * installed. An experiment's design arm is automatic selection, so it uses this too.
    */
   suspend fun automaticallySelectable(designId: String): Boolean {
-    val d = (usable() ?: bundled?.manifest)?.design(designId) ?: return false
+    val d = (usable() ?: bundledManifest())?.design(designId) ?: return false
     return !d.revoked && (d.install == InstallPolicy.Always || designId in installedIds())
   }
 
@@ -285,7 +332,7 @@ class TemplateRepository(
     ref.sha256?.let { sha ->
       // The same bytes may be listed for several targets or designs: any entry that matches the
       // reference (and its design, if it names one) and passes the gate will do.
-      val catalog = m ?: bundled?.manifest ?: return null
+      val catalog = m ?: bundledManifest() ?: return null
       val e = catalog.templates.firstOrNull {
         it.sha256 == sha && (ref.designId == null || it.designId == ref.designId) && TemplateSelector.eligible(catalog, it, query)
       } ?: return null
@@ -374,9 +421,11 @@ class TemplateRepository(
 
   /** Hashes this repository needs on disk: `Always` and installed designs, for every target, with their assets. */
   suspend fun retained(): Set<String> {
-    val m = manifest() ?: return emptySet()
+    val manifests = stateLock.withLock { listOfNotNull(loadCachedLocked(), preparing) }
     val installed = installedIds()
-    val entries = m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }.flatMap { entriesForTargets(m, it.id) }
+    val entries = manifests.flatMap { m ->
+      m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }.flatMap { entriesForTargets(m, it.id) }
+    }
     return (entries.map { it.sha256 } + entries.flatMap { it.assets }).toSet()
   }
 
