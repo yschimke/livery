@@ -13,6 +13,8 @@ import ee.schimke.livery.protocol.TemplateRef
 import ee.schimke.livery.protocol.fits
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +87,8 @@ class TemplateRepository(
   /** Serialises refreshes. Held across the network; nothing on the render path takes it. */
   private val refreshLock = Mutex()
   private var current: Manifest? = null
+  /** Replacement blobs remain retained while the previous manifest serves readers. */
+  private var preparing: Manifest? = null
 
   @Serializable
   private data class Meta(
@@ -181,18 +185,23 @@ class TemplateRepository(
                 // Keep the old ETag and playable manifest until the replacement is ready.
                 acceptedSerial = next.serial
                 putMeta(m.copy(acceptedSerial = acceptedSerial))
-                val prepared = prefetch(next)
-                if (cached != null && !prepared.complete) {
-                  if (prepared.added) _revision.update { it + 1 }
-                  return@withLock fail("template downloads incomplete; keeping the previous catalog")
+                stateLock.withLock { preparing = next }
+                try {
+                  val prepared = prefetch(next)
+                  if (cached != null && !prepared.complete) {
+                    if (prepared.added) _revision.update { it + 1 }
+                    return@withLock fail("template downloads incomplete; keeping the previous catalog")
+                  }
+                  stateLock.withLock {
+                    kv.put(k("manifest"), r.bytes.decodeToString())
+                    current = next
+                  }
+                  putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
+                  _revision.update { it + 1 }
+                  RefreshResult.Updated(next.serial)
+                } finally {
+                  withContext(NonCancellable) { stateLock.withLock { preparing = null } }
                 }
-                stateLock.withLock {
-                  kv.put(k("manifest"), r.bytes.decodeToString())
-                  current = next
-                }
-                putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
-                _revision.update { it + 1 }
-                RefreshResult.Updated(next.serial)
               }
             }
           }
@@ -358,9 +367,11 @@ class TemplateRepository(
 
   /** Hashes this repository needs on disk: `Always` and installed designs, for every target, with their assets. */
   suspend fun retained(): Set<String> {
-    val m = manifest() ?: return emptySet()
+    val manifests = stateLock.withLock { listOfNotNull(loadCachedLocked(), preparing) }
     val installed = installedIds()
-    val entries = m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }.flatMap { entriesForTargets(m, it.id) }
+    val entries = manifests.flatMap { m ->
+      m.designs.filter { it.install == InstallPolicy.Always || it.id in installed }.flatMap { entriesForTargets(m, it.id) }
+    }
     return (entries.map { it.sha256 } + entries.flatMap { it.assets }).toSet()
   }
 

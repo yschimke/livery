@@ -99,6 +99,7 @@ public actor TemplateRepository {
   private let clock: @Sendable () -> Int64
   private let targets: [PlayerCapabilities]
   private let bundled: Bundled?
+  private var preparing: Manifest?
   private var current: Manifest?
   private var refreshing: Task<RefreshResult, Never>?
 
@@ -191,6 +192,8 @@ public actor TemplateRepository {
         var accepted = m
         accepted.acceptedSerial = acceptedSerial
         await putMeta(accepted)
+        preparing = next
+        defer { preparing = nil }
         let complete = await prefetch(next)
         if cached != nil && !complete { return await fail("template downloads incomplete; keeping the previous catalog") }
         await kv.put(k("manifest"), String(decoding: bytes, as: UTF8.self))
@@ -318,9 +321,12 @@ public actor TemplateRepository {
   }
 
   public func retained() async -> Set<String> {
-    guard let m = await manifest() else { return [] }
+    _ = await manifest()
+    let manifests = [current, preparing].compactMap { $0 }
     let installed = await installedIds()
-    let es = m.designs.filter { $0.install == .always || installed.contains($0.id) }.flatMap { entries(m, $0.id) }
+    let es = manifests.flatMap { m in
+      m.designs.filter { $0.install == .always || installed.contains($0.id) }.flatMap { entries(m, $0.id) }
+    }
     return Set(es.map(\.sha256) + es.flatMap(\.assets))
   }
 

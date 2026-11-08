@@ -30,6 +30,7 @@ class RepositoryTest {
     var blobsDown = false
     var blobRequested: CompletableDeferred<Unit>? = null
     var resumeBlobs: CompletableDeferred<Unit>? = null
+    var pauseSha: String? = null
     override suspend fun get(url: String, etag: String?): FetchResult {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
@@ -40,9 +41,11 @@ class RepositoryTest {
         url.endsWith("manifest.sig.json") -> if (!signed) FetchResult.Failed(404, "none") else
           FetchResult.Ok(json.encodeToString(ManifestSignature.serializer(), ManifestSignature(keyId = "k", signature = Base64.encode(key + bytes.size.toString().encodeToByteArray()))).encodeToByteArray(), null)
         else -> {
-          blobRequested?.complete(Unit)
-          resumeBlobs?.await()
           val sha = url.substringAfterLast('/').removeSuffix(".rc")
+          if (pauseSha == null || pauseSha == sha) {
+            blobRequested?.complete(Unit)
+            resumeBlobs?.await()
+          }
           val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
           names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
         }
@@ -99,8 +102,8 @@ class RepositoryTest {
   }
 
   private fun replacement(): Manifest {
-    val bytes = Fx.blob("retro-v7")
     return Fx.manifest(serial = 2).let { m -> m.copy(templates = m.templates.map { entry ->
+      val bytes = Fx.blob(if (entry.target.surface == "launcher-widget") "retro-launcher" else "retro-v7")
       if (entry.designId == "tile-default") entry.copy(sha256 = FakeCrypto.sha(bytes), bytes = bytes.size.toLong()) else entry
     }) }
   }
@@ -113,11 +116,16 @@ class RepositoryTest {
     host.manifest = replacement()
     host.blobRequested = CompletableDeferred()
     host.resumeBlobs = CompletableDeferred()
+    host.pauseSha = FakeCrypto.sha(Fx.blob("retro-launcher"))
     val refreshing = async { r.refresh(force = true) }
     host.blobRequested!!.await()
     assertEquals(1, r.current()?.serial)
     assertEquals(original.entry.sha256, r.resolve(q)?.entry?.sha256)
     assertEquals(1, repo(host).current()?.serial, "a concurrently opened repository sees the playable disk snapshot")
+    val downloaded = FakeCrypto.sha(Fx.blob("retro-v7"))
+    assertNotNull(blobs.get(downloaded))
+    r.prune()
+    assertNotNull(blobs.get(downloaded), "pruning must retain the replacement while its other downloads are pending")
     host.resumeBlobs!!.complete(Unit)
     assertEquals(RefreshResult.Updated(2), refreshing.await())
     assertEquals(2, r.current()?.serial)
