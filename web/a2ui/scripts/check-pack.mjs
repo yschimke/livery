@@ -14,6 +14,12 @@ try {
     'vendor/remote-compose-player.d.mts', 'vendor/PROVENANCE.md', 'README.md']) {
     assert(files.has(file), `missing runtime file: ${file}`);
   }
+  if ([...files].some((f) => f.startsWith('dist/livery-web-compose/'))) {
+    for (const file of ['livery-livery-web-compose.mjs', 'livery-livery-web-compose.wasm',
+      'skiko.mjs', 'skiko.wasm', 'fonts/RobotoFlex.ttf', 'fonts/NotoSansSymbols2-Regular.ttf']) {
+      assert(files.has(`dist/livery-web-compose/${file}`), `missing CMP runtime file: ${file}`);
+    }
+  }
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
   function checkExports(value) {
     if (typeof value === 'string') {

@@ -1,7 +1,7 @@
 import { Component, ElementRef, effect, inject, type OnDestroy } from '@angular/core';
 import { A2uiRendererService, AngularCatalog, CatalogComponent, createComponentImplementation, BasicCatalog } from '@a2ui/angular/v0_9';
 import { ComponentContext } from '@a2ui/web_core/v0_9';
-import { componentApi, type LiveryComponentApi, type LiveryCatalogOptions } from './api.js';
+import { componentApi, preparePlayerOptions, type LiveryComponentApi, type LiveryCatalogOptions } from './api.js';
 import type { LiverySession } from './livery.js';
 import { hostStyle, LiveryController } from './controller.js';
 export { LiverySession, loadLiveryWeb } from './livery.js';
@@ -37,6 +37,7 @@ export class LiveryAngularComponent extends CatalogComponent<LiveryComponentApi>
 }
 
 export async function liveryAngularCatalog(session: LiverySession, options: LiveryCatalogOptions) {
+  options = await preparePlayerOptions(options);
   const components = (await session.components()).map((spec) => {
     const api = componentApi(session, spec, options);
     return { ...api, ...createComponentImplementation(api, LiveryAngularComponent) };

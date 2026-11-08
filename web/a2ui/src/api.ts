@@ -1,8 +1,12 @@
+import type { LiveryPlayerFactory } from './player.js';
+import { prepareCmpPlayer } from './cmp-player.js';
 import { ActionSchema, DynamicBooleanSchema, DynamicNumberSchema, DynamicStringSchema, DynamicValueSchema, type Catalog } from '@a2ui/web_core/v0_9';
 import { z } from 'zod';
 import type { LiveryComponentSpec, LiveryPropertySpec, LiverySession } from './livery.js';
 
 export interface LiveryCatalogOptions {
+  /** In-page player; optional CMP is prepared before any framework registers its catalog. */
+  player?: 'ts' | 'cmp' | LiveryPlayerFactory;
   /** The catalog id the client advertises: basic components plus one per Livery contract. */
   catalogId: string;
   /** The catalog to extend; A2UI's basic catalog by default. */
@@ -52,9 +56,14 @@ function propertySchema(p: LiveryPropertySpec): z.ZodTypeAny {
 }
 
 export function componentApi(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): LiveryComponentApi {
+  if (options.player === 'cmp') throw new Error("Use an async catalog factory with player: 'cmp', or pass await prepareCmpPlayer() to liveryComponent");
   return { name: spec.name, tagName: `livery-${kebab(spec.name)}`, schema: schemaOf(spec), session, spec, options };
 }
 
 export function kebab(s: string): string {
   return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+}
+
+export async function preparePlayerOptions(options: LiveryCatalogOptions): Promise<LiveryCatalogOptions> {
+  return options.player === 'cmp' ? { ...options, player: await prepareCmpPlayer() } : options;
 }

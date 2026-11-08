@@ -200,7 +200,7 @@ jobs:
       - name: Android SDK platform
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: Build Wasm
-        run: ./gradlew :livery-web:webDist
+        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
       - name: Build and inspect npm package
         working-directory: web/a2ui
         env:

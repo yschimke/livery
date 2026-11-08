@@ -167,7 +167,7 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
       - name: livery-web's Wasm module and the livery CLI
         working-directory: .
-        run: ./gradlew :livery-web:webDist :livery-publish:installDist
+        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
       - name: npm ci, check and build
         run: |
           npm ci

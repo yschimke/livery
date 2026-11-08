@@ -6,6 +6,10 @@ order: 17
 `@livery/a2ui` renders Livery contracts in A2UI's Lit, React and Angular surfaces. The common
 Kotlin pipeline, compiled to Wasm, selects and verifies templates and gates actions. The
 TypeScript Remote Compose player draws them on a canvas and updates named values live.
+An optional `player: 'cmp'` uses the in-page Compose Multiplatform player; it is prepared before
+catalog registration and supports the same framework adapters. CMP keeps authored height when
+root measurement is unavailable. Its runtime and bundled fonts increase download and viewport
+costs; see `docs/A2UI-CMP.md` for the measured tradeoffs.
 The package is built; its first npm publication needs the repository owner's publish token.
 
 Use `LiverySession.open({ catalog, keys })`, then `liveryCatalog(session, { catalogId })` for Lit,

@@ -9,7 +9,12 @@ export async function renderer(name: string) {
     return {
       catalog: liveryReactCatalog,
       processor: async (catalog: any, action: any) => new MessageProcessor([catalog], action),
-      mount: (p: any, id: string, el: HTMLElement) => createRoot(el).render(createElement(A2uiSurface, { surface: p.model.getSurface(id) })),
+      mount: (p: any, id: string, el: HTMLElement) => {
+        let root = createRoot(el);
+        const draw = () => root.render(createElement(A2uiSurface, { surface: p.model.getSurface(id) }));
+        draw();
+        return { unmount: () => root.unmount(), remount: () => { root = createRoot(el); draw(); } };
+      },
     };
   }
   if (name === 'angular') {
@@ -29,10 +34,17 @@ export async function renderer(name: string) {
       },
       mount: (p: any, id: string, el: HTMLElement) => {
         const app = apps.get(p);
-        const view = createComponent(SurfaceComponent, { environmentInjector: app.injector, hostElement: el });
-        view.setInput('surfaceId', id);
-        app.attachView(view.hostView);
-        app.tick();
+        const attach = () => {
+          const host = document.createElement('div');
+          el.append(host);
+          const view = createComponent(SurfaceComponent, { environmentInjector: app.injector, hostElement: host });
+          view.setInput('surfaceId', id);
+          app.attachView(view.hostView);
+          app.tick();
+          return view;
+        };
+        let view = attach();
+        return { unmount: () => { app.detachView(view.hostView); view.destroy(); }, remount: () => { view = attach(); } };
       },
     };
   }
@@ -44,6 +56,7 @@ export async function renderer(name: string) {
     mount: (p: any, id: string, el: HTMLElement) => {
       const surface = document.createElement('a2ui-surface') as any;
       surface.surface = p.model.getSurface(id); el.append(surface);
+      return { unmount: () => surface.remove(), remount: () => el.append(surface) };
     },
   };
 }

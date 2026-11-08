@@ -22,7 +22,8 @@
     "./angular": {
       "types": "./dist/angular.d.ts",
       "default": "./dist/angular.js"
-    }
+    },
+    "./livery-web-compose/*": "./dist/livery-web-compose/*"
   },
   "files": [
     "dist",

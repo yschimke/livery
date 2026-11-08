@@ -2,7 +2,7 @@ import { A2uiLitElement, basicCatalog } from '@a2ui/lit/v0_9';
 import type { Catalog } from '@a2ui/web_core/v0_9';
 import { css, html, nothing, type PropertyValues } from 'lit';
 import type { LiveryComponentSpec, LiverySession } from './livery.js';
-import { componentApi, type LiveryComponentApi as SharedComponentApi, type LiveryCatalogOptions } from './api.js';
+import { componentApi, type LiveryComponentApi as SharedComponentApi, type LiveryCatalogOptions, preparePlayerOptions } from './api.js';
 import { LiveryController } from './controller.js';
 import type { NamedAction } from './player.js';
 export type { LiveryCatalogOptions } from './api.js';
@@ -10,6 +10,7 @@ export type { LiveryCatalogOptions } from './api.js';
 export interface LiveryComponentApi extends SharedComponentApi { element: CustomElementConstructor; }
 
 export async function liveryCatalog(session: LiverySession, options: LiveryCatalogOptions): Promise<{ catalog: Catalog<any, any>; components: LiveryComponentApi[] }> {
+  options = await preparePlayerOptions(options);
   const base = options.base ?? basicCatalog;
   const components = (await session.components()).map((spec) => liveryComponent(session, spec, options));
   const catalog = base.derive({ catalogId: options.catalogId, components: [...base.components.keys(), ...components] as any });

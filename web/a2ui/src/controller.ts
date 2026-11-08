@@ -2,7 +2,7 @@ import type { ComponentContext } from '@a2ui/web_core/v0_9';
 import type { LiveryComponentApi } from './api.js';
 import { kebab } from './api.js';
 import type { LiveryComponentSpec, Rendered, Routed } from './livery.js';
-import { RcCanvasPlayer, type NamedAction } from './player.js';
+import { RcCanvasPlayer, type NamedAction, type LiveryPlayer } from './player.js';
 
 export const hostStyle = 'display:block;width:100%;height:var(--livery-a2ui-height,var(--livery-template-height,200px))';
 const BASELINE: Record<string, string> = {
@@ -59,7 +59,7 @@ export class LiveryController {
       this.shownKey = undefined; this.request = '';
       this.automatic = false; this.automaticFor = undefined; this.imagesFailed = false;
     }
-    private player?: RcCanvasPlayer;
+    private player?: LiveryPlayer;
     /** The player's canvas lives here across framework renders. */
     readonly box: HTMLDivElement = Object.assign(document.createElement('div'), { className: 'player' });
     private render_?: number;
@@ -115,7 +115,9 @@ export class LiveryController {
       if (!api || !this.context) return;
       const { session, spec, options } = api;
       // One player per element, for as long as the element lives: its document stays and values move.
-      this.player ??= new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
+      this.player ??= typeof options.player === 'function'
+        ? options.player(this.box, (a) => void this.onAction(a))
+        : new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
       const props = this.props(spec);
       // After the chosen design failed to play, this element renders the automatic choice, until
       // the agent changes the component.
@@ -282,4 +284,3 @@ function cssColorToArgb(color: string, el: HTMLElement): string | undefined {
   const hex = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, '0').toUpperCase();
   return `#${hex(a * 255)}${hex(r)}${hex(g)}${hex(b)}`;
 }
-

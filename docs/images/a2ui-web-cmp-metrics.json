@@ -1,0 +1,67 @@
+{
+  "sampleReadyMs": 2386.1999999999534,
+  "heapBytes": 31231549,
+  "resources": [
+    {
+      "name": "livery-livery-web.mjs",
+      "bytes": 3366,
+      "ms": 12.199999999953434
+    },
+    {
+      "name": "livery-livery-web.import-object.mjs",
+      "bytes": 20095,
+      "ms": 2.300000000046566
+    },
+    {
+      "name": "livery-livery-web.js-builtins.mjs",
+      "bytes": 2095,
+      "ms": 5.699999999953434
+    },
+    {
+      "name": "livery-livery-web.wasm",
+      "bytes": 4749595,
+      "ms": 40.699999999953434
+    },
+    {
+      "name": "livery-livery-web-compose.mjs",
+      "bytes": 3348,
+      "ms": 2.7999999998137355
+    },
+    {
+      "name": "RobotoFlex.ttf",
+      "bytes": 1787292,
+      "ms": 18
+    },
+    {
+      "name": "NotoSansSymbols2-Regular.ttf",
+      "bytes": 656852,
+      "ms": 5
+    },
+    {
+      "name": "livery-livery-web-compose.import-object.mjs",
+      "bytes": 42892,
+      "ms": 10.5
+    },
+    {
+      "name": "livery-livery-web-compose.js-builtins.mjs",
+      "bytes": 2095,
+      "ms": 4.899999999906868
+    },
+    {
+      "name": "skiko.mjs",
+      "bytes": 503913,
+      "ms": 5.7999999998137355
+    },
+    {
+      "name": "skiko.wasm",
+      "bytes": 8648883,
+      "ms": 26
+    },
+    {
+      "name": "livery-livery-web-compose.wasm",
+      "bytes": 12944800,
+      "ms": 104.4000000001397
+    }
+  ],
+  "accessibility": "- text: Spring sale\n- button \"✕\"\n- button \"Shop now\""
+}

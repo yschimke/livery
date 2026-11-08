@@ -1,12 +1,13 @@
 import { createElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createComponentImplementation, type ReactA2uiComponentProps } from '@a2ui/react/v0_9';
 import { basicCatalog } from '@a2ui/web_core/v0_9/basic_catalog';
-import { componentApi, type LiveryCatalogOptions } from './api.js';
+import { componentApi, preparePlayerOptions, type LiveryCatalogOptions } from './api.js';
 import type { LiverySession } from './livery.js';
 import { hostStyle, LiveryController } from './controller.js';
 export { LiverySession, loadLiveryWeb } from './livery.js';
 
 export async function liveryReactCatalog(session: LiverySession, options: LiveryCatalogOptions) {
+  options = await preparePlayerOptions(options);
   const components = (await session.components()).map((spec) => {
     const api = componentApi(session, spec, options);
     function View({ context, props }: ReactA2uiComponentProps<Record<string, unknown>>) {
