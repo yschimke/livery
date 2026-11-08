@@ -12,7 +12,9 @@ const actions: unknown[] = [];
 const problems: [string, string][] = [];
 const app: unknown[] = [];
 
-const session = await LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'] });
+const openSession = () => LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'] });
+const session = await openSession();
+let peer: LiverySession;
 const { catalog, components } = await adapter.catalog(session, {
   catalogId: CATALOG_ID,
   player,
@@ -59,6 +61,9 @@ const secondLifecycle = adapter.mount(processor2, 'chat-2', document.getElementB
   cachedComponents: async (options: Record<string, unknown>) => { try { return (await (await LiverySession.open({
     catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'], ...options,
   })).components()).map((c) => c.name); } catch { return null; } },
+  refresh: () => session.refresh(),
+  openPeer: async () => { peer = await openSession(); },
+  refreshPeer: () => peer.refresh(),
   catalogPreparedAt,
   detachSecond: () => secondLifecycle.unmount(),
   reconnectSecond: () => secondLifecycle.remount(),
