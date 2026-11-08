@@ -1,6 +1,6 @@
 # Parallel handovers: shareable RC components
 
-Status: **Planned work; not started by writing these notes.**
+Status: **Planned work. Read-only readiness checks completed for 00/01/02; no implementation started.**
 Baseline plan commit: `23a0c09`. Read the [delivery plan](../RC_TILES_PLAN.md) first.
 These notes are independently assignable briefs. Read the target repository's current
 `AGENTS.md` before implementation and recheck all external branch heads.
@@ -20,26 +20,42 @@ are separate. Never interpret a demo bookmark as an account write. No shared pol
 | Note | Workstream | Can start now | Integration dependency |
 | --- | --- | --- | --- |
 | [00](00-contract-and-fixtures.md) | Descriptor, host semantics and fixtures | Yes; owns the shared interface | Content bundle from 01 for real fixtures |
-| [01](01-confetti-content.md) | Confetti artifact and native reference | Yes; existing draft catalog | 00 for publication wrapper |
+| [01](01-confetti-content.md) | Confetti artifact and native reference | **Hold until relevant Confetti PRs land** | Reinspect merged source, then 00 |
 | [02](02-web-player.md) | Standalone web player and preview UI | Yes; local fixtures | 00/01; 03 serves its output |
 | [03](03-publication-hosting.md) | Public publication and HTTP hosting | Yes; existing export/unfurl code | 00/01; 02 for interactive assets |
 | [04](04-editor-sharing.md) | UI Builder Publish/share controls | Yes; mocked publication response | 03 before real end-to-end publication |
 | [05](05-dokka-embedding.md) | KDoc/Dokka embed adapter | Yes; fixture URL/viewer | 02/03 for real preview |
 | [06](06-heron-incoming-share.md) | Heron incoming share to composer | Yes; ordinary URL only | Independent of RC renderer |
 | [07](07-heron-rendering.md) | Native RC external-link rendering | Yes; local artifact/provider | 00/01; 03 for live URL resolution |
-| [08](08-confetti-public-sessions.md) | Real session identity, data and actions | Yes; read-only source/link discovery | 00/03/07 before integrated live sharing |
+| [08](08-confetti-public-sessions.md) | Real session identity, data and actions | **Hold until relevant Confetti PRs land** | Merged source plus 00/03/07 |
 | [09](09-integration-and-quality.md) | Cross-host verification and evidence | Yes; matrix/harness | Consumes runnable slices incrementally |
 | [10](10-at-interoperability-research.md) | Later AT mapping and interoperability research | Yes; research only | Working products before schema implementation |
 
-All eleven can start discovery, fixtures or isolated work now. They are not eleven
-independent end-to-end features. With fewer people, prioritise 00/01, 02, 03 and 07;
-06 is a small independent app integration. Start 04/05 with mocks; 08/10 need not delay
-the first component-preview demonstration.
+## Recommended waves
+
+Do not start eleven implementations at once. The user has explicitly deferred Confetti work
+until the relevant PRs land; 01 and 08 are parked, including further draft-stack investigation.
+Recheck merged source and current instructions when that gate opens. The cited draft snapshots
+are historical references, not a branch to implement against now.
+
+1. **First wave:** 00 shared fixture/contract, 02 standalone web path, and 06 Heron incoming
+   sharing. Use Livery's existing quantity stepper as a development fixture. The coordinator
+   maintains 09's acceptance matrix; a separate quality implementation need not start yet.
+2. **After interface agreement:** 03 publication hosting and 07 native preview rendering.
+   04 editor sharing and 05 Dokka can begin with mocks, then integrate the real service.
+3. **After Confetti lands:** resume 01 against merged code, replace the diagnostic fixture
+   with real content, and start 08's public session adapter. The stepper is not the product demo.
+4. **After working integrations:** expand 09 quality checks and start 10 AT research/proposal
+   work when there is evidence to inform it.
+
+Subagents can perform these bounded assignments in the same chat; separate user-owned chats
+are unnecessary. The coordinator owns interface decisions, integration and verification.
 
 ## Shared interface checkpoint
 
 00 owns descriptor/fixture semantics and records unresolved decisions centrally.
-01 supplies real bytes, fonts, contracts and examples. At the first checkpoint, freeze
+Initially use the existing Livery fixture; 01 supplies real Confetti content after its merge
+gate opens. At the first checkpoint, freeze
 one revisioned fixture and the minimum resolution/publication interfaces. Each consumer
 then implements against the same fixture version. Do not fork descriptors per host.
 
@@ -68,7 +84,7 @@ Use separate branches/worktrees for parallel implementations, not concurrent Gra
 generated-file writes in one checkout. Agree shared dependency versions before merging
 cross-repository changes; test the published artifacts, not only composite builds.
 
-Suggested merge order: shared fixture + content -> web and native fixture rendering ->
+Suggested merge order: shared Livery fixture -> web and native fixture rendering ->
 public hosting -> editor/docs consumers -> end-to-end shares -> real session adapter.
 Incoming-share support can merge independently.
 

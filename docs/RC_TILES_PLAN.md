@@ -6,6 +6,17 @@ standard. Source inspection: 2026-11-08. “RC tile” remains a provisional for
 Implementation assignments: [parallel handover notes](handovers/README.md), with owners,
 shared interface checkpoints, dependencies and acceptance checks.
 
+## Execution gate
+
+Confetti work waits until the relevant upstream PRs land, per the user's direction. Do not
+implement against or continue investigating its unmerged stack now. Reinspect merged code
+before starting Confetti content or public-session integration. The snapshots below are
+historical evidence and may no longer describe current integration wiring.
+
+Meanwhile, use Livery's existing quantity-stepper sample to develop the shared fixture and
+standalone web/native paths. Heron incoming sharing is independent. This is a development
+fixture substitution; Confetti remains the intended real product demonstration.
+
 ## Product: Confetti components, interactive previews and shared sessions
 
 Use Confetti's existing Remote Compose work as the first real content and native application.

@@ -1,5 +1,9 @@
 # 01 — Confetti artifact and native reference
 
+**On hold:** wait for the relevant Confetti PRs to land. Do not begin implementation or
+continue draft-stack investigation until then. Reinspect merged code and repository instructions;
+the source references below are historical context, not current integration guarantees.
+
 Read [coordination](README.md). **Goal:** supply one real non-shader KotlinConf session card,
 its dependencies and native reference behaviour for every consumer.
 

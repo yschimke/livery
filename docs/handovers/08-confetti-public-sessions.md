@@ -1,5 +1,9 @@
 # 08 — Public Confetti session identity, updates and sharing
 
+**On hold:** wait for the relevant Confetti PRs to land. Do not begin implementation or
+continue draft-stack investigation until then. Reinspect merged code and repository instructions;
+the source references below are historical context, not current integration guarantees.
+
 Read [coordination](README.md). **Goal:** extend a component preview into a useful real
 session share without exporting private account state or inventing another agenda backend.
 This is the second product milestone; source/data discovery can start immediately.

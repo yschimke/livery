@@ -3,6 +3,9 @@
 Read [coordination](README.md). **Goal:** an ordinary external-link post pointing at the
 supported preview origin becomes a native Compose RC preview, with normal link fallback.
 
+Use the existing Livery quantity-stepper fixture while Confetti's PRs are pending. The
+Confetti artifact/font acceptance checks below become active after 01's merge gate opens.
+
 ## Source and entry points
 
 Inspect current `tunjid/heron` and its AGENTS.md; baseline was
