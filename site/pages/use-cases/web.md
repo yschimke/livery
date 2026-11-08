@@ -71,3 +71,7 @@ host application's responsibility.
 reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
 its fetch and redirect contract. `docs/WASM-SIZE.md` records section and dependency measurements;
 `scripts/wasm-size.py` reproduces the breakdown for subsequent builds.
+
+Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.

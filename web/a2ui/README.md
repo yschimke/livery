@@ -168,3 +168,7 @@ its fetch and redirect contract. `docs/WASM-SIZE.md` records section and depende
 selects a framework when running `node test/e2e.mjs` directly. `LIVERY_RENDER_OUT` saves screenshots
 and load measurements. `CHROMIUM_PATH` (or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`) selects an installed
 Chromium. CMP retains authored height when it cannot expose a finite root measurement.
+
+Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.

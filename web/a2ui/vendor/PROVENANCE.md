@@ -6,7 +6,7 @@ from `src/web/main.ts`. It draws a document on a `<canvas>` in the page, and its
 (`createHostApi`) sets named values on the document while it plays and reports its host actions.
 
 - Source: [yschimke/rc-players](https://github.com/yschimke/rc-players) `third_party/remote-compose-player`,
-  `agent/player-measured-size` at commit `6e00009c9d49393c5881d07fc168bfc077a88fa7` ([#835](https://github.com/yschimke/rc-players/pull/835)), exposing the root layout measured size, which includes
+  `agent/player-measured-size` at commit `626f44dfdb254aa1f19fc26b5139d2b7ae0f3da9` ([#835](https://github.com/yschimke/rc-players/pull/835)), exposing the root layout measured size, which includes
   [yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829) (NaN-boxed `spacedBy`
   and rounded-clip radii resolved, and a click's definitions loaded with the document, without
   which these templates lay out at `NaN` and their buttons don't fire), itself vendored from
