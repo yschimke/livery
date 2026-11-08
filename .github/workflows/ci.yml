@@ -172,7 +172,6 @@ jobs:
       # Not a dependency of the package: the test's browser, installed for this run only.
       - name: Playwright's Chromium
         run: |
-          npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: End-to-end in Chromium
         run: npm test

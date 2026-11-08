@@ -18,7 +18,7 @@ order: 24
 | `livery-wear-widgets` | Wear OS (Glance Wear) | Available; not yet device-tested in CI |
 | `livery-notifications` | Android 16+ | Available; not yet device-tested in CI |
 | `livery-firebase` | Android | Available (Firebase Analytics, Remote Config, Firestore); not yet tested against a live project |
-| `@livery/a2ui` (`web/a2ui`): Livery components in A2UI's Lit renderer, over `livery-web` (Wasm) | Browsers | Built; not yet on npm |
+| `@livery/a2ui` (`web/a2ui`): Livery components in A2UI's Lit, React and Angular renderers, over `livery-web` (Wasm) | Browsers | Built; not yet on npm |
 | `@livery/web` (a `<livery-template>` element outside A2UI) | Browsers | Planned |
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
 | `livery-mcp-core` (the agent tools, transport-free) | JVM, iOS, Wasm | Available from the release after 0.4.0 |

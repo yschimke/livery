@@ -14,7 +14,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./livery-web/*": "./dist/livery-web/*"
+    "./livery-web/*": "./dist/livery-web/*",
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./angular": {
+      "types": "./dist/angular.d.ts",
+      "default": "./dist/angular.js"
+    }
   },
   "files": [
     "dist",
@@ -22,9 +30,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-livery-web.mjs",
+    "build": "tsc -p tsconfig.json && ngc -p tsconfig.angular.json && node scripts/copy-livery-web.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "node test/e2e.mjs",
+    "test": "node test/all.mjs",
     "pack:check": "node scripts/check-pack.mjs"
   },
   "dependencies": {
@@ -35,10 +43,56 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@a2ui/angular": "^0.14.0",
+    "@a2ui/react": "^0.15.0",
+    "@angular/common": "^21.2.5",
+    "@angular/compiler": "^21.2.5",
+    "@angular/compiler-cli": "^21.2.5",
+    "@angular/core": "^21.2.5",
+    "@angular/platform-browser": "^21.2.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "esbuild": "0.28.2",
+    "playwright": "^1.63.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.9.1",
     "typescript": "5.9.3"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "@a2ui/angular": "^0.14.0",
+    "@a2ui/react": "^0.15.0",
+    "@angular/common": "^21.2.5",
+    "@angular/core": "^21.2.5",
+    "@angular/platform-browser": "^21.2.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "peerDependenciesMeta": {
+    "@a2ui/angular": {
+      "optional": true
+    },
+    "@a2ui/react": {
+      "optional": true
+    },
+    "@angular/common": {
+      "optional": true
+    },
+    "@angular/core": {
+      "optional": true
+    },
+    "@angular/platform-browser": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   }
 }

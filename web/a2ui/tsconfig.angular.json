@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "files": ["src/angular.ts"],
+  "include": [],
+  "angularCompilerOptions": { "compilationMode": "partial", "strictTemplates": true }
+}

@@ -89,3 +89,18 @@ The repository owner must configure `NPM_TOKEN` with publish access to `@livery/
 first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
 relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
 with its provenance until rc-players publishes a supported npm package.
+
+### React and Angular
+
+The same session and controller power all three web renderers. Use
+`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
+React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
+Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
+The Angular entry ships partial compilation for the application's Angular linker.
+
+`options.base` extends the selected renderer's catalog. Actions, data-model paths, themes,
+decision ids, retry and height behavior are shared. `fallback` returns a Lit template for Lit,
+a React node for React, or a DOM node/string for Angular. `npm test` runs the same sample catalog
+and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local Chromium binary.
