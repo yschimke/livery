@@ -189,7 +189,7 @@ final class RepositoryTests: XCTestCase {
       }
       files["manifest.json"] = try JSONEncoder().encode(next); await host.replace(files)
       if case .failed = await repo.refresh(force: true) {} else { XCTFail("incomplete replacement activated") }
-      for hash in await store.keys() { await store.remove(hash) }
+      for hash in await store.keys() { await store.delete(hash) }
       for reader in [repo, open()] {
         let resolved = await reader.resolve(TemplateQuery(contract: "c/tile@1", caps: caps))
         XCTAssertNotEqual(resolved?.entry.sha256, Hashing.sha256Hex(blob("a")), "bundle-only withdrawal survives restart")
