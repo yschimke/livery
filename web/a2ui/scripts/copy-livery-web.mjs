@@ -11,3 +11,7 @@ if (!existsSync(join(from, 'livery-livery-web.mjs'))) {
 }
 mkdirSync(join(root, 'dist/livery-web'), { recursive: true });
 cpSync(from, join(root, 'dist/livery-web'), { recursive: true });
+
+// Optional: a TS-only build does not need the CMP renderer. CI builds both distributions.
+const cmp = join(root, '../../livery-web-compose/build/web-dist');
+if (existsSync(cmp)) cpSync(cmp, join(root, 'dist/livery-web-compose'), { recursive: true });

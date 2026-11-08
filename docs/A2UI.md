@@ -278,7 +278,7 @@ action kind.
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` *(built)* | any MCP host (`livery-mcp-core`) | `a2ui_component_schema(contract?)` and `validate_a2ui(message, data_model?)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
-| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player and setting named values live |
+| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -303,8 +303,13 @@ headless Chromium by CI (`web` job).
 selection, trust, binding, instantiation and action gate, compiled to Wasm, so it can't drift from
 the other clients and needs no fixture of its own beyond the ones Kotlin already passes.
 
+- **Player choice.** `liveryCatalog(session, {catalogId, player: 'cmp'})` selects the optional
+  in-page Compose Multiplatform renderer. Omit `player` (or use `'ts'`) for TypeScript. A custom
+  `(box, onAction) => LiveryPlayer` factory is also supported. CMP and its bundled fonts are loaded
+  during catalog preparation; TS-only pages fetch none of them. At most eight CMP viewports are
+  reserved per page, with additional components using TS. [Build, costs and comparison](A2UI-CMP.md).
 - **Drawing.** The TypeScript Remote Compose player (vendored from rc-players, `web/a2ui/vendor`)
-  on a canvas in the component itself: no iframe. A document is loaded once and its named values
+  or CMP player on a canvas in the component itself: no iframe. A document is loaded once and its named values
   are set on it while it plays (`createHostApi`), so a data-model change moves values and never
   reloads the document, as `LiveryTemplate` does on Compose. Only what that player can't set live
   is written into the document (`TemplateInstantiator`): bound images (`livery:value/<input>`) and

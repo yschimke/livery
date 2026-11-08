@@ -3,4 +3,5 @@ export type { LiveryConfig, LiveryComponentSpec, LiveryPropertySpec, LiverySpace
 export { liveryCatalog, liveryComponent } from './catalog.js';
 export type { LiveryCatalogOptions, LiveryComponentApi } from './catalog.js';
 export { RcCanvasPlayer } from './player.js';
-export type { NamedAction } from './player.js';
+export type { NamedAction, LiveryPlayer, LiveryPlayerFactory } from './player.js';
+export { prepareCmpPlayer } from './cmp-player.js';

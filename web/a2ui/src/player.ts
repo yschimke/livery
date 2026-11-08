@@ -8,12 +8,23 @@ export interface NamedAction {
   value: unknown;
 }
 
+/** A persistent in-page renderer. Superseded shows resolve false; dispose cancels pending work. */
+export interface LiveryPlayer {
+  show(key: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean>;
+  resize(widthPx: number, heightPx: number, density: number): void;
+  forget(): void;
+  dispose(): void;
+  readonly stats: { loads: number; sets: number };
+}
+
+export type LiveryPlayerFactory = (container: HTMLElement, onAction: (action: NamedAction) => void) => LiveryPlayer;
+
 /**
  * The TypeScript Remote Compose player on a canvas in [container], in the page itself. A document
  * is loaded once; its named values are set on it while it plays, so a data change moves the values
  * and never reloads the document (Remote Compose's model, as `LiveryTemplate` does on Compose).
  */
-export class RcCanvasPlayer {
+export class RcCanvasPlayer implements LiveryPlayer {
   private readonly handle: RcPlayerHandle;
   private readonly host: HostApi;
   private key?: string;
@@ -21,6 +32,8 @@ export class RcCanvasPlayer {
   /** Shows run one after another; one asked for while another runs replaces any still queued. */
   private queue: Promise<unknown> = Promise.resolve();
   private latest = 0;
+  private disposed = false;
+  private epoch = 0;
   /** Documents loaded and values set, for tests and debugging. */
   readonly stats = { loads: 0, sets: 0 };
 
@@ -40,9 +53,9 @@ export class RcCanvasPlayer {
   show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean> {
     const mine = ++this.latest;
     const run = this.queue.then(async () => {
-      if (mine !== this.latest) return false;
+      if (this.disposed || mine !== this.latest) return false;
       await this.apply(documentKey, document, values, widthPx, heightPx, density);
-      return true;
+      return !this.disposed && mine === this.latest;
     });
     this.queue = run.catch(() => {});
     return run;
@@ -50,11 +63,14 @@ export class RcCanvasPlayer {
 
   private async apply(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
     if (documentKey !== this.key) {
+      const epoch = this.epoch;
       this.handle.player.setDensity(density);
       // Sized before the load too: the player fixes its touch mapping from the canvas a document
       // loads into, so a document loaded at the default 256 px missed taps past it.
       this.resize(widthPx, heightPx, density);
       await this.handle.loadFromArrayBuffer(document.slice().buffer);
+      if (this.disposed) { this.handle.destroy(); return; }
+      if (epoch !== this.epoch) return;
       this.key = documentKey;
       this.values.clear();
       this.stats.loads++;
@@ -80,11 +96,15 @@ export class RcCanvasPlayer {
 
   /** Forgets the document playing, so the next [show] loads its document again. */
   forget(): void {
+    this.latest++;
+    this.epoch++;
     this.key = undefined;
     this.values.clear();
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.latest++;
     this.host.dispose();
     this.handle.destroy();

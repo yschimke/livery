@@ -10,9 +10,12 @@ import {
 import { css, html, nothing, type PropertyValues } from 'lit';
 import { z } from 'zod';
 import type { LiveryComponentSpec, LiveryPropertySpec, LiverySession, Rendered, Routed } from './livery.js';
-import { RcCanvasPlayer, type NamedAction } from './player.js';
+import { RcCanvasPlayer, type NamedAction, type LiveryPlayer, type LiveryPlayerFactory } from './player.js';
+import { prepareCmpPlayer } from './cmp-player.js';
 
 export interface LiveryCatalogOptions {
+  /** In-page renderer; TypeScript by default. CMP is prepared once before the catalog returns. */
+  player?: 'ts' | 'cmp' | LiveryPlayerFactory;
   /** The catalog id the client advertises: basic components plus one per Livery contract. */
   catalogId: string;
   /** The catalog to extend; A2UI's basic catalog by default. */
@@ -57,6 +60,7 @@ const THEME_ROLES = Object.keys(BASELINE);
  * the catalog a client registers with its `MessageProcessor` and advertises as [catalogId].
  */
 export async function liveryCatalog(session: LiverySession, options: LiveryCatalogOptions): Promise<{ catalog: Catalog<any, any>; components: LiveryComponentApi[] }> {
+  if (options.player === 'cmp') options = { ...options, player: await prepareCmpPlayer() };
   const base = options.base ?? basicCatalog;
   const components = (await session.components()).map((spec) => liveryComponent(session, spec, options));
   const catalog = base.derive({ catalogId: options.catalogId, components: [...base.components.keys(), ...components] as any });
@@ -69,6 +73,7 @@ export async function liveryCatalog(session: LiverySession, options: LiveryCatal
  * catalog that defined the tag: two catalogs (or a session opened again) each draw with their own.
  */
 export function liveryComponent(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): LiveryComponentApi {
+  if (options.player === 'cmp') throw new Error("Use await liveryCatalog with player: 'cmp', or pass await prepareCmpPlayer() to liveryComponent");
   const tagName = `livery-${kebab(spec.name)}`;
   let element = customElements.get(tagName);
   if (!element) {
@@ -113,7 +118,7 @@ class LiveryElement extends A2uiLitElement {
       .player { width: 100%; height: 100%; overflow: hidden; }
     `;
 
-    private player?: RcCanvasPlayer;
+    private player?: LiveryPlayer;
     /** The player's canvas lives here, across renders: Lit never re-creates it. */
     private readonly box: HTMLDivElement = Object.assign(document.createElement('div'), { className: 'player' });
     private render_?: number;
@@ -211,7 +216,9 @@ class LiveryElement extends A2uiLitElement {
       if (!api || !this.context) return;
       const { session, spec, options } = api;
       // One player per element, for as long as the element lives: its document stays and values move.
-      this.player ??= new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
+      this.player ??= typeof options.player === 'function'
+        ? options.player(this.box, (a) => void this.onAction(a))
+        : new RcCanvasPlayer(this.box, (a) => void this.onAction(a));
       const props = this.props(spec);
       // After the chosen design failed to play, this element renders the automatic choice, until
       // the agent changes the component.
