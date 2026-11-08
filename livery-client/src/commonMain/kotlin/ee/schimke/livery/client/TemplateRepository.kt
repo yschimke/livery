@@ -145,7 +145,7 @@ class TemplateRepository(
     var acceptedSerial = m.acceptedSerial
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
-      if (cached != null && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
+      if (cached != null && cached.serial == m.acceptedSerial && now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000 && now < cached.expiresAtEpochMs) {
         // A retry of downloads an earlier refresh couldn't finish: new bytes can change an answer.
         if (prefetch(cached).added) _revision.update { it + 1 }
         return RefreshResult.Skipped("fresh")

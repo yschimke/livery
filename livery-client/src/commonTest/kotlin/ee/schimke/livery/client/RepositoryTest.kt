@@ -139,6 +139,19 @@ class RepositoryTest {
     assertEquals(2, r.current()?.serial)
   }
 
+  @Test fun pendingReplacementRetriesAfterBackoffEvenWhileTheOldCatalogIsFresh() = runTest {
+    val host = Host(Fx.manifest().copy(ttlSeconds = 3600))
+    val r = repo(host)
+    r.refresh()
+    host.manifest = replacement(); host.blobsDown = true
+    assertIs<RefreshResult.Failed>(r.refresh(force = true))
+    assertEquals(RefreshResult.Skipped("backing off"), r.refresh())
+    now += 60_001
+    host.blobsDown = false
+    assertEquals(RefreshResult.Updated(2), r.refresh(), "pending serial bypasses the old cache's TTL")
+    assertEquals(2, r.current()?.serial)
+  }
+
   @Test fun installIsExplicitAndPreviewDoesNotInstall() = runTest {
     val r = repo(Host(Fx.manifest()))
     r.refresh()

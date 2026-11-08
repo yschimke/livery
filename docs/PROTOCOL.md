@@ -521,3 +521,5 @@ When replacing a cached catalog, refresh keeps the previous manifest active unti
 replacement templates and assets finish downloading. Failed downloads keep the playable cache;
 the accepted serial watermark is still persisted immediately so rollback protection survives a
 failure or interruption. Kotlin and Swift use the same activation order.
+
+A pending replacement bypasses the previous catalog’s freshness TTL after failure backoff expires.

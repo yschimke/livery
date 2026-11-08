@@ -156,7 +156,7 @@ public actor TemplateRepository {
     var acceptedSerial = m.acceptedSerial
     if !force {
       if now < m.nextAttemptEpochMs { return .skipped("backing off") }
-      if let cached, now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000, now < cached.expiresAtEpochMs {
+      if let cached, cached.serial == m.acceptedSerial, now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000, now < cached.expiresAtEpochMs {
         _ = await prefetch(cached)
         return .skipped("fresh")
       }

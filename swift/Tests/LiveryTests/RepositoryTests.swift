@@ -101,6 +101,33 @@ final class RepositoryTests: XCTestCase {
     XCTAssertEqual(latest?.entry.sha256, newHash)
   }
 
+  final class MutableClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Int64 = 1_000
+    func now() -> Int64 { lock.lock(); defer { lock.unlock() }; return value }
+    func advance(_ milliseconds: Int64) { lock.lock(); defer { lock.unlock() }; value += milliseconds }
+  }
+
+  func testPendingReplacementRetriesBeforeTheOldTTLExpires() async throws {
+    let (original, blobs) = manifestJSON(serial: 5)
+    let clock = MutableClock()
+    var files = blobs; files["manifest.json"] = original
+    let host = MutableHost(files)
+    let repo = TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
+      blobs: MemoryBlobStore(), kv: MemoryKeyValueStore(), clock: { clock.now() }, targets: [caps])
+    _ = await repo.refresh()
+    let (next, _) = manifestJSON(serial: 6)
+    let oldHash = Hashing.sha256Hex(blob("a")), newHash = Hashing.sha256Hex(blob("b"))
+    files["manifest.json"] = Data(String(decoding: next, as: UTF8.self).replacingOccurrences(of: oldHash, with: newHash).utf8)
+    files.removeValue(forKey: "blobs/\(newHash).rc")
+    await host.replace(files)
+    if case .failed = await repo.refresh(force: true) {} else { XCTFail("replacement activated") }
+    clock.advance(60_001)
+    files["blobs/\(newHash).rc"] = blob("b"); await host.replace(files)
+    let retried = await repo.refresh()
+    XCTAssertEqual(retried, .updated(serial: 6), "pending replacement must bypass the old TTL")
+  }
+
   func testPlannerBindsAndRefusesBadData() async throws {
     let (m, blobs) = manifestJSON(serial: 1)
     var files = blobs
