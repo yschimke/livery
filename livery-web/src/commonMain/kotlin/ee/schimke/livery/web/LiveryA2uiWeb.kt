@@ -1,5 +1,15 @@
 package ee.schimke.livery.web
 
+import ee.schimke.livery.a2ui.A2uiTemplate
+import ee.schimke.livery.a2ui.A2uiDecision
+import ee.schimke.livery.client.Decider
+import ee.schimke.livery.client.DecisionContext
+import ee.schimke.livery.client.DecisionRequest
+import ee.schimke.livery.client.RedirectingFetcher
+import ee.schimke.livery.client.CacheOnly
+import ee.schimke.livery.instantiate.NamedDocuments
+import ee.schimke.livery.instantiate.templateHeightDp
+import kotlinx.coroutines.withContext
 import ee.schimke.livery.a2ui.A2uiComponentSpec
 import ee.schimke.livery.a2ui.LiveryA2ui
 import ee.schimke.livery.client.ActionArguments
@@ -69,6 +79,9 @@ class LiveryA2uiWeb(
   private val urlAllowlist: (String) -> Boolean = { false },
   /** Action kinds the page handles itself (`navigate`, `dismiss`, `app:…`) when the agent didn't wire them. */
   private val appKinds: Set<String> = emptySet(),
+  documentFetcher: RedirectingFetcher? = null,
+  private val decider: Decider? = null,
+  private val decisionContext: (() -> DecisionContext)? = null,
 ) {
   /** The size and theme a render is for. */
   /**
@@ -76,7 +89,7 @@ class LiveryA2uiWeb(
    * `a2ui:<surfaceId>/<componentId>` (docs/A2UI.md), so analytics can tell agent-placed templates
    * from the app's own.
    */
-  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null)
+  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null, val theme: String? = null)
 
   sealed interface Rendered {
     /**
@@ -94,13 +107,15 @@ class LiveryA2uiWeb(
       val designId: String,
       val sha256: String,
       val heightDp: Int? = null,
+      /** A query is still loading; draw this automatic design, then call fetchPending and render again. */
+      val pending: Boolean = false,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
-    data class Fallback(val reason: String) : Rendered
+    data class Fallback(val reason: String, val pending: Boolean = false) : Rendered
 
     /** An image isn't on the device yet ([reason]): call [fetchImages], then render again. Not the agent's problem. */
-    data class Waiting(val reason: String) : Rendered
+    data class Waiting(val reason: String, val pending: Boolean = false) : Rendered
   }
 
   /** Where a template's host action goes. */
@@ -119,6 +134,34 @@ class LiveryA2uiWeb(
 
     /** Not passed on: undeclared, malformed, a URL outside the allowlist, or no handler ([reason]). */
     data class Dropped(val reason: String) : Routed
+  }
+
+  private val named = NamedDocuments(repository, documents, documentFetcher)
+  private data class NamedKey(val template: A2uiTemplate.Named, val query: TemplateQuery)
+  private data class QueryKey(val component: String?, val request: DecisionRequest)
+  private val namedAnswers = LinkedHashMap<NamedKey, LoadedTemplate?>()
+  private val pendingNames = LinkedHashMap<NamedKey, Contract>()
+  private val queries = LinkedHashMap<QueryKey, A2uiDecision>()
+  private val pendingQueries = LinkedHashSet<A2uiDecision>()
+
+  private fun hasPending() = pendingNames.isNotEmpty() || pendingQueries.isNotEmpty()
+  private fun <K, V> trim(map: MutableMap<K, V>) { while (map.size > 128) map.remove(map.keys.first()) }
+
+  /** Fetches queued documents/decisions off the render path; render again after completion. */
+  suspend fun fetchPending(): Boolean {
+    val names = pendingNames.toMap()
+    pendingNames.clear()
+    val asked = pendingQueries.toList()
+    pendingQueries.clear()
+    for ((key, contract) in names) {
+      val t = key.template
+      val loaded = named.load(t.sha256, t.url, t.signature, contract, key.query)
+      // Catalog documents live in the repository, signed standalone ones in this bounded session cache.
+      if (loaded == null || loaded.design == null) namedAnswers[key] = loaded
+      trim(namedAnswers)
+    }
+    for (answer in asked) decider?.let { answer.fetch(it, repository, clock) }
+    return names.isNotEmpty() || asked.isNotEmpty()
   }
 
   private class Live(val plan: RenderPlan, val wiring: Map<String, JsonObject>)
@@ -152,7 +195,7 @@ class LiveryA2uiWeb(
     val wiring = (props[LiveryA2ui.ACTIONS] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonObject)?.let { k to it } }.toMap()
     val plan = when (val p = plan(contract, props, dataset, space)) {
       is RenderPlan -> p
-      else -> return Rendered.Fallback("$name (${contract.ref}): $p")
+      else -> return Rendered.Fallback("$name (${contract.ref}): $p", hasPending())
     }
     val px = { dp: Int? -> ((dp ?: DEFAULT_IMAGE_DP) * space.density).roundToInt().coerceAtLeast(1) }
     // What a playing document can't take as a named value is written in; the rest stays live.
@@ -167,7 +210,7 @@ class LiveryA2uiWeb(
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending())
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -176,12 +219,12 @@ class LiveryA2uiWeb(
         val misses = cached?.misses.orEmpty()
         if (misses.isEmpty()) return Rendered.Fallback("$name (${contract.ref}): ${i.reason}")
         missing += misses
-        Rendered.Waiting("$name (${contract.ref}): ${i.reason}")
+        Rendered.Waiting("$name (${contract.ref}): ${i.reason}", hasPending())
       }
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan))
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending())
       }
     }
   }
@@ -259,9 +302,8 @@ class LiveryA2uiWeb(
    * declares, else the height its document was authored at.
    */
   private fun heightDp(plan: RenderPlan): Int? {
-    val entry = plan.template.entry
-    entry.target.size.minHeightDp?.let { return it }
-    return heightBySha.getOrPut(entry.sha256) { runCatching { TemplateInstantiator.authoredHeightDp(plan.template.bytes) }.getOrNull() }
+    plan.template.entry.target.size.minHeightDp?.let { return it }
+    return heightBySha.getOrPut(plan.template.entry.sha256) { plan.templateHeightDp() }
   }
 
   private fun drawsImages(sha256: String, template: ByteArray): Boolean =
@@ -285,11 +327,46 @@ class LiveryA2uiWeb(
 
   /** A [RenderPlan], or why there is none. */
   private suspend fun plan(contract: Contract, props: JsonObject, dataset: JsonObject, space: Space): Any {
-    if (LiveryA2ui.TEMPLATE in props) return inline(contract, props.getValue(LiveryA2ui.TEMPLATE), dataset, space.decisionId)
     val query = TemplateQuery(
-      contract.ref, capabilities, widthDp = space.widthDp,
+      contract.ref, capabilities, widthDp = space.widthDp, heightDp = space.heightDp, theme = space.theme,
       designId = props.str(LiveryA2ui.DESIGN), variant = props.str(LiveryA2ui.VARIANT), minor = contract.minor,
     )
+    if (LiveryA2ui.TEMPLATE in props) {
+      when (val t = A2uiTemplate.parse(props.getValue(LiveryA2ui.TEMPLATE))) {
+        is A2uiTemplate.Invalid -> return t.reason
+        is A2uiTemplate.Inline -> return inline(contract, props.getValue(LiveryA2ui.TEMPLATE), dataset, space.decisionId)
+        is A2uiTemplate.Named -> {
+          val key = NamedKey(t, query)
+          // Catalog plans are checked again on each render, including revocations and eligibility.
+          val local = withContext(CacheOnly()) { named.load(t.sha256, t.url, t.signature, contract, query, network = false) }
+          val loaded = local ?: namedAnswers[key]?.takeUnless { repository.current()?.templates?.any { entry -> entry.sha256 == t.sha256 } == true }
+          if (loaded != null) return when (val b = ContractBinder.bind(contract, dataset)) {
+            is BindResult.Ok -> RenderPlan(loaded, contract, b.bindings, decisionId = space.decisionId)
+            is BindResult.Invalid -> "invalid data: " + b.problems.joinToString { "${it.name}: ${it.message}" }
+          }
+          if (key !in namedAnswers) pendingNames[key] = contract
+          return "named document unavailable or refused"
+        }
+        is A2uiTemplate.Query -> {
+          val context = decisionContext?.invoke()?.copy(nowEpochMs = 0)
+          if (decider != null && context != null) {
+            val key = QueryKey(space.decisionId, DecisionRequest(query, t.params, context))
+            val answer = queries[key]?.takeUnless { it.expired(clock.nowEpochMs()) }
+              ?: A2uiDecision(key.request).also { queries[key] = it; trim(queries) }
+            if (!answer.completed) pendingQueries += answer
+            answer.decision?.let { d ->
+              val themed = d.copy(data = JsonObject(d.data + LiveryA2ui.themeValues(contract, space.themeArgb)))
+              val chosen = withContext(CacheOnly()) { planner.forDecision(query, themed, decisionId = space.decisionId ?: d.decisionId) }
+              if (chosen is PlanResult.Ready) return chosen.plan
+            }
+          }
+          return when (val auto = planner.forAppData(query.copy(designId = null), dataset, decisionId = space.decisionId)) {
+            is PlanResult.Ready -> auto.plan
+            is PlanResult.Fallback -> auto.reason
+          }
+        }
+      }
+    }
     return when (val r = planner.forAppData(query, dataset, decisionId = space.decisionId)) {
       is PlanResult.Ready -> r.plan
       is PlanResult.Fallback -> r.reason

@@ -430,12 +430,15 @@ What the prototype taught, and what it doesn't do yet:
   only.
 - **Semantics come through.** The player's text is in Compose semantics, so a UI test taps the CTA
   by its label inside the A2UI surface.
-- **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
-  conformance fixture; events carry no `a2ui:<surface>/<component>` decision id (A2UI's `A2uiComponentScope` exposes
-  neither id; the web has it); the
-  `createSurface` theme isn't read (theme roles come from the host's Material colours; the web
-  reads it); no
-  `template` forms other than the design preference, or the height rule (the web has it).
+- **Built:** the shared `livery-a2ui` projection and conformance fixture, inline documents,
+  exact named documents (bundled/cached catalog or a bounded signed fetch), the height rule,
+  and contract queries through the app's configured `Decider`. A query draws the installed
+  automatic design while the server answers. `LiveryA2uiHost` accepts `decider`,
+  `decisionContext` and a redirect-aware `documentFetcher`.
+- **Not yet:** events carry no `a2ui:<surface>/<component>` identity because
+  `A2uiComponentScope` exposes neither id; the web has it. The `createSurface` theme is also
+  unavailable through that scope, so Compose uses the host's Material colours. These need public
+  `componentId`, `surfaceId` and surface theme access in upstream A2UI. No vendor fork is included.
 
 ## Order of work
 
@@ -454,8 +457,11 @@ What the prototype taught, and what it doesn't do yet:
    Catalog templates are held to the same features (*done*, protocol level 8): the publisher
    records each template's `features`, and selection skips one the player's
    `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
-   inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
-   `query` form with `livery-server`'s decision endpoint.
+   inline path agree. `sha256` (+ `url`) and `query` are now built in both adapters. Named documents use the catalog
+   gate or a template signature fetched only from catalog hosts, with a byte limit and redirect
+   checks. Queries use `KtorDecider` or an app implementation of `Decider.decide(DecisionRequest)`;
+   the app implements the endpoint described in PROTOCOL.md §8.3 (no Livery server module required).
+   See [the handler example](../samples/a2ui-query/README.md).
 6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
    a Lit component per contract, drawing in the page with the TypeScript player and live named
    values (above). Still to do: React and Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
@@ -473,6 +479,18 @@ What the prototype taught, and what it doesn't do yet:
 - **Size.** A2UI layouts measure children; a Remote Compose document lays itself out within the
   constraints it is given. The rule, for a component given no height: the smallest height its
   template's target declares (`minHeightDp`), else the height its document was authored at (the
-  header's height over its density at generation). *Built* on the web (`Rendered.Ready.heightDp`);
+  header's height over its density at generation). *Built* on the web (`Rendered.Ready.heightDp`) and Compose (`constraints.hasBoundedHeight`);
   a page's `--livery-a2ui-height` still wins. Measuring a document's laid-out content height
   instead would need the player to expose it.
+
+## Configuring contract queries
+
+The optional `Decider.decide(DecisionRequest)` overload defaults to null. Configure it and an
+app-owned `DecisionContext` on `LiveryA2uiHost` or `LiveryA2uiWeb`. `KtorDecider` posts to the
+configured HTTPS endpoint and refuses redirects. A2UI's inner `query` object is opaque params;
+it cannot override the device's contract, dimensions, capabilities or context.
+
+For `@livery/a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySession.open`.
+The Lit adapter calls `fetchPending()` after rendering a result marked `pending`. Hosts using
+`LiveryA2uiWeb` directly must do the same, then render again. `Ready.pending` means the automatic
+design can draw immediately. A pending exact document shows the app's fallback until it arrives.

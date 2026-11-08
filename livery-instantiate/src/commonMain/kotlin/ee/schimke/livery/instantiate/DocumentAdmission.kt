@@ -102,7 +102,7 @@ class DocumentAdmission(
   val signedFeatures: Set<RiskyFeature> = emptySet(),
   /** Unsigned documents: refused unless the app sets a policy. */
   val agentBytes: AgentBytesPolicy? = null,
-  private val maxSignedBytes: Int = 256 * 1024,
+  val maxSignedBytes: Int = 256 * 1024,
 ) {
   suspend fun admit(bytes: ByteArray, contract: Contract, signature: ManifestSignature?): Admission {
     val ref = contract.ref

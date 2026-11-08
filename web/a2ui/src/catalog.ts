@@ -217,9 +217,9 @@ class LiveryElement extends A2uiLitElement {
       // the agent changes the component.
       const asked = JSON.stringify(props);
       if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
-      if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
+      if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; delete props[TEMPLATE]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
-      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: this.pageHeight() ? Math.round(this.clientHeight) || undefined : undefined, density, theme: themeOf(this, this.context?.theme), decisionId: this.decisionId() };
+      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: this.pageHeight() ? Math.round(this.clientHeight) || undefined : undefined, density, colorScheme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', theme: themeOf(this, this.context?.theme), decisionId: this.decisionId() };
       this.lastTheme = space.theme;
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
@@ -230,6 +230,19 @@ class LiveryElement extends A2uiLitElement {
         // A newer render is on its way: this one is never shown, so the session can drop its plan.
         if (r.ok) session.release(r.render);
         return;
+      }
+      if (r.pending) {
+        // A Ready answer is the installed automatic design: keep drawing it while the query runs.
+        void session.fetchPending().then(() => {
+          if (mine !== this.sequence || !this.isConnected) return;
+          this.request = '';
+          this.requestUpdate();
+        });
+        if (!r.ok) {
+          this.fallback = r.reason;
+          this.requestUpdate();
+          return;
+        }
       }
       if (!r.ok && r.waiting && !this.imagesFailed) {
         // An image isn't on the device: fetch it off the render path, then render again. Not the agent's problem.
@@ -277,7 +290,7 @@ class LiveryElement extends A2uiLitElement {
      */
     private cannotPlay(props: Record<string, unknown>, reason: string): void {
       this.livery?.options.onProblem?.(this.livery.spec.name, reason);
-      if (props[DESIGN] !== undefined && props[TEMPLATE] === undefined && !this.automatic) {
+      if (!this.automatic && ((props[DESIGN] !== undefined && props[TEMPLATE] === undefined) || (props[TEMPLATE] && typeof props[TEMPLATE] === 'object' && 'query' in (props[TEMPLATE] as object)))) {
         this.automatic = true;
         this.request = '';
       } else {

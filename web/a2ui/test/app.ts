@@ -9,7 +9,7 @@ const actions: unknown[] = [];
 const problems: [string, string][] = [];
 const app: unknown[] = [];
 
-const session = await LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'] });
+const session = await LiverySession.open({ catalog: new URL('catalog/', location.href).href, unsigned: true, appKinds: ['navigate'], decisionEndpoint: 'https://decisions.example/v1/decisions/query', decisionContext: { platform: 'web', locale: 'en-GB', appVersion: 1, bucketingId: 'browser-test' } });
 const { catalog, components } = await liveryCatalog(session, {
   catalogId: CATALOG_ID,
   onProblem: (c, m) => problems.push([c, m]),

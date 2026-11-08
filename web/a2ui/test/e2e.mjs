@@ -55,8 +55,23 @@ await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 480, height: 700 } });
+let decisionRequest;
+let releaseDecision;
+const decisionGate = new Promise((resolve) => { releaseDecision = resolve; });
+await page.route('https://decisions.example/v1/decisions/query', async (route) => {
+  if (route.request().method() === 'OPTIONS') {
+    await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type' } });
+    return;
+  }
+  decisionRequest = route.request().postDataJSON();
+  await decisionGate;
+  await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({
+    placement: 'assistant-offer', decisionId: 'server:browser', template: { designId: 'banner-classic' },
+    data: { headline: 'Server offer', cta: 'Go' }, ttlSeconds: 60,
+  }) });
+});
 const logs = [];
 page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
@@ -219,12 +234,31 @@ try {
   }));
   check(heights.banner === 160 && heights.stepper === 120, `the banner takes its template's 160dp, the stepper the page's 120px: ${JSON.stringify(heights)}`);
 
+  // The automatic banner remains visible during a delayed contract decision, then gets server data.
+  const queryBefore = await statsOf('#app livery-promo-banner');
+  const querySent = page.waitForRequest('https://decisions.example/v1/decisions/query');
+  await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateComponents: { surfaceId: 'chat-1', components: [
+    { id: 'promo', component: 'PromoBanner', headline: 'Waiting offer', cta: 'Wait', template: { query: { offer: 'summer' } } },
+  ] } }]));
+  await page.waitForFunction((n) => document.querySelector('#app livery-promo-banner')?.liveryStats?.sets > n, queryBefore.sets);
+  await querySent;
+  check(decisionRequest?.query?.contract === 'promo/banner@1' && decisionRequest?.params?.offer === 'summer' && decisionRequest?.context?.locale === 'en-GB',
+    `query sends device context and agent params: ${JSON.stringify(decisionRequest)}`);
+  const waiting = await statsOf('#app livery-promo-banner');
+  check((await page.locator('#app livery-promo-banner canvas').count()) > 0, 'automatic canvas draws while the server waits');
+  releaseDecision();
+  await page.waitForFunction((n) => document.querySelector('#app livery-promo-banner')?.liveryStats?.sets > n, waiting.sets);
+  await hostAction('#app livery-promo-banner', { name: 'cta', valueType: 'string', value: '{"route":"/sale"}' });
+  const queryEvents = await page.evaluate(() => window.__livery.events());
+  check(queryEvents.some((e) => e.type === 'Action' && e.placement === 'assistant-offer' && e.decisionId === 'a2ui:chat-1/promo'), 'decided actions retain the A2UI event id and server placement');
+
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
 } catch (e) {
   check(false, String(e));
   console.log(logs.join('\n'));
 } finally {
+  releaseDecision();
   await browser.close();
   server.close();
 }

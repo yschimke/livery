@@ -1,7 +1,7 @@
 import Foundation
 
 /// What a slot asks for (docs/PROTOCOL.md §5).
-public struct TemplateQuery: Sendable, Equatable {
+public struct TemplateQuery: Codable, Sendable, Equatable {
   public var contract: String
   public var caps: PlayerCapabilities
   public var widthDp: Int?
@@ -17,6 +17,16 @@ public struct TemplateQuery: Sendable, Equatable {
     self.contract = contract; self.caps = caps; self.widthDp = widthDp; self.heightDp = heightDp
     self.designId = designId; self.variant = variant; self.theme = theme; self.tags = tags; self.minor = minor
   }
+  private enum CodingKeys: String, CodingKey { case contract, caps, widthDp, heightDp, designId, variant, theme, tags, minor }
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    contract = try c.decode(String.self, forKey: .contract); caps = try c.decode(PlayerCapabilities.self, forKey: .caps)
+    widthDp = try c.decodeIfPresent(Int.self, forKey: .widthDp); heightDp = try c.decodeIfPresent(Int.self, forKey: .heightDp)
+    designId = try c.decodeIfPresent(String.self, forKey: .designId); variant = try c.decodeIfPresent(String.self, forKey: .variant)
+    theme = try c.decodeIfPresent(String.self, forKey: .theme); minor = try c.decodeIfPresent(Int.self, forKey: .minor)
+    tags = try c.decodeIfPresent([String: String].self, forKey: .tags) ?? [:]
+  }
+
 }
 
 /// Pure selection over a manifest: the same answer as the Kotlin `TemplateSelector`.

@@ -5,6 +5,9 @@
 export interface LiveryConfig {
   /** The catalog's base URL; `manifest.json` is fetched from beside it. */
   catalog: string;
+  /** App-configured HTTPS POST endpoint for contract decisions (§8.3); never supplied by the agent. */
+  decisionEndpoint?: string;
+  decisionContext?: { nowEpochMs?: number; platform: string; locale: string; appVersion: number; bucketingId: string; segments?: string[] };
   /** Trusted Ed25519 keys, the public key as base64 of its raw 32 bytes. */
   keys?: { keyId: string; publicKey: string; contracts?: string[] }[];
   /** Accept an unsigned catalog: development only. */
@@ -44,6 +47,7 @@ export interface LiverySpace {
   widthDp?: number;
   heightDp?: number;
   density?: number;
+  colorScheme?: string;
   /** Theme roles (`primary`, `surface`, `onSurface`, …) as `#RRGGBB` or `#AARRGGBB`. */
   theme?: Record<string, string>;
   /** What the render's events carry as `decisionId`: `a2ui:<surfaceId>/<componentId>` for an A2UI component. */
@@ -63,8 +67,9 @@ export type Rendered =
       sha256: string;
       /** The template's own height in dp: what to draw it at when the page gives the component none. */
       heightDp?: number;
+      pending?: boolean;
     }
-  | { ok: false; reason: string; waiting?: boolean };
+  | { ok: false; reason: string; waiting?: boolean; pending?: boolean };
 
 export type Routed =
   | { route: 'agent'; action: Record<string, unknown>; shadowed: string[] }
@@ -83,6 +88,7 @@ export interface LiveryWebModule {
   liveryRelease(session: number, render: number): void;
   liveryAction(session: number, render: number, name: string, valueType: string, value: string | null): Promise<unknown>;
   liveryEvents(session: number): string;
+  liveryFetchPending(session: number): Promise<unknown>;
   liveryFetchImages(session: number): Promise<unknown>;
 }
 
@@ -119,6 +125,14 @@ export class LiverySession {
   async render(name: string, props: Record<string, unknown>, space: LiverySpace = {}): Promise<Rendered> {
     const r = JSON.parse(String(await this.lib.liveryRender(this.id, name, JSON.stringify(props), JSON.stringify(space))));
     return r.ok ? { ...r, document: base64ToBytes(r.document) } : r;
+  }
+
+  private pendingFetch: Promise<void> = Promise.resolve();
+
+  /** Run after rendering an answer marked pending, then render again. */
+  fetchPending(): Promise<void> {
+    this.pendingFetch = this.pendingFetch.then(async () => { await this.lib.liveryFetchPending(this.id); }).catch(() => {});
+    return this.pendingFetch;
   }
 
   private fetching: Promise<unknown> = Promise.resolve();

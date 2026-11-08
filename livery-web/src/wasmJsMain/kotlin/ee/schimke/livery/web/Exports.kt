@@ -58,6 +58,8 @@ internal data class WebConfig(
   val urlAllowlist: List<String> = emptyList(),
   /** Action kinds the page handles when the agent didn't wire them. */
   val appKinds: Set<String> = emptySet(),
+  val decisionEndpoint: String? = null,
+  val decisionContext: ee.schimke.livery.client.DecisionContext? = null,
 ) {
   @Serializable data class Key(val keyId: String, val publicKey: String, val contracts: Set<String> = emptySet())
 
@@ -65,7 +67,7 @@ internal data class WebConfig(
 }
 
 @Serializable
-internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null)
+internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null, val colorScheme: String? = null)
 
 private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>)
 
@@ -101,6 +103,9 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     repository, SlotPlanner(repository, sink, clock), c.capabilities, sink, clock,
     ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts),
     documents, urlAllowlist = { url -> c.urlAllowlist.any(url::startsWith) }, appKinds = c.appKinds,
+    documentFetcher = fetcher,
+    decider = c.decisionEndpoint?.let { ee.schimke.livery.client.KtorDecider(it) },
+    decisionContext = c.decisionContext?.let { context -> { context.copy(nowEpochMs = clock.nowEpochMs()) } },
   )
   val id = nextSession++
   sessions[id] = Session(web, repository, events)
@@ -152,21 +157,26 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = asyn
 fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = async {
   val s = json.decodeFromString(WebSpace.serializer(), space)
   val theme = s.theme.mapNotNull { (role, hex) -> argb(hex)?.let { role to it } }.toMap()
-  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId))
+  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId, s.colorScheme))
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
+      put("pending", r.pending)
       r.heightDp?.let { put("heightDp", it) }
     }
-    is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason) }
-    is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason) }
+    is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason); put("pending", r.pending) }
+    is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason); put("pending", r.pending) }
   }
 }
 
 /** Fetches the images renders were waiting for (off the render path); resolves to whether all arrived. */
 @JsExport
 fun liveryFetchImages(session: Int): Promise<JsAny?> = async { session(session).web.fetchImages() }
+
+/** Fetches query answers and named documents off the render path. */
+@JsExport
+fun liveryFetchPending(session: Int): Promise<JsAny?> = async { session(session).web.fetchPending() }
 
 /** The player shows render [render]: its impression. */
 @JsExport

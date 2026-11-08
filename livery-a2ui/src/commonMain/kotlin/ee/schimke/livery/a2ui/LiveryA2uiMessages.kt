@@ -103,19 +103,8 @@ object LiveryA2uiMessages {
     return problems
   }
 
-  private fun templateProblems(t: JsonElement): List<String> {
-    if (t !is JsonObject) return listOf("template must be {\"inline\": <base64>, \"signature\"?}")
-    val inline = t["inline"] as? JsonPrimitive
-    if (inline == null || !inline.isString) return listOf("template needs inline: the document as base64")
-    if (runCatching { kotlin.io.encoding.Base64.decode(inline.content) }.isFailure) return listOf("inline is not base64")
-    val s = t["signature"] ?: return emptyList()
-    if (s !is JsonObject) return listOf("signature must be {\"keyId\", \"signature\", \"alg\"?}")
-    // As the clients read it (LiveryA2uiComponent.inlineDocument): each field a string.
-    fun text(key: String) = (s[key] as? JsonPrimitive)?.takeIf { it.isString }
-    if (text("keyId") == null || text("signature") == null) return listOf("signature needs keyId and signature, as strings")
-    if ("alg" in s && text("alg") == null) return listOf("signature's alg must be a string")
-    return emptyList()
-  }
+  private fun templateProblems(t: JsonElement): List<String> =
+    (A2uiTemplate.parse(t) as? A2uiTemplate.Invalid)?.let { listOf(it.reason) }.orEmpty()
 
   /** The value at JSON pointer [path] (`/a/b/0`) in [root], or null. */
   private fun pointer(root: JsonElement, path: String): JsonElement? {

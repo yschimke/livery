@@ -141,7 +141,8 @@ object LiveryA2ui {
         A2uiPropertySpec(ACTIONS, A2uiPropertySpec.Kind.Actions, description = "What each of the template's actions does; an action left out is handled by the app.", properties = actions),
         A2uiPropertySpec(
           TEMPLATE, A2uiPropertySpec.Kind.Any,
-          description = "Usually left out: the client picks a reviewed design. To send the document itself: " +
+          description = "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; " +
+            "{\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: " +
             "{\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only " +
             "where the app allows them, and never with shaders or other risky features.",
         ),

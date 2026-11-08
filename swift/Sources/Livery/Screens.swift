@@ -130,7 +130,7 @@ public final class LiveryScreens: @unchecked Sendable {
     guard !closed.isEmpty else { return }
     for s in closed.reversed() {
       let p = s.plan
-      planner.events(TemplateEvent(type: .dismiss, atEpochMs: planner.clock(), placement: p.decision?.placement ?? s.placement, decisionId: p.decision?.decisionId,
+      planner.events(TemplateEvent(type: .dismiss, atEpochMs: planner.clock(), placement: p.decision?.placement ?? s.placement, decisionId: p.decisionId,
         feedItemId: p.feedItem?.id, designId: p.template.entry.designId, sha256: p.template.entry.sha256, detail: reason, experiments: p.experiments))
     }
     onChange?(now)

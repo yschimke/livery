@@ -76,6 +76,16 @@ class TemplateRepository(
   private val bundled: Bundled? = null,
   private val json: Json = DefaultJson,
 ) {
+  /** Default location of a message's signed document when it supplies no URL. */
+  suspend fun documentUrl(sha256: String): String =
+    resolveUrl(source.manifestUrl, (current()?.blobBase ?: "blobs/") + sha256 + ".rc")
+
+  /** Hosts a message may fetch signed documents from: configured catalog and its verified blob base. */
+  suspend fun documentHosts(): Set<String> = listOfNotNull(
+    ImageResolver.remoteHost(source.manifestUrl),
+    current()?.let { ImageResolver.remoteHost(resolveUrl(source.manifestUrl, it.blobBase)) },
+  ).toSet()
+
   /** The app's own copy of a catalog, produced by the same publisher at build time. */
   class Bundled(val manifest: Manifest, val read: suspend (sha256: String) -> ByteArray?)
 
@@ -251,9 +261,15 @@ class TemplateRepository(
     ref.sha256?.let { sha ->
       // The same bytes may be listed for several targets or designs: any entry that matches the
       // reference (and its design, if it names one) and passes the gate will do.
-      val e = m?.templates?.firstOrNull {
-        it.sha256 == sha && (ref.designId == null || it.designId == ref.designId) && TemplateSelector.eligible(m, it, query)
+      val catalog = m ?: bundled?.manifest ?: return null
+      val e = catalog.templates.firstOrNull {
+        it.sha256 == sha && (ref.designId == null || it.designId == ref.designId) && TemplateSelector.eligible(catalog, it, query)
       } ?: return null
+      if (m == null) {
+        val b = bundled ?: return null
+        if (e.assets.any { b.read(it) == null }) return null
+        return b.read(sha)?.let { loaded(catalog, e, it, LoadedTemplate.Origin.Bundled) }
+      }
       val bytes = obtain(m, e) ?: return null
       return loaded(m, e, bytes, originOf(m))
     }
