@@ -165,7 +165,11 @@ class TemplateRepository(
     val now = clock.nowEpochMs()
     val m = meta()
     // Another session may have activated a newer snapshot since this instance last read it.
-    val cached = stateLock.withLock { current = null; loadCachedLocked() }
+    val cached = stateLock.withLock {
+      val previous = current
+      current = null
+      loadCachedLocked().also { if (previous != null && it != previous) _revision.update { it + 1 } }
+    }
     var acceptedSerial = m.acceptedSerial
     if (!force) {
       if (now < m.nextAttemptEpochMs) return RefreshResult.Skipped("backing off")
@@ -203,6 +207,7 @@ class TemplateRepository(
               else -> {
                 // Remember the verified serial immediately, even if downloads fail or are cancelled.
                 // Keep the old ETag and playable manifest until the replacement is ready.
+                val bundledBefore = bundledManifest()
                 // Persist all accepted withdrawals, even those matching only bundled content.
                 kv.put(k("withdrawals"), r.bytes.decodeToString())
                 val previous = cached ?: bundled?.manifest
@@ -212,8 +217,9 @@ class TemplateRepository(
                     kv.put(k("manifest"), json.encodeToString(Manifest.serializer(), withdrawn))
                     current = withdrawn
                   }
-                  _revision.update { it + 1 }
                 }
+                // Bundle-only withdrawals also change what an already displayed slot may draw.
+                if (withdrawn != previous || bundledBefore != bundledManifest()) _revision.update { it + 1 }
                 acceptedSerial = next.serial
                 putMeta(m.copy(acceptedSerial = acceptedSerial))
                 stateLock.withLock { preparing = next }

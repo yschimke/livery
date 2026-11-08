@@ -160,6 +160,20 @@ class RepositoryTest {
     assertEquals(2, r.current()?.serial)
   }
 
+  @Test fun refreshNotifiesReadersWhenAnotherRepositoryActivatedANewerSnapshot() = runTest {
+    val host = Host(Fx.manifest())
+    val first = repo(host)
+    first.refresh()
+    val second = repo(host)
+    assertEquals(1, second.manifest()?.serial)
+    val before = second.revision.value
+    host.manifest = replacement()
+    first.refresh(force = true)
+    assertEquals(RefreshResult.Skipped("fresh"), second.refresh())
+    assertEquals(before + 1, second.revision.value)
+    assertEquals(2, second.manifest()?.serial)
+  }
+
   @Test fun refreshWithdrawalsUseTheLatestPersistedPlayableSnapshot() = runTest {
     val host = Host(Fx.manifest())
     val first = repo(host)
@@ -204,7 +218,15 @@ class RepositoryTest {
         designs = active.designs + if (design) listOf(original.design("tile-default")!!.copy(revoked = true)) else emptyList(),
         templates = active.templates.map { it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing"))) } +
           if (!design) original.templates.filter { it.designId == "tile-default" }.map { it.copy(revoked = true) } else emptyList())
-      assertIs<RefreshResult.Failed>(r.refresh(force = true))
+      host.blobRequested = CompletableDeferred()
+      host.resumeBlobs = CompletableDeferred()
+      val before = r.revision.value
+      val refreshing = async { r.refresh(force = true) }
+      host.blobRequested!!.await()
+      assertEquals(before + 1, r.revision.value, "bundle-only withdrawal must replan slots before downloads finish")
+      assertNull(r.bundledTemplate(oldHash, q))
+      host.resumeBlobs!!.complete(Unit)
+      assertIs<RefreshResult.Failed>(refreshing.await())
       assertNull(r.bundledTemplate(oldHash, q))
       assertNull(open().bundledTemplate(oldHash, q), "bundle-only withdrawals survive restart")
       if (design) {
