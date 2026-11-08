@@ -8,7 +8,24 @@
     ".": {
       "package-name": "livery",
       "include-component-in-tag": false,
-      "initial-version": "0.1.1"
+      "initial-version": "0.1.1",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "web/a2ui/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "web/a2ui/package-lock.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "web/a2ui/package-lock.json",
+          "jsonpath": "$.packages[\"\"].version"
+        }
+      ]
     }
   }
 }

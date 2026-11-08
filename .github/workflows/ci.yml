@@ -168,6 +168,7 @@ jobs:
           npm ci
           npm run check
           npm run build
+          npm run pack:check
       # Not a dependency of the package: the test's browser, installed for this run only.
       - name: Playwright's Chromium
         run: |
