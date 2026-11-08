@@ -182,6 +182,39 @@ class RepositoryTest {
     assertTrue(reopened.manifest()!!.designs.filter { it.id != "tile-default" }.all { it.revoked })
   }
 
+  @Test fun withdrawalsForContentAbsentFromTheActiveCatalogStillApplyToTheBundle() = runTest {
+    for (design in listOf(false, true)) {
+      val original = Fx.manifest()
+      val active = if (design) original.copy(serial = 2,
+        designs = original.designs.filter { it.id != "tile-default" }.map { it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always) },
+        templates = original.templates.filter { it.designId != "tile-default" }) else replacement()
+      val host = Host(active)
+      val store = MemoryBlobStore()
+      val values = MemoryKeyValueStore()
+      val bundled = TemplateRepository.Bundled(original) { sha ->
+        listOf("default-v7", "default-v8", "default-launcher").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+      }
+      fun open() = TemplateRepository(StaticSource("https://cdn.example/catalog/main"), host, FakeCrypto,
+        TrustPolicy.Signed(listOf(TrustedKey("k", key))), store, values, { now }, listOf(Fx.inApp), bundled)
+      val r = open()
+      assertEquals(RefreshResult.Updated(2), r.refresh())
+      val oldHash = FakeCrypto.sha(Fx.blob("default-v7"))
+      assertNotNull(r.bundledTemplate(oldHash, q))
+      host.manifest = active.copy(serial = 3,
+        designs = active.designs + if (design) listOf(original.design("tile-default")!!.copy(revoked = true)) else emptyList(),
+        templates = active.templates.map { it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing"))) } +
+          if (!design) original.templates.filter { it.designId == "tile-default" }.map { it.copy(revoked = true) } else emptyList())
+      assertIs<RefreshResult.Failed>(r.refresh(force = true))
+      assertNull(r.bundledTemplate(oldHash, q))
+      assertNull(open().bundledTemplate(oldHash, q), "bundle-only withdrawals survive restart")
+      if (design) {
+        now = original.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+        assertFalse(open().automaticallySelectable("tile-default"))
+        now = 1_000
+      }
+    }
+  }
+
   @Test fun designRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(true) }
 
   @Test fun templateRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(false) }

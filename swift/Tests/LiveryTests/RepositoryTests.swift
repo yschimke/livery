@@ -157,6 +157,46 @@ final class RepositoryTests: XCTestCase {
     XCTAssertEqual(saved?.design("skin")?.revoked, true)
   }
 
+  func testWithdrawalsForContentAbsentFromTheActiveCatalogStillApplyToTheBundle() async throws {
+    for revokeDesign in [false, true] {
+      let (original, bundledBlobs) = manifestJSON(serial: 5)
+      let bundledManifest = try JSONDecoder().decode(Manifest.self, from: original)
+      var active = bundledManifest
+      active.serial = 6
+      if revokeDesign {
+        active.designs = active.designs.filter { $0.id != "builtin" }.map { d in var d = d; d.install = .always; return d }
+        active.templates = active.templates.filter { $0.designId != "builtin" }
+      } else {
+        active.templates = active.templates.map { t in var t = t; if t.designId == "builtin" { t.sha256 = Hashing.sha256Hex(blob("b")) }; return t }
+      }
+      var files = bundledBlobs; files["manifest.json"] = try JSONEncoder().encode(active)
+      let host = MutableHost(files)
+      let store = MemoryBlobStore(), kv = MemoryKeyValueStore()
+      func open() -> TemplateRepository {
+        TemplateRepository(source: StaticSource("https://cdn.example/c"), fetcher: host, trust: .allowUnsigned,
+          blobs: store, kv: kv, clock: { 1_000 }, targets: [caps],
+          bundled: .init(manifest: bundledManifest, read: { sha in bundledBlobs["blobs/\(sha).rc"] }))
+      }
+      let repo = open()
+      _ = await repo.refresh()
+      var next = active
+      next.serial = 7
+      next.templates = active.templates.map { t in var t = t; t.sha256 = "missing"; return t }
+      if revokeDesign {
+        var d = bundledManifest.design("builtin")!; d.revoked = true; next.designs.append(d)
+      } else {
+        next.templates += bundledManifest.templates.filter { $0.designId == "builtin" }.map { t in var t = t; t.revoked = true; return t }
+      }
+      files["manifest.json"] = try JSONEncoder().encode(next); await host.replace(files)
+      if case .failed = await repo.refresh(force: true) {} else { XCTFail("incomplete replacement activated") }
+      for hash in await store.keys() { await store.remove(hash) }
+      for reader in [repo, open()] {
+        let resolved = await reader.resolve(TemplateQuery(contract: "c/tile@1", caps: caps))
+        XCTAssertNotEqual(resolved?.entry.sha256, Hashing.sha256Hex(blob("a")), "bundle-only withdrawal survives restart")
+      }
+    }
+  }
+
   func testPendingReplacementWithdrawsDesignsAndTemplatesIncludingBundledFallback() async throws {
     for revokeDesign in [true, false] {
       let (original, blobs) = manifestJSON(serial: 5)

@@ -143,7 +143,11 @@ public actor TemplateRepository {
 
   private func bundledManifest() async -> Manifest? {
     guard let b = bundled else { return nil }
-    return withRevocations(b.manifest, await manifest())
+    let accepted: Manifest?
+    if let text = await kv.get(k("withdrawals")) {
+      accepted = try? JSONDecoder().decode(Manifest.self, from: Data(text.utf8))
+    } else { accepted = nil }
+    return withRevocations(withRevocations(b.manifest, await manifest()), accepted)
   }
 
   private func meta() async -> Meta {
@@ -207,6 +211,7 @@ public actor TemplateRepository {
         if next.serial < m.acceptedSerial { return await fail("rollback: serial \(next.serial) < \(m.acceptedSerial)") }
         if next.minClient > Self.protocolLevel { return await fail("needs client level \(next.minClient)") }
         // Refuse rollback even when downloading this accepted catalog fails or is cancelled.
+        await kv.put(k("withdrawals"), String(decoding: bytes, as: UTF8.self))
         if let previous = cached ?? bundled?.manifest {
           let withdrawn = withRevocations(previous, next)
           if withdrawn != previous, let data = try? JSONEncoder().encode(withdrawn) {

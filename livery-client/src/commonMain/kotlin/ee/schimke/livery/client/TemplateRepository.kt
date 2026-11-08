@@ -142,7 +142,13 @@ class TemplateRepository(
     )
   }
 
-  private suspend fun bundledManifest(): Manifest? = bundled?.manifest?.let { withRevocations(it, manifest()) }
+  private suspend fun bundledManifest(): Manifest? = bundled?.manifest?.let { base ->
+    // Accepted withdrawals can name bundled content absent from the active downloaded snapshot.
+    val accepted = kv.get(k("withdrawals"))?.let {
+      runCatching { json.decodeFromString(Manifest.serializer(), it) }.getOrNull()
+    }
+    withRevocations(withRevocations(base, manifest()), accepted)
+  }
 
   private suspend fun meta(): Meta = kv.get(k("meta"))?.let { runCatching { json.decodeFromString(Meta.serializer(), it) }.getOrNull() } ?: Meta()
 
@@ -197,6 +203,8 @@ class TemplateRepository(
               else -> {
                 // Remember the verified serial immediately, even if downloads fail or are cancelled.
                 // Keep the old ETag and playable manifest until the replacement is ready.
+                // Persist all accepted withdrawals, even those matching only bundled content.
+                kv.put(k("withdrawals"), r.bytes.decodeToString())
                 val previous = cached ?: bundled?.manifest
                 val withdrawn = previous?.let { withRevocations(it, next) }
                 if (withdrawn != null && withdrawn != previous) {

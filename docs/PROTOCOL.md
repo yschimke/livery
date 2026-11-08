@@ -529,3 +529,5 @@ so a stale response cannot lower the persisted accepted serial or replace a newe
 Verified design and template revocations apply immediately to the active snapshot and bundled
 fallback, before replacement downloads. These withdrawals persist across failed downloads,
 restarts and expiry of the previous catalog; unrelated playable content remains available.
+Accepted withdrawals are stored independently of the active snapshot, including revoked hashes
+and design IDs present only in the bundled catalog.
