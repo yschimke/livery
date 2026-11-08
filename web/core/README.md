@@ -4,6 +4,7 @@ A browser RC player and local component-preview host using Livery's Kotlin/Wasm
 selection, binding, trust and action gates. No A2UI or UI Builder runtime is required.
 The first fixture is the quantity stepper in `samples/two-way`; Confetti integration
 is deferred. This is a local implementation prototype, not a hosted sharing service.
+The standalone package is currently built from source; it is not published independently.
 
 ## Run
 
@@ -73,5 +74,7 @@ capabilities. The default standalone document budget is 256 KiB; hosts can confi
 
 `web/a2ui` depends on this package's player, while its optional `livery-web` Wasm
 facade delegates shared work to `livery-web-core`. Build the core package before
-building/installing the local A2UI package. Its existing component API remains intact.
+installing/building the local A2UI package. A2UI bundles its player dependency so
+installed tarball consumers do not need a sibling checkout. After changing the
+core package locally, rerun `npm ci` in `web/a2ui` to refresh its installed copy. Its existing component API remains intact.
 The checked-in vendor player and provenance now live in `web/core/vendor/`.

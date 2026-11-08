@@ -108,12 +108,13 @@ export class ComponentPreview {
     const mine = ++this.sequence;
     const previous = this.render;
     try {
-      let r = await session.render(pub.template.contract, this.data, { widthDp: effectiveWidth, density: devicePixelRatio || 1, theme: this.theme, decisionId: `preview:${pub.publicationId}` }, pub.template.designId, pub.template.sha256);
+      const space = { widthDp: effectiveWidth, density: devicePixelRatio || 1, theme: this.theme, colorScheme: this.theme === dark ? 'dark' : 'light', decisionId: `preview:${pub.publicationId}` };
+      let r = await session.render(pub.template.contract, this.data, space, pub.template.designId, pub.template.sha256);
       if (!r.ok && r.waiting && mine === this.sequence) {
         this.setStatus('loading', 'Loading component resources…');
         await session.fetchImages(); // explicitly outside the cache-only render
         if (mine !== this.sequence || this.disposed) return;
-        r = await session.render(pub.template.contract, this.data, { widthDp: effectiveWidth, density: devicePixelRatio || 1, theme: this.theme }, pub.template.designId, pub.template.sha256);
+        r = await session.render(pub.template.contract, this.data, space, pub.template.designId, pub.template.sha256);
       }
       if (mine !== this.sequence || this.disposed) { if (r.ok) session.release(r.render); return; }
       if (!r.ok) { this.suspend(); this.setStatus('fallback', `${pub.fallback.description} (${r.reason})`); return; }
@@ -121,7 +122,7 @@ export class ComponentPreview {
       this.render = r;
       this.surface.style.width = `${this.width}px`;
       this.surface.style.height = `${r.heightDp ?? 120}px`;
-      this.player ??= new RcCanvasPlayer(this.surface, a => { void this.dispatch(a).catch(e => this.fail(e)); });
+      this.player ??= new RcCanvasPlayer(this.surface, a => { void this.dispatch(a).catch(e => this.fail(e)); }, { reloadOnResize: true });
       const shown = await this.player.show(r.documentKey, r.document, r.values, effectiveWidth, r.heightDp ?? 120, devicePixelRatio || 1);
       if (mine === this.sequence && !this.disposed && shown) {
         if (!previous || previous.documentKey !== r.documentKey) session.shown(r.render);

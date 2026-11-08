@@ -121,7 +121,7 @@
             "description": "What each of the template's actions does; an action left out is handled by the app."
           },
           "template": {
-            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+            "description": "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; {\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
           }
         },
         "required": [
@@ -289,7 +289,7 @@
             "description": "What each of the template's actions does; an action left out is handled by the app."
           },
           "template": {
-            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+            "description": "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; {\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
           }
         },
         "required": [
@@ -419,7 +419,7 @@
             "description": "What each of the template's actions does; an action left out is handled by the app."
           },
           "template": {
-            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+            "description": "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; {\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
           }
         },
         "required": [
@@ -556,7 +556,7 @@
             "description": "What each of the template's actions does; an action left out is handled by the app."
           },
           "template": {
-            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+            "description": "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; {\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
           }
         },
         "required": [
@@ -661,7 +661,7 @@
             "description": "What each of the template's actions does; an action left out is handled by the app."
           },
           "template": {
-            "description": "Usually left out: the client picks a reviewed design. To send the document itself: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
+            "description": "Usually left out: the client picks a reviewed design. {\"query\": {...}} asks the app server; {\"sha256\": <hash>, \"url\"?: <https>, \"signature\"?: {...}} names an exact document. To send bytes: {\"inline\": <base64 Remote Compose bytes>, \"signature\": {\"keyId\", \"signature\"}}; unsigned bytes play only where the app allows them, and never with shaders or other risky features."
           }
         },
         "required": [

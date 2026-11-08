@@ -33,6 +33,7 @@ val published = mapOf(
   ":livery-a2ui" to ("Livery A2UI" to "Livery contracts as A2UI components: their catalog schema, and the datasets and events that cross between A2UI and Livery"),
   ":livery-web-core" to ("Livery standalone web" to "Host-neutral Remote Compose preparation, binding and action routing for browser previews"),
   ":livery-web" to ("Livery web" to "Livery's A2UI pipeline for the web, compiled to Wasm with a JSON API for JavaScript: what @livery/a2ui draws with"),
+  ":livery-web-compose" to ("Livery web Compose" to "Optional in-page Compose Multiplatform renderer for @livery/a2ui"),
   ":livery-instantiate" to ("Livery instantiate" to "Write a slot's values and images into a template for widget hosts and snapshots"),
   ":livery-launcher-widgets" to ("Livery launcher widgets" to "Android launcher AppWidgets drawn from Livery templates"),
   ":livery-wear-widgets" to ("Livery Wear widgets" to "Glance Wear widgets drawn from Livery templates"),

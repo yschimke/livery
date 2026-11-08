@@ -3,14 +3,20 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
     "skipLibCheck": true,
     "useDefineForClassFields": false,
-    "experimentalDecorators": false
+    "experimentalDecorators": true
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

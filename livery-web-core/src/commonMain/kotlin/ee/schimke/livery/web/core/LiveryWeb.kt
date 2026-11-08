@@ -30,6 +30,7 @@ import ee.schimke.livery.client.CacheOnly
 import kotlinx.coroutines.withContext
 import ee.schimke.livery.protocol.FeedItem
 import ee.schimke.livery.protocol.TemplateRef
+import ee.schimke.livery.instantiate.templateHeightDp
 import ee.schimke.livery.protocol.ValueType
 import kotlinx.serialization.json.JsonNull
 
@@ -44,7 +45,7 @@ class LiveryWeb(
   private val urlAllowlist: (String) -> Boolean = { false },
   private val appKinds: Set<String> = emptySet(),
 ) {
-  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null)
+  data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null, val theme: String? = null)
   sealed interface Rendered {
     data class Ready(val id: Int, val document: ByteArray, val documentKey: String, val values: Map<String, JsonElement>, val designId: String, val sha256: String, val heightDp: Int? = null) : Rendered
     data class Fallback(val reason: String) : Rendered
@@ -63,9 +64,9 @@ class LiveryWeb(
 
   /** Exact pinned publications use the repository's existing exact-template path. */
   suspend fun render(contract: String, data: JsonObject, space: Space = Space(), designId: String? = null, sha256: String? = null): Rendered {
-    val query = TemplateQuery(contract, capabilities, widthDp = space.widthDp, designId = designId)
     val specification = repository.current()?.contracts?.filter { it.ref == contract }?.maxByOrNull { it.minor }
       ?: return Rendered.Fallback("unknown contract $contract")
+    val query = TemplateQuery(contract, capabilities, widthDp = space.widthDp, heightDp = space.heightDp, designId = designId, theme = space.theme, minor = specification.minor)
     val themed = JsonObject(data + themeValues(specification, space.themeArgb))
     val cache = CacheOnly()
     val planned = withContext(cache) { if (sha256 == null) planner.forAppData(query, themed, decisionId = space.decisionId)
@@ -115,6 +116,8 @@ class LiveryWeb(
    * Fetches the images earlier renders were [Rendered.Waiting] for, off the render path; true when
    * there were some and all arrived, so a new [render] can draw.
    */
+  val hasPendingImages: Boolean get() = missing.isNotEmpty()
+
   suspend fun fetchImages(): Boolean {
     val resolver = images ?: return false
     val asked = missing.toList()
@@ -180,7 +183,7 @@ class LiveryWeb(
   private fun heightDp(plan: RenderPlan): Int? {
     val entry = plan.template.entry
     entry.target.size.minHeightDp?.let { return it }
-    return heightBySha.getOrPut(entry.sha256) { runCatching { TemplateInstantiator.authoredHeightDp(plan.template.bytes) }.getOrNull() }
+    return heightBySha.getOrPut(entry.sha256) { plan.templateHeightDp() }
   }
 
   private fun drawsImages(sha256: String, template: ByteArray): Boolean =

@@ -61,7 +61,7 @@ import kotlinx.coroutines.runBlocking
  * rc-players' Compose player.
  */
 @OptIn(ExperimentalTestApi::class)
-abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? = null) {
+abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? = null, private val decider: ee.schimke.livery.client.Decider? = null) {
   private val samples = File(System.getProperty("livery.samples") ?: "../samples/catalog")
 
   /** The sample catalog with the two-way one's contracts and designs added (it needs level 7). */
@@ -109,6 +109,8 @@ abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? =
     clock = clock,
     appActions = listOf("dismiss", "navigate", "app:vote").associateWith { kind -> { _, _, args -> appHandled += kind to args } },
     documents = documents,
+    decider = decider,
+    decisionContext = { ee.schimke.livery.client.DecisionContext(1_000, "desktop", "en-GB", 1, "test") },
   )
 
   private val basic: A2uiCatalog = materialA2uiBasicCatalogV1(

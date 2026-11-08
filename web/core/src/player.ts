@@ -8,25 +8,41 @@ export interface NamedAction {
   value: unknown;
 }
 
+/** A persistent in-page renderer. Superseded shows resolve false; dispose cancels pending work. */
+export interface LiveryPlayer {
+  /** Finite wrap-content height when supported by this player. */
+  readonly measuredHeightDp?: number;
+  show(key: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean>;
+  resize(widthPx: number, heightPx: number, density: number): void;
+  forget(): void;
+  dispose(): void;
+  readonly stats: { loads: number; sets: number };
+}
+
+export type LiveryPlayerFactory = (container: HTMLElement, onAction: (action: NamedAction) => void) => LiveryPlayer;
+
 /**
  * The TypeScript Remote Compose player on a canvas in [container], in the page itself. A document
  * is loaded once; its named values are set on it while it plays, so a data change moves the values
  * and never reloads the document (Remote Compose's model, as `LiveryTemplate` does on Compose).
  */
-export class RcCanvasPlayer {
+export class RcCanvasPlayer implements LiveryPlayer {
   private readonly handle: RcPlayerHandle;
   private readonly host: HostApi;
   private key?: string;
   private geometry?: string;
-  private disposed = false;
   private values = new Map<string, string>();
   /** Shows run one after another; one asked for while another runs replaces any still queued. */
   private queue: Promise<unknown> = Promise.resolve();
   private latest = 0;
+  /** Last root layout height, in dp, after applying named values. */
+  measuredHeightDp?: number;
+  private disposed = false;
+  private epoch = 0;
   /** Documents loaded and values set, for tests and debugging. */
   readonly stats = { loads: 0, sets: 0 };
 
-  constructor(container: HTMLElement, onAction: (a: NamedAction) => void) {
+  constructor(container: HTMLElement, onAction: (a: NamedAction) => void, private readonly options: { reloadOnResize?: boolean } = {}) {
     this.handle = createPlayer(container, {});
     this.handle.canvas.style.display = 'block';
     this.host = createHostApi(this.handle.player);
@@ -34,17 +50,17 @@ export class RcCanvasPlayer {
   }
 
   /**
-   * Shows [documentKey]'s document with [values]: loads [document] when its key or viewport geometry differs, then sets changed values. A load is asynchronous, so shows are
+   * Shows [documentKey]'s document with [values]: loads [document] only when the key differs from
+   * the one playing, then sets each value that changed. A load is asynchronous, so shows are
    * queued: each waits for the one before it, and a show superseded while it waits does nothing
    * (resolves `false`), so an older one can never land after a newer one.
    */
   show(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<boolean> {
-    if (this.disposed) return Promise.resolve(false);
     const mine = ++this.latest;
     const run = this.queue.then(async () => {
-      if (mine !== this.latest) return false;
+      if (this.disposed || mine !== this.latest) return false;
       await this.apply(documentKey, document, values, widthPx, heightPx, density);
-      return !this.disposed;
+      return !this.disposed && mine === this.latest;
     });
     this.queue = run.catch(() => {});
     return run;
@@ -52,23 +68,22 @@ export class RcCanvasPlayer {
 
   private async apply(documentKey: string, document: Uint8Array, values: Record<string, HostValue>, widthPx: number, heightPx: number, density: number): Promise<void> {
     const geometry = `${widthPx}/${heightPx}/${density}`;
-    // The vendored player retains stale click regions after live reflow. Re-load at a new
-    // geometry; data/theme-only updates still retain the playing document.
-    if (documentKey !== this.key || geometry !== this.geometry) {
+    // Some documents retain stale click regions after reflow; hosts may opt into reloading.
+    if (documentKey !== this.key || (this.options.reloadOnResize && geometry !== this.geometry)) {
+      const epoch = this.epoch;
       this.handle.player.setDensity(density);
       // Sized before the load too: the player fixes its touch mapping from the canvas a document
       // loads into, so a document loaded at the default 256 px missed taps past it.
       this.resize(widthPx, heightPx, density);
       await this.handle.loadFromArrayBuffer(document.slice().buffer);
       if (this.disposed) { this.handle.destroy(); return; }
+      if (epoch !== this.epoch) return;
       this.key = documentKey;
       this.geometry = geometry;
       this.values.clear();
       this.stats.loads++;
       this.resize(widthPx, heightPx, density);
     }
-    this.handle.player.setDensity(density);
-    this.resize(widthPx, heightPx, density);
     // A document's variables are in Remote Compose's `USER:` domain; set each by the name it declares.
     const declared = this.host.variables();
     for (const [name, value] of Object.entries(values)) {
@@ -80,6 +95,9 @@ export class RcCanvasPlayer {
       this.values.set(name, text);
       this.stats.sets++;
     }
+    this.handle.player.repaint();
+    const measured = this.handle.player.measureSize();
+    this.measuredHeightDp = measured ? measured.height / density : undefined;
   }
 
   /** The canvas at [widthPx] × [heightPx] CSS pixels. */
@@ -89,7 +107,10 @@ export class RcCanvasPlayer {
 
   /** Forgets the document playing, so the next [show] loads its document again. */
   forget(): void {
+    this.latest++;
+    this.epoch++;
     this.key = undefined;
+    this.geometry = undefined;
     this.values.clear();
   }
 
@@ -99,8 +120,6 @@ export class RcCanvasPlayer {
     this.latest++;
     this.host.dispose();
     this.handle.destroy();
-    // A load already in flight may initialise player internals after destroy. Stop it again
-    // when that queued work settles; no value or action can revive this wrapper.
     void this.queue.then(() => this.handle.destroy(), () => this.handle.destroy());
   }
 }
@@ -110,3 +129,5 @@ function valueTypeOf(value: unknown): NamedAction['valueType'] {
   if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'float';
   return 'string';
 }
+
+export type { HostValue } from '../vendor/remote-compose-player.mjs';

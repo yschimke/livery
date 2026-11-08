@@ -109,7 +109,7 @@ public struct LiveryTemplateView<Player: View>: View {
   }
 
   private func event(_ type: TemplateEvent.Kind) -> TemplateEvent {
-    TemplateEvent(type: type, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decision?.decisionId,
+    TemplateEvent(type: type, atEpochMs: clock(), placement: plan.decision?.placement, decisionId: plan.decisionId,
       feedItemId: plan.feedItem?.id, designId: plan.template.entry.designId, sha256: plan.template.entry.sha256, experiments: plan.experiments)
   }
 }

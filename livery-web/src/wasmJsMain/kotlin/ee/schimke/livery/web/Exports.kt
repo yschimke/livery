@@ -3,11 +3,13 @@
 package ee.schimke.livery.web
 
 import ee.schimke.livery.client.defaultHttpClient
+import ee.schimke.livery.client.KtorDecider
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.KtorFetcher
@@ -16,6 +18,7 @@ import ee.schimke.livery.client.MemoryKeyValueStore
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateRepository
+import ee.schimke.livery.client.RefreshResult
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.client.TrustedKey
 import ee.schimke.livery.client.WebCrypto
@@ -30,6 +33,9 @@ import kotlin.io.encoding.Base64
 import kotlin.js.Promise
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.promise
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.await
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -53,6 +59,8 @@ internal data class WebConfig(
   val keys: List<Key> = emptyList(),
   /** Accept an unsigned catalog: a development build only. */
   val unsigned: Boolean = false,
+  /** Persist verified catalog state and blobs in IndexedDB; false uses session memory. */
+  val persistentCache: Boolean = true,
   val capabilities: PlayerCapabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx")),
   /** Documents an agent sends with a message: refused unless set. */
   val agentBytes: AgentBytes? = null,
@@ -64,6 +72,8 @@ internal data class WebConfig(
   val urlAllowlist: List<String> = emptyList(),
   /** Action kinds the page handles when the agent didn't wire them. */
   val appKinds: Set<String> = emptySet(),
+  val decisionEndpoint: String? = null,
+  val decisionContext: ee.schimke.livery.client.DecisionContext? = null,
 ) {
   @Serializable data class Key(val keyId: String, val publicKey: String, val contracts: Set<String> = emptySet())
 
@@ -71,11 +81,11 @@ internal data class WebConfig(
 }
 
 @Serializable
-internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null)
+internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null, val colorScheme: String? = null)
 
-private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>, val http: HttpClient) {
+private class Session(val web: LiveryA2uiWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>, val cacheNamespace: String?, val http: HttpClient, val decider: KtorDecider?) {
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-  fun close() { scope.cancel(); web.close(); events.clear(); http.close() }
+  fun close() { scope.cancel(); web.close(); events.clear(); decider?.close(); http.close() }
 }
 
 private val sessions = mutableMapOf<Int, Session>()
@@ -85,7 +95,23 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 private fun session(id: Int): Session = sessions[id] ?: error("no Livery session $id")
 
 private fun <T> async(block: suspend () -> T): Promise<JsAny?> = GlobalScope.promise { block()?.toString()?.toJsString() }
+
 private fun <T> inSession(id: Int, block: suspend () -> T): Promise<JsAny?> = session(id).scope.promise { block()?.toString()?.toJsString() }
+
+// Web Locks are origin-wide: they cover separate sessions, workers and tabs sharing IndexedDB.
+private suspend fun refreshRepository(repository: TemplateRepository, namespace: String?, force: Boolean = false): RefreshResult = coroutineScope {
+  if (namespace == null) return@coroutineScope repository.refresh(force)
+  var result: RefreshResult? = null
+  browserRefreshLock("livery-refresh/$namespace") {
+    promise<JsAny?> { result = repository.refresh(force); null }
+  }.await()
+  checkNotNull(result)
+}
+
+private fun browserRefreshLock(name: String, block: () -> Promise<JsAny?>): Promise<JsAny?> = js("""{
+  if (!globalThis.navigator?.locks) throw new Error('Persistent Livery caching requires Web Locks on a secure origin; use persistentCache: false otherwise');
+  return navigator.locks.request(name, {mode: 'exclusive'}, () => block());
+}""")
 
 /** Opens a session on a catalog (refreshing it once) and resolves to its handle. */
 @JsExport
@@ -98,29 +124,52 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   val sink = ee.schimke.livery.client.EventSink { events += it }
   val http = defaultHttpClient()
   val fetcher = KtorFetcher(http)
+  // Trust configuration is part of the namespace: an unsigned cache can never become a signed one.
+  val cacheNamespace = WebCrypto.sha256Hex(json.encodeToString(WebConfig.serializer(), c).encodeToByteArray())
+  val stores = if (c.persistentCache) BrowserStores.open(cacheNamespace) else null
   val repository = TemplateRepository(
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
-    MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(c.capabilities),
+    stores?.blobs ?: MemoryBlobStore(), stores?.values ?: MemoryKeyValueStore(), clock, listOf(c.capabilities),
   )
-  repository.refresh()
   val documents = if (c.agentBytes == null && keys.isEmpty()) null else DocumentAdmission(
     WebCrypto, keys,
     signedFeatures = c.signedFeatures.mapNotNull(RiskyFeature::fromWire).toSet(),
     agentBytes = c.agentBytes?.let { AgentBytesPolicy(it.contracts, it.maxBytes, it.allowedKinds) },
   )
+  val decider = c.decisionEndpoint?.let { KtorDecider(it, http) }
   val web = LiveryA2uiWeb(
     repository, SlotPlanner(repository, sink, clock), c.capabilities, sink, clock,
     ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts),
     documents, urlAllowlist = { url -> c.urlAllowlist.any(url::startsWith) }, appKinds = c.appKinds,
+    documentFetcher = fetcher,
+    decider = decider,
+    decisionContext = c.decisionContext?.let { context -> { context.copy(nowEpochMs = clock.nowEpochMs()) } },
   )
+  val opened = Session(web, repository, events, if (stores != null) cacheNamespace else null, http, decider)
+  suspend fun refresh() {
+    refreshRepository(repository, if (stores != null) cacheNamespace else null)
+  }
+  // A saved manifest alone is not a warm cache: interrupted prefetch can leave every blob missing.
+  // Catalog adapters register components once, so repair downloads before returning an empty set.
+  try {
+    if (web.components().isEmpty()) refresh()
+    else opened.scope.launch {
+      try { refresh() }
+      catch (e: CancellationException) { throw e }
+      catch (_: Exception) { /* A storage failure during background refresh must not stop cached rendering. */ }
+    }
+  } catch (failure: Throwable) { opened.close(); throw failure }
   val id = nextSession++
-  sessions[id] = Session(web, repository, events, http)
+  sessions[id] = opened
   id
 }
 
 /** Fetches the catalog again; resolves to what changed (`updated`, `notModified`, a failure). */
 @JsExport
-fun liveryRefresh(session: Int): Promise<JsAny?> = inSession(session) { session(session).repository.refresh(force = true)::class.simpleName }
+fun liveryRefresh(session: Int): Promise<JsAny?> = inSession(session) {
+  val s = session(session)
+  refreshRepository(s.repository, s.cacheNamespace, force = true)::class.simpleName
+}
 
 /**
  * The components to register: a JSON array of `{name, contract, description, schema, properties,
@@ -163,21 +212,28 @@ fun liveryCatalogSchema(session: Int, catalogId: String): Promise<JsAny?> = inSe
 fun liveryRender(session: Int, name: String, props: String, space: String): Promise<JsAny?> = inSession(session) {
   val s = json.decodeFromString(WebSpace.serializer(), space)
   val theme = s.theme.mapNotNull { (role, hex) -> argb(hex)?.let { role to it } }.toMap()
-  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId))
+  val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId, s.colorScheme))
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
+      put("presentationKey", r.presentationKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
+      put("pending", r.pending)
       r.heightDp?.let { put("heightDp", it) }
+      r.minHeightDp?.let { put("minHeightDp", it) }
     }
-    is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason) }
-    is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason) }
+    is LiveryA2uiWeb.Rendered.Fallback -> buildJsonObject { put("ok", false); put("reason", r.reason); put("pending", r.pending) }
+    is LiveryA2uiWeb.Rendered.Waiting -> buildJsonObject { put("ok", false); put("waiting", true); put("reason", r.reason); put("pending", r.pending) }
   }
 }
 
 /** Fetches the images renders were waiting for (off the render path); resolves to whether all arrived. */
 @JsExport
 fun liveryFetchImages(session: Int): Promise<JsAny?> = inSession(session) { session(session).web.fetchImages() }
+
+/** Fetches query answers and named documents off the render path. */
+@JsExport
+fun liveryFetchPending(session: Int): Promise<JsAny?> = inSession(session) { session(session).web.fetchPending() }
 
 /** The player shows render [render]: its impression. */
 @JsExport
@@ -226,6 +282,6 @@ private fun argb(hex: String): Long? {
   return when (h.length) { 6 -> 0xFF000000L or v; 8 -> v; else -> null }
 }
 
-/** Releases a page's A2UI session when its host is disposed. */
+/** Stops work and releases resources owned by this session. */
 @JsExport
-fun liveryClose(id: Int) { sessions.remove(id)?.close() }
+fun liveryClose(session: Int) { sessions.remove(session)?.close() }

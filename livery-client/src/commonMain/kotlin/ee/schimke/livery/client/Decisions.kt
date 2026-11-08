@@ -6,8 +6,9 @@ import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlacementRule
 
 /** What a decider may know about the user: coarse, app-reported, never sent to the catalog host. */
+@kotlinx.serialization.Serializable
 data class DecisionContext(
-  val nowEpochMs: Long,
+  val nowEpochMs: Long = 0,
   val platform: String,
   val locale: String,
   val appVersion: Long,
@@ -19,7 +20,18 @@ data class DecisionContext(
 /** Picks what a placement shows. Local rules, a remote ad/promo server, or both in order. */
 fun interface Decider {
   suspend fun decide(placement: String, context: DecisionContext): Decision?
+
+  /** Contract-based decisions (§8.3). Called off the render path, only by the app's host. */
+  suspend fun decide(request: DecisionRequest): Decision? = null
 }
+
+/** The device owns [query] and [context]; the agent supplies only [params]. */
+@kotlinx.serialization.Serializable
+data class DecisionRequest(
+  val query: TemplateQuery,
+  val params: kotlinx.serialization.json.JsonObject,
+  val context: DecisionContext,
+)
 
 /** Impression counts per rule, for frequency caps. Persist it; an in-memory one resets per run. */
 interface FrequencyStore {
@@ -92,6 +104,15 @@ class LocalRulesDecider(
 
 /** Tries each decider in order: e.g. a remote ad server first, local house promos when it has none. */
 class FirstDecider(private val deciders: List<Decider>) : Decider {
+  override suspend fun decide(request: DecisionRequest): Decision? {
+    for (decider in deciders) {
+      try { decider.decide(request)?.let { return it } }
+      catch (e: kotlinx.coroutines.CancellationException) { throw e }
+      catch (_: Exception) { /* Try the next configured decider. */ }
+    }
+    return null
+  }
+
   override suspend fun decide(placement: String, context: DecisionContext): Decision? =
     deciders.firstNotNullOfOrNull { runCatching { it.decide(placement, context) }.getOrNull() }
 }

@@ -59,7 +59,7 @@ internal data class WebConfig(
 }
 
 @Serializable
-internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null)
+internal data class WebSpace(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val theme: Map<String, String> = emptyMap(), val decisionId: String? = null, val colorScheme: String? = null)
 
 private class Session(val web: LiveryWeb, val repository: TemplateRepository, val events: MutableList<TemplateEvent>, val http: HttpClient) {
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -119,7 +119,7 @@ fun previewRefresh(session: Int): Promise<JsAny?> = inSession(session) { session
 fun previewRender(session: Int, contract: String, data: String, space: String, designId: String?, sha256: String?): Promise<JsAny?> = inSession(session) {
   val s = json.decodeFromString(WebSpace.serializer(), space)
   val theme = s.theme.mapNotNull { (role, hex) -> argb(hex)?.let { role to it } }.toMap()
-  val r = session(session).web.render(contract, json.parseToJsonElement(data).jsonObject, LiveryWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId), designId, sha256)
+  val r = session(session).web.render(contract, json.parseToJsonElement(data).jsonObject, LiveryWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId, s.colorScheme), designId, sha256)
   when (r) {
     is LiveryWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)

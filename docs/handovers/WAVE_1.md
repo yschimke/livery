@@ -49,7 +49,8 @@ Livery integration branch: `agent/rc-component-plan` in `/workspace/livery`.
 Fixture commit: `690559f`. Standalone implementation: `42cea92` (cherry-picked from
 `423b13b` in the isolated web worktree).
 
-Passed on the implementation tree:
+Passed on the original implementation tree, before integrating `origin/main` at
+`10cef3a` (these are baseline results, not validation of the merged tree):
 
 - `:livery-client:jvmTest :livery-web-core:jvmTest :livery-web:jvmTest`: 116 tests
   (98 client, 3 core and 15 A2UI), including shared-fixture and action-admission cases.
@@ -97,6 +98,20 @@ Local browser evidence is retained at
 `/workspace/rc-wave1/evidence/standalone-preview.png` and
 `/workspace/rc-wave1/evidence/a2ui-web.png`. Regenerate it using `npm test` with
 `LIVERY_RENDER_OUT` set to the desired screenshot path.
+
+## Integration with current main
+
+The first-wave branch now incorporates main's named/signed template forms, contract
+queries, persistent browser cache, CMP player and Lit/React/Angular adapters. Shared
+preparation/action routing remains in the neutral Kotlin core. The A2UI tarball
+bundles the shared player; it does not require a sibling source checkout.
+
+Local integration checks cover TypeScript, Angular compilation, tarball structure,
+attribution and documentation. Tarball inspection uses the previously built Wasm
+files solely to validate packaging. Newly rebuilt Wasm, JVM and full browser-matrix
+results must come from the PR CI; local disk constraints prevent a fresh Gradle build.
+No upstream or standalone tests were disabled. CI retains Lit/React/Angular on both
+players, React 18 compatibility, and adds the standalone fixture suite.
 
 ## Limits and next assignments
 

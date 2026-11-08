@@ -192,7 +192,7 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog \
     <a class="card" href="use-cases/launcher-widgets.html"><span class="tag">launcher</span><h3>Launcher widgets</h3><p>Subclass one provider; Livery instantiates the template for each widget's size and routes taps back.</p></a>
     <a class="card" href="use-cases/wear-widgets.html"><span class="tag">wear</span><h3>Wear widgets</h3><p>Subclass one Glance Wear widget; Livery frames the template in each watch's container.</p></a>
     <a class="card" href="use-cases/notifications.html"><span class="tag">notifications</span><h3>Notifications</h3><p>Render a template for a notification's expanded body; taps come back to your receiver.</p></a>
-    <a class="card planned" href="use-cases/web.html"><span class="tag">web · planned</span><h3>The web</h3><p>A <code>&lt;livery-template&gt;</code> element over the TypeScript player.</p></a>
+    <a class="card" href="use-cases/web.html"><span class="tag">web · built</span><h3>The web</h3><p>A2UI components for Lit, React and Angular, over the TypeScript player.</p></a>
   </div>
 </section>
 

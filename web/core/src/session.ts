@@ -8,7 +8,7 @@ export interface WebConfig {
   urlAllowlist?: string[];
   appKinds?: string[];
 }
-export interface Space { widthDp?: number; heightDp?: number; density?: number; theme?: Record<string, string>; decisionId?: string }
+export interface Space { colorScheme?: string; widthDp?: number; heightDp?: number; density?: number; theme?: Record<string, string>; decisionId?: string }
 export type Ready = { ok: true; render: number; document: Uint8Array; documentKey: string; values: Record<string, string | number>; design: string; sha256: string; heightDp?: number };
 export type Rendered = Ready | { ok: false; waiting?: boolean; reason: string };
 export type Routed = { route: 'set'; input: string; value: unknown } | { route: 'app'; kind: string; action: string; args: Record<string, string> } | { route: 'dropped'; reason: string };

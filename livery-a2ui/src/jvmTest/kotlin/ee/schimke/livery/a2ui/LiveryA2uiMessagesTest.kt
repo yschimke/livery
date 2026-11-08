@@ -24,6 +24,15 @@ class LiveryA2uiMessagesTest {
   private fun problems(m: JsonElement, data: String? = null, designs: Map<String, Set<String>>? = null) =
     LiveryA2uiMessages.validate(m, contracts, data?.let(Json::parseToJsonElement), designs)
 
+  @Test fun queryAndNamedFormsAreValidatedBeforeRendering() {
+    for (template in listOf("""{"query":{"offer":"sale"}}""", """{"sha256":"${"a".repeat(64)}"}""")) {
+      assertEquals(emptyList(), problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")))
+    }
+    for (template in listOf("""{"query":42}""", """{"query":{},"url":"https://agent.invalid/"}""", """{"sha256":"bad"}""", """{"query":{},"inline":"eA=="}""")) {
+      assertTrue(problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")).isNotEmpty())
+    }
+  }
+
   @Test fun aGoodComponentHasNoProblems() {
     val m = message("""{"id":"root","component":"Column","children":["promo"],"anything":1}""",
       """{"id":"promo","component":"PromoBanner","headline":{"path":"/t"},"cta":"Shop","actions":{"cta":{"event":{"name":"go"}}},"design":"banner-bold"}""")
@@ -61,6 +70,15 @@ class LiveryA2uiMessagesTest {
       val m = message("""{"id":"promo","component":"PromoBanner","headline":{"path":$path},"cta":"Go"}""")
       assertEquals(listOf("headline"), problems(m).map { it.property }, path)
     }
+  }
+
+  @Test fun aTemplateMayNameItsDocumentByHash() {
+    fun named(template: String) = problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")).map { it.property }
+    val sha = "ab".repeat(32)
+    assertEquals(emptyList(), named("""{"sha256":"$sha"}"""))
+    assertEquals(emptyList(), named("""{"sha256":"$sha","url":"https://catalog.example/d.rc","signature":{"keyId":"k","signature":"c2ln"}}"""))
+    assertEquals(listOf("template"), named("""{"sha256":"abc"}"""))
+    assertEquals(listOf("template"), named("""{"sha256":"$sha","url":"http://catalog.example/d.rc"}"""))
   }
 
   @Test fun aSignatureNeedsStringFields() {

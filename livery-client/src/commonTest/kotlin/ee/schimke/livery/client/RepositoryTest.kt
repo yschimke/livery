@@ -14,6 +14,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 
@@ -26,6 +28,9 @@ class RepositoryTest {
     val requests = mutableListOf<String>()
     var down = false
     var blobsDown = false
+    var blobRequested: CompletableDeferred<Unit>? = null
+    var resumeBlobs: CompletableDeferred<Unit>? = null
+    var pauseSha: String? = null
     override suspend fun get(url: String, etag: String?): FetchResult {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
@@ -37,6 +42,10 @@ class RepositoryTest {
           FetchResult.Ok(json.encodeToString(ManifestSignature.serializer(), ManifestSignature(keyId = "k", signature = Base64.encode(key + bytes.size.toString().encodeToByteArray()))).encodeToByteArray(), null)
         else -> {
           val sha = url.substringAfterLast('/').removeSuffix(".rc")
+          if (pauseSha == null || pauseSha == sha) {
+            blobRequested?.complete(Unit)
+            resumeBlobs?.await()
+          }
           val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
           names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
         }
@@ -90,6 +99,189 @@ class RepositoryTest {
     assertIs<RefreshResult.Failed>(r.refresh())
     assertEquals(RefreshResult.Skipped("backing off"), r.refresh())
     assertNotNull(r.resolve(q))
+  }
+
+  private fun replacement(): Manifest {
+    return Fx.manifest(serial = 2).let { m -> m.copy(templates = m.templates.map { entry ->
+      val bytes = Fx.blob(if (entry.target.surface == "launcher-widget") "retro-launcher" else "retro-v7")
+      if (entry.designId == "tile-default") entry.copy(sha256 = FakeCrypto.sha(bytes), bytes = bytes.size.toLong()) else entry
+    }) }
+  }
+
+  @Test fun refreshKeepsThePlayableSnapshotUntilReplacementDownloadsFinish() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    val original = assertNotNull(r.resolve(q))
+    host.manifest = replacement()
+    host.blobRequested = CompletableDeferred()
+    host.resumeBlobs = CompletableDeferred()
+    host.pauseSha = FakeCrypto.sha(Fx.blob("retro-launcher"))
+    val refreshing = async { r.refresh(force = true) }
+    host.blobRequested!!.await()
+    assertEquals(1, r.current()?.serial)
+    assertEquals(original.entry.sha256, r.resolve(q)?.entry?.sha256)
+    assertEquals(1, repo(host).current()?.serial, "a concurrently opened repository sees the playable disk snapshot")
+    val downloaded = FakeCrypto.sha(Fx.blob("retro-v7"))
+    assertNotNull(blobs.get(downloaded))
+    r.prune()
+    assertNotNull(blobs.get(downloaded), "pruning must retain the replacement while its other downloads are pending")
+    host.resumeBlobs!!.complete(Unit)
+    assertEquals(RefreshResult.Updated(2), refreshing.await())
+    assertEquals(2, r.current()?.serial)
+    assertEquals(FakeCrypto.sha(Fx.blob("retro-v7")), r.resolve(q)?.entry?.sha256)
+  }
+
+  @Test fun failedReplacementKeepsCacheButStillRecordsTheAcceptedSerial() = runTest {
+    val host = Host(Fx.manifest())
+    val r = repo(host)
+    r.refresh()
+    host.manifest = replacement(); host.blobsDown = true
+    assertIs<RefreshResult.Failed>(r.refresh(force = true))
+    assertEquals(1, r.current()?.serial)
+    assertNotNull(r.resolve(q))
+    val rollback = repo(Host(Fx.manifest()))
+    assertIs<RefreshResult.Failed>(rollback.refresh(force = true)).also { assertTrue("rollback" in it.reason) }
+    host.blobsDown = false
+    assertEquals(RefreshResult.Updated(2), r.refresh(force = true))
+    assertEquals(2, r.current()?.serial)
+  }
+
+  @Test fun pendingReplacementRetriesAfterBackoffEvenWhileTheOldCatalogIsFresh() = runTest {
+    val host = Host(Fx.manifest().copy(ttlSeconds = 3600))
+    val r = repo(host)
+    r.refresh()
+    host.manifest = replacement(); host.blobsDown = true
+    assertIs<RefreshResult.Failed>(r.refresh(force = true))
+    assertEquals(RefreshResult.Skipped("backing off"), r.refresh())
+    now += 60_001
+    host.blobsDown = false
+    assertEquals(RefreshResult.Updated(2), r.refresh(), "pending serial bypasses the old cache's TTL")
+    assertEquals(2, r.current()?.serial)
+  }
+
+  @Test fun refreshNotifiesReadersWhenAnotherRepositoryActivatedANewerSnapshot() = runTest {
+    val host = Host(Fx.manifest())
+    val first = repo(host)
+    first.refresh()
+    val second = repo(host)
+    assertEquals(1, second.manifest()?.serial)
+    val before = second.revision.value
+    host.manifest = replacement()
+    first.refresh(force = true)
+    assertEquals(RefreshResult.Skipped("fresh"), second.refresh())
+    assertEquals(before + 1, second.revision.value)
+    assertEquals(2, second.manifest()?.serial)
+  }
+
+  @Test fun refreshWithdrawalsUseTheLatestPersistedPlayableSnapshot() = runTest {
+    val host = Host(Fx.manifest())
+    val first = repo(host)
+    first.refresh()
+    val second = repo(host)
+    assertEquals(1, second.manifest()?.serial)
+    host.manifest = replacement()
+    assertEquals(RefreshResult.Updated(2), first.refresh(force = true))
+    val latest = assertNotNull(first.resolve(q))
+    host.manifest = replacement().copy(serial = 3,
+      designs = replacement().designs.map { it.copy(revoked = it.id != "tile-default") },
+      templates = replacement().templates.map {
+        if (it.target.surface == "launcher-widget") it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing"))) else it
+      })
+    assertIs<RefreshResult.Failed>(second.refresh(force = true))
+    assertEquals(2, second.manifest()?.serial, "withdrawals must retain the newest activated snapshot")
+    val reopened = repo(host)
+    assertEquals(2, reopened.manifest()?.serial)
+    assertEquals(latest.entry.sha256, reopened.resolve(q)?.entry?.sha256)
+    assertTrue(reopened.manifest()!!.designs.filter { it.id != "tile-default" }.all { it.revoked })
+  }
+
+  @Test fun withdrawalsForContentAbsentFromTheActiveCatalogStillApplyToTheBundle() = runTest {
+    for (design in listOf(false, true)) {
+      val original = Fx.manifest()
+      val active = if (design) original.copy(serial = 2,
+        designs = original.designs.filter { it.id != "tile-default" }.map { it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always) },
+        templates = original.templates.filter { it.designId != "tile-default" }) else replacement()
+      val host = Host(active)
+      val store = MemoryBlobStore()
+      val values = MemoryKeyValueStore()
+      val bundled = TemplateRepository.Bundled(original) { sha ->
+        listOf("default-v7", "default-v8", "default-launcher").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+      }
+      fun open() = TemplateRepository(StaticSource("https://cdn.example/catalog/main"), host, FakeCrypto,
+        TrustPolicy.Signed(listOf(TrustedKey("k", key))), store, values, { now }, listOf(Fx.inApp), bundled)
+      val r = open()
+      assertEquals(RefreshResult.Updated(2), r.refresh())
+      val oldHash = FakeCrypto.sha(Fx.blob("default-v7"))
+      assertNotNull(r.bundledTemplate(oldHash, q))
+      host.manifest = active.copy(serial = 3,
+        designs = active.designs + if (design) listOf(original.design("tile-default")!!.copy(revoked = true)) else emptyList(),
+        templates = active.templates.map { it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing"))) } +
+          if (!design) original.templates.filter { it.designId == "tile-default" }.map { it.copy(revoked = true) } else emptyList())
+      host.blobRequested = CompletableDeferred()
+      host.resumeBlobs = CompletableDeferred()
+      val before = r.revision.value
+      val refreshing = async { r.refresh(force = true) }
+      host.blobRequested!!.await()
+      assertEquals(before + 1, r.revision.value, "bundle-only withdrawal must replan slots before downloads finish")
+      assertNull(r.bundledTemplate(oldHash, q))
+      host.resumeBlobs!!.complete(Unit)
+      assertIs<RefreshResult.Failed>(refreshing.await())
+      assertNull(r.bundledTemplate(oldHash, q))
+      assertNull(open().bundledTemplate(oldHash, q), "bundle-only withdrawals survive restart")
+      if (design) {
+        now = original.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+        assertFalse(open().automaticallySelectable("tile-default"))
+        now = 1_000
+      }
+    }
+  }
+
+  @Test fun designRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(true) }
+
+  @Test fun templateRevocationAppliesBeforeReplacementDownloadsFinish() = runTest { checkPendingRevocation(false) }
+
+  private suspend fun kotlinx.coroutines.CoroutineScope.checkPendingRevocation(design: Boolean) {
+    val original = Fx.manifest()
+    val host = Host(original)
+    val store = MemoryBlobStore()
+    val values = MemoryKeyValueStore()
+    val bundled = TemplateRepository.Bundled(original) { sha ->
+      listOf("default-v7", "default-v8", "default-launcher").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+    }
+    fun open() = TemplateRepository(StaticSource("https://cdn.example/catalog/main"), host, FakeCrypto,
+      TrustPolicy.Signed(listOf(TrustedKey("k", key))), store, values, { now }, listOf(Fx.inApp), bundled)
+    val r = open()
+    r.refresh()
+    val old = assertNotNull(r.resolve(q))
+    host.manifest = original.copy(serial = 2,
+      designs = original.designs.map {
+        when (it.id) {
+          "tile-default" -> it.copy(revoked = design)
+          else -> it.copy(install = ee.schimke.livery.protocol.InstallPolicy.Always)
+        }
+      },
+      templates = original.templates.map {
+        if (it.designId == "tile-default") it.copy(revoked = !design)
+        else it.copy(sha256 = FakeCrypto.sha(Fx.blob("missing")))
+      })
+    host.blobRequested = CompletableDeferred()
+    host.resumeBlobs = CompletableDeferred()
+    val refreshing = async { r.refresh(force = true) }
+    host.blobRequested!!.await()
+    suspend fun withdrawn(repository: TemplateRepository) {
+      assertNull(repository.resolve(q), "withdrawn content must not return through bundled fallback")
+      assertNull(repository.ensure(TemplateRef(sha256 = old.entry.sha256), q))
+      assertNull(repository.bundledTemplate(old.entry.sha256, q))
+      if (design) assertFalse(repository.automaticallySelectable("tile-default"))
+    }
+    withdrawn(r)
+    withdrawn(open())
+    host.resumeBlobs!!.complete(Unit)
+    assertIs<RefreshResult.Failed>(refreshing.await())
+    withdrawn(open())
+    now = original.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+    withdrawn(open())
   }
 
   @Test fun installIsExplicitAndPreviewDoesNotInstall() = runTest {

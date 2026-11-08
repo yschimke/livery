@@ -278,7 +278,7 @@ action kind.
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` *(built)* | any MCP host (`livery-mcp-core`) | `a2ui_component_schema(contract?)` and `validate_a2ui(message, data_model?)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
-| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one Lit component (`A2uiLitElement`) per contract, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player and setting named values live |
+| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one component per contract for Lit, React or Angular, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -303,8 +303,13 @@ headless Chromium by CI (`web` job).
 selection, trust, binding, instantiation and action gate, compiled to Wasm, so it can't drift from
 the other clients and needs no fixture of its own beyond the ones Kotlin already passes.
 
+- **Player choice.** `liveryCatalog(session, {catalogId, player: 'cmp'})` selects the optional
+  in-page Compose Multiplatform renderer. Omit `player` (or use `'ts'`) for TypeScript. A custom
+  `(box, onAction) => LiveryPlayer` factory is also supported. CMP and its bundled fonts are loaded
+  during catalog preparation; TS-only pages fetch none of them. At most eight CMP viewports are
+  reserved per page, with additional components using TS. [Build, costs and comparison](A2UI-CMP.md).
 - **Drawing.** The TypeScript Remote Compose player (vendored from rc-players, `web/a2ui/vendor`)
-  on a canvas in the component itself: no iframe. A document is loaded once and its named values
+  or CMP player on a canvas in the component itself: no iframe. A document is loaded once and its named values
   are set on it while it plays (`createHostApi`), so a data-model change moves values and never
   reloads the document, as `LiveryTemplate` does on Compose. Only what that player can't set live
   is written into the document (`TemplateInstantiator`): bound images (`livery:value/<input>`) and
@@ -323,6 +328,10 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
   resolved from A2UI's controller; `actions`, `template` and a `set` input's `{"path"}` binding are
   read as the agent wrote them. A `set` writes through `dataContext.set(path, value)`; an agent's
   action goes out through `dispatchAction` with the template's checked arguments in its context.
+- **Documents named by hash.** `template: {"sha256", "url"?, "signature"?}` plays exactly that
+  document or the page's fallback: from a trusted catalog that lists it, else fetched from `url`
+  (a host the catalog uses) and admitted with its signature by `DocumentAdmission`. A document not
+  on the device yet answers *waiting* like an image, and the same `fetchImages` fetches it.
 - **Images.** Rendering never waits on the network: a render uses only images already on the
   device, and one that misses answers *waiting*; the element fetches them (`fetchImages`, off the
   render path) and renders again, as widget hosts do with `CachedImages`. One fetch serves every
@@ -345,8 +354,8 @@ the other clients and needs no fixture of its own beyond the ones Kotlin already
 A2UI's web renderers share `@a2ui/web_core` (`MessageProcessor`, `Catalog`, `DataContext`). A
 custom component is an API object (a name, a tag and a Zod schema) plus an implementation per
 renderer: a subclass of `A2uiLitElement` in `@a2ui/lit` (built), `createComponentImplementation(Api,
-…)` in `@a2ui/react` and a `CatalogComponent` in `@a2ui/angular` (*planned*: the same API objects
-over the same session).
+…)` in `@a2ui/react` and a `CatalogComponent` in `@a2ui/angular` (all built over a shared renderer-neutral
+controller and the same session).
 
 On the wire, a client action is `{name, surfaceId, sourceComponentId, timestamp, context}`, so a
 Livery action arrives at the agent with `sourceComponentId` naming the Livery component and the
@@ -430,12 +439,15 @@ What the prototype taught, and what it doesn't do yet:
   only.
 - **Semantics come through.** The player's text is in Compose semantics, so a UI test taps the CTA
   by its label inside the A2UI surface.
-- **Not yet:** the projection lives in the Compose module rather than `livery-a2ui`; no
-  conformance fixture; events carry no `a2ui:<surface>/<component>` decision id (A2UI's `A2uiComponentScope` exposes
-  neither id; the web has it); the
-  `createSurface` theme isn't read (theme roles come from the host's Material colours; the web
-  reads it); no
-  `template` forms other than the design preference, or the height rule (the web has it).
+- **Built:** the shared `livery-a2ui` projection and conformance fixture, inline documents,
+  exact named documents (bundled/cached catalog or a bounded signed fetch), the height rule,
+  and contract queries through the app's configured `Decider`. A query draws the installed
+  automatic design while the server answers. `LiveryA2uiHost` accepts `decider`,
+  `decisionContext` and a redirect-aware `documentFetcher`.
+- **Not yet:** events carry no `a2ui:<surface>/<component>` identity because
+  `A2uiComponentScope` exposes neither id; the web has it. The `createSurface` theme is also
+  unavailable through that scope, so Compose uses the host's Material colours. These need public
+  `componentId`, `surfaceId` and surface theme access in upstream A2UI. No vendor fork is included.
 
 ## Order of work
 
@@ -454,11 +466,15 @@ What the prototype taught, and what it doesn't do yet:
    Catalog templates are held to the same features (*done*, protocol level 8): the publisher
    records each template's `features`, and selection skips one the player's
    `PlayerCapabilities.features` doesn't allow, so the A2UI component's catalog path and its
-   inline path agree. Still to do: `sha256` (+ `url`) against the trusted manifests, and the
-   `query` form with `livery-server`'s decision endpoint.
+   inline path agree. `sha256` (+ `url`) and `query` are now built in both adapters. Named documents use the catalog
+   gate or a template signature fetched only from catalog hosts, with a byte limit and redirect
+   checks. Queries use `KtorDecider` or an app implementation of `Decider.decide(DecisionRequest)`;
+   the app implements the endpoint described in PROTOCOL.md §8.3 (no Livery server module required).
+   See [the handler example](../samples/a2ui-query/README.md).
 6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
-   a Lit component per contract, drawing in the page with the TypeScript player and live named
-   values (above). Still to do: React and Angular wrappers, publishing to npm, and a Binaryen-optimised build of the module (4.7 MB now).
+   Lit, React and Angular components per contract, drawing with the TypeScript player and live
+   named values. IndexedDB caching and Binaryen optimization are built. npm release automation
+   is prepared; publishing needs the owner's token.
 
 ## Open questions
 
@@ -470,9 +486,86 @@ What the prototype taught, and what it doesn't do yet:
 - **Lists of components versus lists in a template.** A feed can be an A2UI `List` of Livery
   components (one template per item, as Livery feeds do) or one template with a list input. The
   first is better for viewability per item; worth a sample of each.
-- **Size.** A2UI layouts measure children; a Remote Compose document lays itself out within the
-  constraints it is given. The rule, for a component given no height: the smallest height its
-  template's target declares (`minHeightDp`), else the height its document was authored at (the
-  header's height over its density at generation). *Built* on the web (`Rendered.Ready.heightDp`);
-  a page's `--livery-a2ui-height` still wins. Measuring a document's laid-out content height
-  instead would need the player to expose it.
+- **Size.** A page's `--livery-a2ui-height` wins. Otherwise the web controller uses the player's
+  measured root content height at the current width, at least the target's `minHeightDp`.
+  `Rendered.Ready.heightDp` supplies the authored fallback when no finite root measurement is
+  available; `minHeightDp` keeps an explicit target minimum distinct from that fallback.
+  Measurement uses the destination bounds of layout animations, so a transient frame cannot
+  clip the final card. The sample banner is 112dp high rather than its 160dp authored viewport.
+
+### npm releases
+
+`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
+The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
+first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
+with its provenance until rc-players publishes a supported npm package.
+
+### React and Angular
+
+The same session and controller power all three web renderers. Use
+`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
+React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
+Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
+The Angular entry ships partial compilation for the application's Angular linker.
+
+`options.base` extends the selected renderer's catalog. Actions, data-model paths, themes,
+decision ids, retry and height behavior are shared. `fallback` returns a Lit template for Lit,
+a React node for React, or a DOM node/string for Angular. `npm test` runs the same sample catalog
+and all interaction checks once per renderer; `CHROMIUM_PATH` can select a local Chromium binary.
+
+### Persistent browser cache
+
+Web sessions default to IndexedDB for blobs and small named documents. A session with playable cached templates reads
+its catalog immediately and refreshes in the background. A cached manifest without playable
+blobs first retries prefetch, so an interrupted download cannot register an empty component catalog.
+Template rendering does not
+wait for a network response. The existing repository still owns expiry, stale grace, install
+policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
+the browser; this is a cache, not durable application data.
+
+Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (also useful in
+hosts that deny IndexedDB or Web Locks). Persistent caching requires a secure origin
+(HTTPS or localhost) and Web Locks; refreshes sharing a namespace are serialized across sessions and tabs. Cache namespaces include the catalog and trust configuration:
+switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
+The browser suite reloads with all catalog requests blocked and checks that cached templates
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
+cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
+host application's responsibility.
+
+### Wasm distribution size
+
+`webDist` runs Kotlin's pinned Binaryen optimizer before packaging. On the 0.6.0 baseline this
+reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
+its fetch and redirect contract. `docs/WASM-SIZE.md` records section and dependency measurements;
+`scripts/wasm-size.py` reproduces the breakdown for subsequent builds.
+
+Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.
+
+When replacing a cached catalog, refresh keeps the previous manifest active until its required
+replacement templates and assets finish downloading. Failed downloads keep the playable cache;
+the accepted serial watermark is still persisted immediately so rollback protection survives a
+failure or interruption. Kotlin and Swift use the same activation order.
+
+## Configuring contract queries
+
+The optional `Decider.decide(DecisionRequest)` overload defaults to null. Configure it and an
+app-owned `DecisionContext` on `LiveryA2uiHost` or `LiveryA2uiWeb`. `KtorDecider` posts to the
+configured HTTPS endpoint and refuses redirects. A2UI's inner `query` object is opaque params;
+it cannot override the device's contract, dimensions, capabilities or context.
+
+For `@livery/a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySession.open`.
+The Lit adapter calls `fetchPending()` after rendering a result marked `pending`. Hosts using
+`LiveryA2uiWeb` directly must do the same, then render again. `Ready.pending` means the automatic
+design can draw immediately. A pending exact document shows the app's fallback until it arrives.
+Failed named-document fetches back off for 30 seconds. A subsequent render can then queue another
+background attempt with the same template and query; successfully admitted documents stay cached.
+
+A custom web host reports `shown(render.id)` after drawing each new `Ready.presentationKey`.
+This key changes when a server decision replaces the automatic plan, even if `documentKey`
+stays the same. Keep using `documentKey` for player loading so that transition only updates values.

@@ -99,6 +99,7 @@ public actor TemplateRepository {
   private let clock: @Sendable () -> Int64
   private let targets: [PlayerCapabilities]
   private let bundled: Bundled?
+  private var preparing: Manifest?
   private var current: Manifest?
   private var refreshing: Task<RefreshResult, Never>?
 
@@ -124,7 +125,29 @@ public actor TemplateRepository {
   /// install still has them, as selection already does.
   public func current() async -> Manifest? {
     if let m = await usable() { return m }
-    return bundled?.manifest
+    return await bundledManifest()
+  }
+
+  private func withRevocations(_ base: Manifest, _ accepted: Manifest?) -> Manifest {
+    guard let accepted else { return base }
+    let designs = Set(accepted.designs.filter { $0.revoked }.map { $0.id })
+    var result = base
+    result.designs = base.designs.map { d in var d = d; if designs.contains(d.id) { d.revoked = true }; return d }
+    result.templates = base.templates.map { t in
+      var t = t
+      if accepted.templates.contains(where: { $0.revoked && $0.designId == t.designId && $0.sha256 == t.sha256 }) { t.revoked = true }
+      return t
+    }
+    return result
+  }
+
+  private func bundledManifest() async -> Manifest? {
+    guard let b = bundled else { return nil }
+    let accepted: Manifest?
+    if let text = await kv.get(k("withdrawals")) {
+      accepted = try? JSONDecoder().decode(Manifest.self, from: Data(text.utf8))
+    } else { accepted = nil }
+    return withRevocations(withRevocations(b.manifest, await manifest()), accepted)
   }
 
   private func meta() async -> Meta {
@@ -152,29 +175,32 @@ public actor TemplateRepository {
   private func doRefresh(force: Bool) async -> RefreshResult {
     let now = clock()
     let m = await meta()
+    current = nil // Reload a snapshot another repository may have activated.
     let cached = await manifest()
+    var acceptedSerial = m.acceptedSerial
     if !force {
       if now < m.nextAttemptEpochMs { return .skipped("backing off") }
-      if let cached, now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000, now < cached.expiresAtEpochMs {
-        await prefetch(cached)
+      if let cached, cached.serial == m.acceptedSerial, now - m.fetchedAtEpochMs < cached.ttlSeconds * 1000, now < cached.expiresAtEpochMs {
+        _ = await prefetch(cached)
         return .skipped("fresh")
       }
     }
     func fail(_ reason: String, _ retryAfter: Int64? = nil) async -> RefreshResult {
       var next = m
+      next.acceptedSerial = acceptedSerial
       next.failures += 1
       next.nextAttemptEpochMs = now + (retryAfter.map { $0 * 1000 } ?? Self.backoffMs[min(next.failures - 1, Self.backoffMs.count - 1)])
       await putMeta(next)
       return .failed(reason)
     }
-    switch await fetcher.get(source.manifestURL, etag: cached != nil ? m.etag : nil) {
+    switch await fetcher.get(source.manifestURL, etag: cached?.serial == m.acceptedSerial ? m.etag : nil) {
     case .failed(let status, let message, let retry):
       return await fail("manifest: \(status.map(String.init) ?? "-") \(message)", retry)
     case .notModified:
       var next = m
       next.fetchedAtEpochMs = now; next.failures = 0; next.nextAttemptEpochMs = 0
       await putMeta(next)
-      if let cached { await prefetch(cached) }
+      if let cached { _ = await prefetch(cached) }
       return .unchanged
     case .ok(let bytes, let etag):
       var signature: ManifestSignature?
@@ -184,10 +210,26 @@ public actor TemplateRepository {
       case .accepted(let next, _):
         if next.serial < m.acceptedSerial { return await fail("rollback: serial \(next.serial) < \(m.acceptedSerial)") }
         if next.minClient > Self.protocolLevel { return await fail("needs client level \(next.minClient)") }
+        // Refuse rollback even when downloading this accepted catalog fails or is cancelled.
+        await kv.put(k("withdrawals"), String(decoding: bytes, as: UTF8.self))
+        if let previous = cached ?? bundled?.manifest {
+          let withdrawn = withRevocations(previous, next)
+          if withdrawn != previous, let data = try? JSONEncoder().encode(withdrawn) {
+            await kv.put(k("manifest"), String(decoding: data, as: UTF8.self))
+            current = withdrawn
+          }
+        }
+        acceptedSerial = next.serial
+        var accepted = m
+        accepted.acceptedSerial = acceptedSerial
+        await putMeta(accepted)
+        preparing = next
+        defer { preparing = nil }
+        let complete = await prefetch(next)
+        if cached != nil && !complete { return await fail("template downloads incomplete; keeping the previous catalog") }
         await kv.put(k("manifest"), String(decoding: bytes, as: UTF8.self))
         current = next
         await putMeta(Meta(etag: etag, acceptedSerial: next.serial, fetchedAtEpochMs: now))
-        await prefetch(next)
         return .updated(serial: next.serial)
       }
     }
@@ -218,20 +260,20 @@ public actor TemplateRepository {
         return loaded(m, e, bytes, origin(m))
       }
     }
-    guard let b = bundled else { return nil }
+    guard let b = bundled, let bm = await bundledManifest() else { return nil }
     var plain = query
     plain.designId = nil
-    guard let e = TemplateSelector.select(b.manifest, query, automatic: automatic) ?? TemplateSelector.select(b.manifest, plain, automatic: automatic),
+    guard let e = TemplateSelector.select(bm, query, automatic: automatic) ?? TemplateSelector.select(bm, plain, automatic: automatic),
       let bytes = await b.read(e.sha256)
     else { return nil }
-    return loaded(b.manifest, e, bytes, .bundled)
+    return loaded(bm, e, bytes, .bundled)
   }
 
   /// Whether automatic selection may pick `designId` (§5.2): not revoked, and `Always` or installed.
   /// An experiment's design arm is automatic selection, so it uses this too.
   public func automaticallySelectable(_ designId: String) async -> Bool {
     let m: Manifest?
-    if let u = await usable() { m = u } else { m = bundled?.manifest }
+    if let u = await usable() { m = u } else { m = await bundledManifest() }
     guard let d = m?.design(designId), !d.revoked else { return false }
     if d.install == .always { return true }
     return await installedIds().contains(designId)
@@ -242,10 +284,18 @@ public actor TemplateRepository {
     let m = await usable()
     if let sha = ref.sha256 {
       // The same bytes may be listed for several targets or designs: any matching, eligible entry will do.
-      guard let m, let e = m.templates.first(where: { $0.sha256 == sha && (ref.designId == nil || $0.designId == ref.designId) && TemplateSelector.eligible(m, $0, query) }),
-        let bytes = await obtain(m, e)
-      else { return nil }
-      return loaded(m, e, bytes, origin(m))
+      let catalog: Manifest?
+      if let m { catalog = m } else { catalog = await bundledManifest() }
+      guard let catalog,
+        let e = catalog.templates.first(where: { $0.sha256 == sha && (ref.designId == nil || $0.designId == ref.designId) && TemplateSelector.eligible(catalog, $0, query) }) else { return nil }
+      if let m {
+        guard let bytes = await obtain(m, e) else { return nil }
+        return loaded(m, e, bytes, origin(m))
+      }
+      guard let b = bundled else { return nil }
+      for asset in e.assets { if await b.read(asset) == nil { return nil } }
+      guard let bytes = await b.read(sha) else { return nil }
+      return loaded(catalog, e, bytes, .bundled)
     }
     guard let designId = ref.designId else { return await resolve(query) }
     var q = query
@@ -310,9 +360,12 @@ public actor TemplateRepository {
   }
 
   public func retained() async -> Set<String> {
-    guard let m = await manifest() else { return [] }
+    _ = await manifest()
+    let manifests = [current, preparing].compactMap { $0 }
     let installed = await installedIds()
-    let es = m.designs.filter { $0.install == .always || installed.contains($0.id) }.flatMap { entries(m, $0.id) }
+    let es = manifests.flatMap { m in
+      m.designs.filter { $0.install == .always || installed.contains($0.id) }.flatMap { entries(m, $0.id) }
+    }
     return Set(es.map(\.sha256) + es.flatMap(\.assets))
   }
 
@@ -331,11 +384,13 @@ public actor TemplateRepository {
     m.templates(for: designId).filter { e in !e.revoked && targets.contains { e.target.fits($0) && e.bytes <= $0.maxBytes } }
   }
 
-  private func prefetch(_ m: Manifest) async {
+  private func prefetch(_ m: Manifest) async -> Bool {
     let installed = await installedIds()
+    var complete = true
     for d in m.designs where !d.revoked && (d.install == .always || installed.contains(d.id)) {
-      for e in entries(m, d.id) { _ = await obtain(m, e) }
+      for e in entries(m, d.id) { if await obtain(m, e) == nil { complete = false } }
     }
+    return complete
   }
 
   /// The template's bytes once it and all its assets are on disk, downloading what is missing.
