@@ -97,10 +97,14 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
     signedFeatures = c.signedFeatures.mapNotNull(RiskyFeature::fromWire).toSet(),
     agentBytes = c.agentBytes?.let { AgentBytesPolicy(it.contracts, it.maxBytes, it.allowedKinds) },
   )
+  val catalogHosts = setOfNotNull(LiveryA2uiWeb.hostOf(c.catalog), repository.current()?.blobBase?.let(LiveryA2uiWeb::hostOf))
   val web = LiveryA2uiWeb(
     repository, SlotPlanner(repository, sink, clock), c.capabilities, sink, clock,
     ImageResolver(repository, fetcher, WebCrypto, directHosts = c.imageHosts),
     documents, urlAllowlist = { url -> c.urlAllowlist.any(url::startsWith) }, appKinds = c.appKinds,
+    fetcher = fetcher,
+    // A named document's url: only on a host the catalog itself uses (its manifest's, its blobs').
+    documentHosts = { host -> host in catalogHosts },
   )
   val id = nextSession++
   sessions[id] = Session(web, repository, events)

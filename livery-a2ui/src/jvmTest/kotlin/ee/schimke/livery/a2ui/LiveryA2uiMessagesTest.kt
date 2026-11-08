@@ -63,6 +63,15 @@ class LiveryA2uiMessagesTest {
     }
   }
 
+  @Test fun aTemplateMayNameItsDocumentByHash() {
+    fun named(template: String) = problems(message("""{"id":"promo","component":"PromoBanner","headline":"Hi","cta":"Go","template":$template}""")).map { it.property }
+    val sha = "ab".repeat(32)
+    assertEquals(emptyList(), named("""{"sha256":"$sha"}"""))
+    assertEquals(emptyList(), named("""{"sha256":"$sha","url":"https://catalog.example/d.rc","signature":{"keyId":"k","signature":"c2ln"}}"""))
+    assertEquals(listOf("template"), named("""{"sha256":"abc"}"""))
+    assertEquals(listOf("template"), named("""{"sha256":"$sha","url":"http://catalog.example/d.rc"}"""))
+  }
+
   @Test fun aSignatureNeedsStringFields() {
     val doc = kotlin.io.encoding.Base64.encode(byteArrayOf(1, 2, 3))
     fun signed(signature: String) = problems(message(
