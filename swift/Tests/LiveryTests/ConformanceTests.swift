@@ -46,7 +46,7 @@ final class ConformanceTests: XCTestCase {
       var designId: String?; var variant: String?; var theme: String?; var tags: [String: String]?
       var minor: Int?
     }
-    struct Case: Decodable { var name: String; var query: Query; var installed: [String]?; var expect: String? }
+    struct Case: Decodable { var name: String; var query: Query; var fallbacks: [Query]?; var installed: [String]?; var expect: String? }
     var manifest: Manifest
     var cases: [Case]
   }
@@ -56,9 +56,15 @@ final class ConformanceTests: XCTestCase {
     XCTAssertFalse(f.cases.isEmpty)
     for c in f.cases {
       let installed = Set(c.installed ?? [])
-      let q = TemplateQuery(contract: c.query.contract, caps: c.query.caps, widthDp: c.query.widthDp, heightDp: c.query.heightDp,
-        designId: c.query.designId, variant: c.query.variant, theme: c.query.theme, tags: c.query.tags ?? [:], minor: c.query.minor)
-      let got = TemplateSelector.select(f.manifest, q) { $0.install == .always || installed.contains($0.id) }
+      func query(_ q: SelectionFixture.Query) -> TemplateQuery {
+        TemplateQuery(contract: q.contract, caps: q.caps, widthDp: q.widthDp, heightDp: q.heightDp,
+          designId: q.designId, variant: q.variant, theme: q.theme, tags: q.tags ?? [:], minor: q.minor)
+      }
+      let automatic: (Design) -> Bool = { $0.install == .always || installed.contains($0.id) }
+      let fallbacks = (c.fallbacks ?? []).map(query)
+      let got = fallbacks.isEmpty
+        ? TemplateSelector.select(f.manifest, query(c.query), automatic: automatic)
+        : TemplateSelector.selectFirst(f.manifest, [query(c.query)] + fallbacks, automatic: automatic)?.entry
       XCTAssertEqual(got?.sha256, c.expect, c.name)
     }
   }

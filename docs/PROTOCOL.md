@@ -303,6 +303,17 @@ and have its document and all declared assets present. Accepted revocations stil
 the downloaded catalog expires. Missing or incompatible exact hashes
 never substitute another template.
 
+### 5.4 Most specific first
+
+A slot may ask with an ordered list of queries for one contract, most specific first (tagged for
+one item, then its group, then none). The first query that has a template decides, chosen by §5.2
+for that query; the downloaded catalog answers every query before the bundled one is asked. With
+an experiment arm (§8.1), the arm applies within the deciding query; when no query has a template
+automatic selection may pick, the last query is planned on its own, so an arm's design that only an
+arm may pick (`automatic: false`) still draws as it would for that query alone. A design tagged for one item
+should have a variant of its own, so the plain query's `default` design still wins for every other
+item.
+
 ## 6. Resources
 
 ### 6.1 Image references

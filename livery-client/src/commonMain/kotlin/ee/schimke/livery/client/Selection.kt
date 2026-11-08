@@ -66,6 +66,20 @@ object TemplateSelector {
   }
 
   /**
+   * The first of [queries] that has a template, with its index and that template: one call for a
+   * slot that tries the most specific query first (tagged for this talk, then its track, then its
+   * category) and falls back to the plain one. A design tagged for one item should have a variant
+   * of its own, so that the plain query's `default` design still wins for every other item.
+   */
+  fun selectFirst(
+    manifest: Manifest,
+    queries: List<TemplateQuery>,
+    supportedMajor: Int? = null,
+    automatic: (Design) -> Boolean = { true },
+  ): IndexedValue<TemplateEntry>? =
+    queries.withIndex().firstNotNullOfOrNull { (i, q) -> select(manifest, q, supportedMajor, automatic)?.let { IndexedValue(i, it) } }
+
+  /**
    * Whether [t] may play for [query]: right contract, a live design, not revoked, needing no newer
    * contract minor than the app's, within the player's byte budget, using no risky feature the
    * player doesn't allow, within its level, profiles, container, size and theme, and matching its tags. Exact

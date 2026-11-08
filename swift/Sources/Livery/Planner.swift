@@ -52,11 +52,31 @@ public struct SlotPlanner: Sendable {
   }
 
   public func forAppData(_ query: TemplateQuery, data: [String: JSONValue], extra: Bindings = Bindings()) async -> PlanResult {
+    await appData(query, nil, data, extra)
+  }
+
+  /// §5.4: app-owned data for a slot that prefers a more specific design. `queries` are most specific
+  /// first, all for one contract; the first with a template decides, and an experiment's design arm
+  /// still applies within it.
+  public func forAppData(_ queries: [TemplateQuery], data: [String: JSONValue], extra: Bindings = Bindings()) async -> PlanResult {
+    precondition(!queries.isEmpty, "no queries")
+    precondition(queries.allSatisfy { $0.contract == queries[0].contract }, "queries for more than one contract")
+    // Nothing automatic for any query: the plain one still draws an arm's design that only an arm
+    // may pick (`automatic = false`), exactly as forAppData(query) does.
+    guard let found = await repository.resolveFirst(queries) else { return await appData(queries[queries.count - 1], nil, data, extra) }
+    return await appData(queries[found.index], found.template, data, extra)
+  }
+
+  private func appData(_ query: TemplateQuery, _ resolved: LoadedTemplate?, _ data: [String: JSONValue], _ extra: Bindings) async -> PlanResult {
+    func usual() async -> LoadedTemplate? {
+      if let resolved { return resolved }
+      return await repository.resolve(query)
+    }
     if query.designId == nil, let experiments, let arm = await experiments.designFor(query.contract) {
       let tag = [arm.experiment: arm.arm]
       guard let design = arm.designId else {
         // An arm without a design (a control) draws the usual choice, tagged with its arm.
-        guard let t = await repository.resolve(query) else { return fallback(query, "no template", nil) }
+        guard let t = await usual() else { return fallback(query, "no template", nil) }
         return plan(t, data, extra, nil, nil, tag)
       }
       // An arm's design is automatic selection: never a skin nobody installed. Without a template
@@ -67,7 +87,7 @@ public struct SlotPlanner: Sendable {
         if let t = await repository.resolve(q), t.entry.designId == design { return plan(t, data, extra, nil, nil, tag) }
       }
     }
-    guard let t = await repository.resolve(query) else { return fallback(query, "no template", nil) }
+    guard let t = await usual() else { return fallback(query, "no template", nil) }
     return plan(t, data, extra, nil, nil)
   }
 

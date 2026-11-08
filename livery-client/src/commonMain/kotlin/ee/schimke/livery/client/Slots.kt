@@ -62,12 +62,32 @@ class SlotPlanner(
    * [decisionId] is what every event of the plan carries, the planner's own included (an A2UI
    * component's `a2ui:<surfaceId>/<componentId>`); no decision placed it.
    */
-  suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult {
+  suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult =
+    appData(query, null, data, extra, decisionId)
+
+  /**
+   * App-owned data for a slot that prefers a more specific design: [queries], most specific first
+   * (tagged for this talk, then its track, then its category, then none), all for one contract. The
+   * first query that has a template decides, in one pass over the catalog (PROTOCOL.md §5.4); an
+   * experiment's design arm still applies within it, as for [forAppData] with that query.
+   */
+  suspend fun forAppData(queries: List<TemplateQuery>, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult {
+    require(queries.isNotEmpty()) { "no queries" }
+    require(queries.all { it.contract == queries[0].contract }) { "queries for more than one contract" }
+    // Nothing automatic for any query: the plain one still draws an arm's design that only an arm
+    // may pick (`automatic = false`), exactly as forAppData(query) does.
+    val found = repository.resolveFirst(queries) ?: return appData(queries.last(), null, data, extra, decisionId)
+    return appData(queries[found.index], found.value, data, extra, decisionId)
+  }
+
+  /** [forAppData] for [query], whose usual choice is [resolved] when the caller already has it. */
+  private suspend fun appData(query: TemplateQuery, resolved: LoadedTemplate?, data: JsonObject, extra: Bindings, decisionId: String?): PlanResult {
+    val usual = suspend { resolved ?: repository.resolve(query) }
     val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
     val design = arm?.designId
     if (arm != null && design == null) {
       // An arm without a design (a control) draws the usual choice, tagged with its arm.
-      val t = repository.resolve(query) ?: return fallback(query, "no template", null, decisionId)
+      val t = usual() ?: return fallback(query, "no template", null, decisionId)
       return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm), decisionId)
     }
     // An arm's design is automatic selection: never a skin nobody installed (AGENTS.md).
@@ -78,7 +98,7 @@ class SlotPlanner(
         return plan(t, data, extra, null, null, mapOf(arm.experiment to arm.arm), decisionId)
       }
     }
-    val t = repository.resolve(query) ?: return fallback(query, "no template", null, decisionId)
+    val t = usual() ?: return fallback(query, "no template", null, decisionId)
     return plan(t, data, extra, null, null, decisionId = decisionId)
   }
 
