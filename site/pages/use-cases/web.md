@@ -65,6 +65,9 @@ The installed automatic template draws while the query runs, then the decided te
 its place if it can play and its data binds. A missing or invalid answer keeps the automatic
 choice. The Lit component handles the background fetch; a custom host calls `fetchPending()`
 when a render returns `pending`, then renders again. Named hashes never substitute another design.
+A custom host reports an impression after drawing each new `presentationKey`, while using
+`documentKey` to decide when to reload the player. A server decision can reuse the automatic
+document and still receive its own impression.
 A standalone signed URL must use a catalog host; its redirects, byte size, hash and signature are
 checked. Without an explicit page height, the template's minimum or authored height is used.
 

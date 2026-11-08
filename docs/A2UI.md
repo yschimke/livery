@@ -503,3 +503,7 @@ For `@livery/a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySe
 The Lit adapter calls `fetchPending()` after rendering a result marked `pending`. Hosts using
 `LiveryA2uiWeb` directly must do the same, then render again. `Ready.pending` means the automatic
 design can draw immediately. A pending exact document shows the app's fallback until it arrives.
+
+A custom web host reports `shown(render.id)` after drawing each new `Ready.presentationKey`.
+This key changes when a server decision replaces the automatic plan, even if `documentKey`
+stays the same. Keep using `documentKey` for player loading so that transition only updates values.

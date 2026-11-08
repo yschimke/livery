@@ -31,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -98,6 +99,10 @@ class LiveryA2uiWebTest {
     assertEquals(JsonPrimitive("Spring sale"), immediate.values["headline"])
     assertTrue(web.fetchPending())
     val decided = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", p, space))
+    assertEquals(immediate.documentKey, decided.documentKey, "the server reused the automatic document")
+    assertNotEquals(immediate.presentationKey, decided.presentationKey, "the server decision needs its own impression")
+    val updated = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", JsonObject(p + ("headline" to JsonPrimitive("Updated fallback"))), space))
+    assertEquals(decided.presentationKey, updated.presentationKey, "the cached decision is still the same presentation")
     assertEquals(JsonPrimitive("From server"), decided.values["headline"])
     assertEquals(false, decided.pending)
     web.shown(decided.id)
@@ -140,6 +145,7 @@ class LiveryA2uiWebTest {
     assertEquals(JsonPrimitive(1), r.values["quantity"])
     val again = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", JsonObject(qty + ("quantity" to JsonPrimitive(3))), LiveryA2uiWeb.Space(widthDp = 360)))
     assertEquals(r.documentKey, again.documentKey, "the same document: only a value changed")
+    assertEquals(r.presentationKey, again.presentationKey, "live data updates do not create a new presentation")
     assertEquals(JsonPrimitive(3), again.values["quantity"])
     web.shown(again.id)
     assertEquals(TemplateEvent.Type.Impression, events.last().type)

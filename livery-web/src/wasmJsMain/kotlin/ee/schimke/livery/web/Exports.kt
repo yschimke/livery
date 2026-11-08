@@ -161,6 +161,7 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
       put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
+      put("presentationKey", r.presentationKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
       put("pending", r.pending)
       r.heightDp?.let { put("heightDp", it) }

@@ -46,6 +46,8 @@ import ee.schimke.livery.protocol.TemplateRef
 import kotlin.io.encoding.Base64
 import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -114,6 +116,8 @@ class LiveryA2uiWeb(
       val heightDp: Int? = null,
       /** A query is still loading; draw this automatic design, then call fetchPending and render again. */
       val pending: Boolean = false,
+      /** Impression identity: a server decision can change while [documentKey] stays the same. */
+      val presentationKey: String = documentKey,
     ) : Rendered
 
     /** Draw the page's fallback, and tell the agent [reason]. */
@@ -213,12 +217,15 @@ class LiveryA2uiWeb(
     // template's own default instead of keeping the last value set.
     val key = plan.template.entry.sha256 + written.values.entries.sortedBy { it.key }.joinToString("") { "|${it.key}=${it.value}" } +
       "|" + live.keys.sorted().joinToString(",")
+    // The original server id distinguishes a decision from the automatic plan even when event
+    // decisionId is overridden by the component's stable a2ui:<surface>/<component> id.
+    val presentationKey = JsonArray(listOf(JsonPrimitive(key), plan.decision?.let { JsonPrimitive(it.decisionId) } ?: JsonNull)).toString()
     // Any image the document draws is written in: the web player draws none from a URL.
     val draws = written.values.isNotEmpty() || drawsImages(plan.template.entry.sha256, plan.template.bytes)
     if (!draws) {
       val id = next++
       this.live[id] = Live(plan, wiring)
-      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending())
+      return Rendered.Ready(id, plan.template.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey)
     }
     val cached = images?.let(::CachedImages)
     val instantiator = cached?.instantiator ?: NO_IMAGES
@@ -232,7 +239,7 @@ class LiveryA2uiWeb(
       is InstantiateResult.Ok -> {
         val id = next++
         this.live[id] = Live(plan, wiring)
-        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending())
+        Rendered.Ready(id, i.bytes, key, live, plan.template.entry.designId, plan.template.entry.sha256, heightDp(plan), hasPending(), presentationKey)
       }
     }
   }

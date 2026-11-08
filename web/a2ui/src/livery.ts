@@ -61,6 +61,8 @@ export type Rendered =
       /** The document to play; load it only when [documentKey] changes, otherwise set [values]. */
       document: Uint8Array;
       documentKey: string;
+      /** Impression identity; a new decision can reuse the same documentKey. */
+      presentationKey: string;
       /** Its named values: strings, numbers (booleans as 1 or 0), colours as `#AARRGGBB`. */
       values: Record<string, string | number>;
       design: string;

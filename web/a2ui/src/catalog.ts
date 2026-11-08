@@ -131,7 +131,7 @@ class LiveryElement extends A2uiLitElement {
     private automaticFor?: string;
     /** A fetch for this element's images failed: if it renders waiting again, it can't draw. */
     private imagesFailed = false;
-    private shownKey?: string;
+    private shownPresentation?: string;
     private resize?: ResizeObserver;
     private widthDp = 0;
 
@@ -172,7 +172,7 @@ class LiveryElement extends A2uiLitElement {
       this.render_ = undefined;
       this.player?.dispose();
       this.player = undefined;
-      this.shownKey = undefined;
+      this.shownPresentation = undefined;
       this.request = '';
     }
 
@@ -279,10 +279,10 @@ class LiveryElement extends A2uiLitElement {
       try {
         const first = previous === undefined;
         const shown = await player.show(r.documentKey, r.document, r.values, this.clientWidth, this.clientHeight, density);
-        // An impression per document shown, as LiveryTemplate reports after its first frame. A
-        // show a newer one replaced, or one the element left the page during, isn't one.
-        if (shown && mine === this.sequence && (first || this.shownKey !== r.documentKey)) session.shown(r.render);
-        if (shown && mine === this.sequence) this.shownKey = r.documentKey;
+        // Report a new decision even when it reuses the automatic document. Superseded shows
+        // and updates to the same presentation do not report another impression.
+        if (shown && mine === this.sequence && (first || this.shownPresentation !== r.presentationKey)) session.shown(r.render);
+        if (shown && mine === this.sequence) this.shownPresentation = r.presentationKey;
       } catch (e) {
         player.forget();
         if (mine === this.sequence) this.cannotPlay(props, `the player could not play ${r.design}: ${(e as Error).message}`);
