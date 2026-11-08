@@ -193,6 +193,25 @@ try {
   const second = await page.evaluate(() => window.__livery.actions2[0]);
   check(second?.name === 'secondTrial' && await page.evaluate(() => window.__livery.actions.length) === firstCount, `a second catalog's component reports to its own processor: ${JSON.stringify(second)}`);
 
+  // The agent's createSurface theme colours its templates over the page's CSS theme; a surface
+  // without one takes the page's.
+  const themes = await page.evaluate(() => ({
+    agent: document.querySelector('#app livery-shop-quantity')?.liveryTheme?.primary,
+    page: document.querySelector('#second livery-promo-banner')?.liveryTheme?.primary,
+  }));
+  check(themes.agent === '#FF00897B' && typeof themes.page === 'string' && themes.page !== themes.agent, `a surface's primaryColor is its templates' primary: ${JSON.stringify(themes)}`);
+  const shot = await (await page.$('#app livery-shop-quantity')).screenshot();
+  const teal = await page.evaluate(async (b64) => {
+    const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 0x00) < 24 && Math.abs(d[i + 1] - 0x89) < 24 && Math.abs(d[i + 2] - 0x7b) < 24) n++;
+    return n;
+  }, shot.toString('base64'));
+  check(teal > 200, `and the stepper draws in it: ${teal} pixels of #00897B`);
+
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
 } catch (e) {

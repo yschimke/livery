@@ -17,7 +17,7 @@ const { catalog, components } = await liveryCatalog(session, {
 });
 const processor = new MessageProcessor([catalog as any], (a) => { actions.push(a); });
 processor.processMessages([
-  { version: 'v0.9', createSurface: { surfaceId: 'chat-1', catalogId: CATALOG_ID } },
+  { version: 'v0.9', createSurface: { surfaceId: 'chat-1', catalogId: CATALOG_ID, theme: { primaryColor: '#00897B' } } },
   { version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/', value: { offer: { title: 'Spring sale' }, cart: { quantity: 1 } } } },
   {
     version: 'v0.9',

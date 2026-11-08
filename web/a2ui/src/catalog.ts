@@ -122,6 +122,7 @@ class LiveryElement extends A2uiLitElement {
     private sequence = 0;
     /** The agent's design failed to play: render the automatic choice instead, until the props change. */
     private automatic = false;
+    private lastTheme?: Record<string, string>;
     private automaticFor?: string;
     /** A fetch for this element's images failed: if it renders waiting again, it can't draw. */
     private imagesFailed = false;
@@ -132,6 +133,11 @@ class LiveryElement extends A2uiLitElement {
     /** Documents this element's player loaded and values it set: a data change sets values, never reloads. */
     get liveryStats(): { loads: number; sets: number } | undefined {
       return this.player?.stats;
+    }
+
+    /** The theme roles of the last render, as `#AARRGGBB`. @internal For tests. */
+    get liveryTheme(): Record<string, string> | undefined {
+      return this.lastTheme;
     }
 
     /** This element's catalog entry: the session, spec and options of the catalog it was rendered from. */
@@ -208,7 +214,8 @@ class LiveryElement extends A2uiLitElement {
       if (this.automaticFor !== undefined && this.automaticFor !== asked) this.automatic = false;
       if (this.automatic) { this.automaticFor ??= asked; delete props[DESIGN]; } else this.automaticFor = undefined;
       const density = window.devicePixelRatio || 1;
-      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this), decisionId: this.decisionId() };
+      const space = { widthDp: this.widthDp || Math.round(this.clientWidth) || undefined, heightDp: Math.round(this.clientHeight) || undefined, density, theme: themeOf(this, this.context?.theme), decisionId: this.decisionId() };
+      this.lastTheme = space.theme;
       const request = JSON.stringify([props, space]);
       if (request === this.request) return;
       this.request = request;
@@ -316,13 +323,17 @@ class LiveryElement extends A2uiLitElement {
  * Theme role inputs from CSS: `--livery-<role>` (kebab-case), else A2UI's own `--a2ui-color-<role>`,
  * else Material 3's baseline, as `#AARRGGBB`.
  */
-function themeOf(el: HTMLElement): Record<string, string> {
+function themeOf(el: HTMLElement, surface?: Record<string, unknown>): Record<string, string> {
   const style = getComputedStyle(el);
   const out: Record<string, string> = {};
+  // The agent's own colour first: A2UI's createSurface theme (`primaryColor` → `primary`).
+  const agent: Record<string, unknown> = { primary: surface?.primaryColor };
   for (const role of THEME_ROLES) {
     const name = kebab(role);
+    const asked = agent[role];
+    const fromAgent = typeof asked === 'string' ? cssColorToArgb(asked, el) : undefined;
     const value = style.getPropertyValue(`--livery-${name}`).trim() || style.getPropertyValue(`--a2ui-color-${name}`).trim();
-    out[role] = (value ? cssColorToArgb(value, el) : undefined) ?? BASELINE[role];
+    out[role] = fromAgent ?? (value ? cssColorToArgb(value, el) : undefined) ?? BASELINE[role];
   }
   return out;
 }
