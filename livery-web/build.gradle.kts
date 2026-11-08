@@ -32,10 +32,19 @@ kotlin {
   }
 }
 
-// The Wasm module and its JavaScript glue, for `@livery/a2ui` to ship in its dist/livery-web/.
-val webDist by tasks.registering(Sync::class) {
-  val link = tasks.named<org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink>("compileProductionLibraryKotlinWasmJs")
-  from(link.flatMap { it.destinationDirectory })
-  include("*.mjs", "*.wasm", "*.d.mts")
+// Ship the production link through Kotlin's pinned Binaryen toolchain.
+val webLink = tasks.named<org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink>("compileProductionLibraryKotlinWasmJs")
+@OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+val optimizeWebWasm = org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenExec.register(
+  kotlin.targets.getByName("wasmJs").compilations.getByName("main") as org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation,
+  "optimizeWebWasm",
+) {
+  inputFiles.from(webLink.flatMap { it.destinationDirectory }.map { it.file("livery-livery-web.wasm") })
+  outputDirectory.set(layout.buildDirectory.dir("optimized-web"))
+}
+
+val webDist = tasks.register<Sync>("webDist") {
+  from(webLink.flatMap { it.destinationDirectory }) { include("*.mjs", "*.d.mts") }
+  from(optimizeWebWasm.flatMap { it.outputDirectory }) { include("*.wasm") }
   into(layout.buildDirectory.dir("web-dist"))
 }

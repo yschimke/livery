@@ -524,3 +524,10 @@ The browser suite reloads with all catalog requests blocked and checks that cach
 draw, that memory-only sessions are empty offline, and that a different trust configuration
 cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
 host application's responsibility.
+
+### Wasm distribution size
+
+`webDist` runs Kotlin's pinned Binaryen optimizer before packaging. On the 0.6.0 baseline this
+reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
+its fetch and redirect contract. `docs/WASM-SIZE.md` records section and dependency measurements;
+`scripts/wasm-size.py` reproduces the breakdown for subsequent builds.
