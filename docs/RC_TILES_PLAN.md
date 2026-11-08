@@ -3,6 +3,9 @@
 Status: **Proposed / Planned**. This is a delivery plan, not a supported API or AT Protocol
 standard. Source inspection: 2026-11-08. “RC tile” remains a provisional format name.
 
+Implementation assignments: [parallel handover notes](handovers/README.md), with owners,
+shared interface checkpoints, dependencies and acceptance checks.
+
 ## Product: Confetti components, interactive previews and shared sessions
 
 Use Confetti's existing Remote Compose work as the first real content and native application.
