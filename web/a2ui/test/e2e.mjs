@@ -18,6 +18,7 @@ const root = join(here, '..');
 const repo = join(root, '../..');
 const site = join(here, 'site');
 const out = process.env.LIVERY_RENDER_OUT;
+const players = process.env.LIVERY_TEST_PLAYER ? [process.env.LIVERY_TEST_PLAYER] : ['ts', 'cmp'];
 rmSync(site, { recursive: true, force: true });
 mkdirSync(site, { recursive: true });
 
@@ -32,6 +33,8 @@ execFileSync(cli, ['build', src, join(site, 'catalog')], { stdio: 'inherit' });
 // This package's Wasm module beside the page.
 const require = createRequire(import.meta.url);
 cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: true });
+
+if (players.includes('cmp')) cpSync(join(root, 'dist/livery-web-compose'), join(site, 'livery-web-compose'), { recursive: true });
 
 // The page, bundled; @js-joda/core (imported by the Wasm module's glue) through an import map.
 await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js'), external: ['./livery-web/*'], logLevel: 'warning' });
@@ -55,16 +58,21 @@ await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 480, height: 700 } });
+const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
+let failed = 0;
+for (const player of players) {
+console.log(`Player: ${player}`);
+const page = await browser.newPage({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_TEST_DPR ?? 1) });
 const logs = [];
+const requests = [];
+page.on('request', (r) => requests.push(r.url()));
+if (player === 'cmp') await page.addInitScript(() => Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en-US@posix', 'en_GB'] }));
 page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
 page.on('response', (r) => { if (r.status() >= 400) logs.push(`${r.status()} ${r.url()}`); });
-let failed = 0;
 const check = (ok, what) => { console.log(`${ok ? 'ok' : 'FAIL'} - ${what}`); if (!ok) failed++; };
 try {
-  await page.goto(base);
+  await page.goto(`${base}?player=${player}`);
   await page.waitForFunction(() => window.__livery, null, { timeout: 60_000 });
   const components = await page.evaluate(() => window.__livery.components);
   check(components.includes('PromoBanner') && components.includes('ShopQuantity'), `components advertised: ${components}`);
@@ -76,8 +84,9 @@ try {
       for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; }
       return null;
     };
+    const count = (root, tag) => [...root.querySelectorAll('*')].reduce((n, e) => n + (e.matches(tag) ? 1 : 0) + (e.shadowRoot ? count(e.shadowRoot, tag) : 0), 0);
     const el = find(document);
-    return el ? { ...el.liveryStats, iframes: el.shadowRoot.querySelectorAll('iframe').length, canvases: el.shadowRoot.querySelectorAll('canvas').length } : null;
+    return el ? { ...el.liveryStats, iframes: count(el.shadowRoot, 'iframe'), canvases: count(el.shadowRoot, 'canvas') } : null;
   }, selector);
   const loaded = (selector) => page.waitForFunction((sel) => {
     const find = (root) => {
@@ -92,7 +101,16 @@ try {
   const promoStats = await statsOf('#app livery-promo-banner');
   check(promoStats.iframes === 0 && promoStats.canvases === 1, `drawn on a canvas in the page, no iframe: ${JSON.stringify(promoStats)}`);
   await page.waitForTimeout(300);
-  if (out) { mkdirSync(out, { recursive: true }); await page.screenshot({ path: join(out, 'a2ui-web.png') }); }
+  const initialRequests = requests.length;
+  const timing = await page.evaluate(() => ({ sampleReadyMs: performance.now(), heapBytes: performance.memory?.usedJSHeapSize, resources: performance.getEntriesByType('resource').filter((r) => r.name.includes('/livery-web')).map((r) => ({ name: r.name.split('/').pop(), bytes: r.decodedBodySize, ms: r.duration })) }));
+  timing.accessibility = await page.locator('#app livery-promo-banner').ariaSnapshot();
+  console.log(`metrics ${player}: ${JSON.stringify(timing)}`);
+  if (player === 'cmp') check(await page.evaluate(() => performance.getEntriesByType('resource')
+    .filter((r) => r.name.includes('/livery-web-compose/'))
+    .every((r) => r.responseEnd <= window.__livery.catalogPreparedAt)), 'CMP, Skiko and fonts finish loading before catalog preparation returns');
+  if (out) { mkdirSync(out, { recursive: true }); writeFileSync(join(out, `a2ui-web-${player}-metrics.json`), JSON.stringify(timing, null, 2) + '\n'); }
+  check(player !== 'ts' || !requests.some((r) => r.includes('livery-web-compose') || r.includes('skiko')), 'the default player fetches no CMP runtime, Skiko or fonts');
+  if (out) { mkdirSync(out, { recursive: true }); await page.screenshot({ path: join(out, `a2ui-web-${player}.png`) }); }
 
   // Drawn, not just loaded: the banner has its surface and its text.
   const colours = async (selector) => {
@@ -182,7 +200,7 @@ try {
   const redrawn = await colours('#app livery-promo-banner');
   check(promoAfter.loads === promoBefore.loads && promoAfter.sets > promoBefore.sets && redrawn.hash !== banner.hash,
     `a data-model update sets the headline on the playing document, which redraws: ${JSON.stringify({ promoBefore, promoAfter })}`);
-  if (out) await page.screenshot({ path: join(out, 'a2ui-web-updated.png') });
+  if (out) await page.screenshot({ path: join(out, `a2ui-web-${player}-updated.png`) });
 
   // A second catalog with the same component names draws with its own session, and its actions reach
   // its own processor, not the first one's.
@@ -219,13 +237,50 @@ try {
   }));
   check(heights.banner === 160 && heights.stepper === 120, `the banner takes its template's 160dp, the stepper the page's 120px: ${JSON.stringify(heights)}`);
 
+  await page.evaluate(() => window.__livery.send([{ version: 'v0.9', updateDataModel: { surfaceId: 'chat-1', path: '/offer/title', value: 'Unavailable glyph: 𐀀' } }]));
+  await page.waitForTimeout(800);
+  check(requests.length === initialRequests, 'actions, live updates and missing glyphs make no network requests');
+
+  // A container-only resize must resize the viewport without a browser window resize event.
+  await page.evaluate(() => { document.body.style.width = '380px'; });
+  await page.waitForTimeout(400);
+  const resizedCount = await page.evaluate(() => window.__livery.actions.length);
+  await tap('#app livery-promo-banner');
+  await page.waitForFunction((n) => window.__livery.actions.length > n, resizedCount);
+  check((await statsOf('#app livery-promo-banner')).loads === 1, 'resizing preserves the document and real taps still work');
+
+  // Detach and reconnect the same surface: release its viewport and create exactly one new one.
+  await page.evaluate(() => {
+    window.__detachedSurface = document.querySelector('#second a2ui-surface');
+    window.__detachedSurface.remove();
+  });
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => {
+    const count = (r) => [...r.querySelectorAll('*')].reduce((n, e) => n + (e.tagName === 'CANVAS' ? 1 : 0) + (e.shadowRoot ? count(e.shadowRoot) : 0), 0);
+    return count(window.__detachedSurface) === 0;
+  }), 'disconnect releases every canvas');
+  await page.evaluate(() => document.querySelector('#second').append(window.__detachedSurface));
+  await loaded('#second livery-promo-banner');
+  check((await statsOf('#second livery-promo-banner')).canvases === 1, 'reconnect creates exactly one fresh canvas');
+  const reconnectCount = await page.evaluate(() => window.__livery.actions2.length);
+  await tap('#second livery-promo-banner');
+  await page.waitForFunction((n) => window.__livery.actions2.length > n, reconnectCount);
+  check(true, 'the reconnected component still routes real taps');
+  const lifecycle = await page.evaluate(() => window.__livery.exercisePlayers());
+  check(lifecycle.drawn && (player === 'ts' || lifecycle.cmpCount === 5), `twelve more components draw, with at most eight CMP viewports across the page: ${JSON.stringify(lifecycle)}`);
+  check(lifecycle.queued[0] === false && lifecycle.queued[1] === true && lifecycle.reloaded && lifecycle.forgotten, 'queued shows supersede, changed keys reload, forget forces a reload');
+  check(lifecycle.cancelled === false && lifecycle.remaining === 0, 'dispose cancels an in-flight show and leaves no canvas');
+  check(!logs.some((l) => l.startsWith('pageerror:')), `no uncaught browser errors: ${logs.filter((l) => l.startsWith('pageerror:'))}`);
+
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);
 } catch (e) {
   check(false, String(e));
   console.log(logs.join('\n'));
 } finally {
-  await browser.close();
-  server.close();
+  await page.close();
 }
+}
+await browser.close();
+server.close();
 process.exit(failed ? 1 : 0);
