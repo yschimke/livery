@@ -21,6 +21,8 @@ export class RcCanvasPlayer {
   /** Shows run one after another; one asked for while another runs replaces any still queued. */
   private queue: Promise<unknown> = Promise.resolve();
   private latest = 0;
+  /** Last root layout height, in dp, after applying named values. */
+  measuredHeightDp?: number;
   /** Documents loaded and values set, for tests and debugging. */
   readonly stats = { loads: 0, sets: 0 };
 
@@ -71,6 +73,9 @@ export class RcCanvasPlayer {
       this.values.set(name, text);
       this.stats.sets++;
     }
+    this.handle.player.repaint();
+    const measured = this.handle.player.measureSize();
+    this.measuredHeightDp = measured ? measured.height / density : undefined;
   }
 
   /** The canvas at [widthPx] × [heightPx] CSS pixels. */

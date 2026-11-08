@@ -65,6 +65,8 @@ export type Rendered =
       sha256: string;
       /** The template's own height in dp: what to draw it at when the page gives the component none. */
       heightDp?: number;
+      /** An authored target minimum, retained when sizing to the measured root. */
+      minHeightDp?: number;
     }
   | { ok: false; reason: string; waiting?: boolean };
 

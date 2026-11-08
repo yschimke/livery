@@ -60,7 +60,7 @@ export class LiveryController {
       this.automatic = false; this.automaticFor = undefined; this.imagesFailed = false;
     }
     private player?: RcCanvasPlayer;
-    /** The player's canvas lives here, across renders: Lit never re-creates it. */
+    /** The player's canvas lives here across framework renders. */
     readonly box: HTMLDivElement = Object.assign(document.createElement('div'), { className: 'player' });
     private render_?: number;
     private request = '';
@@ -160,12 +160,18 @@ export class LiveryController {
       // A template that doesn't say takes the default, never the last template's height.
       if (r.heightDp) this.element.style.setProperty('--livery-template-height', `${r.heightDp}px`);
       else this.element.style.removeProperty('--livery-template-height');
+      if (mine !== this.sequence) { session.release(r.render); return; }
       const previous = this.render_;
       this.render_ = r.render;
       const player = this.player;
       try {
         const first = previous === undefined;
         const shown = await player.show(r.documentKey, r.document, r.values, this.element.clientWidth, this.element.clientHeight, density);
+        if (shown && mine === this.sequence && !this.pageHeight() && player.measuredHeightDp) {
+          const height = Math.max(r.minHeightDp ?? 0, player.measuredHeightDp);
+          this.element.style.setProperty('--livery-template-height', `${height}px`);
+          player.resize(this.element.clientWidth, height, density);
+        }
         // An impression per document shown, as LiveryTemplate reports after its first frame. A
         // show a newer one replaced, or one the element left the page during, isn't one.
         if (shown && mine === this.sequence && (first || this.shownKey !== r.documentKey)) session.shown(r.render);
@@ -206,7 +212,9 @@ export class LiveryController {
       if (this.render_ === undefined || !api) return;
       const { session, spec, options } = api;
       const value = a.valueType === 'none' ? null : a.value;
-      const routed: Routed = await session.action(this.render_, a.name, a.valueType, value);
+      const render = this.render_;
+      const routed: Routed = await session.action(render, a.name, a.valueType, value);
+      if (!this.connected || this.livery !== api || this.render_ !== render) return;
       switch (routed.route) {
         case 'agent':
           return this.dispatch(routed);

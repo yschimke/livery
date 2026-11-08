@@ -2,10 +2,12 @@ import { A2uiLitElement, basicCatalog } from '@a2ui/lit/v0_9';
 import type { Catalog } from '@a2ui/web_core/v0_9';
 import { css, html, nothing, type PropertyValues } from 'lit';
 import type { LiveryComponentSpec, LiverySession } from './livery.js';
-import { componentApi, type LiveryComponentApi, type LiveryCatalogOptions } from './api.js';
+import { componentApi, type LiveryComponentApi as SharedComponentApi, type LiveryCatalogOptions } from './api.js';
 import { LiveryController } from './controller.js';
 import type { NamedAction } from './player.js';
-export type { LiveryComponentApi, LiveryCatalogOptions } from './api.js';
+export type { LiveryCatalogOptions } from './api.js';
+/** Lit retains its custom-element constructor alongside the renderer-neutral API. */
+export interface LiveryComponentApi extends SharedComponentApi { element: CustomElementConstructor; }
 
 export async function liveryCatalog(session: LiverySession, options: LiveryCatalogOptions): Promise<{ catalog: Catalog<any, any>; components: LiveryComponentApi[] }> {
   const base = options.base ?? basicCatalog;
@@ -19,7 +21,7 @@ export async function liveryCatalog(session: LiverySession, options: LiveryCatal
  * session, spec and options from the catalog entry it was rendered from, never from the first
  * catalog that defined the tag: two catalogs (or a session opened again) each draw with their own.
  */
-export function liveryComponent(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): LiveryComponentApi & { element: CustomElementConstructor } {
+export function liveryComponent(session: LiverySession, spec: LiveryComponentSpec, options: LiveryCatalogOptions): LiveryComponentApi {
   const api = componentApi(session, spec, options);
   const { tagName } = api;
   let element = customElements.get(tagName);

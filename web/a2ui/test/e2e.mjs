@@ -56,7 +56,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
-const page = await browser.newPage({ viewport: { width: 480, height: 700 } });
+const page = await browser.newPage({ viewport: { width: 480, height: 700 }, deviceScaleFactor: Number(process.env.LIVERY_DENSITY ?? 1) });
 const logs = [];
 page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
 page.on('pageerror', (e) => { logs.push(`pageerror: ${e.message}`); console.error(e); });
@@ -217,7 +217,7 @@ try {
     banner: document.querySelector('#app [data-livery-component="PromoBanner"]').clientHeight,
     stepper: document.querySelector('#app [data-livery-component="ShopQuantity"]').clientHeight,
   }));
-  check(heights.banner === 160 && heights.stepper === 120, `the banner takes its template's 160dp, the stepper the page's 120px: ${JSON.stringify(heights)}`);
+  check(heights.banner === 112 && heights.stepper === 120, `the banner wraps its measured 112dp card, the stepper the page's 120px: ${JSON.stringify(heights)}`);
 
   const problems = await page.evaluate(() => window.__livery.problems);
   check(problems.length === 0, `no problems reported: ${JSON.stringify(problems)}`);

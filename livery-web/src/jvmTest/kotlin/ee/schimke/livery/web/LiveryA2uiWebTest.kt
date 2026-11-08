@@ -213,11 +213,27 @@ class LiveryA2uiWebTest {
   }
 
   @Test fun aTemplateSaysHowTallItIs() = runTest {
-    // The height rule: no height from the page, so the template's own, the height it was authored at.
+    // Authored fallback remains available when the player cannot measure a root.
     val r = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
     val bytes = built.files.entries.first { it.key.contains(r.sha256) }.value
     assertEquals(ee.schimke.livery.instantiate.TemplateInstantiator.authoredHeightDp(bytes), r.heightDp)
     assertEquals(160, r.heightDp, "banner-classic is authored at 360x160")
+    assertEquals(null, r.minHeightDp, "authored fallback is not a target minimum")
+  }
+
+  @Test fun anExplicitMinimumRemainsSeparateFromMeasuredContent() = runTest {
+    val manifest = built.manifest.copy(templates = built.manifest.templates.map { entry ->
+      entry.copy(target = entry.target.copy(size = entry.target.size.copy(minHeightDp = 150)))
+    })
+    val repo = TemplateRepository(
+      StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(manifest) { sha -> built.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    val web = LiveryA2uiWeb(repo, SlotPlanner(repo, { events += it }, clock), caps, { events += it }, clock)
+    val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", promo))
+    assertEquals(150, ready.minHeightDp)
+    assertEquals(150, ready.heightDp)
   }
 
   @Test fun itsEventsCarryWhereTheAgentPlacedIt() = runTest {

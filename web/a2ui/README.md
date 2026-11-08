@@ -1,13 +1,12 @@
 # @livery/a2ui
 
-Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit renderer
-(`@a2ui/lit`). An agent places a component per contract and sends its data. The page then picks a
+Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit, React and Angular renderers. An agent places a component per contract and sends its data. The page then picks a
 reviewed, signed template for it, binds the data through the contract, and plays the template on a
 canvas in the page with the TypeScript Remote Compose player. A data change sets named values on the
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
-The player is vendored from rc-players `main`, which has two fixes this package needs
+The player is vendored from the commit recorded in `vendor/PROVENANCE.md`, with the fixes this package needs
 ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829)): without them, these
 templates lay out at `NaN` and their buttons don't fire.
 
@@ -59,8 +58,9 @@ Each theme role (`primary`, `surface`, `onSurface`, …) comes from the first of
 
 Templates therefore match the basic components around them. The width the element gets selects
 the design. The height is `--livery-a2ui-height` when the page sets it; otherwise it's the
-template's own: the smallest height its target declares, else the height its document was
-authored at.
+measured root content at that width, clamped to the target's `minHeightDp` when declared.
+Documents without a finite root measurement use their authored height as the fallback.
+The sample banner wraps to 112dp instead of its 160dp authored viewport.
 
 ## Develop
 
@@ -70,15 +70,15 @@ npm ci && npm run check && npm run build
 npm test                                                    # headless Chromium (Playwright)
 ```
 
-`npm test` serves the sample catalog to a page that runs A2UI's own engine and Lit renderer, then
-checks seven things:
+`npm test` serves the sample catalog to a page that runs A2UI's own engine with each of the Lit, React and Angular renderers, then
+checks rendering, interactions and offline behavior:
 
 - both templates draw on a canvas in the page, with no iframe;
 - an action reaches the agent with only its declared arguments, and a `set` writes the data model;
 - a data change sets values on the playing document without reloading it, and redraws it;
 - Livery's events carry the A2UI decision id, `a2ui:<surfaceId>/<componentId>`;
 - a surface's `primaryColor` colours its templates over the page's CSS theme;
-- a component takes its template's height unless the page sets one;
+- a component wraps measured content unless the page sets its height;
 - a second catalog's components keep their own session.
 
 ### npm releases
@@ -117,7 +117,7 @@ Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (a
 hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
 switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
 The browser suite reloads with all catalog requests blocked and checks that cached templates
-draw, that memory-only sessions are empty offline, and that a different trust configuration
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
 cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
 host application's responsibility.
 

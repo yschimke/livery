@@ -3,19 +3,18 @@ order: 17
 
 # The web
 
-> **Planned.**
+`@livery/a2ui` renders Livery contracts in A2UI's Lit, React and Angular surfaces. The common
+Kotlin pipeline, compiled to Wasm, selects and verifies templates and gates actions. The
+TypeScript Remote Compose player draws them on a canvas and updates named values live.
+The package is built; its first npm publication needs the repository owner's publish token.
 
-**In one line:** a `<livery-template>` element that fetches, verifies and plays a template with
-rc-players' TypeScript player, fed by the same catalogs.
+Use `LiverySession.open({ catalog, keys })`, then `liveryCatalog(session, { catalogId })` for Lit,
+or one of the framework adapters below. Outside A2UI, a standalone `<livery-template>` element
+is still **Planned**. `livery-compose` also runs in browsers through Compose Multiplatform.
 
-## The plan
-
-- A TypeScript client (`fetch`, `crypto.subtle` Ed25519, Cache API storage) ported from the Kotlin
-  one and checked against the shared conformance fixtures.
-- A web component over `remote-compose-player-js`.
-
-Today, the Kotlin client already compiles for Wasm (Ktor's `fetch` engine), and `livery-compose`
-runs in the browser through Compose Multiplatform.
+The host's `--livery-a2ui-height` sets a fixed height. Without it, components wrap the measured
+root content, respecting an explicit target minimum. The sample banner takes 112dp instead of
+its authored 160dp. Documents without measurable root content retain the authored fallback.
 
 **Hosting for the web:** GitHub release downloads send no CORS headers, so a browser must read a
 catalog from GitHub Pages, a CDN or a design server instead ([Hosting](../hosting.md)).
@@ -56,7 +55,7 @@ Set `persistentCache: false` in `LiverySession.open` for memory-only sessions (a
 hosts that deny IndexedDB). Cache namespaces include the catalog and trust configuration:
 switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
 The browser suite reloads with all catalog requests blocked and checks that cached templates
-draw, that memory-only sessions are empty offline, and that a different trust configuration
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
 cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
 host application's responsibility.
 
