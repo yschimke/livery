@@ -164,7 +164,7 @@ jobs:
           case "$TAG" in v[0-9]*) ;; *) echo "::error::tag '$TAG' is not v<version>"; exit 1 ;; esac
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
       - name: Build and test
-        run: ./gradlew build -Plivery.version="$VERSION"
+        run: ./gradlew build -Plivery.version="$VERSION" --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
       - name: Publish to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -179,7 +179,9 @@ jobs:
         run: gh release upload "$TAG" livery-publish/build/distributions/*.zip livery-mcp/build/distributions/*.zip --clobber
 
   publish-npm:
-    name: Publish npm
+    name: Publish npm and standalone viewer
+    permissions:
+      contents: write
     needs: release-please
     if: ${{ needs.release-please.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
@@ -207,6 +209,14 @@ jobs:
       - name: Build bundled standalone dependency
         working-directory: web/core
         run: npm ci && npm run check && npm run build
+      - name: Standalone viewer distribution
+        working-directory: web/core
+        env:
+          TAG: ${{ needs.release-please.outputs.publish_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LIVERY_VIEWER_VERSION="${TAG#v}" npm run bundle
+          gh release upload "$TAG" build/livery-preview-viewer-*.zip --clobber
       - name: Install built local player dependency
         working-directory: web/a2ui
         run: npm ci

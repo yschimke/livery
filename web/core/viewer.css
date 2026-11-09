@@ -1,0 +1,24 @@
+/* Scoped to the enhancement mount; server-rendered content remains host-owned. */
+.livery-publication{--preview-accent:#6550a1;box-sizing:border-box;max-width:100%;font:16px/1.5 system-ui,sans-serif;color:#24212b}
+.livery-publication *{box-sizing:border-box}
+.livery-publication h2{margin:0 0 4px;font-size:1.25rem;letter-spacing:-.02em}
+.livery-publication a{color:var(--preview-accent);text-underline-offset:3px}
+.livery-publication-component{padding:20px;border:1px solid #e4dfea;border-radius:16px;background:#fff;overflow:hidden}
+.livery-publication button,.livery-publication select{font:inherit;color:inherit;border:1px solid #d5cddd;border-radius:8px;background:#fff;padding:6px 10px}
+.livery-publication button{cursor:pointer}
+.livery-publication button:hover{background:#f3eef9}
+.livery-publication button:focus-visible,.livery-publication a:focus-visible,.livery-publication select:focus-visible{outline:3px solid #b6a4da;outline-offset:3px}
+.livery-publication [role=status]{font-size:.875rem;color:#686170;margin:12px 0 0}
+.livery-publication-share{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+.livery-publication-share>a{font-weight:600}
+.livery-publication-share input{width:100%;font:inherit;padding:8px}
+.livery-share-status:empty{display:none}
+.livery-publication[data-mode=embed] .livery-publication-component{padding:12px}
+.livery-publication[data-mode=embed] .livery-publication-share{margin-top:8px;font-size:.875rem}
+/* Optional host wrapper: keep static content until enhancement succeeds. */
+.livery-publication-page{max-width:720px;margin:40px auto;padding:0 16px;font:16px/1.5 system-ui,sans-serif;color:#24212b}
+.livery-publication-page>[data-livery-fallback] h1{letter-spacing:-.025em}
+.livery-publication-page>[data-livery-fallback] img{max-width:100%;height:auto}
+.livery-publication-page:has([data-livery-preview] [data-state=ready])>[data-livery-fallback] img{display:none}
+.livery-publication-page:has([data-livery-preview][data-mode=embed]){max-width:none;margin:0;padding:0}
+.livery-publication-page:has([data-livery-preview][data-mode=embed] [data-state=ready])>[data-livery-fallback]{display:none}
