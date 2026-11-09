@@ -148,7 +148,7 @@ class FirstFrameTest {
   }
 
   @Test fun everyCardOfATemplateSharesOneDecodedDocument() {
-    assertSame(host.resources.document(template()), host.resources.document(template()))
+    assertSame(host.resources.prepared(template()), host.resources.prepared(template()))
   }
 
   @Test fun anImageOneSlotLoadedIsInMemoryForTheNext() = runBlocking {

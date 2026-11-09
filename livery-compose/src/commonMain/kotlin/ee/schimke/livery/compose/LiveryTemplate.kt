@@ -84,8 +84,9 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     values.keys.toList().filter { it !in pushed }.forEach(values::remove)
     values.putAll(pushed)
   }
-  // Shared by every card of this template: decoding is done once per template, not per card.
-  val document = remember(bytes, host) { host.resources.document(plan.template) }
+  // Shared by every card of this template: decoding, linking and the layout tree are done once per
+  // template, not per card. Each card's player state is still its own.
+  val prepared = remember(bytes, host) { host.resources.prepared(plan.template) }
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
   val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
@@ -110,7 +111,7 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     tracker.visible(visible, host.clock.nowEpochMs())
   }) {
     RcComposePlayer(
-      document = document,
+      prepared = prepared,
       imageLoader = imageLoader,
       modifier = Modifier,
       theme = host.theme,

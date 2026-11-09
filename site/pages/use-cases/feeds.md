@@ -46,7 +46,7 @@ Each item is its own measured view: `Impression` and `Viewable` carry the item i
 
 ## 3. Draw every card on its first frame
 
-Every card of a template shares that template's decoded document, fonts and images, kept in memory
+Every card of a template shares that template's prepared document (decoded, linked and laid out once), fonts and images, kept in memory
 by the host (`host.resources`, a `LiveryResources`). So only a template's very first card does any
 work before it can draw; every later card draws complete on the frame it first appears, with its own
 data and no animation from another card's values. Share one `LiveryHost` across the feed.
