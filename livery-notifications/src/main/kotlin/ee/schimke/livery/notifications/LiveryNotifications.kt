@@ -81,9 +81,12 @@ class NotificationRender internal constructor(
  * render.views?.let { builder.setCustomBigContentView(it) } ?: builder.setStyle(BigTextStyle().bigText(text))
  * ```
  *
- * Don't set a style alongside the custom body: on Android 17 a `BigTextStyle` or
- * `DecoratedCustomViewStyle` wraps it in a template, which refuses a nested view with draw
- * instructions, and SystemUI drops the notification.
+ * Since API 31 SystemUI nests every custom body in its own template, style or not, and Android 17
+ * refuses a nested view that has draw instructions ("Cannot add a nested view that has
+ * DrawInstructions"): SystemUI drops the notification, and a foreground service's crashes the app.
+ * [NotificationRender.views] is therefore already wrapped for nesting
+ * (`RcLauncherWidgets.notificationRemoteViews`); post it as it is, without wrapping or replacing
+ * it. Leave the style off alongside it, so the custom body is the expanded view.
  *
  * Rendering never waits on the network: planning is [CacheOnly], images come from the device
  * ([CachedImages]), and what was missing is fetched by [NotificationRender.fetchMissed].
@@ -176,7 +179,8 @@ class LiveryNotifications(
         val taps = result.actions.mapValues { (actionId, action) -> tapIntent(actionId, action) }
         // No Impression: posting isn't showing, and SystemUI doesn't say when the body is
         // expanded (PROTOCOL.md §8).
-        Attempt(RcLauncherWidgets.remoteViews(result.bytes, taps), null, ready, appOwned)
+        // Wrapped so SystemUI's template can nest it on Android 17 (see the class docs).
+        Attempt(RcLauncherWidgets.notificationRemoteViews(result.bytes, taps), null, ready, appOwned)
       }
     }
   }
