@@ -20,6 +20,7 @@ kotlin {
     commonMain.dependencies {
       api(project(":livery-client"))
       api(project(":livery-instantiate"))
+      api(project(":livery-web-core"))
       api(project(":livery-a2ui"))
     }
     jvmTest.dependencies {

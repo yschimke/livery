@@ -203,7 +203,13 @@ jobs:
         working-directory: web/a2ui
         run: npm ci
       - name: Build Wasm
-        run: ./gradlew :livery-web:webDist :livery-web-compose:webDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+        run: ./gradlew :livery-web-core:webDist :livery-web:webDist :livery-web-compose:webDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+      - name: Build bundled standalone dependency
+        working-directory: web/core
+        run: npm ci && npm run check && npm run build
+      - name: Install built local player dependency
+        working-directory: web/a2ui
+        run: npm ci
       - name: Build and inspect npm package
         working-directory: web/a2ui
         env:

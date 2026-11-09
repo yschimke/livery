@@ -7,7 +7,7 @@ compiled to Wasm (`player: 'cmp'`). A data change sets named values on the
 playing document; it never reloads it. Actions in the template become A2UI events, or are written
 back to the data model.
 
-The player is vendored from the commit recorded in `vendor/PROVENANCE.md`, with the fixes this package needs
+The player is vendored from the commit recorded in `../core/vendor/PROVENANCE.md`, with the fixes this package needs
 ([yschimke/rc-players#829](https://github.com/yschimke/rc-players/pull/829)): without them, these
 templates lay out at `NaN` and their buttons don't fire.
 
@@ -183,3 +183,9 @@ CI uses Binaryen 130.0.0 from the npm lockfile with `-Plivery.wasmOpt=<path-to-w
 This keeps the same optimizer version and Kotlin arguments while avoiding the GitHub release
 asset endpoint, which repeatedly returned HTTP 504. Ordinary Gradle builds retain Kotlin's
 native Binaryen download unless an executable is supplied.
+
+The optional A2UI facade delegates shared document preparation and action routing to
+`livery-web-core`. Its canvas player comes from the neutral `@livery/web/player`
+package, bundled into the published A2UI tarball. In a checkout, build `web/core`
+before installing/building this package; `npm ci` copies that local package.
+Standalone component previews are documented in [../core/README.md](../core/README.md).

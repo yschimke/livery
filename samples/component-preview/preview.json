@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "mode": "preview",
+  "publicationId": "quantity-stepper",
+  "revision": "fixture-1",
+  "canonicalUrl": "./",
+  "catalog": {
+    "manifestUrl": "./catalog/manifest.json"
+  },
+  "template": {
+    "contract": "shop/quantity@1",
+    "designId": "quantity-stepper",
+    "sha256": "f96b10bb34aebc29fa84233de3a89ff0ee80dc1a9a68cdfbea694bbfc65fb3f9"
+  },
+  "data": {
+    "name": "Oat milk, 1 l",
+    "price": "€2.49",
+    "quantity": 1
+  },
+  "fallback": {
+    "title": "Quantity stepper",
+    "description": "Try the quantity control; changes stay in this preview."
+  }
+}

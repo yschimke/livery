@@ -1,4 +1,4 @@
-import type { HostValue } from '../vendor/remote-compose-player.mjs';
+import type { HostValue } from './player.js';
 import type { LiveryPlayer, LiveryPlayerFactory, NamedAction } from './player.js';
 import { RcCanvasPlayer } from './player.js';
 
