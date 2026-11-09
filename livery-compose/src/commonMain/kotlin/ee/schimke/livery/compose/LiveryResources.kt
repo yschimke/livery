@@ -89,21 +89,26 @@ class LiveryResources(
   fun typefacesNow(template: LoadedTemplate): RcTypefaceLoader? {
     typefaces[template.typefaceKey()]?.let { return it }
     val faces = template.fontAssets()
-    if (faces.any { fonts[it.id] == null }) return null
-    return build(template, faces)
+    // Read once into a local map: the shared cache may evict between a check and a later read.
+    val loaded = faces.associate { face -> face.id to (fonts[face.id] ?: return null) }
+    return build(template, faces, loaded)
   }
 
   /** [template]'s typefaces, reading the faces not yet in memory from the repository. */
   suspend fun typefaces(template: LoadedTemplate): RcTypefaceLoader {
     typefacesNow(template)?.let { return it }
     val faces = template.fontAssets()
+    // The faces this call holds, whatever the bounded shared cache evicts meanwhile (a template
+    // with more faces than it keeps, or a concurrent preload): the cache is only for reuse.
+    val loaded = mutableMapOf<String, Font>()
     for (face in faces) {
-      if (fonts[face.id] != null) continue
+      fonts[face.id]?.let { loaded[face.id] = it; continue }
       val bytes = repository.asset(face.sha256) ?: continue
       val font = runCatching { withContext(Dispatchers.Default) { fontFrom(face.sha256, bytes, face.weight, face.style) } }.getOrNull() ?: continue
       fonts.put(face.id, font)
+      loaded[face.id] = font
     }
-    return build(template, faces)
+    return build(template, faces, loaded)
   }
 
   /** An image loader for one slot, whose `livery:value/` images come from [bindings]. */
@@ -148,13 +153,13 @@ class LiveryResources(
     coroutineScope { plans.forEach { launch { preload(it) } } }
   }
 
-  private fun build(template: LoadedTemplate, faces: List<Face>): RcTypefaceLoader {
-    val families = faces.groupBy { it.family }.mapValues { (_, f) -> f.mapNotNull { fonts[it.id] } }
+  private fun build(template: LoadedTemplate, faces: List<Face>, loaded: Map<String, Font>): RcTypefaceLoader {
+    val families = faces.groupBy { it.family }.mapValues { (_, f) -> f.mapNotNull { loaded[it.id] } }
       .filterValues { it.isNotEmpty() }
       .mapValues { (_, f) -> FontFamily(f) }
     val loader = if (families.isEmpty()) fallbackTypefaces else LiveryTypefaceLoader(families, fallbackTypefaces)
     // Only a complete set is kept: a face that failed to load is tried again by the next card.
-    if (faces.all { fonts[it.id] != null }) typefaces.put(template.typefaceKey(), loader)
+    if (faces.all { it.id in loaded }) typefaces.put(template.typefaceKey(), loader)
     return loader
   }
 

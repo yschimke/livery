@@ -46,6 +46,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -174,6 +175,20 @@ class FirstFrameTest {
     host.resources.typefaces(template())
     val italic = template().copy(assets = listOf(AssetEntry(FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700, italic = true), license = "OFL-1.1")))
     assertNull(host.resources.typefacesNow(italic), "a Font is built for its declared weight and style")
+    Unit
+  }
+
+  @Test fun aTemplateWithMoreFacesThanTheCacheKeepsGetsThemAll() = runBlocking {
+    runBlocking { blobs.put(OTHER_FONT, File(samples, "fonts/Placeholder-Bold.ttf").readBytes()) }
+    val small = LiveryResources(repository, maxFonts = 1)
+    val twoFaces = template().copy(assets = listOf(
+      AssetEntry(FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700), license = "OFL-1.1"),
+      AssetEntry(OTHER_FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Serif", 400), license = "OFL-1.1"),
+    ))
+    val loader = small.typefaces(twoFaces)
+    assertNotNull(loader.typeface("Placeholder Sans", null), "the first face survived the second's load")
+    assertNotNull(loader.typeface("Placeholder Serif", null))
+    assertTrue("Placeholder Sans" in loader.families && "Placeholder Serif" in loader.families)
     Unit
   }
 
