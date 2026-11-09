@@ -53,8 +53,8 @@ suspend fun post(context: Context, id: Int, data: JsonObject) {
     .setSmallIcon(R.drawable.ic_status)
     .setContentTitle(data.title)
     .setContentText(data.summary)
-  // No setStyle() with the custom body: on Android 17 a style wraps it in a template that refuses
-  // draw instructions, and SystemUI drops the notification.
+  // views come wrapped so SystemUI's template can nest them (Android 17 refuses a nested view with
+  // draw instructions): post them as they are, with no setStyle() alongside.
   render.views?.let { builder.setCustomBigContentView(it) }
     ?: builder.setStyle(NotificationCompat.BigTextStyle().bigText(data.summary))
   NotificationManagerCompat.from(context).notify(id, builder.build())
