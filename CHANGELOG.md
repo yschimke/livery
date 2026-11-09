@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/yschimke/livery/compare/v0.7.0...v0.8.0) (2026-11-09)
+
+
+### Features
+
+* **build:** livery-bom, and publish only the modules a release changed ([#51](https://github.com/yschimke/livery/issues/51)) ([14761c1](https://github.com/yschimke/livery/commit/14761c1df9886de0463bd7471b9bea9ab5b951e6))
+* **compose:** draw every card on its first frame, splash-screen startup hook, rc-players 2.30 ([#47](https://github.com/yschimke/livery/issues/47)) ([1cab479](https://github.com/yschimke/livery/commit/1cab479d14fb190fd420b1aa2ec85ce8256f5a48))
+* **compose:** share one prepared document between every card of a template ([#50](https://github.com/yschimke/livery/issues/50)) ([9b31d7a](https://github.com/yschimke/livery/commit/9b31d7aa98fac968a14eccaae8f30853504a5afe))
+* distribute shareable component previews and Dokka embeds ([#48](https://github.com/yschimke/livery/issues/48)) ([db1222f](https://github.com/yschimke/livery/commit/db1222f7fc0ddb146b576956bb5d9de6a59802b2))
+* **server:** extract reusable component publication hosting ([#52](https://github.com/yschimke/livery/issues/52)) ([e0ed587](https://github.com/yschimke/livery/commit/e0ed587800f0a92d4355d936f7818b13e594f971))
+
 ## [0.7.0](https://github.com/yschimke/livery/compare/v0.6.0...v0.7.0) (2026-11-09)
 
 
