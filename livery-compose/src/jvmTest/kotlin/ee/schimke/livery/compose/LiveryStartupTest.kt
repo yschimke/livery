@@ -41,13 +41,13 @@ class LiveryStartupTest {
     val gate = CompletableDeferred<Unit>()
     val startup = resources.startup(scope, timeoutMillis = 60_000) {
       gate.await()
-      prepareSlot("home.top") { PlanResult.Fallback("no catalog yet") }
+      prepareSlot("home.top", null) { PlanResult.Fallback("no catalog yet") }
     }
     assertFalse(startup.isReady, "the splash stays while the screen is being prepared")
     gate.complete(Unit)
     withTimeout(5_000) { startup.await() }
     assertTrue(startup.isReady)
-    assertNotNull(resources.lastPlan("home.top", repository.revision.value), "the slot's answer is waiting for it")
+    assertNotNull(resources.lastPlan("home.top", null, repository.revision.value), "the slot's answer is waiting for it")
     scope.cancel()
   }
 

@@ -107,12 +107,13 @@ preparing in the background after it:
 ```kotlin
 // Android, androidx.core:core-splashscreen, in onCreate before setContent
 val startup = host.resources.startup(lifecycleScope) {
-  prepareSlot("home.top") { planner.forAppData(query, data) }   // the same key and call as the slot
+  prepareSlot("home.top", data) { planner.forAppData(query, data) }   // the slot's slotId, key and call
 }
 installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
 ```
 
-On desktop, iOS and the web, `startup.await()` before showing the first screen.
+The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. On desktop, iOS
+and the web, `startup.await()` before showing the first screen.
 
 **Swift (iOS, macOS)**:
 

@@ -139,6 +139,13 @@ class FirstFrameTest {
     Unit
   }
 
+  @Test fun aTemplateWhoseFontsChangedDoesNotDrawWithTheOldOnes() = runBlocking {
+    host.resources.typefaces(template())
+    val refreshed = template().copy(assets = listOf(AssetEntry(OTHER_FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700), license = "OFL-1.1")))
+    assertNull(host.resources.typefacesNow(refreshed), "the same document with another face must load that face")
+    Unit
+  }
+
   @Test fun everyCardOfATemplateSharesOneDecodedDocument() {
     assertSame(host.resources.document(template()), host.resources.document(template()))
   }
@@ -154,14 +161,15 @@ class FirstFrameTest {
 
   @Test fun aSlotsLastAnswerIsOnlyReusedAtTheSameRevision() {
     val ready = PlanResult.Ready(plan("one"))
-    host.resources.keepPlan("item-1", 3, ready)
-    assertSame(ready, host.resources.lastPlan("item-1", 3))
-    assertNull(host.resources.lastPlan("item-1", 4), "a refreshed catalog may answer differently")
+    host.resources.keepPlan("feed", "item-1", 3, ready)
+    assertSame(ready, host.resources.lastPlan("feed", "item-1", 3))
+    assertNull(host.resources.lastPlan("feed", "item-1", 4), "a refreshed catalog may answer differently")
+    assertNull(host.resources.lastPlan("sidebar", "item-1", 3), "another slot with an equal key has its own answer")
   }
 
   @Test fun aPreparedSlotHasItsAnswerAndItsFontsBeforeItComposes() = runBlocking {
-    host.resources.prepareSlot("item-1") { PlanResult.Ready(plan("one")) }
-    assertNotNull(host.resources.lastPlan("item-1", repository.revision.value))
+    host.resources.prepareSlot("feed", "item-1") { PlanResult.Ready(plan("one")) }
+    assertNotNull(host.resources.lastPlan("feed", "item-1", repository.revision.value))
     assertNotNull(host.resources.typefacesNow(template()))
     Unit
   }
@@ -170,6 +178,7 @@ class FirstFrameTest {
 
   private companion object {
     const val FONT = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+    const val OTHER_FONT = "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
     const val PICTURE = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
   }
 }

@@ -62,18 +62,20 @@ class LiveryResources(
   private val plans = BoundedCache<SlotKey, Pair<Long, PlanResult>>(maxPlans)
 
   /**
-   * The answer a [LiverySlot] last planned for [key] at catalog [revision], so a slot that comes
-   * back (scrolled away and back, a screen reopened) draws it on its first frame instead of its
-   * fallback while it plans again. An answer from another revision is never used: an install or a
-   * revocation may have changed it.
+   * The answer the [LiverySlot] named [slotId] last planned for [key] at catalog [revision], so a
+   * slot that comes back (scrolled away and back, a screen reopened) draws it on its first frame
+   * instead of its fallback while it plans again. [slotId] names the slot on this host (`home.top`,
+   * `home-feed`): [key] alone only says when one slot replans, and two slots may share a key. An
+   * answer from another revision is never used: an install or a revocation may have changed it.
    */
-  fun lastPlan(key: Any?, revision: Long): PlanResult? =
-    plans[SlotKey(key)]?.takeIf { it.first == revision }?.second
+  fun lastPlan(slotId: String, key: Any?, revision: Long): PlanResult? =
+    plans[SlotKey(slotId, key)]?.takeIf { it.first == revision }?.second
 
-  /** Records [result] as [key]'s answer at [revision], for [lastPlan]. */
-  fun keepPlan(key: Any?, revision: Long, result: PlanResult) = plans.put(SlotKey(key), revision to result)
+  /** Records [result] as the answer of slot [slotId] for [key] at [revision], for [lastPlan]. */
+  fun keepPlan(slotId: String, key: Any?, revision: Long, result: PlanResult) =
+    plans.put(SlotKey(slotId, key), revision to result)
 
-  private data class SlotKey(val key: Any?)
+  private data class SlotKey(val slotId: String, val key: Any?)
 
   /** [template]'s decoded document: from memory, or decoded now (it never waits on I/O) and kept. */
   fun document(template: LoadedTemplate): RcDocument =
@@ -85,7 +87,7 @@ class LiveryResources(
    * Null means [typefaces] has to read them first.
    */
   fun typefacesNow(template: LoadedTemplate): RcTypefaceLoader? {
-    typefaces[template.entry.sha256]?.let { return it }
+    typefaces[template.typefaceKey()]?.let { return it }
     val faces = template.fontAssets()
     if (faces.any { fonts[it.sha256] == null }) return null
     return build(template, faces)
@@ -128,14 +130,15 @@ class LiveryResources(
 
   /**
    * Plans a [LiverySlot] ahead of time: runs [plan] (the same call the slot makes, for the same
-   * [key]), keeps the answer for the slot ([lastPlan]) and [preload]s it. A slot that then composes
-   * with [key] draws the finished template on its first frame, not its fallback. Call it for a feed
-   * page's items when the page arrives, before they scroll into view.
+   * [slotId] and [key]), keeps the answer for the slot ([lastPlan]) and [preload]s it. A slot that
+   * then composes with that `slotId` and [key] draws the finished template on its first frame, not
+   * its fallback. Call it for a feed page's items when the page arrives, before they scroll into
+   * view.
    */
-  suspend fun prepareSlot(key: Any?, plan: suspend () -> PlanResult): PlanResult {
+  suspend fun prepareSlot(slotId: String, key: Any?, plan: suspend () -> PlanResult): PlanResult {
     val revision = repository.revision.value
     val result = plan()
-    keepPlan(key, revision, result)
+    keepPlan(slotId, key, revision, result)
     if (result is PlanResult.Ready) preload(result.plan)
     return result
   }
@@ -151,13 +154,20 @@ class LiveryResources(
       .mapValues { (_, f) -> FontFamily(f) }
     val loader = if (families.isEmpty()) fallbackTypefaces else LiveryTypefaceLoader(families, fallbackTypefaces)
     // Only a complete set is kept: a face that failed to load is tried again by the next card.
-    if (faces.all { fonts[it.sha256] != null }) typefaces.put(template.entry.sha256, loader)
+    if (faces.all { fonts[it.sha256] != null }) typefaces.put(template.typefaceKey(), loader)
     return loader
   }
 
   private fun cachedImage(key: String): ImageBitmap? = decoded[key]
 
   private fun keepImage(key: String, image: ImageBitmap) = decoded.put(key, image)
+
+  /**
+   * A loader is for one document with one set of faces: a refreshed catalog may give the same
+   * document other font assets, which must not draw with the old ones.
+   */
+  private fun LoadedTemplate.typefaceKey(): String =
+    fontAssets().joinToString(",", prefix = "${entry.sha256}:") { "${it.sha256}/${it.family}/${it.weight.weight}/${it.style}" }
 
   private class Face(val sha256: String, val family: String, val weight: FontWeight, val style: FontStyle)
 

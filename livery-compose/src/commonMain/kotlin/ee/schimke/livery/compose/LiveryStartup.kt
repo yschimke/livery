@@ -13,7 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * ```kotlin
  * // Android, androidx.core:core-splashscreen, in Activity.onCreate before setContent
  * val startup = host.resources.startup(lifecycleScope) {
- *   prepareSlot("home.top") { planner.forAppData(query, data) }
+ *   prepareSlot("home.top", data) { planner.forAppData(query, data) }
  * }
  * installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
  * ```
