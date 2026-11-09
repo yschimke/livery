@@ -240,8 +240,11 @@ if manifest_path:
 else:
     # Eight at a time: 69 sequential round-trips is most of this script's wall clock, and Central
     # serves these as static files.
+    # The BOM too, though it is not planned: the build skips its upload when Central already has it
+    # at the version being released (a re-run of a release that published it before failing).
+    lookups = sorted(set(modules) | {"livery-bom"})
     with ThreadPoolExecutor(max_workers=8) as pool:
-        found = dict(zip(sorted(modules), pool.map(central_release, sorted(modules))))
+        found = dict(zip(lookups, pool.map(central_release, lookups)))
     recorded = {aid: v for aid, v in found.items() if v}
     print(f"  baseline: Maven Central ({len(recorded)} of {len(modules)} coordinates)",
           file=sys.stderr)

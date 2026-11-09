@@ -186,6 +186,13 @@ jobs:
           PUBLISH_ALL: ${{ inputs.publish_all }}
         run: |
           set -euo pipefail
+          # A tag cut before changed-only publishing (v0.7.0 and older) has neither the plan nor
+          # `publishLivery`: recovering one publishes every module the way that release would have.
+          if [ ! -f release-tasks.gradle.kts ]; then
+            echo "$TAG predates changed-only publishing: every module publishes"
+            echo "PUBLISH_LEGACY=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
           if [ "$PUBLISH_ALL" = "true" ]; then
             echo "publish_all: every module publishes at $TAG"
             echo "PUBLISH_PLANNED=false" >> "$GITHUB_ENV"
@@ -207,6 +214,11 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ "${PUBLISH_LEGACY:-}" = "true" ]; then
+            ./gradlew publishToMavenCentral -Plivery.version="$VERSION" --no-configuration-cache \
+              --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
+            exit 0
+          fi
           if [ "$PUBLISH_PLANNED" = "true" ] && [ -z "$PUBLISH_SET" ]; then
             echo "no Maven artifact changed; nothing to publish to Central"
             exit 0

@@ -67,12 +67,16 @@ extra["liveryPublishedVersions"] = versions.mapKeys { (path, _) -> artifactIds.g
 val toPublish: List<String> =
   publishedPaths.filter { it != bomPath && (publishSet == null || artifactIds.getValue(it) in publishSet) }
 
+// Central refuses a version it already has: a re-run of a release that uploaded the BOM before it
+// failed must not upload it again. The plan records the BOM's published version with the others.
+val publishBom: Boolean = toPublish.isNotEmpty() && recordedVersion("livery-bom") != tagVersion
+
 tasks.register("publishLivery") {
   group = "publishing"
   description = "Publishes the modules this release changed, and the BOM, to Maven Central."
   // The BOM is the index of the release, so it goes up whenever anything does, naming each skipped
   // module at the version it is already published at. A plan that found nothing publishes nothing.
-  if (toPublish.isNotEmpty()) dependsOn("$bomPath:publishToMavenCentral")
+  if (publishBom) dependsOn("$bomPath:publishToMavenCentral")
   toPublish.forEach { dependsOn("$it:publishToMavenCentral") }
 }
 
@@ -80,7 +84,7 @@ tasks.register("printPublishSet") {
   group = "publishing"
   description = "Prints the artifact id and version of each module publishLivery would upload."
   notCompatibleWithConfigurationCache("Reports a configuration-time decision")
-  val lines = (toPublish + if (toPublish.isEmpty()) emptyList() else listOf(bomPath))
+  val lines = (toPublish + if (publishBom) listOf(bomPath) else emptyList())
     .map { "${artifactIds.getValue(it)}:${versions.getValue(it)}" }
     .sorted()
   doLast { lines.forEach(::println) }
