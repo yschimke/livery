@@ -35,7 +35,7 @@ class LiveryImageLoader(
   override fun cached(bitmap: RcBitmapData): ImageBitmap? = when (val ref = ref(bitmap)) {
     Ref.Fallback -> fallback.cached(bitmap)
     Ref.None -> null
-    is Ref.Url -> memory(key(ref.value, bitmap))
+    is Ref.Url -> if (ref.shareable) memory(key(ref.value, bitmap)) else null
   }
 
   override suspend fun load(bitmap: RcBitmapData): ImageBitmap? {
@@ -45,16 +45,20 @@ class LiveryImageLoader(
       is Ref.Url -> r.value
     }
     val key = key(ref, bitmap)
-    memory(key)?.let { return it }
+    if (ref.shareable()) memory(key)?.let { return it }
     val bytes = resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) ?: return null
-    return runCatching { decodeImage(bytes) }.getOrNull()?.also { keep(key, it) }
+    return runCatching { decodeImage(bytes) }.getOrNull()?.also { if (ref.shareable()) keep(key, it) }
   }
 
   private sealed interface Ref {
     data object Fallback : Ref
     data object None : Ref
-    class Url(val value: String) : Ref
+    class Url(val value: String) : Ref {
+      val shareable: Boolean get() = value.shareable()
+    }
   }
+
+
 
   private fun ref(bitmap: RcBitmapData): Ref {
     if (bitmap.encoding != RcBitmapData.ENCODING_URL) return Ref.Fallback
@@ -73,6 +77,14 @@ class LiveryImageLoader(
     const val VALUE_PREFIX: String = "livery:value/"
   }
 }
+
+/**
+ * Whether the picture behind [this] reference can never change, so a decoded copy may be shared:
+ * a catalog asset is named by its hash, and a remote URL is fetched once per size anyway
+ * ([ImageResolver]). An `app:` image is the app's own and may change under the same key (a new
+ * avatar), so the app's loader is asked every time.
+ */
+private fun String.shareable(): Boolean = !startsWith("app:")
 
 /**
  * Typefaces from the template's own font assets (verified, downloaded with it). Families the

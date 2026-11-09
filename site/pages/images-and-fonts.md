@@ -52,5 +52,7 @@ val host = LiveryHost(repository, actions, events, clock, images = images)
 
 The host keeps what it loads in memory (`host.resources`): decoded images by reference and size, and
 fonts by asset hash. A picture or a face that any slot on the host has already drawn appears on the
-next slot's first frame, and a template whose faces another template loaded draws without waiting.
+next slot's first frame, and a template whose faces another template loaded draws without waiting. An `app:` image is the app's own and may change under the same key,
+so it is asked for every time; give your `app` loader its own memory cache to draw it on the first
+frame.
 `host.resources.preload(plan)` loads a plan's document, fonts and images ahead of time.

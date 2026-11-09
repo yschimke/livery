@@ -89,7 +89,7 @@ class LiveryResources(
   fun typefacesNow(template: LoadedTemplate): RcTypefaceLoader? {
     typefaces[template.typefaceKey()]?.let { return it }
     val faces = template.fontAssets()
-    if (faces.any { fonts[it.sha256] == null }) return null
+    if (faces.any { fonts[it.id] == null }) return null
     return build(template, faces)
   }
 
@@ -98,10 +98,10 @@ class LiveryResources(
     typefacesNow(template)?.let { return it }
     val faces = template.fontAssets()
     for (face in faces) {
-      if (fonts[face.sha256] != null) continue
+      if (fonts[face.id] != null) continue
       val bytes = repository.asset(face.sha256) ?: continue
       val font = runCatching { withContext(Dispatchers.Default) { fontFrom(face.sha256, bytes, face.weight, face.style) } }.getOrNull() ?: continue
-      fonts.put(face.sha256, font)
+      fonts.put(face.id, font)
     }
     return build(template, faces)
   }
@@ -149,12 +149,12 @@ class LiveryResources(
   }
 
   private fun build(template: LoadedTemplate, faces: List<Face>): RcTypefaceLoader {
-    val families = faces.groupBy { it.family }.mapValues { (_, f) -> f.mapNotNull { fonts[it.sha256] } }
+    val families = faces.groupBy { it.family }.mapValues { (_, f) -> f.mapNotNull { fonts[it.id] } }
       .filterValues { it.isNotEmpty() }
       .mapValues { (_, f) -> FontFamily(f) }
     val loader = if (families.isEmpty()) fallbackTypefaces else LiveryTypefaceLoader(families, fallbackTypefaces)
     // Only a complete set is kept: a face that failed to load is tried again by the next card.
-    if (faces.all { fonts[it.sha256] != null }) typefaces.put(template.typefaceKey(), loader)
+    if (faces.all { fonts[it.id] != null }) typefaces.put(template.typefaceKey(), loader)
     return loader
   }
 
@@ -169,7 +169,10 @@ class LiveryResources(
   private fun LoadedTemplate.typefaceKey(): String =
     fontAssets().joinToString(",", prefix = "${entry.sha256}:") { "${it.sha256}/${it.family}/${it.weight.weight}/${it.style}" }
 
-  private class Face(val sha256: String, val family: String, val weight: FontWeight, val style: FontStyle)
+  private class Face(val sha256: String, val family: String, val weight: FontWeight, val style: FontStyle) {
+    /** A `Font` carries its weight and style, so the same bytes declared differently are another font. */
+    val id: String get() = "$sha256/${weight.weight}/$style"
+  }
 
   private fun LoadedTemplate.fontAssets(): List<Face> = assets.mapNotNull { a ->
     val font = a.font ?: return@mapNotNull null

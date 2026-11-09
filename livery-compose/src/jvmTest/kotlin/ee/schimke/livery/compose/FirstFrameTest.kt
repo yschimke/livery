@@ -159,6 +159,24 @@ class FirstFrameTest {
     Unit
   }
 
+  @Test fun anAppImageIsAskedForEveryTime() = runBlocking {
+    var version = 0
+    val resolver = ImageResolver(repository, offline, JavaCrypto, app = { _, _, _ -> version++; png() })
+    val resources = LiveryResources(repository, resolver)
+    val bitmap = RcBitmapData(1, 2, 2, 0, RcBitmapData.ENCODING_URL, "app:avatar".encodeToByteArray())
+    assertNotNull(resources.imageLoader { Bindings.EMPTY }.load(bitmap))
+    assertNull(resources.imageLoader { Bindings.EMPTY }.cached(bitmap), "the app may have changed the picture")
+    assertNotNull(resources.imageLoader { Bindings.EMPTY }.load(bitmap))
+    assertEquals(2, version)
+  }
+
+  @Test fun theSameFontBytesDeclaredAsAnotherFaceAreAnotherFont() = runBlocking {
+    host.resources.typefaces(template())
+    val italic = template().copy(assets = listOf(AssetEntry(FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700, italic = true), license = "OFL-1.1")))
+    assertNull(host.resources.typefacesNow(italic), "a Font is built for its declared weight and style")
+    Unit
+  }
+
   @Test fun aSlotsLastAnswerIsOnlyReusedAtTheSameRevision() {
     val ready = PlanResult.Ready(plan("one"))
     host.resources.keepPlan("feed", "item-1", 3, ready)
