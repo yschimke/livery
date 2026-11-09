@@ -134,7 +134,7 @@ GitHub release downloads send no CORS headers, so a browser client reads a Pages
 - **No visible redraws.** A card after the first of its template, and any card the app preloaded,
   draws complete on its first frame: no blank frame while fonts load, no fallback for a slot that
   had an answer, no image popping in that is already in memory. In Compose, `LiveryResources` (one
-  per `LiveryHost`) keeps decoded documents per template, fonts per asset hash, decoded images per
+  per `LiveryHost`) keeps prepared documents (decoded, linked, laid out) per template, fonts per asset hash, decoded images per
   reference and size, and each slot's last answer per catalog revision, all bounded, and composition
   reads them without suspending; `preload` and `prepareSlot` fill them ahead of time, and
   `startup` prepares the first screen behind a splash screen (`LiveryStartup.isReady`, never later

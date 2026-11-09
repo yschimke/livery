@@ -8,10 +8,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
+import ee.schimke.composeai.rcplayer.compose.RcPreparedDocument
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocument
-import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.LoadedTemplate
@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
  * A feed draws many cards from few templates, and every card used to decode its template, read and
  * build its fonts, and fetch and decode its images again. Here each of those is done once per
  * content hash and shared:
- * - the **decoded document**, per template hash (each card still gets its own player state, seeded
+ * - the **prepared document** (decoded, linked, laid out), per template hash (each card still gets its own player state, seeded
  *   from its own values before its first frame, so no card shows or animates from another's data);
  * - **fonts**, per font asset hash, so a template whose faces another template already loaded draws
  *   its first frame with them;
@@ -55,7 +55,7 @@ class LiveryResources(
   maxImages: Int = 64,
   maxPlans: Int = 128,
 ) {
-  private val documents = BoundedCache<String, RcDocument>(maxTemplates)
+  private val documents = BoundedCache<String, RcPreparedDocument>(maxTemplates)
   private val typefaces = BoundedCache<String, RcTypefaceLoader>(maxTemplates)
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
@@ -77,9 +77,16 @@ class LiveryResources(
 
   private data class SlotKey(val slotId: String, val key: Any?)
 
-  /** [template]'s decoded document: from memory, or decoded now (it never waits on I/O) and kept. */
-  fun document(template: LoadedTemplate): RcDocument =
-    documents[template.entry.sha256] ?: RcDocumentCodec.decode(template.bytes).also { documents.put(template.entry.sha256, it) }
+  /**
+   * [template]'s prepared document: decoded, linked and laid out once, then shared by every card of
+   * the template (each card still gets its own player state). From memory, or prepared now (it
+   * never waits on I/O) and kept.
+   */
+  fun prepared(template: LoadedTemplate): RcPreparedDocument =
+    documents[template.entry.sha256] ?: RcPreparedDocument.decode(template.bytes).also { documents.put(template.entry.sha256, it) }
+
+  /** [template]'s decoded document, from [prepared]. */
+  fun document(template: LoadedTemplate): RcDocument = prepared(template).document
 
   /**
    * [template]'s typefaces if they can be had without I/O: it ships no fonts, or every face it
@@ -122,7 +129,7 @@ class LiveryResources(
    * have without a preload: a missing image is fetched again when the card draws.
    */
   suspend fun preload(plan: RenderPlan) {
-    val document = withContext(Dispatchers.Default) { document(plan.template) }
+    val document = withContext(Dispatchers.Default) { prepared(plan.template) }.document
     coroutineScope {
       launch { typefaces(plan.template) }
       val loader = imageLoader { plan.bindings }
