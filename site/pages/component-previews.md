@@ -32,6 +32,22 @@ local preview state. Incompatible or missing content shows fallback. A preview b
 or toggle is not an account write. Custom font parity and accessibility of drawn controls
 remain to be established before claiming a general-purpose embed.
 
+## Host the viewer
+
+After building the package, `npm run bundle` writes a standalone `viewer-dist/`
+and ZIP. A host serves those assets under `/assets/livery-preview/` and renders the
+publication page with the descriptor URL, canonical revision URL and operator trust
+configuration. Follow `web/core/HOSTING.md`; the server does not need a Livery source
+checkout or an A2UI runtime. Metadata, static fallback and publication storage remain
+the host's responsibility.
+
+The full page offers Bluesky's normal compose intent, system sharing when available,
+and copy-link with a manual fallback. These share the canonical revision, not local
+control edits, and never post automatically. Embed mode retains theme/reset and an
+open-page link. `npm run test:viewer` exercises the extracted ZIP with the actual RC
+player. Successfully published future releases attach the versioned viewer ZIP;
+a local build or draft release is not a public dependency.
+
 **Planned:** public revision publishing, UI Builder share controls, Dokka embedding,
 Heron rendering, Confetti public-session data and later AT interoperability. None is
 required by the local quantity-stepper demonstration.

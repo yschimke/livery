@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..'), repo = resolve(root, '../..');
 const site = join(here, 'site');
 rmSync(site, { recursive: true, force: true }); mkdirSync(site, { recursive: true });
-execFileSync(join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'samples/two-way'), join(site, 'catalog')], { stdio: 'inherit' });
+execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'samples/two-way'), join(site, 'catalog')], { stdio: 'inherit' });
 cpSync(join(repo, 'samples/component-preview/preview.json'), join(site, 'preview.json'));
 cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: true });
 await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js') });

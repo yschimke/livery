@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "documentationVersion": "fixture-1",
+  "previews": [
+    {
+      "url": "https://preview.coo.ee/p/quantity-stepper/r/fixture-1/",
+      "publicationId": "quantity-stepper",
+      "revision": "fixture-1",
+      "title": "Interactive quantity-stepper component",
+      "height": 420,
+      "occurrences": 2
+    }
+  ]
+}

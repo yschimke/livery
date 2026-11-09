@@ -23,7 +23,10 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
     "test": "node test/e2e.mjs",
-    "demo": "node test/e2e.mjs --serve"
+    "demo": "node test/e2e.mjs --serve",
+    "bundle": "node scripts/build-viewer.mjs --zip",
+    "test:viewer": "node test/viewer.mjs",
+    "test:host": "node test/host.mjs"
   },
   "dependencies": {
     "@js-joda/core": "3.2.0"
