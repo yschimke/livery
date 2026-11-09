@@ -9,7 +9,7 @@ kotlinx-coroutines = "1.11.0"
 compose-multiplatform = "1.12.2"
 # The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
 skiko = "0.150.2"
-rc-players = "2.23.0"
+rc-players = "2.29.0"
 agp = "9.5.0"
 ktor = "3.6.1"
 okio = "3.18.2"
@@ -20,7 +20,7 @@ firebase-bom = "35.1.0"
 sentry = "8.62.0"
 datadog = "3.15.0"
 amplitude = "1.36.0"
-compose-remote = "1.0.0-alpha22"
+compose-remote = "1.0.0-alpha23"
 robolectric = "4.17"
 # The A2UI release train (androidx.a2ui:*, material3-a2ui) for livery-a2ui-compose's Android
 # target, and the same release ported to Compose Multiplatform (yschimke/a2ui-catalog, vendor/) for
