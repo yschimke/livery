@@ -74,8 +74,9 @@ export class ComponentPreview {
       previewUrl(url);
       const response = await (this.options.fetch ?? fetch)(url, { signal: this.abort.signal, credentials: 'omit', redirect: 'error' });
       if (!response.ok) throw new Error(`Preview unavailable (${response.status})`);
-      const text = await response.text();
-      if (text.length > 64 * 1024) throw new Error('Preview descriptor is too large');
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength > 64 * 1024) throw new Error('Preview descriptor is too large');
+      const text = new TextDecoder().decode(bytes);
       const pub = descriptor(JSON.parse(text), url);
       if (this.disposed) return;
       this.publication = pub; this.data = structuredClone(pub.data);

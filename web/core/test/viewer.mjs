@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -21,6 +21,15 @@ for (const [path, spec] of Object.entries(manifest.files)) {
 }
 execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'samples/two-way'), join(temporary, 'catalog')], { stdio: 'inherit' });
 cpSync(join(repo, 'samples/component-preview/preview.json'), join(temporary, 'preview.json'));
+// Unknown descriptor metadata is allowed. Keep its Unicode character count below
+// 64 KiB while testing the exact UTF-8 byte boundary, without changing bound data.
+const padded = { ...JSON.parse(readFileSync(join(temporary, 'preview.json'))), notes: '' };
+const room = 64 * 1024 - Buffer.byteLength(JSON.stringify(padded));
+padded.notes = 'é'.repeat(Math.floor(room / 2)) + (room % 2 ? 'x' : '');
+const atLimit = JSON.stringify(padded), oversized = JSON.stringify({ ...padded, notes: padded.notes + 'é' });
+assert.equal(Buffer.byteLength(atLimit), 64 * 1024);
+assert(oversized.length < 64 * 1024 && Buffer.byteLength(oversized) > 64 * 1024);
+writeFileSync(join(temporary, 'limit.json'), atLimit); writeFileSync(join(temporary, 'oversized.json'), oversized);
 const html = (mode, config = { unsigned: true }, descriptor = publication + 'preview.json') => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Quantity stepper · Component preview</title>
 <link rel="canonical" href="${publication}"><link rel="alternate" type="application/vnd.livery.preview+json" href="${descriptor}"><link rel="stylesheet" href="/assets/livery-preview/viewer.css">
 <style>body{margin:0;padding:32px 24px;background:#f6f4f8;color:#26212e;font-family:system-ui}main{max-width:560px;margin:40px auto}h1{font-size:36px;letter-spacing:-.04em;margin:8px 0 12px}header p{color:#6b6276;max-width:440px;line-height:1.6}.eyebrow{font-size:12px;letter-spacing:.13em;text-transform:uppercase}main>p{font-size:13px;color:#6b6276}</style>
@@ -36,7 +45,7 @@ const server = createServer(async (req, res) => {
     const mode = url.pathname.endsWith('/embed/') ? 'embed' : 'page';
     if ([publication, publication + 'embed/'].includes(url.pathname)) {
       const config = url.searchParams.has('no-trust') ? {} : { unsigned: true };
-      const descriptor = url.searchParams.has('missing') ? publication + 'missing.json' : publication + 'preview.json';
+      const descriptor = publication + (url.searchParams.has('missing') ? 'missing.json' : url.searchParams.get('size') === 'limit' ? 'limit.json' : url.searchParams.get('size') === 'oversized' ? 'oversized.json' : 'preview.json');
       res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'" });
       res.end(html(mode, config, descriptor)); return;
     }
@@ -100,6 +109,13 @@ try {
   check(await page.locator('canvas').count() === 0 && await page.locator('#fallback').isVisible(), 'missing operator trust fails closed with server fallback intact');
   await page.goto(base + publication + '?missing'); await page.locator('[data-state="fallback"]').waitFor();
   check(await page.locator('#fallback').isVisible(), 'missing descriptor leaves readable server fallback');
+  await page.goto(base + publication + '?size=limit'); await page.locator('[data-state="ready"]').waitFor();
+  check(await page.locator('canvas').count() === 1, 'exactly 64 KiB of UTF-8 descriptor bytes remains playable');
+  const requestStart = requests.length;
+  await page.goto(base + publication + '?size=oversized'); await page.locator('[data-state="fallback"]').waitFor();
+  check((await page.locator('[data-state="fallback"]').innerText()).includes('Preview descriptor is too large') &&
+    await page.locator('canvas').count() === 0 && !requests.slice(requestStart).some(r => r.url.includes('/catalog/')),
+    'Unicode descriptor below character limit but above 64 KiB bytes is refused before catalog fetch');
   const noJs = await browser.newContext({ javaScriptEnabled: false }); const staticPage = await noJs.newPage(); await staticPage.goto(base + publication);
   check(await staticPage.locator('#fallback').isVisible() && await staticPage.getByRole('link', { name: 'Preview descriptor' }).count() === 1, 'no-JavaScript page retains text and discovery link'); await noJs.close();
   const unsupported = await context.newPage(); unsupported.on('pageerror', e => errors.push(e.message));

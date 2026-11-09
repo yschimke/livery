@@ -113,6 +113,13 @@ for (const [name, mutate] of [
   ['wrong byte count', async f => { f.manifest.templates[0].bytes++; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
   ['missing required asset', async f => { f.manifest.templates[0].assets = ['b'.repeat(64)]; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
   ['missing preview', async f => { f.manifest.designs[0].previews = [{ sha256: 'c'.repeat(64), mime: 'image/png' }]; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
+  ['missing template-owned preview', async f => { f.manifest.templates[0].previews = [{ sha256: sha(png), mime: 'image/png' }]; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
+  ['corrupt template-owned preview', async f => {
+    f.manifest.templates[0].previews = [{ sha256: sha(png), mime: 'image/png' }];
+    await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest);
+    await fs.mkdir(path.join(f.source, 'catalog/previews'));
+    await fs.writeFile(path.join(f.source, `catalog/previews/${sha(png)}.png`), Buffer.concat([png, Buffer.from('changed')]));
+  }],
   ['absolute catalog base', async f => { f.manifest.blobBase = 'https://example.com/blobs/'; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
   ['escaping catalog base', async f => { f.manifest.blobBase = '../other/'; await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest); }],
   ['root-relative canonical URL', async f => { f.descriptor.canonicalUrl = '/somewhere/'; await writeJson(path.join(f.source, 'preview.json'), f.descriptor); }],
@@ -150,6 +157,19 @@ test('catalog assets and design/theme previews must be local, hash verified and 
   assert.equal((await installPublication(f.source, f.root)).status, 'installed');
 });
 
+test('a preview referenced only by a template is installed and included in the integrity inventory', async t => {
+  const f = await fixture(t);
+  const imageHash = sha(png), relative = `catalog/previews/${imageHash}.png`;
+  f.manifest.templates[0].previews = [{ sha256: imageHash, mime: 'image/png' }];
+  await writeJson(path.join(f.source, 'catalog/manifest.json'), f.manifest);
+  await fs.mkdir(path.join(f.source, 'catalog/previews'));
+  await fs.writeFile(path.join(f.source, relative), png);
+  assert.equal((await installPublication(f.source, f.root)).status, 'installed');
+  const inventory = JSON.parse(await fs.readFile(path.join(f.destination, 'publication-files.json')));
+  assert.equal(inventory[relative], imageHash);
+  assert.deepEqual(await fs.readFile(path.join(f.destination, relative)), png);
+});
+
 test('rejects symlink files, source parents, and destination parents', async t => {
   const f = await fixture(t);
   const blob = path.join(f.source, `catalog/blobs/${hash}.rc`);
@@ -175,9 +195,32 @@ test('bounded files, JSON and inventory path grammar reject oversized or ambiguo
   await thumbnail.close();
   await assert.rejects(validatePublication(f.source), /oversized/);
   await fs.writeFile(path.join(f.source, 'thumbnail.png'), png);
-  await fs.writeFile(path.join(f.source, 'preview.json'), ' '.repeat(LIMITS.jsonBytes + 1));
+  await fs.writeFile(path.join(f.source, 'catalog/manifest.json'), ' '.repeat(LIMITS.jsonBytes + 1));
   await assert.rejects(validatePublication(f.source), /oversized/);
 });
+
+for (const character of ['a', '界']) {
+  test(`descriptor limit is exactly 64 KiB of UTF-8 bytes (${character === 'a' ? 'ASCII' : 'Unicode'})`, async t => {
+    const f = await fixture(t);
+    assert.equal(LIMITS.descriptorBytes, 64 * 1024);
+    f.descriptor.data.padding = '';
+    const budget = LIMITS.descriptorBytes - Buffer.byteLength(`${JSON.stringify(f.descriptor)}\n`, 'utf8');
+    const width = Buffer.byteLength(character, 'utf8');
+    f.descriptor.data.padding = character.repeat(Math.floor(budget / width)) + 'a'.repeat(budget % width);
+    const serialized = `${JSON.stringify(f.descriptor)}\n`;
+    assert.equal(Buffer.byteLength(serialized, 'utf8'), LIMITS.descriptorBytes);
+    if (width > 1) assert.ok(serialized.length < LIMITS.descriptorBytes);
+    await fs.writeFile(path.join(f.source, 'preview.json'), serialized);
+    assert.equal((await installPublication(f.source, f.root)).status, 'installed');
+    f.descriptor.data.padding += 'a';
+    const oversized = `${JSON.stringify(f.descriptor)}\n`;
+    assert.equal(Buffer.byteLength(oversized, 'utf8'), LIMITS.descriptorBytes + 1);
+    await fs.writeFile(path.join(f.source, 'preview.json'), oversized);
+    const rejectedRoot = `${f.root}-oversized`;
+    await assert.rejects(installPublication(f.source, rejectedRoot), /oversized.*preview\.json/);
+    await assert.rejects(fs.stat(rejectedRoot), { code: 'ENOENT' });
+  });
+}
 
 test('file count and aggregate byte limits apply before any revision is installed', async t => {
   const f = await fixture(t);

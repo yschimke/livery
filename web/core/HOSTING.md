@@ -31,8 +31,10 @@ host configuration; never copy it from a publication or request parameter. It ta
 `ComponentPreview`'s `config` shape, excluding `catalog`. Omitting keys fails closed.
 The local unsigned fixture must explicitly configure `{"unsigned":true}`; that is
 for development/preview channels only. Descriptor/catalog/canonical URLs must be on
-the host origin, using HTTPS except loopback development. The descriptor and catalog
-keep the existing version-1 preview and exact template/hash semantics.
+the host origin, using HTTPS except loopback development. The descriptor is limited
+to 64 KiB of UTF-8 bytes (not characters), matching the installer and server limit.
+The descriptor and catalog keep the existing version-1 preview and exact
+template/hash semantics.
 
 At `/p/quantity-stepper/r/fixture-1/embed/`, set `data-mode="embed"` and retain the
 absolute descriptor and canonical page URLs above. Embed mode shows theme/reset and

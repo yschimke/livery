@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
-export const LIMITS = Object.freeze({ files: 128, fileBytes: 16 * 1024 * 1024, totalBytes: 32 * 1024 * 1024, jsonBytes: 1024 * 1024, inventoryBytes: 64 * 1024 });
+export const LIMITS = Object.freeze({ files: 128, fileBytes: 16 * 1024 * 1024, totalBytes: 32 * 1024 * 1024, jsonBytes: 1024 * 1024, descriptorBytes: 64 * 1024, inventoryBytes: 64 * 1024 });
 const INVENTORY = 'publication-files.json';
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -92,7 +92,8 @@ async function readBundle(directory, installed = false) {
       } else {
         if (!entry.isFile() || !allowedFile(name)) fail(`Unexpected publication file: ${name}`);
         if (files.size >= LIMITS.files) fail('Too many publication files');
-        const bytes = await readBounded(path.join(root, name), name.endsWith('.json') ? LIMITS.jsonBytes : LIMITS.fileBytes);
+        const maximum = name === 'preview.json' ? LIMITS.descriptorBytes : name.endsWith('.json') ? LIMITS.jsonBytes : LIMITS.fileBytes;
+        const bytes = await readBounded(path.join(root, name), maximum);
         total += bytes.length;
         if (total > LIMITS.totalBytes) fail('Publication exceeds total byte budget');
         files.set(name, bytes);
@@ -112,7 +113,7 @@ function catalogBase(value, fallback) {
 }
 
 function validateFiles(files) {
-  const descriptor = json(files.get('preview.json'), 'preview.json');
+  const descriptor = json(files.get('preview.json'), 'preview.json', LIMITS.descriptorBytes);
   if (!object(descriptor) || descriptor.schemaVersion !== 1 || descriptor.mode !== 'preview' ||
     ![descriptor.publicationId, descriptor.revision].every(value => typeof value === 'string' && ID.test(value))) fail('Invalid preview version, mode or identity');
   if (descriptor.canonicalUrl !== './' || descriptor.catalog?.manifestUrl !== './catalog/manifest.json') fail('Preview URLs must use fixed same-publication relative paths');
@@ -147,7 +148,7 @@ function validateFiles(files) {
   }
   const themes = manifest.themes ?? [];
   if (!Array.isArray(themes)) fail('Invalid catalog themes');
-  for (const owner of [...manifest.designs, ...themes]) {
+  for (const owner of [...manifest.designs, ...manifest.templates, ...themes]) {
     if (!Array.isArray(owner.previews ?? [])) fail('Invalid catalog previews');
     for (const preview of owner.previews ?? []) checkFile(previewBase, preview, MIME_EXT.get(preview.mime ?? 'image/webp'), false);
   }

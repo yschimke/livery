@@ -67,8 +67,10 @@ cross-repository source build at server startup.
 Local verification used freshly built neutral Wasm, actual RC thumbnails, a normally
 launched Ktor server and generated Dokka HTML:
 
-- 30 installer tests, including concurrent retries, immutable identity and bounded inputs.
-- 21 standalone player assertions and 22 extracted-viewer ZIP browser assertions.
+- 35 installer tests, including concurrent retries, immutable identity, template-owned preview
+  completeness and exact UTF-8 descriptor limits.
+- 21 standalone player assertions and 24 extracted-viewer ZIP browser assertions, including
+  the shared 64 KiB descriptor byte limit.
 - 43 server tests covering HTTP, settings, page policy and private/public design isolation;
   Gradle formatting and full Caddy configuration validation also passed.
 - 22 real-host assertions at desktop and mobile widths for each of the unsigned development

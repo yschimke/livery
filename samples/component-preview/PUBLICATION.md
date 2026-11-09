@@ -70,7 +70,9 @@ if the host lacks glyph coverage, configure its font environment (for example
 ## Complete bundle and local inventory
 
 A bundle must contain `preview.json`, `thumbnail.png`, `catalog/manifest.json`, and every
-local catalog template, asset and preview referenced by that manifest. The descriptor keeps
+local catalog template, asset and preview referenced by that manifest, including previews owned
+by designs, individual templates and themes. Each referenced preview must be present and match
+its SHA-256. The descriptor keeps
 `canonicalUrl: "./"` and `catalog.manifestUrl: "./catalog/manifest.json"`. Catalog bases must be
 relative subdirectories inside `catalog/`; URLs with origins, root paths, traversal, query
 strings or encoded path components are rejected. Image proxies and Google font downloads
@@ -85,8 +87,10 @@ is not a public resource or a trust signature; the server must never serve it. N
 code, source history, editor credentials or publishing keys belong in the bundle. Viewer assets
 are a separate operator-installed build.
 
-Limits shared with the server: 128 files, 16 MiB per file, 32 MiB total, 1 MiB per JSON file,
-64 KiB inventory, 200 characters for the fallback title and 2000 for its description.
+Limits shared with the server: 128 files, 16 MiB per file, 32 MiB total, 1 MiB per catalog JSON
+file, 64 KiB for the entire `preview.json` descriptor and 64 KiB for the inventory. JSON limits
+count UTF-8 bytes, including whitespace, rather than characters. Fallback text is limited to
+200 characters for the title and 2000 for its description.
 IDs/revisions match `[a-z0-9][a-z0-9-]{0,63}`. Relative paths are at most
 240 ASCII characters; each segment matches `[A-Za-z0-9][A-Za-z0-9._-]{0,99}`. Supported file
 types are RC, PNG/JPEG/WebP, TTF/OTF/WOFF2, catalog binary assets and the catalog JSON files.
