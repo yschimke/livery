@@ -8,12 +8,15 @@ From nothing to a signed catalog on a GitHub release, read by an app, in five st
 ## 1. Get the tools
 
 The libraries are published to Maven Central as `ee.schimke.composeai:<module>`, from the first
-release on. Each release attaches the `livery` and `livery-mcp` CLIs as zips:
+release on. Each release attaches the `livery` and `livery-mcp` CLIs as zips. A release publishes
+only the modules that changed, so modules can sit at different versions: import `livery-bom` and
+name the modules without one, and the BOM gives each the version it is published at:
 
 ```kotlin
 dependencies {
-  implementation("ee.schimke.composeai:livery-client:<version>")   // fetch, verify, cache, select, bind
-  implementation("ee.schimke.composeai:livery-compose:<version>")  // LiveryTemplate, LiverySlot
+  implementation(platform("ee.schimke.composeai:livery-bom:<version>"))
+  implementation("ee.schimke.composeai:livery-client")   // fetch, verify, cache, select, bind
+  implementation("ee.schimke.composeai:livery-compose")  // LiveryTemplate, LiverySlot
   // launcher and Wear widgets, notifications: livery-launcher-widgets, livery-wear-widgets, livery-notifications
   // Firebase Analytics, Remote Config experiments, Firestore frequency caps: livery-firebase
 }

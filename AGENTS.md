@@ -37,9 +37,12 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
 - Merge only when explicitly asked.
 - **Releases** are cut by release-please (`.github/workflows/release.yml`, as in
   compose-ui-builder): it keeps a `chore(main): release <version>` PR open from the Conventional
-  Commit subjects, and merging it tags `v<version>` and publishes every module listed in the root
-  `build.gradle.kts` (`published`) to Maven Central as `ee.schimke.composeai:<module>`, and the CLIs
-  to the GitHub release. Don't push `v*` tags by hand. A new library module goes into that list.
+  Commit subjects, and merging it tags `v<version>` and publishes, of the modules listed in the root
+  `build.gradle.kts` (`published`), the ones that changed (`.github/scripts/maven-publish-plan.sh`,
+  `release-tasks.gradle.kts`) to Maven Central as `ee.schimke.composeai:<module>`, with
+  `livery-bom` pinning every module at the version it is published at, and the CLIs to the GitHub
+  release. Don't push `v*` tags by hand. A new library module goes into that list. A change to the
+  plan's rules updates `.github/scripts/test-maven-publish-plan.sh`.
 
 ## Checks
 

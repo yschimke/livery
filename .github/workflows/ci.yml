@@ -36,6 +36,8 @@ jobs:
       # compileSdk 37.1 (Compose Multiplatform 1.13, OkHttp 5); the runner image may not carry it yet.
       - name: Android SDK platform
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.1" > /dev/null
+      - name: Publish plan rules
+        run: .github/scripts/test-maven-publish-plan.sh
       - name: Build and test every target, then build the sample catalog
         run: |
           # Compose/Wasm test linking exceeds the default 2 GiB Kotlin daemon heap.
