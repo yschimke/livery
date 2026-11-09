@@ -7,6 +7,7 @@ order: 24
 | --- | --- | --- |
 | `livery-protocol`, `livery-client` | Android, JVM, iOS, Wasm | Available |
 | `livery-compose` | Android, desktop, iOS, Wasm (Compose Multiplatform) | Available |
+| `livery-bom` (a `platform(…)` with every module's version) | Gradle and Maven | From the next release |
 | `livery-compose-material3` (`ColorScheme.toLiveryTheme()`) | Android, desktop, iOS, Wasm (Compose Multiplatform) | Available from the release after 0.4.0 |
 | `livery-instantiate` | Android, JVM, iOS, Wasm | Available |
 | `livery-launcher-widgets` | Android 16+ | Available; not yet device-tested in CI |

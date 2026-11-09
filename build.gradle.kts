@@ -48,7 +48,13 @@ val published = mapOf(
   ":livery-verify" to ("Livery verify" to "Play Livery templates on the players apps ship them to, under Robolectric, and fail on their errors"),
   ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),
   ":livery-gradle-plugin" to ("Livery Gradle plugin" to "Builds a Livery catalog into an app's assets at build time"),
+  ":livery-bom" to ("Livery BOM" to "Version constraints for every Livery library, so an app aligns them with one coordinate"),
 )
+
+// Which modules a release publishes, and the version each is named at: see release-tasks.gradle.kts.
+// It sets each published project's version, so it runs before the publishing configuration below.
+extra["liveryPublishedPaths"] = published.keys.toList()
+apply(from = "release-tasks.gradle.kts")
 
 subprojects {
   val (title, about) = published[path] ?: return@subprojects

@@ -149,8 +149,9 @@ livery build catalog build/release \
     </div>
     <div role="tabpanel" id="tab-kotlin">
 <pre><code>dependencies {
-  implementation("ee.schimke.composeai:livery-client:&lt;version&gt;")   // fetch, verify, cache, select, bind
-  implementation("ee.schimke.composeai:livery-compose:&lt;version&gt;")  // LiveryTemplate, LiverySlot
+  implementation(platform("ee.schimke.composeai:livery-bom:&lt;version&gt;"))
+  implementation("ee.schimke.composeai:livery-client")   // fetch, verify, cache, select, bind
+  implementation("ee.schimke.composeai:livery-compose")  // LiveryTemplate, LiverySlot
   // livery-launcher-widgets, livery-wear-widgets, livery-notifications
 }</code></pre>
       <p>Android, JVM, iOS and Wasm from one Kotlin Multiplatform client. <a href="getting-started.html#5-read-it-in-the-app">Set up the repository →</a></p>

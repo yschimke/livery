@@ -12,9 +12,15 @@ name: Release
 # There is no `push: tags` trigger: release-please makes the tag itself, so a tag trigger would
 # publish twice, and Maven Central refuses a version it already has.
 #
+# Only the modules that changed are published (.github/scripts/maven-publish-plan.sh and
+# release-tasks.gradle.kts): a module is published when anything it is built from changed since the
+# version it last published at, when a module it depends on is publishing, or when a shared build
+# input changed. Every other module keeps its published version, which `livery-bom` pins.
+#
 # `workflow_dispatch` with `publish_tag` is the recovery path: it runs the publish for an EXISTING
-# tag and release (a draft whose publish failed) instead of cutting a new one. Maven Central still
-# refuses a version it already has, so only re-run a publish that failed before uploading.
+# tag and release (a draft whose publish failed) instead of cutting a new one. The plan runs there
+# too, so a publish that uploaded some modules before failing resumes with the rest (a module
+# already on Central at the tag has nothing to publish). `publish_all` skips the plan.
 #
 # Secrets (as compose-ui-builder uses): MAVEN_CENTRAL_USERNAME and MAVEN_CENTRAL_PASSWORD (a Central
 # Portal user token for the ee.schimke.composeai namespace), SIGNING_KEY (an ASCII-armoured private
@@ -34,6 +40,13 @@ on:
           for a release whose publish failed. Leave it empty for the normal run.
         required: false
         type: string
+      publish_all:
+        description: >-
+          With publish_tag: publish every module at the tag instead of only those the publish plan
+          finds changed. Only for a recovery where the plan cannot be trusted.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -152,6 +165,8 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.publish_tag }}
           persist-credentials: false
+          # The publish plan diffs each module against the tag it last published at.
+          fetch-depth: 0
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -163,8 +178,33 @@ jobs:
         run: |
           case "$TAG" in v[0-9]*) ;; *) echo "::error::tag '$TAG' is not v<version>"; exit 1 ;; esac
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
-      - name: Build and test
-        run: ./gradlew build -Plivery.version="$VERSION" --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
+      # No `./gradlew build` here: the release commit already passed CI's required `gradle` check,
+      # and a cold full build on this runner ran the Kotlin daemon out of memory (v0.6.0, v0.7.0), so
+      # neither release reached Central. Publishing compiles only what it uploads.
+      - name: Compute the publish plan
+        env:
+          PUBLISH_ALL: ${{ inputs.publish_all }}
+        run: |
+          set -euo pipefail
+          # A tag cut before changed-only publishing (v0.7.0 and older) has neither the plan nor
+          # `publishLivery`: recovering one publishes every module the way that release would have.
+          if [ ! -f release-tasks.gradle.kts ]; then
+            echo "$TAG predates changed-only publishing: every module publishes"
+            echo "PUBLISH_LEGACY=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ "$PUBLISH_ALL" = "true" ]; then
+            echo "publish_all: every module publishes at $TAG"
+            echo "PUBLISH_PLANNED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # `--write-manifest` records the versions the plan read from Central, where the build reads
+          # them to name each skipped module at the version it is already published at.
+          PUBLISH_SET="$(.github/scripts/maven-publish-plan.sh --head "$TAG" \
+            --write-manifest publishing-manifest.json | paste -sd, -)"
+          echo "publish set: ${PUBLISH_SET:-<empty>}"
+          echo "PUBLISH_SET=$PUBLISH_SET" >> "$GITHUB_ENV"
+          echo "PUBLISH_PLANNED=true" >> "$GITHUB_ENV"
       - name: Publish to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -172,7 +212,19 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: ./gradlew publishToMavenCentral -Plivery.version="$VERSION" --no-configuration-cache
+        run: |
+          set -euo pipefail
+          if [ "${PUBLISH_LEGACY:-}" = "true" ]; then
+            ./gradlew publishToMavenCentral -Plivery.version="$VERSION" --no-configuration-cache \
+              --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
+            exit 0
+          fi
+          # An empty plan still runs Gradle: `publishLivery` then does nothing, unless this release's
+          # libraries already reached Central and its BOM did not (a re-run after a failed BOM upload).
+          PLAN_ARGS=()
+          if [ "$PUBLISH_PLANNED" = "true" ]; then PLAN_ARGS+=("-Plivery.publishSet=$PUBLISH_SET"); fi
+          ./gradlew printPublishSet publishLivery -Plivery.version="$VERSION" --no-configuration-cache \
+            --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g ${PLAN_ARGS[@]+"${PLAN_ARGS[@]}"}
       - name: CLI distributions
         run: ./gradlew :livery-publish:distZip :livery-mcp:distZip -Plivery.version="$VERSION"
       - name: Attach the CLIs to the release
