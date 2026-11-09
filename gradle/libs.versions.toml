@@ -9,7 +9,7 @@ kotlinx-coroutines = "1.11.0"
 compose-multiplatform = "1.12.2"
 # The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
 skiko = "0.150.2"
-rc-players = "2.29.0"
+rc-players = "2.30.0"
 agp = "9.5.0"
 ktor = "3.6.1"
 okio = "3.18.2"
