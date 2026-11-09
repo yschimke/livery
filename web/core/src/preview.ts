@@ -5,6 +5,10 @@ import { WebSession, type WebConfig, type Ready, type Routed } from './session.j
 export interface PreviewOptions {
   /** Host-owned trust and capabilities. These cannot be supplied by the descriptor. */
   config: Omit<WebConfig, 'catalog'>;
+  /** Minimal embeds retain theme/reset; full previews also expose width/examples. */
+  controls?: 'full' | 'minimal';
+  /** Developer diagnostics, hidden by public publication pages. */
+  showActionLog?: boolean;
   fetch?: typeof fetch;
   /** Host-provided example overrides; never application scripts. */
   examples?: Record<string, Record<string, unknown>>;
@@ -49,7 +53,8 @@ export class ComponentPreview {
     this.surface.setAttribute('aria-label', 'Interactive Remote Compose component');
     this.controls.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap;margin:12px 0';
     this.surface.style.maxWidth = '100%';
-    this.element.replaceChildren(title, link, this.controls, this.surface, this.status, this.log);
+    this.element.replaceChildren(title, link, this.controls, this.surface, this.status);
+    if (this.options.showActionLog !== false) this.element.append(this.log);
     this.addControls();
     document.addEventListener('visibilitychange', this.visibility);
     this.observer = new IntersectionObserver(entries => { this.inView = entries[0]?.isIntersecting ?? false; this.visibility(); });
@@ -156,8 +161,8 @@ export class ComponentPreview {
       field.addEventListener('change', () => change(field.value)); wrapper.append(field); this.controls.append(wrapper);
     };
     select('Theme', ['Light', 'Dark'], value => { this.theme = value === 'Dark' ? dark : light; void this.update(); });
-    select('Width', ['360', '280', '480'], value => { this.width = Number(value); void this.update(); });
-    select('Example', ['Default', ...Object.keys(this.options.examples ?? {})], value => { if (this.publication) void this.setData({ ...this.publication.data, ...this.options.examples?.[value] }); });
+    if (this.options.controls !== 'minimal') select('Width', ['360', '280', '480'], value => { this.width = Number(value); void this.update(); });
+    if (this.options.controls !== 'minimal' && Object.keys(this.options.examples ?? {}).length) select('Example', ['Default', ...Object.keys(this.options.examples ?? {})], value => { if (this.publication) void this.setData({ ...this.publication.data, ...this.options.examples?.[value] }); });
     const reset = document.createElement('button'); reset.textContent = 'Reset'; reset.addEventListener('click', () => { void this.reset(); }); this.controls.append(reset);
   }
 }

@@ -3,6 +3,17 @@
 Read [coordination](README.md). **Goal:** a documented component has source, an interactive
 published RC example and a useful fallback in generated HTML.
 
+Implemented in [the optional Dokka sample](../../samples/dokka-preview/README.md): it
+keeps normal KDoc links and `@sample` source, then applies an explicit HTML build adapter
+using pinned release mappings. It consumes the hosting stream's `/embed/` route; it does
+not add a runtime dependency or automatically publish editor content. See the sample's
+checks and the wave report for reproducible generation/browser validation. The isolated
+Kotlin 2.3.21/Dokka 2.3.0 build generated the actual API page; the adapter inserted two
+embeds while preserving `@sample` source. Browser checks against the real hosted fixture
+cover independent local actions, reset, keyboard-accessible links and unavailable/no-JS
+fallback. Fixed mapped height needs no postMessage protocol. CI generates Dokka and checks
+the adapter; the optional browser test requires an independently running publication host.
+
 ## Start independently
 
 Build a tiny Kotlin/Dokka sample against a fixed fixture preview URL. Read the current

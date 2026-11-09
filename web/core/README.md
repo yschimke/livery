@@ -3,8 +3,11 @@
 A browser RC player and local component-preview host using Livery's Kotlin/Wasm
 selection, binding, trust and action gates. No A2UI or UI Builder runtime is required.
 The first fixture is the quantity stepper in `samples/two-way`; Confetti integration
-is deferred. This is a local implementation prototype, not a hosted sharing service.
-The standalone package is currently built from source; it is not published independently.
+is deferred. This includes an experimental viewer distribution for a host to serve; it does not
+deploy a hosting service.
+The standalone npm package is currently built from source, not published independently.
+A successful future release also attaches a `livery-preview-viewer-<version>.zip`.
+A draft or failed release does not establish public artifact availability.
 
 ## Run
 
@@ -52,7 +55,8 @@ portable publication standard or support for following a mutable “latest” ch
 
 `ComponentPreview` is a DOM host, not a custom element. `WebSession` exposes the typed
 Wasm bridge and `RcCanvasPlayer` the neutral canvas player for other hosts. The preview
-accepts host-provided `examples` as input overrides. Every resulting dataset and `set`
+accepts host-provided `examples` as input overrides. `controls: "minimal"` keeps
+theme/reset only; `showActionLog: false` hides developer action diagnostics. Every resulting dataset and `set`
 action passes through the Kotlin gates; TypeScript does not duplicate their rules.
 
 Each viewer owns its session/data. Closing it cancels session work, closes its HTTP
@@ -78,3 +82,31 @@ installing/building the local A2UI package. A2UI bundles its player dependency s
 installed tarball consumers do not need a sibling checkout. After changing the
 core package locally, rerun `npm ci` in `web/a2ui` to refresh its installed copy. Its existing component API remains intact.
 The checked-in vendor player and provenance now live in `web/core/vendor/`.
+
+## Distribute a publication viewer
+
+After `npm run build`, run `npm run bundle`. This produces `viewer-dist/` and
+`build/livery-preview-viewer-development.zip`, including the player, Kotlin/Wasm,
+styles, provenance, license and an asset inventory. Set `LIVERY_VIEWER_VERSION` to
+label a build. The runtime is self-contained; a host does not need npm, an import
+map, A2UI or a Livery checkout. Mount the directory at `/assets/livery-preview/`
+and generate publication HTML using [HOSTING.md](HOSTING.md)'s exact bootstrap
+attributes. Host-owned keys remain separate from publication data.
+
+The full-page viewer offers Bluesky's ordinary compose intent, system sharing where
+supported, and clipboard/manual copying. Each shares the canonical revision URL,
+without local edits or automatic posting. Embed mode retains theme/reset and a link
+to the full page. Server-rendered metadata, static fallback, descriptor discovery,
+publication storage and iframe policy belong to the host.
+
+`npm run test:viewer` extracts the ZIP and runs real Chromium/RC interaction under
+a revision URL and same-origin CSP, including share activation, denied/unsupported
+APIs, embed mode, trust failure and no-JavaScript fallback. It requires the built
+publisher CLI; `LIVERY_CLI` can point to an already installed CLI. To keep the local
+fixture server open for inspection, run `node test/viewer.mjs --serve`.
+
+For a separately running publication server with the quantity-stepper fixture,
+`LIVERY_PUBLICATION_URL=http://127.0.0.1:8080/p/quantity-stepper/r/fixture-1/ npm run test:host`
+checks actual SSR/discovery/thumbnail routes, desktop/mobile interaction and embed
+mode. It does not start a server or build another repository. `LIVERY_RENDER_OUT`
+saves screenshots from both browser test modes.

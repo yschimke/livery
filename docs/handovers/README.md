@@ -1,6 +1,6 @@
 # Parallel handovers: shareable RC components
 
-Status: **First wave implemented locally; see the [implementation report](WAVE_1.md) for validation and remaining work.**
+Status: **First wave merged in [PR #46](https://github.com/yschimke/livery/pull/46); public hosting and documentation integration are the [second delivery slice](WAVE_2.md).**
 Baseline plan commit: `23a0c09`. Read the [delivery plan](../RC_TILES_PLAN.md) first.
 These notes are independently assignable briefs. Read the target repository's current
 `AGENTS.md` before implementation and recheck all external branch heads.

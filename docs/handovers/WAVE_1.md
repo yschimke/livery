@@ -4,11 +4,13 @@ Implementation date: 2026-11-08. These are local development changes, not deploy
 services or a published AT Protocol extension. Confetti work remains on hold until
 its relevant upstream PRs merge, including further investigation of the draft stack.
 
-Delivery: [Livery PR #46](https://github.com/yschimke/livery/pull/46). The branch is pushed,
-with current main (`10cef3a`) integrated in `dde2095`. The PR's required `gradle` check
-tracks the complete build, catalog workflows and rebuilt standalone/A2UI browser matrix.
-The local results below describe the initial implementation and integration checks;
-consult the PR for validation of its latest commit.
+Delivery: [Livery PR #46](https://github.com/yschimke/livery/pull/46) merged on 2026-11-09
+at `de03ef56801d4d1a0d6c4bbb05a614193addf02e`.
+[CI passed](https://github.com/yschimke/livery/actions/runs/42528632302), including the
+full build, Android widget player, catalog review/publish dry run, 21 standalone and
+380 A2UI/React 18 browser assertions. This resolves the initial local build limitations
+recorded below. Heron remains on its fork branch; its device smoke matrix is still open.
+The [second slice](WAVE_2.md) supplies public hosting and real Dokka integration.
 
 ## Delivered scope
 

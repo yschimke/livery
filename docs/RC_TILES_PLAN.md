@@ -1,7 +1,8 @@
 # Shareable Remote Compose components: delivery plan
 
-Status: **Staged delivery; first wave implemented locally.** See the
-[implementation report](handovers/WAVE_1.md) for completed work and validation.
+Status: **Staged delivery; first wave merged.** See the
+[first-wave report](handovers/WAVE_1.md) and
+[public hosting and documentation slice](handovers/WAVE_2.md) for delivery and validation.
 This is a delivery plan, not a supported publication API or AT Protocol standard.
 Source inspection: 2026-11-08. “RC tile” remains a provisional format name.
 
