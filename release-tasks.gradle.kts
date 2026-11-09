@@ -5,7 +5,8 @@
 // passes that set here as `-Plivery.publishSet=livery-client,livery-compose,…`:
 //
 //  * absent: no plan ran (a local build, a manual recovery run), so everything takes the tag;
-//  * present but empty: the plan found nothing to publish, so nothing publishes, not even the BOM;
+//  * present but empty: the plan found nothing to publish, so nothing publishes, not even the BOM
+//    (unless this release's libraries are already on Central and its BOM is not);
 //  * otherwise: those modules take the tag, and every other module keeps the version it is already
 //    published at, read from `publishing-manifest.json` (written by the plan, never committed).
 //
@@ -67,9 +68,14 @@ extra["liveryPublishedVersions"] = versions.mapKeys { (path, _) -> artifactIds.g
 val toPublish: List<String> =
   publishedPaths.filter { it != bomPath && (publishSet == null || artifactIds.getValue(it) in publishSet) }
 
-// Central refuses a version it already has: a re-run of a release that uploaded the BOM before it
-// failed must not upload it again. The plan records the BOM's published version with the others.
-val publishBom: Boolean = toPublish.isNotEmpty() && recordedVersion("livery-bom") != tagVersion
+// The BOM is this release's index: it is pending while Central lacks it at the tag and the release
+// publishes something now or already published something (a re-run after the libraries went up and
+// the BOM did not). Central refuses a version it already has, so a BOM already there at the tag is
+// never uploaded again. The plan records the BOM's published version with the others.
+val releasedBefore: Boolean =
+  publishedPaths.any { it != bomPath && recordedVersion(artifactIds.getValue(it)) == tagVersion }
+val publishBom: Boolean =
+  (toPublish.isNotEmpty() || releasedBefore) && recordedVersion("livery-bom") != tagVersion
 
 tasks.register("publishLivery") {
   group = "publishing"

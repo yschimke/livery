@@ -219,10 +219,8 @@ jobs:
               --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
             exit 0
           fi
-          if [ "$PUBLISH_PLANNED" = "true" ] && [ -z "$PUBLISH_SET" ]; then
-            echo "no Maven artifact changed; nothing to publish to Central"
-            exit 0
-          fi
+          # An empty plan still runs Gradle: `publishLivery` then does nothing, unless this release's
+          # libraries already reached Central and its BOM did not (a re-run after a failed BOM upload).
           PLAN_ARGS=()
           if [ "$PUBLISH_PLANNED" = "true" ]; then PLAN_ARGS+=("-Plivery.publishSet=$PUBLISH_SET"); fi
           ./gradlew printPublishSet publishLivery -Plivery.version="$VERSION" --no-configuration-cache \
