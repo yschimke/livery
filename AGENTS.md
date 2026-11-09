@@ -23,6 +23,10 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   public API, CLI flag or catalog file updates the pages that show it, in the same PR, and
   anything not built yet stays marked *Planned*. Build it with `python3 site/build.py build/site`
   (needs `pip install markdown`); `.github/workflows/pages.yml` deploys it from `main`.
+- **No visible redraws.** A card after the first of its template, and any card the app preloaded,
+  draws complete on its first frame (`LiveryResources`, `FirstFrameTest`): composition reads
+  documents, fonts and images from memory without suspending, and only a template's first card that
+  was not preloaded may wait. Never reuse one player state across cards.
 - **Rendering never waits on the network**, and a chosen design that can't play falls back to the
   automatic one, never to nothing. Automatic selection never picks an `OnRequest` design that
   isn't installed.

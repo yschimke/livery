@@ -9,7 +9,7 @@ kotlinx-coroutines = "1.11.0"
 compose-multiplatform = "1.12.2"
 # The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
 skiko = "0.150.2"
-rc-players = "2.22.0"
+rc-players = "2.30.0"
 agp = "9.5.0"
 ktor = "3.6.1"
 okio = "3.18.2"
@@ -20,7 +20,7 @@ firebase-bom = "35.1.0"
 sentry = "8.62.0"
 datadog = "3.15.0"
 amplitude = "1.36.0"
-compose-remote = "1.0.0-alpha22"
+compose-remote = "1.0.0-alpha23"
 robolectric = "4.17"
 # The A2UI release train (androidx.a2ui:*, material3-a2ui) for livery-a2ui-compose's Android
 # target, and the same release ported to Compose Multiplatform (yschimke/a2ui-catalog, vendor/) for
@@ -55,6 +55,7 @@ ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 cmp-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 cmp-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
 cmp-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+cmp-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose-multiplatform" }
 # Material 3 for livery-compose-material3: the newest stable Compose Multiplatform Material 3 (its
 # later lines are alphas). An app on a newer Material 3 resolves to its own.
 cmp-material3 = { module = "org.jetbrains.compose.material3:material3", version = "1.9.0" }

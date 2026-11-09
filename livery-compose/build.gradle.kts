@@ -40,8 +40,15 @@ kotlin {
       implementation(libs.cmp.foundation)
     }
     commonTest.dependencies { implementation(kotlin("test")) }
+    // First-frame tests: Compose UI tests on the desktop JVM, playing the sample catalog's documents.
+    jvmTest.dependencies {
+      implementation(compose.desktop.currentOs)
+      implementation(libs.cmp.ui.test)
+    }
   }
 }
+
+tasks.withType<Test>().configureEach { systemProperty("livery.samples", rootProject.file("samples/catalog").absolutePath) }
 
 // The Wasm browser test task is off (see wasmJs above), so there is no Compose UI test bundle for
 // this configuration check to guard; `binaries.executable()` would turn a library into an app.

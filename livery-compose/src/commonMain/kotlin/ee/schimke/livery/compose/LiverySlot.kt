@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import ee.schimke.livery.client.DesignSummary
@@ -19,6 +22,12 @@ import ee.schimke.livery.client.TemplateRepository
  * chosen design: everything [plan] reads from the app) and whenever the repository's
  * [TemplateRepository.revision] does (a refreshed catalog, an install). While
  * it runs, and when it falls back, the slot draws [fallback]: the app's native version, or nothing.
+ *
+ * With a [slotId] that names this slot on the host (`home.top`, `home-feed`), the slot remembers
+ * its answer per [key] in [LiveryHost.resources]: when it comes back (scrolled away and back, a
+ * screen reopened), or after [LiveryResources.prepareSlot] with the same id and key, it draws that
+ * answer on its first frame instead of [fallback], and replans behind it. Without one it starts
+ * from [fallback] every time.
  */
 @Composable
 fun LiverySlot(
@@ -26,11 +35,18 @@ fun LiverySlot(
   host: LiveryHost,
   modifier: Modifier = Modifier,
   fallback: @Composable (reason: String?) -> Unit = {},
+  slotId: String? = null,
   plan: suspend () -> PlanResult,
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
   val revision by host.repository.revision.collectAsState()
-  val result by produceState<PlanResult?>(null, key, host, revision) { value = plan() }
+  // A slot that already had an answer at this revision (scrolled back, reopened) draws it at once
+  // rather than its fallback for a frame; it still replans, and a new answer replaces it.
+  val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
+  LaunchedEffect(state, revision) {
+    state.value = plan().also { r -> slotId?.let { host.resources.keepPlan(it, key, revision, r) } }
+  }
+  val result = state.value
   when (val r = result) {
     null -> fallback(null)
     is PlanResult.Fallback -> fallback(r.reason)

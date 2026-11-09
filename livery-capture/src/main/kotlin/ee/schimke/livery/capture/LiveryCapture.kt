@@ -3,7 +3,7 @@
 package ee.schimke.livery.capture
 
 import android.content.Context
-import androidx.compose.remote.creation.compose.action.Action
+import androidx.compose.remote.creation.compose.action.RemoteAction
 import androidx.compose.remote.creation.compose.action.hostAction
 import androidx.compose.remote.creation.compose.capture.RemoteCreationDisplayInfo
 import androidx.compose.remote.creation.compose.capture.RemoteDensity
@@ -19,6 +19,7 @@ import androidx.compose.remote.creation.compose.state.rs
 import androidx.compose.remote.creation.profile.Profile
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import ee.schimke.composeai.rcwidget.creation.rcWidgetHostAction
 import ee.schimke.composeai.rcwidget.launcher.widgetsProfile
 import ee.schimke.livery.client.ActionGate
@@ -77,7 +78,7 @@ class LiveryValues(val contract: Contract) {
   /** A colour input or a `theme.*` role; [fallback] draws when the contract has no default. */
   fun color(name: String, fallback: Color = Color.Black): RemoteColor {
     val argb = (default(name, ValueType.Color, themeOk = true) as? JsonPrimitive)?.contentOrEmpty()?.let(ContractBinder::parseColor)
-    return RemoteColor.createNamedRemoteColor(name, argb?.let { Color(it.toInt()) } ?: fallback, USER)
+    return RemoteColor.createNamedRemoteColor(name, argb?.toInt() ?: fallback.toArgb(), USER)
   }
 
   /**
@@ -89,7 +90,7 @@ class LiveryValues(val contract: Contract) {
    * with the change: `clickable(combinedAction(valueChange(expanded, !expanded), v.action("expand")))`.
    */
   @Composable
-  fun action(name: String, args: Map<String, String> = emptyMap()): Action {
+  fun action(name: String, args: Map<String, String> = emptyMap()): RemoteAction {
     require(name in contract.actions) { "${contract.ref} declares no action '$name': ${contract.actions.keys.sorted()}" }
     val undeclared = args.keys - contract.actions.getValue(name).args.keys
     require(undeclared.isEmpty()) { "${contract.ref} action '$name' declares no arguments ${undeclared.sorted()}" }
@@ -104,16 +105,16 @@ class LiveryValues(val contract: Contract) {
    * from (an A2UI data model, the app's own state). [value] is evaluated when tapped, so a stepper's
    * plus is `v.set("setQuantity", v.int("quantity") + 1)`.
    */
-  fun set(name: String, value: RemoteInt): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.Int, ValueType.Long)
+  fun set(name: String, value: RemoteInt): RemoteAction = setAction(name, { n -> hostAction(n, value) }, ValueType.Int, ValueType.Long)
 
-  fun set(name: String, value: RemoteFloat): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.Float)
+  fun set(name: String, value: RemoteFloat): RemoteAction = setAction(name, { n -> hostAction(n, value) }, ValueType.Float)
 
-  fun set(name: String, value: RemoteString): Action = setAction(name, { n -> hostAction(n, value) }, ValueType.String)
+  fun set(name: String, value: RemoteString): RemoteAction = setAction(name, { n -> hostAction(n, value) }, ValueType.String)
 
   /** A bool reaches the host as `1` or `0`, which the client takes as `true` or `false`. */
-  fun set(name: String, value: RemoteBoolean): Action = setAction(name, { n -> hostAction(n, value.toRemoteInt()) }, ValueType.Bool)
+  fun set(name: String, value: RemoteBoolean): RemoteAction = setAction(name, { n -> hostAction(n, value.toRemoteInt()) }, ValueType.Bool)
 
-  private fun setAction(name: String, action: (RemoteString) -> Action, vararg types: ValueType): Action {
+  private fun setAction(name: String, action: (RemoteString) -> RemoteAction, vararg types: ValueType): RemoteAction {
     val spec = contract.actions[name] ?: throw IllegalArgumentException("${contract.ref} declares no action '$name': ${contract.actions.keys.sorted()}")
     require(spec.kind == ActionKinds.SET) { "${contract.ref} action '$name' is ${spec.kind}, not set" }
     val input = contract.inputs[spec.input] ?: throw IllegalArgumentException("${contract.ref} action '$name' sets no input of the contract")

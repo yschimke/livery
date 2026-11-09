@@ -99,6 +99,22 @@ val repository = TemplateRepository(
 repository.refresh()                 // from your background scheduler, and at start
 ```
 
+**No blank first screen.** If the app's first screen has Livery slots, keep the splash screen up
+until they are prepared (answers planned, documents, fonts and images in memory), so the screen
+appears complete. `startup` never waits longer than its limit (800 ms by default) and keeps
+preparing in the background after it:
+
+```kotlin
+// Android, androidx.core:core-splashscreen, in onCreate before setContent
+val startup = host.resources.startup(lifecycleScope) {
+  prepareSlot("home.top", data) { planner.forAppData(query, data) }   // the slot's slotId, key and call
+}
+installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
+```
+
+The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. On desktop, iOS
+and the web, `startup.await()` before showing the first screen.
+
 **Swift (iOS, macOS)**:
 
 ```swift
