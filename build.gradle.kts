@@ -47,6 +47,7 @@ val published = mapOf(
   ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
   ":livery-verify" to ("Livery verify" to "Play Livery templates on the players apps ship them to, under Robolectric, and fail on their errors"),
   ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),
+  ":livery-server" to ("Livery server" to "Optional JVM publication storage and Ktor hosting for immutable Remote Compose previews"),
   ":livery-gradle-plugin" to ("Livery Gradle plugin" to "Builds a Livery catalog into an app's assets at build time"),
 )
 

@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "description": "Operator publication acceptance cases shared by the installer and read-only store; not Livery binding or wire-protocol conformance.",
+  "cases": [
+    {"name":"publication identifier maximum", "field":"publicationId", "text":"a", "repeat":64, "accepted":true},
+    {"name":"publication identifier too long", "field":"publicationId", "text":"a", "repeat":65, "accepted":false},
+    {"name":"publication identifier uppercase", "field":"publicationId", "text":"Quantity", "accepted":false},
+    {"name":"publication identifier underscore", "field":"publicationId", "text":"quantity_stepper", "accepted":false},
+    {"name":"publication identifier empty", "field":"publicationId", "text":"", "accepted":false},
+    {"name":"publication identifier traversal", "field":"publicationId", "text":"../private", "accepted":false},
+    {"name":"revision maximum", "field":"revision", "text":"9", "repeat":64, "accepted":true},
+    {"name":"revision too long", "field":"revision", "text":"9", "repeat":65, "accepted":false},
+    {"name":"revision encoded slash", "field":"revision", "text":"one%2ftwo", "accepted":false},
+    {"name":"title maximum", "field":"title", "text":"t", "repeat":200, "accepted":true},
+    {"name":"title too long", "field":"title", "text":"t", "repeat":201, "accepted":false},
+    {"name":"title empty", "field":"title", "text":"", "accepted":false},
+    {"name":"title astral Unicode maximum", "field":"title", "text":"😀", "repeat":100, "accepted":true},
+    {"name":"title astral Unicode too long", "field":"title", "text":"😀", "repeat":101, "accepted":false},
+    {"name":"description maximum", "field":"description", "text":"d", "repeat":2000, "accepted":true},
+    {"name":"description too long", "field":"description", "text":"d", "repeat":2001, "accepted":false},
+    {"name":"descriptor UTF-8 exact bound", "field":"descriptorBytes", "text":"界", "repeat":100, "bytes":65536, "accepted":true},
+    {"name":"descriptor UTF-8 over bound", "field":"descriptorBytes", "text":"界", "repeat":100, "bytes":65537, "accepted":false}
+  ]
+}

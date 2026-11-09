@@ -38,8 +38,11 @@ After building the package, `npm run bundle` writes a standalone `viewer-dist/`
 and ZIP. A host serves those assets under `/assets/livery-preview/` and renders the
 publication page with the descriptor URL, canonical revision URL and operator trust
 configuration. Follow `web/core/HOSTING.md`; the server does not need a Livery source
-checkout or an A2UI runtime. Metadata, static fallback and publication storage remain
-the host's responsibility.
+checkout or an A2UI runtime. The optional JVM `livery-server` library supplies a
+filesystem publication store and Ktor routes for metadata, fallback pages, embeds and
+artifacts. The application supplies configuration, public storage and its security
+policy; see `livery-server/README.md`. Consume a release that includes the module;
+staged local artifacts are development verification only.
 
 The full page offers Bluesky's normal compose intent, system sharing when available,
 and copy-link with a manual fallback. These share the canonical revision, not local
@@ -48,6 +51,10 @@ open-page link. `npm run test:viewer` exercises the extracted ZIP with the actua
 player. Successfully published future releases attach the versioned viewer ZIP;
 a local build or draft release is not a public dependency.
 
-**Planned:** public revision publishing, UI Builder share controls, Dokka embedding,
-Heron rendering, Confetti public-session data and later AT interoperability. None is
-required by the local quantity-stepper demonstration.
+The operator installer and optional `samples/dokka-preview` example provide immutable
+publication and real documentation embeds. The server library makes the read-only
+hosting implementation reusable by other Ktor applications.
+
+**Planned:** authenticated editor publishing, UI Builder share controls, Heron rendering,
+Confetti public-session data and later AT interoperability. None is required by the local
+quantity-stepper demonstration.
