@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/yschimke/livery/compare/v0.6.0...v0.7.0) (2026-11-09)
+
+
+### Features
+
+* **a2ui:** support contract queries and Compose template forms ([#43](https://github.com/yschimke/livery/issues/43)) ([10cef3a](https://github.com/yschimke/livery/commit/10cef3a6ae6c2958d64d4530a6e05bd804557711))
+* **client:** plan a slot from queries, most specific first ([#45](https://github.com/yschimke/livery/issues/45)) ([d3cad67](https://github.com/yschimke/livery/commit/d3cad670c946f933d2ebd24a3da576422faa0634))
+* **web:** add an in-page Compose Multiplatform player ([#41](https://github.com/yschimke/livery/issues/41)) ([922ca08](https://github.com/yschimke/livery/commit/922ca0879cc92b6724b082ea0d4bbc1326caec02))
+* **web:** add renderer adapters caching optimized Wasm and measured height ([#42](https://github.com/yschimke/livery/issues/42)) ([9578d39](https://github.com/yschimke/livery/commit/9578d3952faa18df1e136220b9db313007bf01a4))
+* **web:** add standalone Remote Compose component previews ([#46](https://github.com/yschimke/livery/issues/46)) ([de03ef5](https://github.com/yschimke/livery/commit/de03ef56801d4d1a0d6c4bbb05a614193addf02e))
+* **web:** an A2UI template named by sha256, from a trusted catalog or signed by url ([#39](https://github.com/yschimke/livery/issues/39)) ([743b22d](https://github.com/yschimke/livery/commit/743b22d37d2276ee96fd099ae63166a80cf44569))
+
+
+### Bug Fixes
+
+* preserve catalog retry and trust guarantees during refresh ([#44](https://github.com/yschimke/livery/issues/44)) ([676d988](https://github.com/yschimke/livery/commit/676d9886b879a694ec909c7a49d1f69eb5f6cf53))
+
 ## [0.6.0](https://github.com/yschimke/livery/compare/v0.5.0...v0.6.0) (2026-11-08)
 
 
