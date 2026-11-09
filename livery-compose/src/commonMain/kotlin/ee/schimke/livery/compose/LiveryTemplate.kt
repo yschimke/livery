@@ -8,7 +8,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -32,6 +31,7 @@ import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.slotTag
+import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.TemplateEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -54,12 +54,21 @@ class LiveryHost(
    * integration module can supply its own (`livery-sentry`'s `sentryTag`).
    */
   val slotModifier: (RenderPlan) -> Modifier = { Modifier.testTag(it.slotTag) },
+  /**
+   * Documents, fonts, images and slot answers kept in memory between the slots that use this host,
+   * so a card after the first of its template draws complete on its first frame. Share one host
+   * across a screen, and [LiveryResources.preload] what is coming.
+   */
+  val resources: LiveryResources = LiveryResources(repository, images, fallbackTypefaces, fallbackImages),
 )
 
 /**
  * Plays one [RenderPlan]. Values are in place before the first frame, so a template arrives showing
  * current data; later changes to [RenderPlan.bindings] are pushed without restarting the document,
- * so only updates animate. Reports [TemplateEvent.Type.Impression] after its first frame,
+ * so only updates animate. Each template draws its first frame complete, with no blank or
+ * fallback-font frame first, when its document, fonts and images are in [LiveryHost.resources]:
+ * after any earlier card of the same template (fonts: of any template sharing them), or after a
+ * [LiveryResources.preload]. Only a template's very first card, not preloaded, waits for its fonts. Reports [TemplateEvent.Type.Impression] after its first frame,
  * [TemplateEvent.Type.Viewable] once at least half of it has been on screen for an unbroken second
  * (Compose's `onVisibilityChanged`), and [TemplateEvent.Type.Leave] with the time it was at least
  * half on screen when it leaves composition or the slot shows another item.
@@ -75,12 +84,20 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     values.keys.toList().filter { it !in pushed }.forEach(values::remove)
     values.putAll(pushed)
   }
-  val imageLoader = remember(bytes, host) {
-    host.images?.let { LiveryImageLoader(it, { current.bindings }, host.fallbackImages) } ?: host.fallbackImages
+  // Shared by every card of this template: decoding is done once per template, not per card.
+  val document = remember(bytes, host) { host.resources.document(plan.template) }
+  // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
+  val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
+  val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
+  // In memory already (an earlier card, a preload): drawn on this composition's frame. Otherwise read
+  // once, and kept for every later card.
+  val typefaceState = remember(bytes, host) { mutableStateOf(host.resources.typefacesNow(plan.template)) }
+  LaunchedEffect(typefaceState) {
+    if (typefaceState.value == null) {
+      typefaceState.value = runCatching { host.resources.typefaces(plan.template) }.getOrDefault(host.fallbackTypefaces)
+    }
   }
-  val typefaces by produceState<RcTypefaceLoader?>(null, bytes, host) {
-    value = runCatching { LiveryTypefaceLoader.forTemplate(plan.template, host.repository, host.fallbackTypefaces) }.getOrDefault(host.fallbackTypefaces)
-  }
+  val typefaces = typefaceState.value
   val scope = rememberCoroutineScope()
   val tracker = remember(bytes, plan.decisionId, plan.feedItem?.id) { VisibilityTracker() }
   // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
@@ -93,7 +110,7 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     tracker.visible(visible, host.clock.nowEpochMs())
   }) {
     RcComposePlayer(
-      bytes = bytes,
+      document = document,
       imageLoader = imageLoader,
       modifier = Modifier,
       theme = host.theme,

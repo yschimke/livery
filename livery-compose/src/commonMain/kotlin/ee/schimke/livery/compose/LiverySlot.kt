@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import ee.schimke.livery.client.DesignSummary
@@ -30,7 +33,13 @@ fun LiverySlot(
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
   val revision by host.repository.revision.collectAsState()
-  val result by produceState<PlanResult?>(null, key, host, revision) { value = plan() }
+  // A slot that already had an answer at this revision (scrolled back, reopened) draws it at once
+  // rather than its fallback for a frame; it still replans, and a new answer replaces it.
+  val state = remember(key, host) { mutableStateOf(host.resources.lastPlan(key, revision)) }
+  LaunchedEffect(state, revision) {
+    state.value = plan().also { host.resources.keepPlan(key, revision, it) }
+  }
+  val result = state.value
   when (val r = result) {
     null -> fallback(null)
     is PlanResult.Fallback -> fallback(r.reason)

@@ -44,7 +44,30 @@ LazyColumn {
 
 Each item is its own measured view: `Impression` and `Viewable` carry the item id.
 
-## 3. Evolve the layout
+## 3. Draw every card on its first frame
+
+Every card of a template shares that template's decoded document, fonts and images, kept in memory
+by the host (`host.resources`, a `LiveryResources`). So only a template's very first card does any
+work before it can draw; every later card draws complete on the frame it first appears, with its own
+data and no animation from another card's values. Share one `LiveryHost` across the feed.
+
+When a page arrives, prepare its items before they scroll into view. `prepareSlot` makes the same
+planning call as the slot, for the same key, keeps the answer and loads the item's document, fonts
+and images, so even an item's first frame shows the finished card rather than the fallback:
+
+```kotlin
+// When a page arrives, before it scrolls into view:
+coroutineScope {
+  page.items.forEach { item ->
+    launch { host.resources.prepareSlot(item) { planner.forFeedItem(query, item) } }
+  }
+}
+```
+
+`host.resources.preload(plans)` does the loading half for plans you already have. Every cache is
+bounded and drops its oldest entries first; a dropped entry only costs the next card that work again.
+
+## 4. Evolve the layout
 
 Publish a new design for the same contract and point the feed's items at it, or change the design's
 template in place: the next refresh downloads it, and items render with it from then on. Old app
@@ -56,3 +79,4 @@ versions keep the templates their player can draw.
 - [ ] A native fallback row for every contract.
 - [ ] The feed API validates item data against the contract.
 - [ ] Remote thumbnails through the image proxy.
+- [ ] One `LiveryHost` shared by the whole feed, and `prepareSlot` called for each page's items.

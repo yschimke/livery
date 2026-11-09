@@ -131,6 +131,15 @@ GitHub release downloads send no CORS headers, so a browser client reads a Pages
 ```
 
 - Rendering never waits on the network: `resolve` reads only the disk.
+- **No visible redraws.** A card after the first of its template, and any card the app preloaded,
+  draws complete on its first frame: no blank frame while fonts load, no fallback for a slot that
+  had an answer, no image popping in that is already in memory. In Compose, `LiveryResources` (one
+  per `LiveryHost`) keeps decoded documents per template, fonts per asset hash, decoded images per
+  reference and size, and each slot's last answer per catalog revision, all bounded, and composition
+  reads them without suspending; `preload` and `prepareSlot` fill them ahead of time. Each card still
+  builds its own player state from its own values, so no card shows or animates from another's data.
+  Reusing one player state across cards was considered and rejected: a reset that missed any piece
+  of state would leak one item into another.
 - `refresh` runs from the platform scheduler (WorkManager on Android, BGTaskScheduler on iOS, a
   service worker or page load on the web), on start, and when a choice changes. It revalidates
   with ETag within `ttlSeconds`, backs off (1 min, 1 h, 4 h, 24 h, honouring `Retry-After`), and
@@ -180,7 +189,7 @@ and schedulers are per platform:
 | --- | --- | --- |
 | `livery-protocol` | KMP (JVM, Android, iOS, Wasm) | the wire types ([PROTOCOL.md](PROTOCOL.md)); `ContractDef`, a contract declared in Kotlin with a typed handle per input and action (`ContractInput`, `ContractAction`) whose `toContract()` is the wire `Contract`; `ThemeRoles`, the Material 3 colour role names as a design-system vocabulary, not an app concept |
 | `livery-client` | KMP | sources, trust, cache, selection, install, preview, resources, decisions, feeds, actions, events; HTTP through **Ktor** (OkHttp on the JVM and Android, Darwin on iOS, `fetch` in the browser) |
-| `livery-compose` | **Compose Multiplatform** (Android, desktop, iOS, Wasm) | `LiveryTemplate` / `LiverySlot` over rc-players' Compose player: values seeded before the first frame and pushed live, actions through the router, impression and viewability events, catalog fonts and images through the player's loaders, `rememberDesigns` / `DesignPicker` |
+| `livery-compose` | **Compose Multiplatform** (Android, desktop, iOS, Wasm) | `LiveryTemplate` / `LiverySlot` over rc-players' Compose player: values seeded before the first frame and pushed live, actions through the router, impression and viewability events, catalog fonts and images through the player's loaders, `LiveryResources` (documents, fonts, images and slot answers shared in memory between slots; `preload`, `prepareSlot`), `rememberDesigns` / `DesignPicker` |
 | `livery-web-compose` | Wasm, optional | in-page CMP renderer for `@livery/a2ui`; accepts the trusted pipeline's bytes and named values, forwards raw actions to the existing web session gate, and adds no selector or action policy |
 | `livery-compose-material3` | Compose Multiplatform, optional | `ColorScheme.toLiveryTheme()`: a Material 3 scheme as the `theme.*` roles, with `theme.surface` from `surfaceContainerHigh` by default (a card's surface). Separate so `livery-compose` doesn't bring Material |
 | `livery-instantiate` | KMP | writes a slot's values and images into a template for hosts that only play bytes (launcher, Glance Wear, snapshots), on rc-players' `RcWidgetDocuments.bake`, with Livery's image rules and byte budget |

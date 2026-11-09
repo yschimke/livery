@@ -27,17 +27,47 @@ class LiveryImageLoader(
   private val resolver: ImageResolver,
   private val bindings: () -> Bindings,
   private val fallback: RcImageLoader = RcImageLoader.Default,
+  /** Decoded images already in memory, by [key] ([LiveryResources] shares them between slots). */
+  private val memory: (key: String) -> ImageBitmap? = { null },
+  /** Keeps an image this loader decoded, for [memory]. */
+  private val keep: (key: String, image: ImageBitmap) -> Unit = { _, _ -> },
 ) : RcImageLoader {
+  override fun cached(bitmap: RcBitmapData): ImageBitmap? = when (val ref = ref(bitmap)) {
+    Ref.Fallback -> fallback.cached(bitmap)
+    Ref.None -> null
+    is Ref.Url -> memory(key(ref.value, bitmap))
+  }
+
   override suspend fun load(bitmap: RcBitmapData): ImageBitmap? {
-    if (bitmap.encoding != RcBitmapData.ENCODING_URL) return fallback.load(bitmap)
+    val ref = when (val r = ref(bitmap)) {
+      Ref.Fallback -> return fallback.load(bitmap)
+      Ref.None -> return null
+      is Ref.Url -> r.value
+    }
+    val key = key(ref, bitmap)
+    memory(key)?.let { return it }
+    val bytes = resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) ?: return null
+    return runCatching { decodeImage(bytes) }.getOrNull()?.also { keep(key, it) }
+  }
+
+  private sealed interface Ref {
+    data object Fallback : Ref
+    data object None : Ref
+    class Url(val value: String) : Ref
+  }
+
+  private fun ref(bitmap: RcBitmapData): Ref {
+    if (bitmap.encoding != RcBitmapData.ENCODING_URL) return Ref.Fallback
     val url = bitmap.data.decodeToString()
     val ref = if (url.startsWith(VALUE_PREFIX)) {
-      (bindings().values[url.removePrefix(VALUE_PREFIX)] as? NamedValue.Image)?.ref ?: return null
+      (bindings().values[url.removePrefix(VALUE_PREFIX)] as? NamedValue.Image)?.ref ?: return Ref.None
     } else url
-    if (!ref.startsWith("asset:") && !ref.startsWith("https://") && !ref.startsWith("app:")) return fallback.load(bitmap)
-    val bytes = resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) ?: return null
-    return runCatching { decodeImage(bytes) }.getOrNull()
+    if (!ref.startsWith("asset:") && !ref.startsWith("https://") && !ref.startsWith("app:")) return Ref.Fallback
+    return Ref.Url(ref)
   }
+
+  /** The same picture at the same requested size: what [ImageResolver] fetches once. */
+  private fun key(ref: String, bitmap: RcBitmapData) = "${bitmap.width}x${bitmap.height} $ref"
 
   companion object {
     const val VALUE_PREFIX: String = "livery:value/"
