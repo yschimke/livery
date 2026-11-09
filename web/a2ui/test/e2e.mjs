@@ -62,7 +62,7 @@ await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = require('playwright');
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE_PATH ?? process.env.CHROMIUM_PATH ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
 let failed = 0;
 for (const player of players) {
 console.log(`Player: ${player}`);

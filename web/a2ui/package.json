@@ -41,7 +41,8 @@
     "@a2ui/web_core": "0.15.0",
     "@js-joda/core": "3.2.0",
     "lit": "^3.3.3",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@livery/web": "file:../core"
   },
   "devDependencies": {
     "@a2ui/angular": "^0.14.0",
@@ -96,5 +97,8 @@
     "react-dom": {
       "optional": true
     }
-  }
+  },
+  "bundleDependencies": [
+    "@livery/web"
+  ]
 }

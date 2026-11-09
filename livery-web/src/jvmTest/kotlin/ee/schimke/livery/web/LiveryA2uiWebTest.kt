@@ -446,4 +446,19 @@ class LiveryA2uiWebTest {
     val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", p))
     assertTrue(TemplateInstantiator.bitmapUrls(ready.document).none { it.startsWith("https://") }, "the image is in the document now")
   }
+  @Test fun wiringOneActionDoesNotEnableOthersWithTheSameKind() = runTest {
+    val manifest = built.manifest.copy(contracts = built.manifest.contracts.map { c ->
+      if (c.ref != "promo/banner@1") c else c.copy(actions = c.actions + ("other" to c.actions.getValue("cta")))
+    })
+    val repo = TemplateRepository(
+      StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto, TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), clock, listOf(caps),
+      TemplateRepository.Bundled(manifest) { sha -> built.files.entries.firstOrNull { it.key.contains(sha) }?.value },
+    )
+    val web = LiveryA2uiWeb(repo, SlotPlanner(repo, { events += it }, clock), caps, { events += it }, clock)
+    val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("PromoBanner", promo))
+    assertIs<LiveryA2uiWeb.Routed.Agent>(web.action(r.id, "cta", "string", """{"route":"/premium"}"""))
+    assertIs<LiveryA2uiWeb.Routed.Dropped>(web.action(r.id, "other", "string", """{"route":"/premium"}"""))
+  }
+
 }
