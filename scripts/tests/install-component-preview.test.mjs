@@ -16,6 +16,7 @@ const rc = Buffer.from('An opaque test RC payload; rendering is checked by Liver
 const hash = sha(rc);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR4kAAAAASUVORK5CYII=', 'base64');
 const writeJson = (file, value) => fs.writeFile(file, `${JSON.stringify(value)}\n`);
+const publicationCases = JSON.parse(await fs.readFile(new URL('../../samples/component-preview/publication-cases.json', import.meta.url), 'utf8'));
 
 async function fixture(t) {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'livery-installer-'));
@@ -39,6 +40,29 @@ async function fixture(t) {
   await fs.writeFile(path.join(source, 'thumbnail.png'), png);
   await fs.writeFile(path.join(source, `catalog/blobs/${hash}.rc`), rc);
   return { temp, source, root, descriptor, manifest, destination: path.join(root, 'test-component/r/r1') };
+}
+
+for (const row of publicationCases.cases) {
+  test(`shared publication acceptance: ${row.name}`, async t => {
+    const f = await fixture(t);
+    const value = row.text.repeat(row.repeat ?? 1);
+    if (row.field === 'publicationId' || row.field === 'revision') f.descriptor[row.field] = value;
+    else if (row.field === 'title' || row.field === 'description') f.descriptor.fallback[row.field] = value;
+    else if (row.field === 'descriptorBytes') f.descriptor.data.notes = value;
+    else assert.fail(`Unknown shared fixture field: ${row.field}`);
+    let bytes = `${JSON.stringify(f.descriptor)}\n`;
+    if (row.field === 'descriptorBytes') {
+      bytes += ' '.repeat(row.bytes - Buffer.byteLength(bytes, 'utf8'));
+      assert.equal(Buffer.byteLength(bytes, 'utf8'), row.bytes);
+      assert.ok(bytes.length < row.bytes, 'fixture must exercise multibyte UTF-8');
+    }
+    await fs.writeFile(path.join(f.source, 'preview.json'), bytes);
+    if (row.accepted) assert.equal((await installPublication(f.source, f.root)).status, 'installed');
+    else {
+      await assert.rejects(installPublication(f.source, f.root));
+      await assert.rejects(fs.stat(f.root), { code: 'ENOENT' });
+    }
+  });
 }
 
 test('complete install preserves exact signed-manifest bytes, records allowlist and retries without rewriting', async t => {

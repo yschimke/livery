@@ -23,12 +23,17 @@ execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/
 cpSync(join(repo, 'samples/component-preview/preview.json'), join(temporary, 'preview.json'));
 // Unknown descriptor metadata is allowed. Keep its Unicode character count below
 // 64 KiB while testing the exact UTF-8 byte boundary, without changing bound data.
-const padded = { ...JSON.parse(readFileSync(join(temporary, 'preview.json'))), notes: '' };
-const room = 64 * 1024 - Buffer.byteLength(JSON.stringify(padded));
-padded.notes = 'é'.repeat(Math.floor(room / 2)) + (room % 2 ? 'x' : '');
-const atLimit = JSON.stringify(padded), oversized = JSON.stringify({ ...padded, notes: padded.notes + 'é' });
-assert.equal(Buffer.byteLength(atLimit), 64 * 1024);
-assert(oversized.length < 64 * 1024 && Buffer.byteLength(oversized) > 64 * 1024);
+const byteCases = JSON.parse(readFileSync(join(repo, 'samples/component-preview/publication-cases.json'))).cases.filter(c => c.field === 'descriptorBytes');
+assert.equal(byteCases.length, 2);
+const descriptorCase = c => {
+  const value = { ...JSON.parse(readFileSync(join(temporary, 'preview.json'))), notes: c.text.repeat(c.repeat) };
+  const json = JSON.stringify(value);
+  return json + ' '.repeat(c.bytes - Buffer.byteLength(json));
+};
+const acceptedCase = byteCases.find(c => c.accepted), rejectedCase = byteCases.find(c => !c.accepted);
+const atLimit = descriptorCase(acceptedCase), oversized = descriptorCase(rejectedCase);
+assert.equal(Buffer.byteLength(atLimit), acceptedCase.bytes);
+assert(oversized.length < acceptedCase.bytes && Buffer.byteLength(oversized) === rejectedCase.bytes);
 writeFileSync(join(temporary, 'limit.json'), atLimit); writeFileSync(join(temporary, 'oversized.json'), oversized);
 const html = (mode, config = { unsigned: true }, descriptor = publication + 'preview.json') => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Quantity stepper · Component preview</title>
 <link rel="canonical" href="${publication}"><link rel="alternate" type="application/vnd.livery.preview+json" href="${descriptor}"><link rel="stylesheet" href="/assets/livery-preview/viewer.css">
