@@ -64,6 +64,23 @@ class CatalogPreviewsTest {
     assertTrue(card("dark") < 80, "dark card: ${card("dark")}")
   }
 
+  /** A header's size is pixels at the density it was generated at: a 720×400 document at 2x previews at 360×200 dp. */
+  @Test fun aDocumentsSizeIsItsPixelsOverItsDensity() {
+    assertEquals(360 to 200, CatalogPreviews.authoredDp(720, 400, 2f, modern = true))
+    assertEquals(720 to 400, CatalogPreviews.authoredDp(720, 400, 0f, modern = true))
+    assertEquals(0 to 0, CatalogPreviews.authoredDp(720, 400, 2f, modern = false))
+  }
+
+  /** An `.rc` without its sidecar is a problem, as `livery build` makes it, not a template left out. */
+  @Test fun aTemplateWithoutASidecarIsAProblem() {
+    val tree = Files.createTempDirectory("tree").toFile()
+    samples.copyRecursively(tree)
+    tree.resolve("designs/poll-card/in-app.json").delete()
+    val index = CatalogPreviews.render(tree, Files.createTempDirectory("out").toFile())
+    assertTrue(index.problems.any { it.design == "poll-card" && it.template == "in-app" && "no sidecar" in it.message }, index.problems.toString())
+    assertTrue(index.previews.none { it.design == "poll-card" })
+  }
+
   @Test fun aDocumentWithoutASizeGetsItsSurfacesWithinItsRange() {
     val launcher = Target(Surfaces.LAUNCHER_WIDGET, 7, size = SizeRange(minWidthDp = 250, maxWidthDp = 400))
     assertEquals(250 to 200, CatalogPreviews.size(0 to 0, launcher))

@@ -106,14 +106,18 @@ object CatalogPreviews {
       val examples = contract.examples.ifEmpty { mapOf("empty" to JsonObject(emptyMap())) }
       dir.listFiles().orEmpty().filter { it.name.endsWith(".rc") }.sortedBy { it.name }.forEach templates@{ rc ->
         val name = rc.name.removeSuffix(".rc")
-        val sidecar = dir.resolve("$name.json").takeIf { it.isFile } ?: return@templates
+        val sidecar = dir.resolve("$name.json").takeIf { it.isFile } ?: run {
+          // As `livery build` refuses it: a document with no sidecar has no target to draw it for.
+          problems += PreviewProblem(design.id, name, null, "no sidecar $name.json beside $name.rc")
+          return@templates
+        }
         val target = json.decodeFromString(TemplateSpec.serializer(), sidecar.readText()).target
         val bytes = rc.readBytes()
         val header = runCatching { RcDocumentCodec.decode(bytes, RcWireLimits()).header }.getOrElse {
           problems += PreviewProblem(design.id, name, null, "not a Remote Compose document this player can read: ${it.message}")
           return@templates
         }
-        val (width, height) = size(header.width to header.height, target)
+        val (width, height) = size(authoredDp(header.width, header.height, header.density, header.modern), target)
         examples.forEach { (example, data) ->
           val bindings = when (val r = ContractBinder.bind(contract, data)) {
             is BindResult.Ok -> r.bindings
@@ -170,7 +174,17 @@ object CatalogPreviews {
     return Mode(if (dark) "dark" else "light", dark, scheme.toLiveryTheme(), scheme.surface.toArgb().toLong() and 0xFFFFFFFFL)
   }
 
-  /** The document's own size ([own], its header's), inside its target's range; else its surface's usual size. */
+  /**
+   * The size a document was authored at, in dp: its header's pixels over the density it was
+   * generated at (as `TemplateInstantiator.authoredHeightDp`), or 0 × 0 when the header doesn't say.
+   */
+  internal fun authoredDp(widthPx: Int, heightPx: Int, density: Float, modern: Boolean): Pair<Int, Int> {
+    if (!modern || widthPx <= 0 || heightPx <= 0) return 0 to 0
+    val d = density.takeIf { it > 0f } ?: 1f
+    return (widthPx / d).toInt() to (heightPx / d).toInt()
+  }
+
+  /** The document's own size ([own], in dp), inside its target's range; else its surface's usual size. */
   internal fun size(own: Pair<Int, Int>, target: Target): Pair<Int, Int> {
     val (w, h) = own.takeIf { it.first > 0 && it.second > 0 } ?: when (target.surface) {
       Surfaces.WEAR_WIDGET -> if (target.container == "wear:small") 192 to 96 else 192 to 192
