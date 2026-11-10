@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/yschimke/livery/compare/v0.8.0...v0.9.0) (2026-11-10)
+
+
+### Features
+
+* **gradle:** capture a catalog's templates from Kotlin at build time ([#59](https://github.com/yschimke/livery/issues/59)) ([c428c99](https://github.com/yschimke/livery/commit/c428c991c416da8812d46d4a9c225fb2c37810d0))
+
+
+### Bug Fixes
+
+* draw host-density templates on the platform's widget player ([#57](https://github.com/yschimke/livery/issues/57)) ([b7dd0f2](https://github.com/yschimke/livery/commit/b7dd0f2951041293abc700284747ccb1b026c110))
+* **notifications:** wrap notification bodies so Android 17 can nest them ([#53](https://github.com/yschimke/livery/issues/53)) ([226e4fc](https://github.com/yschimke/livery/commit/226e4fc0ccaba49f7a9d96427bc187ee33024605))
+* **npm:** publish Livery packages under the yschimke scope ([#58](https://github.com/yschimke/livery/issues/58)) ([3635537](https://github.com/yschimke/livery/commit/3635537626ebdfa2cda7d4566365d0faa9a5be71))
+
 ## [0.8.0](https://github.com/yschimke/livery/compare/v0.7.0...v0.8.0) (2026-11-09)
 
 
