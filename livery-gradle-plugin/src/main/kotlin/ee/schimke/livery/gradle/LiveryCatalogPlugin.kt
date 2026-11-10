@@ -53,10 +53,9 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.description = "Captures the Livery catalog's templates from Kotlin into build/livery/captured"
       // Properties, never the extension: the configuration cache keeps what the task holds.
       val mainClass = ext.capture.mainClass
-      val jvmArgs = ext.capture.jvmArgs
       t.classpath = ext.capture.classpath
       t.mainClass.set(mainClass)
-      t.jvmArgumentProviders.add { jvmArgs.get() }
+      t.captureJvmArgs.set(ext.capture.jvmArgs)
       t.handWritten.set(ext.source.map { if (it.asFile.isDirectory) it else null })
       t.outputDir.set(ext.capture.outputDir)
       t.onlyIf("livery.capture.mainClass is set") { mainClass.isPresent }

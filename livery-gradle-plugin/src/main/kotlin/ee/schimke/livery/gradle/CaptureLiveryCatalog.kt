@@ -1,6 +1,8 @@
 package ee.schimke.livery.gradle
 
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.JavaExec
@@ -20,18 +22,28 @@ import org.gradle.process.CommandLineArgumentProvider
  *
  * A JVM of its own, not a worker in Gradle's: capture loads Compose and its native graphics, which
  * don't belong in the daemon. The task is cacheable: its inputs are the classpath (the designs'
- * compiled code), the main class, its JVM arguments and the hand-written tree.
+ * compiled code), the main class, [captureJvmArgs] and the hand-written tree.
  */
 @CacheableTask
 abstract class CaptureLiveryCatalog : JavaExec() {
   @get:InputDirectory @get:Optional @get:PathSensitive(PathSensitivity.RELATIVE) abstract val handWritten: DirectoryProperty
   @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
+  /**
+   * JVM arguments for the capture, as an input: they can change what is captured (a system
+   * property the entry point reads), and Gradle doesn't fingerprint what a provider returns.
+   */
+  @get:Input abstract val captureJvmArgs: ListProperty<String>
+
   init {
+    captureJvmArgs.convention(emptyList())
     // Properties, not values: read when the task runs, so the configuration cache keeps no paths.
+    // The paths need no fingerprint of their own: they are handWritten's and outputDir's.
     val source = handWritten
     val out = outputDir
+    val jvm = captureJvmArgs
     argumentProviders.add(CommandLineArgumentProvider { listOf(source.orNull?.asFile?.absolutePath ?: "", out.get().asFile.absolutePath) })
+    jvmArgumentProviders.add(CommandLineArgumentProvider { jvm.get() })
   }
 
   @TaskAction override fun exec() {

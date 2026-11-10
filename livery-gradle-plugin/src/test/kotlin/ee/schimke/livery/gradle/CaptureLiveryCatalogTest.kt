@@ -61,7 +61,7 @@ class CaptureLiveryCatalogTest {
           Path out = Paths.get(args[1]);
           if (!args[0].isEmpty()) copy(Paths.get(args[0]), out);
           copy(Paths.get(System.getProperty("livery.designs")), out.resolve("designs"));
-          Files.writeString(out.resolve("captured-by.txt"), "$marker");
+          Files.writeString(out.resolve("captured-by.txt"), "$marker" + System.getProperty("livery.suffix", ""));
         }
 
         static void copy(Path from, Path to) throws IOException {
@@ -108,6 +108,15 @@ class CaptureLiveryCatalogTest {
 
     File(dir, "catalog/catalog.json").appendText("\n")
     assertEquals(TaskOutcome.SUCCESS, run(dir, "buildLiveryCatalog").outcome(":captureLiveryCatalog"))
+  }
+
+  @Test fun recapturesWhenTheJvmArgumentsChange() {
+    val dir = project()
+    run(dir, "buildLiveryCatalog")
+    val build = File(dir, "build.gradle.kts")
+    build.writeText(build.readText().replace("mainClass.set(\"Capture\")", "mainClass.set(\"Capture\")\n    jvmArgs.add(\"-Dlivery.suffix=-changed\")"))
+    assertEquals(TaskOutcome.SUCCESS, run(dir, "buildLiveryCatalog").outcome(":captureLiveryCatalog"))
+    assertEquals("first-changed", File(dir, "build/livery/captured/captured-by.txt").readText())
   }
 
   @Test fun aStaleCaptureIsRemoved() {
