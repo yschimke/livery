@@ -151,17 +151,18 @@ capture) with nothing written by hand. What the tree already says decides what i
 
 - **Data**: each of the contract's `examples`, bound through `ContractBinder` as on a device. An
   example that doesn't bind fails the task, after the rest are drawn.
-- **Modes**: a `host`-themed template in `light`, `dark` and under each theme pack in `themes/`;
-  a `baked:dark` or `baked:light` template once, in its own mode.
+- **Modes**: a `host`-themed template in `light` and `dark` (Material 3's baseline scheme bound to
+  its `theme.*` roles, as an app pushes its own) and under each theme pack in `themes/`
+  (`theme-<id>`); a `baked:dark` or `baked:light` template once, in its own mode.
 - **Size**: the document's own (the size it was captured at), kept inside its target's range.
-- **Background**: the theme's `theme.surface`, else the mode's (black on a watch).
+- **Background**: the scheme's or theme pack's surface, else the mode's (black on a watch).
 - **Fonts** from `fonts/fonts.json`, and one placeholder for every image: no network.
 
 ```bash
 ./gradlew renderLiveryPreviews   # build/livery/previews/index.html
 ```
 
-It writes `<design>/<template>-<example>-<mode>.png`, a `previews.json` index and an `index.html`
+It writes `<design>/<template>/<example>/<mode>.png`, a `previews.json` index and an `index.html`
 that shows them all. Each picture comes from Compose Multiplatform's player on Skia (`livery-render`),
 in its own JVM. The task resolves `ee.schimke.composeai:livery-render` at the plugin's version from
 the build's repositories; set `previews { classpath.from(…) }` to use another. It is cacheable.

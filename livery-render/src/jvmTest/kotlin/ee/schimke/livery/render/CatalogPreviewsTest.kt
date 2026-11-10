@@ -24,13 +24,13 @@ class CatalogPreviewsTest {
     val tile = index.previews.filter { it.design == "tile-default" }
     assertEquals(setOf("on", "off", "unavailable"), tile.map { it.example }.toSet())
     // A host-themed template: light, dark and the tree's theme pack.
-    assertEquals(setOf("light", "dark", "dusk"), tile.map { it.mode }.toSet())
+    assertEquals(setOf("light", "dark", "theme-dusk"), tile.map { it.mode }.toSet())
     assertEquals(9, tile.size)
     index.previews.forEach { p ->
       val image = ImageIO.read(out.resolve(p.file))
       assertEquals(p.widthDp * 2, image.width, p.file); assertEquals(p.heightDp * 2, image.height, p.file)
     }
-    assertTrue(out.resolve("index.html").readText().contains("tile-default/in-app-on-light.png"))
+    assertTrue(out.resolve("index.html").readText().contains("tile-default/in-app/on/light.png"))
     assertTrue(out.resolve("previews.json").isFile)
   }
 
@@ -47,9 +47,21 @@ class CatalogPreviewsTest {
   }
 
   @Test fun aTemplateDrawsOverItsThemesSurface() {
-    val p = index.previews.first { it.design == "tile-default" && it.template == "in-app" && it.mode == "dusk" }
+    val p = index.previews.first { it.design == "tile-default" && it.template == "in-app" && it.mode == "theme-dusk" }
     // The corner is the template's own background or the pack's surface, never transparent.
     assertEquals(0xFF, ImageIO.read(out.resolve(p.file)).getRGB(0, 0) ushr 24)
+  }
+
+  /** Dark binds a dark scheme to the theme roles: the poll's card, light by its captured default, goes dark. */
+  @Test fun darkBindsADarkSchemeToTheThemeRoles() {
+    fun card(mode: String): Int {
+      val p = index.previews.first { it.design == "poll-card" && it.example == "open" && it.mode == mode }
+      val image = ImageIO.read(out.resolve(p.file))
+      val rgb = image.getRGB(image.width / 2, image.height - 40)  // inside the card, below the options
+      return ((rgb shr 16 and 0xFF) + (rgb shr 8 and 0xFF) + (rgb and 0xFF)) / 3
+    }
+    assertTrue(card("light") > 200, "light card: ${card("light")}")
+    assertTrue(card("dark") < 80, "dark card: ${card("dark")}")
   }
 
   @Test fun aDocumentWithoutASizeGetsItsSurfacesWithinItsRange() {

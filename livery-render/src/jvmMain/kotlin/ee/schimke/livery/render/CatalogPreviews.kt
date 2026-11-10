@@ -5,6 +5,9 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -18,12 +21,14 @@ import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ContractBinder
+import ee.schimke.livery.compose.material3.toLiveryTheme
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.ThemePack
+import ee.schimke.livery.protocol.ThemeRoles
 import ee.schimke.livery.publisher.FontFile
 import ee.schimke.livery.publisher.TemplateSpec
 import java.io.File
@@ -40,9 +45,9 @@ data class CatalogPreview(
   val template: String,
   val surface: String,
   val example: String,
-  /** `light`, `dark` (the player's own themes) or a theme pack's id. */
+  /** `light` or `dark` (Material 3's baseline scheme in that mode), or `theme-<id>` for a theme pack. */
   val mode: String,
-  /** Relative to the index: `<design>/<template>-<example>-<mode>.png`. */
+  /** Relative to the index: `<design>/<template>/<example>/<mode>.png`. */
   val file: String,
   val widthDp: Int,
   val heightDp: Int,
@@ -63,17 +68,20 @@ data class PreviewIndex(val previews: List<CatalogPreview>, val problems: List<P
  *
  * - **Data**: the contract's `examples`, each bound through [ContractBinder], the device's gate. An
  *   example that doesn't bind is a [PreviewProblem], not a picture.
- * - **Modes**: a `host`-themed template in `light` and `dark` and under each of the tree's theme
- *   packs (each JSON file in `themes/`, in its own mode); a `baked:<mode>` template once, in that mode.
+ * - **Modes**: a `host`-themed template in `light` and `dark`, each with Material 3's baseline
+ *   scheme bound to the `theme.*` roles (as an app pushes its own), and under each of the tree's
+ *   theme packs (each JSON file in `themes/`, as `theme-<id>`); a `baked:<mode>` template once, in
+ *   that mode, with nothing bound.
  * - **Size**: the document's own (the size it was captured at), kept inside its target's range;
  *   a document without one gets its surface's usual size.
- * - **Background**: the theme pack's `theme.surface`, else the mode's surface (black on a watch): a
- *   template without a background of its own draws over its host's, never over nothing.
+ * - **Background**: the scheme's surface, or the theme pack's `theme.surface`, else the mode's
+ *   (black on a watch): a template without a background of its own draws over its host's, never
+ *   over nothing.
  * - **Fonts** from `fonts/fonts.json`; **images** as one placeholder, so previews never touch the
  *   network.
  *
  * The renders are Compose Multiplatform's player on Skia ([TemplateRenderer]). Writes
- * `<design>/<template>-<example>-<mode>.png`, `previews.json` ([PreviewIndex]) and an `index.html`
+ * `<design>/<template>/<example>/<mode>.png`, `previews.json` ([PreviewIndex]) and an `index.html`
  * that shows them all.
  */
 object CatalogPreviews {
@@ -115,7 +123,8 @@ object CatalogPreviews {
             }
           }
           modes(target, packs).forEach { mode ->
-            val file = "${design.id}/$name-$example-${mode.name}.png"
+            // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
+            val file = "${design.id}/$name/$example/${mode.name}.png"
             val spec = RenderSpec(width, height, density, mode.dark, background = mode.background(target))
             runCatching { TemplateRenderer.png(bytes, bindings + mode.theme, spec, PlaceholderImages, typefaces) }
               .onSuccess { png ->
@@ -134,9 +143,9 @@ object CatalogPreviews {
   }
 
   /** One way a template is themed in a preview. */
-  private class Mode(val name: String, val dark: Boolean, val theme: Bindings) {
+  private class Mode(val name: String, val dark: Boolean, val theme: Bindings, private val surface: Long? = null) {
     fun background(target: Target): Long =
-      (theme.values["theme.surface"] as? NamedValue.Color)?.argb
+      surface ?: (theme.values[ThemeRoles.SURFACE] as? NamedValue.Color)?.argb
         ?: when {
           !dark -> 0xFFFFFFFF
           target.surface == Surfaces.WEAR_WIDGET || target.surface == Surfaces.WEAR_APP -> 0xFF000000
@@ -147,8 +156,18 @@ object CatalogPreviews {
   private fun modes(target: Target, packs: List<ThemePack>): List<Mode> = when (target.theme) {
     Target.baked(dark = true) -> listOf(Mode("dark", true, Bindings.EMPTY))
     Target.baked(dark = false) -> listOf(Mode("light", false, Bindings.EMPTY))
-    else -> listOf(Mode("light", false, Bindings.EMPTY), Mode("dark", true, Bindings.EMPTY)) +
-      packs.map { Mode(it.id, it.mode == "dark", Bindings(it.values)) }
+    else -> listOf(baseline(dark = false), baseline(dark = true)) +
+      packs.map { Mode("theme-${it.id}", it.mode == "dark", Bindings(it.values)) }
+  }
+
+  /**
+   * Material 3's baseline scheme in one mode, bound to the `theme.*` roles as an app pushes its own
+   * ([toLiveryTheme]): without it a template's role colours keep their captured defaults, and
+   * `dark` would draw a light card on a dark page. The page is the scheme's surface.
+   */
+  private fun baseline(dark: Boolean): Mode {
+    val scheme = if (dark) darkColorScheme() else lightColorScheme()
+    return Mode(if (dark) "dark" else "light", dark, scheme.toLiveryTheme(), scheme.surface.toArgb().toLong() and 0xFFFFFFFFL)
   }
 
   /** The document's own size ([own], its header's), inside its target's range; else its surface's usual size. */

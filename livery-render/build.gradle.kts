@@ -15,6 +15,8 @@ kotlin {
       api(project(":livery-compose"))
       // A catalog source tree's files (sidecars, fonts.json), for CatalogPreviews.
       implementation(project(":livery-catalog"))
+      // Material 3's baseline schemes as theme roles, for the previews' light and dark modes.
+      implementation(project(":livery-compose-material3"))
       // Platform-neutral: Skia's natives for every desktop platform, so the published library (and
       // livery-mcp's zip, built on Linux) renders on Linux, macOS and Windows. Never
       // compose.desktop.currentOs here: it would publish the build machine's platform as

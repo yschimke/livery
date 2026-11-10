@@ -42,9 +42,9 @@ class RenderLiveryPreviewsTest {
     val result = runner(dir, "renderLiveryPreviews").build()
     assertEquals(TaskOutcome.SUCCESS, result.task(":renderLiveryPreviews")?.outcome)
     val out = File(dir, "build/livery/previews")
-    assertTrue(File(out, "tile-default/in-app-on-light.png").isFile)
-    assertTrue(File(out, "poll-card/in-app-voted-dark.png").isFile)
-    assertTrue("tile-default/in-app-unavailable-dusk.png" in File(out, "index.html").readText())
+    assertTrue(File(out, "tile-default/in-app/on/light.png").isFile)
+    assertTrue(File(out, "poll-card/in-app/voted/dark.png").isFile)
+    assertTrue("tile-default/in-app/unavailable/theme-dusk.png" in File(out, "index.html").readText())
     val index = File(out, "previews.json").readText()
     assertTrue(Regex(""""problems":\s*\[\s*]""").containsMatchIn(index), index.takeLast(300))
   }
@@ -64,6 +64,6 @@ class RenderLiveryPreviewsTest {
     val dir = project(placeholders = true)
     val result = runner(dir, "renderLiveryPreviews").buildAndFail()
     assertTrue("tile-default/wear-large: not a Remote Compose document" in result.output, result.output.takeLast(2000))
-    assertTrue(File(dir, "build/livery/previews/tile-default/in-app-on-light.png").isFile)
+    assertTrue(File(dir, "build/livery/previews/tile-default/in-app/on/light.png").isFile)
   }
 }
