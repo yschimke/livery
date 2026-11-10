@@ -39,9 +39,12 @@ class PlayCommand : LiveryCommand {
   override val usage: String = """
   livery play <template.rc> --contract <contract.json> (--data <data.json> | --example <name>)
       [--surface compose|launcher-widget] [--size <w>x<h>] [--density <d>] [--out <png>]
-      [--catalog <src>]                 plays a template as this release of Livery plays it: a PNG,
+      [--catalog <src>] [--as-is]       plays a template as this release of Livery plays it: a PNG,
                                         exit 1 if it crashes or is refused. --example also names
                                         a kept example ("on (kept 1a2b3c4d)") with --catalog.
+                                        --as-is (launcher-widget) hands the platform player the
+                                        document without the recovery a widget provider's
+                                        publishing applies, to find a template that needs it.
                                         launcher-widget needs Java 21 (LIVERY_JAVA, or JAVA_HOME)
                                         and downloads Android 16 for Robolectric once (cached in
                                         LIVERY_CACHE, default ~/.cache/livery)
@@ -67,7 +70,7 @@ class PlayCommand : LiveryCommand {
     val out = File(opt("--out") ?: "${template.nameWithoutExtension}.png")
     val verdict = when (val surface = opt("--surface") ?: "compose") {
       "compose" -> compose(template, contract, data, RenderSpec(w, h, density), out, catalog)
-      "launcher-widget" -> widget(template, contractFile, data, w, h, density, out, catalog)
+      "launcher-widget" -> widget(template, contractFile, data, w, h, density, out, catalog, recover = "--as-is" !in args)
       else -> return fail("--surface is compose or launcher-widget, not $surface")
     }
     println(verdict)
@@ -102,7 +105,7 @@ class PlayCommand : LiveryCommand {
     }
   }
 
-  private fun widget(template: File, contract: File, data: JsonObject, w: Int, h: Int, density: Float, out: File, catalog: File?): String {
+  private fun widget(template: File, contract: File, data: JsonObject, w: Int, h: Int, density: Float, out: File, catalog: File?, recover: Boolean): String {
     val lib = androidPlayDir() ?: return "error: this livery has no lib/android-play (a build without the widget player)"
     val sdkDir = robolectricSdk() ?: return "error: couldn't download Robolectric's Android 16 SDK; put ${SDK_FILE} in ${cacheDir()}"
     val downloads = downloads(lib) ?: return "error: couldn't download the widget player's libraries; see ${cacheDir()}"
@@ -116,6 +119,7 @@ class PlayCommand : LiveryCommand {
       "-Dlivery.play.template=${template.absolutePath}", "-Dlivery.play.contract=${contract.absolutePath}",
       "-Dlivery.play.data=${dataFile.absolutePath}", "-Dlivery.play.width=$w", "-Dlivery.play.height=$h",
       "-Dlivery.play.density=$density", "-Dlivery.play.out=${out.absolutePath}", "-Dlivery.play.result=${result.absolutePath}",
+      "-Dlivery.play.recover=$recover",
     ) + listOfNotNull(catalog?.let { "-Dlivery.play.catalog=${it.absolutePath}" }) + "ee.schimke.livery.verify.WidgetPlay"
     // The child's output goes to a file, so a hung player can't block the timed wait on a pipe.
     val logFile = File.createTempFile("livery-play", ".log").apply { deleteOnExit() }

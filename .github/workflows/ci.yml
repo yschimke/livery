@@ -51,16 +51,18 @@ jobs:
           git status --porcelain --untracked-files=all
           [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "::error::the build changed or added files outside build/ (generated output belongs in build/, see AGENTS.md)"; exit 1; }
       # `livery play` from the installed CLI, outside Gradle: a template Android 16's widget player
-      # disables must fail, and its fix must play.
+      # disables when handed it as it is (--as-is) must fail; published as a widget provider
+      # publishes, it is recovered and plays, as its fix does.
       - name: livery play on Android 16's widget player
         run: |
           export LIVERY_JAVA="$JAVA_HOME_21_X64/bin/java"
           livery=livery-publish/build/install/livery/bin/livery
           f=livery-verify/src/test/resources/fixtures
-          play() { "$livery" play "$f/$1" --contract "$f/headphone-controls.json" --example bluetooth --surface launcher-widget --size 352x190 --out "$RUNNER_TEMP/$1.png"; }
-          set +e; play crashes-on-android-16.rc; code=$?; set -e
+          play() { t=$1; shift; "$livery" play "$f/$t" --contract "$f/headphone-controls.json" --example bluetooth --surface launcher-widget --size 352x190 --out "$RUNNER_TEMP/$t.png" "$@"; }
+          set +e; play crashes-on-android-16.rc --as-is; code=$?; set -e
           # 1 is "failed" (the crash); 0 would be a miss and 2 the player not running at all.
           [ "$code" = 1 ] || { echo "::error::expected the Android 16 crash (exit 1), got $code"; exit 1; }
+          play crashes-on-android-16.rc
           play plays-on-android-16.rc
       # The CLI just built, for the reusable catalog workflows' self-tests below.
       - name: Upload the livery CLI
