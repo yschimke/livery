@@ -1,4 +1,4 @@
-// The parts of the TypeScript Remote Compose player (vendor/PROVENANCE.md) @livery/a2ui uses.
+// The parts of the TypeScript Remote Compose player (vendor/PROVENANCE.md) @yschimke/livery-a2ui uses.
 export type HostValue = number | string | number[];
 
 export interface HostApi {

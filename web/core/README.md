@@ -1,4 +1,4 @@
-# @livery/web: standalone component preview (experimental)
+# @yschimke/livery-web: standalone component preview (experimental)
 
 A browser RC player and local component-preview host using Livery's Kotlin/Wasm
 selection, binding, trust and action gates. No A2UI or UI Builder runtime is required.
@@ -34,7 +34,7 @@ Set `LIVERY_RENDER_OUT` to save a screenshot from the actual browser test.
 ## Embed
 
 ```ts
-import { ComponentPreview } from '@livery/web';
+import { ComponentPreview } from '@yschimke/livery-web';
 
 const preview = new ComponentPreview(container, descriptorUrl, {
   config: {

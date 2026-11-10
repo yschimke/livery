@@ -15,4 +15,4 @@ from `src/web/main.ts`. It draws a document on a `<canvas>` in the page, and its
 - License: Apache-2.0.
 
 It isn't published to npm. When it is, this package depends on it instead.
-`remote-compose-player.d.mts` declares only the parts `@livery/a2ui` uses.
+`remote-compose-player.d.mts` declares only the parts `@yschimke/livery-a2ui` uses.

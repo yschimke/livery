@@ -3,14 +3,14 @@ order: 17
 
 # The web
 
-`@livery/a2ui` renders Livery contracts in A2UI's Lit, React and Angular surfaces. The common
+`@yschimke/livery-a2ui` renders Livery contracts in A2UI's Lit, React and Angular surfaces. The common
 Kotlin pipeline, compiled to Wasm, selects and verifies templates and gates actions. The
 TypeScript Remote Compose player draws them on a canvas and updates named values live.
 An optional `player: 'cmp'` uses the in-page Compose Multiplatform player; it is prepared before
 catalog registration and supports the same framework adapters. CMP keeps authored height when
 root measurement is unavailable. Its runtime and bundled fonts increase download and viewport
 costs; see `docs/A2UI-CMP.md` for the measured tradeoffs.
-The package is built; its first npm publication needs the repository owner's publish token.
+The package is built; its first npm publication requires the owner of the `@yschimke` scope.
 
 Use `LiverySession.open({ catalog, keys })`, then `liveryCatalog(session, { catalogId })` for Lit,
 or one of the framework adapters below. Outside A2UI, a standalone `<livery-template>` element
@@ -25,18 +25,22 @@ catalog from GitHub Pages, a CDN or a design server instead ([Hosting](../hostin
 
 ### npm releases
 
-`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+`@yschimke/livery-a2ui` follows the repository version. Release-please updates its package and lockfile;
 merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
-The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
-first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+The first publication is bootstrapped manually under the npm account owning `@yschimke`.
+Then configure npm trusted publishing for GitHub owner `yschimke`, repository `livery`,
+workflow `release.yml`, with no environment and direct publishing allowed. Subsequent releases
+use GitHub Actions OIDC; no `NPM_TOKEN` secret is required. The bundled
+`@yschimke/livery-web` dependency does not need a separate registry publication.
+See the [first-publish instructions](https://github.com/yschimke/livery/blob/main/web/a2ui/PUBLISHING.md). `npm run pack:check` checks the files and
 relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
 with its provenance until rc-players publishes a supported npm package.
 
 ### React and Angular
 
 The same session and controller power all three web renderers. Use
-`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
-`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`liveryReactCatalog(session, options)` from `@yschimke/livery-a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@yschimke/livery-a2ui/angular` with Angular's
 `provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
 React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
 Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
@@ -84,7 +88,7 @@ failure or interruption. Kotlin and Swift use the same activation order.
 
 ## Contract queries and named documents
 
-`@livery/a2ui` uses the Kotlin client compiled to Wasm and the TypeScript player. It accepts
+`@yschimke/livery-a2ui` uses the Kotlin client compiled to Wasm and the TypeScript player. It accepts
 contract inputs, design preferences, inline documents, exact hashes and contract queries.
 The agent's `template: {"query": {"offer": "summer"}}` sends only params to the app's endpoint:
 

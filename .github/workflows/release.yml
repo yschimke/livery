@@ -7,7 +7,8 @@ name: Release
 # `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin
 # `ee.schimke.composeai.livery.catalog`), the `livery` and `livery-mcp` CLIs to the release. The
 # release is un-drafted only once Maven, CLI and npm publishing succeed.
-# NPM_TOKEN needs publish access to the @livery/a2ui package.
+# npm uses trusted publishing: @yschimke/livery-a2ui trusts yschimke/livery, release.yml.
+# Bootstrap the package manually first; no NPM_TOKEN secret is used.
 #
 # There is no `push: tags` trigger: release-please makes the tag itself, so a tag trigger would
 # publish twice, and Maven Central refuses a version it already has.
@@ -234,6 +235,7 @@ jobs:
     name: Publish npm and standalone viewer
     permissions:
       contents: write
+      id-token: write
     needs: release-please
     if: ${{ needs.release-please.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
@@ -246,6 +248,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+      - name: Use npm with trusted publishing support
+        run: npm install --global npm@11.9.0
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -283,14 +287,7 @@ jobs:
           npm run pack:check
       - name: Publish package
         working-directory: web/a2ui
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          test -n "$NPM_TOKEN" || { echo '::error::Set the repository NPM_TOKEN secret with publish access to @livery/a2ui'; exit 1; }
-          config=$(mktemp)
-          trap 'rm -f "$config"' EXIT
-          printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$config"
-          NPM_CONFIG_USERCONFIG="$config" npm publish --access public
+        run: npm publish --access public
 
   # Un-drafts the release once everything it promises is published.
   finish-release:

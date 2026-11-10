@@ -23,7 +23,7 @@ with Livery so that ha-rc keeps only what is about Home Assistant: converters, s
 | `design-server/.../LibraryChannels.kt`, `LibraryMirror.kt` | 656 | `livery-server` channels and mirrors | — |
 | `design-server/.../AgentRelay.kt`, `AgentRelayMcp.kt`, `AgentSessionFile.kt`, `AgentRelayRoutes.kt` | ~1,300 | `livery-server` relay, `livery-mcp` | the per-kind draft gates (`AgentDesignSessions`, `DashboardAgentSessions`) as validators plugged into it |
 | `ha-client/.../agent/AgentRelayClient.kt` | 411 | the relay client in `livery-client` | — |
-| `embed/ha-card.js` (manifest, blob fetch and verify, player wiring) | — | `@livery/web` | the HA OAuth, websocket and the binding port |
+| `embed/ha-card.js` (manifest, blob fetch and verify, player wiring) | — | `@yschimke/livery-web` | the HA OAuth, websocket and the binding port |
 | `.github/scripts/publish-design-library.py` | — | `livery build` + `livery publish` | — |
 
 The Home Assistant concepts become plain Livery data:
@@ -55,6 +55,6 @@ Each step is one ha-rc PR that keeps every surface working, behind the existing 
    `LibraryChannels`/`LibraryMirror` with `livery-server`'s.
 6. **Agent relay.** Move the relay, its MCP surface and the client into Livery, with ha-rc's card
    and dashboard gates registered as validators.
-7. **Web embed.** `embed/ha-card.js` uses `@livery/web` for the catalog and keeps its HA parts.
+7. **Web embed.** `embed/ha-card.js` uses `@yschimke/livery-web` for the catalog and keeps its HA parts.
 
 What stays out: anything that knows about entities, Lovelace, HA auth or the converters.

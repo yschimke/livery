@@ -10,12 +10,12 @@ try {
   const [pack] = JSON.parse(execFileSync('npm', ['pack', '--json', '--pack-destination', dir], { encoding: 'utf8' }));
   const files = new Set(pack.files.map((f) => f.path));
   for (const file of ['dist/index.js', 'dist/index.d.ts', 'dist/livery-web/livery-livery-web.mjs',
-    'dist/livery-web/livery-livery-web.wasm', 'node_modules/@livery/web/dist/player.js', 'node_modules/@livery/web/dist/player.d.ts',
-    'node_modules/@livery/web/vendor/remote-compose-player.mjs',
-    'node_modules/@livery/web/vendor/remote-compose-player.d.mts', 'node_modules/@livery/web/vendor/PROVENANCE.md',
-    'node_modules/@livery/web/package.json',
-    'node_modules/@livery/web/dist/livery-web/livery-livery-web-core.mjs',
-    'node_modules/@livery/web/dist/livery-web/livery-livery-web-core.wasm', 'README.md']) {
+    'dist/livery-web/livery-livery-web.wasm', 'node_modules/@yschimke/livery-web/dist/player.js', 'node_modules/@yschimke/livery-web/dist/player.d.ts',
+    'node_modules/@yschimke/livery-web/vendor/remote-compose-player.mjs',
+    'node_modules/@yschimke/livery-web/vendor/remote-compose-player.d.mts', 'node_modules/@yschimke/livery-web/vendor/PROVENANCE.md',
+    'node_modules/@yschimke/livery-web/package.json',
+    'node_modules/@yschimke/livery-web/dist/livery-web/livery-livery-web-core.mjs',
+    'node_modules/@yschimke/livery-web/dist/livery-web/livery-livery-web-core.wasm', 'README.md']) {
     assert(files.has(file), `missing runtime file: ${file}`);
   }
   if ([...files].some((f) => f.startsWith('dist/livery-web-compose/'))) {
@@ -31,10 +31,10 @@ try {
     } else if (value && typeof value === 'object') Object.values(value).forEach(checkExports);
   }
   checkExports(manifest.exports);
-  assert(manifest.bundleDependencies.includes('@livery/web'), 'local player must be bundled');
-  const bundledManifest = JSON.parse(execFileSync('tar', ['-xOf', join(dir, pack.filename), 'package/node_modules/@livery/web/package.json'], { encoding: 'utf8' }));
+  assert(manifest.bundleDependencies.includes('@yschimke/livery-web'), 'local player must be bundled');
+  const bundledManifest = JSON.parse(execFileSync('tar', ['-xOf', join(dir, pack.filename), 'package/node_modules/@yschimke/livery-web/package.json'], { encoding: 'utf8' }));
   for (const target of Object.values(bundledManifest.exports['./player'])) {
-    assert(files.has(`node_modules/@livery/web/${target.slice(2)}`), `missing bundled player export: ${target}`);
+    assert(files.has(`node_modules/@yschimke/livery-web/${target.slice(2)}`), `missing bundled player export: ${target}`);
   }
   // npm also bundles the player's declared runtime dependency. Validate its published
   // entry points; upstream source maps and source files are part of that package.
@@ -44,7 +44,7 @@ try {
   }
   for (const file of files) {
     if (file.startsWith('node_modules/@js-joda/core/')) continue;
-    assert(/^(dist\/|vendor\/|node_modules\/@livery\/web\/|README.md$|LICENSE(?:\..*)?$|package.json$)/.test(file), `unexpected file: ${file}`);
+    assert(/^(dist\/|vendor\/|node_modules\/@yschimke\/livery-web\/|README.md$|LICENSE(?:\..*)?$|package.json$)/.test(file), `unexpected file: ${file}`);
     assert(!/\.(map|tgz)$/.test(file), `development artifact: ${file}`);
     if (!file.endsWith('.js') && !file.endsWith('.mjs')) continue;
     const source = execFileSync('tar', ['-xOf', join(dir, pack.filename), `package/${file}`], { encoding: 'utf8' });

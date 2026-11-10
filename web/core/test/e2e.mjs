@@ -11,6 +11,7 @@ const site = join(here, 'site');
 rmSync(site, { recursive: true, force: true }); mkdirSync(site, { recursive: true });
 execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'livery-capture/build/samples/two-way'), join(site, 'catalog')], { stdio: 'inherit' });
 cpSync(join(repo, 'samples/component-preview/preview.json'), join(site, 'preview.json'));
+cpSync(join(repo, 'livery-capture/build/samples/two-way/designs/quantity-stepper/in-app.rc'), join(site, 'stepper.rc'));
 cpSync(join(root, 'dist/livery-web'), join(site, 'livery-web'), { recursive: true });
 await build({ entryPoints: [join(here, 'app.ts')], bundle: true, format: 'esm', target: 'es2022', outfile: join(site, 'app.js') });
 await build({ stdin: { contents: "export * from '@js-joda/core';", resolveDir: root }, bundle: true, format: 'esm', outfile: join(site, 'js-joda.mjs') });
@@ -47,6 +48,31 @@ try {
   await page.waitForFunction(() => window.previewReady, null, { timeout: 60000 });
   await page.waitForFunction(() => window.previews.every(p => p.state === 'ready'), null, { timeout: 30000 });
   check(await page.locator('canvas').count() === 2, 'two standalone canvases without A2UI');
+  const immediateActions = await page.evaluate(async () => {
+    const bytes = new Uint8Array(await (await fetch('./stepper.rc')).arrayBuffer());
+    const container = document.createElement('div'); document.body.append(container);
+    const actions = [];
+    // No polling tick can repair a missing subscription: show() must return ready for input.
+    const setInterval = window.setInterval;
+    window.setInterval = () => 0;
+    let player;
+    try {
+      player = new window.RcCanvasPlayer(container, action => actions.push(action), { reloadOnResize: true });
+      for (const [index, width] of [360, 280, 480].entries()) {
+        await player.show('stepper', bytes, { name: 'Oat milk', price: '€2.49', quantity: index + 1 }, width, 80, 1);
+        const canvas = container.querySelector('canvas'), bounds = canvas.getBoundingClientRect();
+        const event = { bubbles: true, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+          clientX: bounds.left + width - 34, clientY: bounds.top + 40, button: 0 };
+        canvas.dispatchEvent(new PointerEvent('pointerdown', { ...event, buttons: 1 }));
+        canvas.dispatchEvent(new PointerEvent('pointerup', { ...event, buttons: 0 }));
+      }
+      return actions.map(action => [action.name, Number(action.value)]);
+    } finally {
+      player?.dispose(); container.remove(); window.setInterval = setInterval;
+    }
+  });
+  check(JSON.stringify(immediateActions) === JSON.stringify([['setQuantity', 2], ['setQuantity', 3], ['setQuantity', 4]]),
+    `first tap after load and each resize works without a polling tick: ${JSON.stringify(immediateActions)}`);
   const before = await page.evaluate(() => window.previews[0].stats);
   const initialImage = await page.locator('#a canvas').screenshot();
   await page.locator('#a canvas').click({ position: { x: 326, y: 40 } });
@@ -62,9 +88,10 @@ try {
   await page.waitForTimeout(200);
   check(!(await page.locator('#a canvas').screenshot()).equals(beforeTheme), 'theme visibly redraws component');
   for (const width of ['280', '480']) {
+    const loads = await page.evaluate(() => window.previews[0].stats.loads);
     await page.locator('#a select[aria-label="Width"]').selectOption(width);
-    await page.waitForFunction(w => document.querySelector('#a canvas').width === Number(w), width);
-    check(await page.evaluate(n => window.previews[0].stats.loads > n, before.loads), `width ${width} reloads for correct player hit regions`);
+    await page.waitForFunction(({ width, loads }) => document.querySelector('#a canvas').width === Number(width) && window.previews[0].stats.loads > loads, { width, loads });
+    check(true, `width ${width} reloads for correct player hit regions`);
     const quantity = await page.evaluate(() => window.previews[0].values.quantity);
     await page.locator('#a canvas').click({ position: { x: Number(width) - 34, y: 40 } });
     await page.waitForFunction(q => window.previews[0].values.quantity === q + 1, quantity);

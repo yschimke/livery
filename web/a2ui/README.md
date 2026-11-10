@@ -1,4 +1,4 @@
-# @livery/a2ui
+# @yschimke/livery-a2ui
 
 Livery contracts as [A2UI](https://a2ui.org) components on the web, for A2UI's Lit, React and Angular renderers. An agent places a component per contract and sends its data. The page then picks a
 reviewed, signed template for it, binds the data through the contract, and plays the template on a
@@ -20,7 +20,7 @@ gate, so the web behaves like every other Livery client. See [docs/A2UI.md](../.
 ```ts
 import '@a2ui/lit/v0_9';
 import { MessageProcessor } from '@a2ui/web_core/v0_9';
-import { LiverySession, liveryCatalog } from '@livery/a2ui';
+import { LiverySession, liveryCatalog } from '@yschimke/livery-a2ui';
 
 const session = await LiverySession.open({
   catalog: 'https://example.com/catalog/',            // manifest.json is beside it
@@ -117,18 +117,22 @@ checks rendering, interactions and offline behavior for both players:
 
 ### npm releases
 
-`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+`@yschimke/livery-a2ui` follows the repository version. Release-please updates its package and lockfile;
 merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
-The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
-first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+The first publication is bootstrapped manually under the npm account owning `@yschimke`.
+Then configure npm trusted publishing for GitHub owner `yschimke`, repository `livery`,
+workflow `release.yml`, with no environment and direct publishing allowed. Subsequent releases
+use GitHub Actions OIDC; no `NPM_TOKEN` secret is required. The bundled
+`@yschimke/livery-web` dependency does not need a separate registry publication.
+See the [first-publish instructions](https://github.com/yschimke/livery/blob/main/web/a2ui/PUBLISHING.md). `npm run pack:check` checks the files and
 relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
 with its provenance until rc-players publishes a supported npm package.
 
 ### React and Angular
 
 The same session and controller power all three web renderers. Use
-`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
-`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`liveryReactCatalog(session, options)` from `@yschimke/livery-a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@yschimke/livery-a2ui/angular` with Angular's
 `provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
 React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
 Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
@@ -185,7 +189,7 @@ asset endpoint, which repeatedly returned HTTP 504. Ordinary Gradle builds retai
 native Binaryen download unless an executable is supplied.
 
 The optional A2UI facade delegates shared document preparation and action routing to
-`livery-web-core`. Its canvas player comes from the neutral `@livery/web/player`
+`livery-web-core`. Its canvas player comes from the neutral `@yschimke/livery-web/player`
 package, bundled into the published A2UI tarball. In a checkout, build `web/core`
 before installing/building this package; `npm ci` copies that local package.
 Standalone component previews are documented in [../core/README.md](../core/README.md).
