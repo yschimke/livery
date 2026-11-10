@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.compose.multiplatform)
   alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.kotlin.serialization)
 }
 
 // Headless renders of templates to PNG on the JVM, through rc-players' Compose player on Skia:
@@ -12,6 +13,10 @@ kotlin {
   sourceSets {
     jvmMain.dependencies {
       api(project(":livery-compose"))
+      // A catalog source tree's files (sidecars, fonts.json), for CatalogPreviews.
+      implementation(project(":livery-catalog"))
+      // Material 3's baseline schemes as theme roles, for the previews' light and dark modes.
+      implementation(project(":livery-compose-material3"))
       // Platform-neutral: Skia's natives for every desktop platform, so the published library (and
       // livery-mcp's zip, built on Linux) renders on Linux, macOS and Windows. Never
       // compose.desktop.currentOs here: it would publish the build machine's platform as
@@ -33,3 +38,4 @@ kotlin {
 tasks.withType<Test>().configureEach {
   providers.gradleProperty("livery.render.out").orNull?.let { systemProperty("livery.render.out", it) }
 }
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

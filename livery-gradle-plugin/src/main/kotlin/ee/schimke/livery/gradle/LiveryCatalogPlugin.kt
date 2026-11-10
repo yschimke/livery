@@ -4,6 +4,9 @@ import com.android.build.api.variant.AndroidComponentsExtension
 import org.gradle.api.Action
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.Usage
+import org.gradle.api.attributes.java.TargetJvmEnvironment
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
@@ -34,6 +37,11 @@ import org.gradle.api.tasks.SourceSetContainer
  *   capture { mainClass.set("com.example.catalog.CaptureKt") }
  * }
  * ```
+ *
+ * `renderLiveryPreviews` previews every template in the catalog (the captured tree, when there's a
+ * capture) into `build/livery/previews`: each with each of its contract's examples, in each mode
+ * its target allows, at its own size (see [RenderLiveryPreviews]). It renders with `livery-render`,
+ * resolved at this plugin's version unless [LiveryPreviewsExtension.classpath] is set.
  */
 class LiveryCatalogPlugin : Plugin<Project> {
   override fun apply(project: Project) {
@@ -69,6 +77,27 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.inspect.set(ext.inspect)
       t.outputDir.set(project.layout.buildDirectory.dir("generated/livery/assets"))
     }
+    // livery-render at the version this plugin was built with, unless the build names its own.
+    val renderer = project.configurations.create("liveryPreviewRenderer") { c ->
+      c.isCanBeConsumed = false
+      c.isCanBeResolved = true
+      c.description = "livery-render, for renderLiveryPreviews"
+      c.attributes { a ->
+        a.attribute(Usage.USAGE_ATTRIBUTE, project.objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
+        a.attribute(Category.CATEGORY_ATTRIBUTE, project.objects.named(Category::class.java, Category.LIBRARY))
+        a.attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, project.objects.named(TargetJvmEnvironment::class.java, TargetJvmEnvironment.STANDARD_JVM))
+      }
+      c.defaultDependencies { it.add(project.dependencies.create("ee.schimke.composeai:livery-render:${PluginVersions.liveryRender}")) }
+    }
+    ext.previews.outputDir.convention(project.layout.buildDirectory.dir("livery/previews"))
+    project.tasks.register("renderLiveryPreviews", RenderLiveryPreviews::class.java) { t ->
+      t.group = "verification"
+      t.description = "Previews every template in the Livery catalog, with each example in each mode, into build/livery/previews"
+      val classpath = ext.previews.classpath
+      t.classpath = project.files(project.provider { if (classpath.isEmpty) renderer else classpath })
+      t.catalog.set(ext.capture.mainClass.flatMap { capture.flatMap { c -> c.outputDir } }.orElse(ext.source))
+      t.outputDir.set(ext.previews.outputDir)
+    }
     project.plugins.withId("com.android.base") {
       project.extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(build, BuildLiveryCatalog::outputDir)
@@ -91,6 +120,22 @@ abstract class LiveryCatalogExtension {
   @get:Nested abstract val capture: LiveryCaptureExtension
 
   fun capture(action: Action<LiveryCaptureExtension>) = action.execute(capture)
+
+  /** `renderLiveryPreviews`: every template, with each example in each mode. */
+  @get:Nested abstract val previews: LiveryPreviewsExtension
+
+  fun previews(action: Action<LiveryPreviewsExtension>) = action.execute(previews)
+}
+
+abstract class LiveryPreviewsExtension {
+  /**
+   * The renderer's classpath, when not `ee.schimke.composeai:livery-render` at this plugin's
+   * version (resolved from the build's repositories): a newer renderer, or a local build of it.
+   */
+  abstract val classpath: ConfigurableFileCollection
+
+  /** Where the previews go: `build/livery/previews`, by default. */
+  abstract val outputDir: DirectoryProperty
 }
 
 abstract class LiveryCaptureExtension {

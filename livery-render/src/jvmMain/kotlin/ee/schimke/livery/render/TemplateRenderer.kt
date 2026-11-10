@@ -3,7 +3,9 @@ package ee.schimke.livery.render
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import ee.schimke.composeai.rcplayer.compose.RcComposePlayer
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
@@ -19,6 +21,12 @@ data class RenderSpec(
   val heightDp: Int,
   val density: Float = 2f,
   val dark: Boolean = false,
+  /**
+   * ARGB drawn behind the template, or null for none (transparent). A template draws over whatever
+   * its host puts behind it, so a preview of one without a background of its own needs the
+   * surface it will sit on: [CatalogPreviews] passes the theme's `theme.surface`.
+   */
+  val background: Long? = null,
 ) {
   init { require(widthDp in 1..4096 && heightDp in 1..4096 && density in 0.5f..4f) { "render size out of range" } }
   val widthPx: Int get() = (widthDp * density).toInt()
@@ -46,7 +54,7 @@ object TemplateRenderer {
       RcComposePlayer(
         bytes = template,
         imageLoader = images,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().let { m -> spec.background?.let { m.background(Color(it.toInt())) } ?: m },
         theme = if (spec.dark) RcPlayerTheme.Dark else RcPlayerTheme.Light,
         namedValues = values,
         onEvent = {},
