@@ -1,6 +1,7 @@
 # Capturing templates from Kotlin: a Gradle plugin, KSP, and (not yet) a compiler plugin
 
-*Status: proposal. Nothing here is built yet; the site keeps it marked Planned until it is.*
+*Status: step 1's JVM runner is built (`livery { capture { … } }`, `CaptureLiveryCatalog`). The
+Android unit-test runner, step 2 and step 3 are proposals, marked Planned on the site until built.*
 
 A Livery template's source is a Kotlin `@RemoteComposable` function. The `.rc` document is build
 output (AGENTS.md). This note asks how that build should work, and whether it should be a Kotlin

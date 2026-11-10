@@ -105,6 +105,10 @@ livery {
 }
 ```
 
+When the designs are Kotlin, `livery { capture { mainClass.set(…) } }` captures them at build time
+and the catalog built into the assets is that capture, so no `.rc` is committed (see
+[Authoring](authoring.md)).
+
 ```kotlin
 val repository = TemplateRepository(
   source, KtorFetcher(), JavaCrypto, trust, blobs, kv, clock, targets,

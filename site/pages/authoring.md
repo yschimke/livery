@@ -115,6 +115,35 @@ captures `banner-classic`, `poll-card` and `quantity-stepper` into
   catalog with a `set` needs protocol level 7. See
   [`samples/two-way`](https://github.com/yschimke/livery/tree/main/samples/two-way).
 
+### Capturing on the JVM with the Gradle plugin
+
+Designs written against rc-players' Compose Multiplatform fork of `remote-creation-compose` capture
+on a plain JVM, with no Robolectric. The catalog plugin runs the capture for you: give it the entry
+point, a `main` called with `<source> <out>`, and it writes the catalog tree into `<out>` from the
+hand-written data in `<source>` (`catalog.json`, themes, placements, fonts) plus the captured
+`designs/` and `contracts/`.
+
+```kotlin
+plugins {
+  kotlin("jvm")
+  id("ee.schimke.composeai.livery.catalog") version "<version>"
+}
+
+livery {
+  source.set(layout.projectDirectory.dir("catalog"))   // the hand-written data only
+  capture {
+    mainClass.set("com.example.catalog.CaptureKt")     // main(args): args[0] source, args[1] out
+    jvmArgs.add("-Djava.awt.headless=true")             // optional
+  }
+}
+```
+
+`captureLiveryCatalog` runs it in its own JVM on the project's runtime classpath (set
+`capture.classpath` for another), into `build/livery/captured`, emptied first. It is cacheable:
+it re-runs only when the designs' code, the entry point or the hand-written tree changes.
+`buildLiveryCatalog` then builds what it captured. An Android-only design library still captures
+from a Robolectric test, as above; a plugin runner for that is *Planned*.
+
 ## In Compose UI Builder
 
 **1. Start from the contract.** Turn it into UI Builder host inputs: state variables with
