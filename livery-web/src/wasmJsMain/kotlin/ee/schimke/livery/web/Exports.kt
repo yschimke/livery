@@ -47,7 +47,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
-// The JavaScript API `@livery/a2ui` calls: a handle per session, JSON strings in and out, and
+// The JavaScript API `@yschimke/livery-a2ui` calls: a handle per session, JSON strings in and out, and
 // Promises for anything that may wait on the network. Everything it decides is LiveryA2uiWeb's.
 
 /** `liveryOpen`'s configuration: the catalog, who signs it, and what the page allows. */

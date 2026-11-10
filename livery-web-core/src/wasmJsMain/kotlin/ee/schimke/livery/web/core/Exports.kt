@@ -34,7 +34,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
-// The standalone JavaScript API `@livery/web` calls: a handle per session, JSON strings in and out, and
+// The standalone JavaScript API `@yschimke/livery-web` calls: a handle per session, JSON strings in and out, and
 // Promises for anything that may wait on the network. Everything it decides is LiveryWeb's.
 
 /** `previewCreate`'s configuration: the catalog, who signs it, and what the page allows. */

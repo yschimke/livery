@@ -5,7 +5,7 @@ plugins {
 
 // Livery in an A2UI surface on the web, without a TypeScript port: the common LiveryA2uiWeb (the
 // same selection, trust, binding, instantiation and action gate every client runs), compiled to
-// Wasm with a small JSON API exported to JavaScript. `@livery/a2ui` (web/a2ui) draws with it.
+// Wasm with a small JSON API exported to JavaScript. `@yschimke/livery-a2ui` (web/a2ui) draws with it.
 // The JVM target is for its tests.
 kotlin {
   jvmToolchain(17)

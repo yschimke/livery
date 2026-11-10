@@ -278,7 +278,7 @@ action kind.
 | `livery publish` | CLI | writes `a2ui-catalog.json` beside `manifest.json`, so an agent in any language (A2UI's agent SDKs are Python and TypeScript) is prompted with the same schema the clients advertise |
 | `livery-mcp` *(built)* | any MCP host (`livery-mcp-core`) | `a2ui_component_schema(contract?)` and `validate_a2ui(message, data_model?)`, for an agent authoring an A2UI response against a catalog |
 | `livery-web` *(built)* | Wasm (browsers, Node), and the JVM for its tests | **The pipeline, for the web.** `LiveryA2uiWeb`: the playable components, `render` (catalog selection or the agent's admitted document, `ContractBinder`, then `TemplateInstantiator` writes the values in), and `action` (`ActionGate`, then the agent, a `set`, or the page's handler), exported to JavaScript as a small JSON API. `WebCrypto` in `livery-client` verifies signatures and blobs |
-| `@livery/a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one component per contract for Lit, React or Angular, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
+| `@yschimke/livery-a2ui` *(built, `web/a2ui`)* | browsers | **Renders on the web.** `liveryCatalog(session, {catalogId})`: A2UI's basic catalog plus one component per contract for Lit, React or Angular, its Zod schema from A2UI's own dynamic types, drawing in the page with the TypeScript Remote Compose player (default) or `player: 'cmp'`, and setting named values live |
 | Swift `LiveryA2UI` | iOS, macOS | the same component over `LiveryTemplateView`, for A2UI's SwiftUI renderer once it is published |
 
 ### One source, two A2UI artifacts on Compose
@@ -296,7 +296,7 @@ moves with it, as a2ui-catalog does.
 
 ### The web
 
-*Built*: [`web/a2ui`](../web/a2ui) (`@livery/a2ui`) over [`livery-web`](../livery-web), checked in
+*Built*: [`web/a2ui`](../web/a2ui) (`@yschimke/livery-a2ui`) over [`livery-web`](../livery-web), checked in
 headless Chromium by CI (`web` job).
 
 ![The sample catalog in an A2UI surface, drawn in the page by the TypeScript player](images/a2ui-web.png) There is no TypeScript port: the web runs Kotlin's own
@@ -471,7 +471,7 @@ What the prototype taught, and what it doesn't do yet:
    checks. Queries use `KtorDecider` or an app implementation of `Decider.decide(DecisionRequest)`;
    the app implements the endpoint described in PROTOCOL.md §8.3 (no Livery server module required).
    See [the handler example](../samples/a2ui-query/README.md).
-6. `@livery/a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
+6. `@yschimke/livery-a2ui`. *Done* without a TypeScript port: `livery-web` (Kotlin, compiled to Wasm) and
    Lit, React and Angular components per contract, drawing with the TypeScript player and live
    named values. IndexedDB caching and Binaryen optimization are built. npm release automation
    is prepared; publishing needs the owner's token.
@@ -495,18 +495,22 @@ What the prototype taught, and what it doesn't do yet:
 
 ### npm releases
 
-`@livery/a2ui` follows the repository version. Release-please updates its package and lockfile;
+`@yschimke/livery-a2ui` follows the repository version. Release-please updates its package and lockfile;
 merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
-The repository owner must configure `NPM_TOKEN` with publish access to `@livery/a2ui` before the
-first npm release. No npm release has been made yet. `npm run pack:check` checks the files and
+The first publication is bootstrapped manually under the npm account owning `@yschimke`.
+Then configure npm trusted publishing for GitHub owner `yschimke`, repository `livery`,
+workflow `release.yml`, with no environment and direct publishing allowed. Subsequent releases
+use GitHub Actions OIDC; no `NPM_TOKEN` secret is required. The bundled
+`@yschimke/livery-web` dependency does not need a separate registry publication.
+See the [first-publish instructions](https://github.com/yschimke/livery/blob/main/web/a2ui/PUBLISHING.md). `npm run pack:check` checks the files and
 relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
 with its provenance until rc-players publishes a supported npm package.
 
 ### React and Angular
 
 The same session and controller power all three web renderers. Use
-`liveryReactCatalog(session, options)` from `@livery/a2ui/react` with React's `A2uiSurface`, or
-`liveryAngularCatalog(session, options)` from `@livery/a2ui/angular` with Angular's
+`liveryReactCatalog(session, options)` from `@yschimke/livery-a2ui/react` with React's `A2uiSurface`, or
+`liveryAngularCatalog(session, options)` from `@yschimke/livery-a2ui/angular` with Angular's
 `provideA2Ui({ catalogs: [catalog] })` and `SurfaceComponent`. Install the matching optional peers:
 React 18/19 with `@a2ui/react` 0.15; Angular 21 with `@a2ui/angular` 0.14 (which uses web_core 0.15).
 Angular applications also configure A2UI's `provideMarkdownRenderer()` for the basic components.
@@ -559,7 +563,7 @@ app-owned `DecisionContext` on `LiveryA2uiHost` or `LiveryA2uiWeb`. `KtorDecider
 configured HTTPS endpoint and refuses redirects. A2UI's inner `query` object is opaque params;
 it cannot override the device's contract, dimensions, capabilities or context.
 
-For `@livery/a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySession.open`.
+For `@yschimke/livery-a2ui`, supply `decisionEndpoint` and `decisionContext` in `LiverySession.open`.
 The Lit adapter calls `fetchPending()` after rendering a result marked `pending`. Hosts using
 `LiveryA2uiWeb` directly must do the same, then render again. `Ready.pending` means the automatic
 design can draw immediately. A pending exact document shows the app's fallback until it arrives.

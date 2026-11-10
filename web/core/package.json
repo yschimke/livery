@@ -1,5 +1,5 @@
 {
-  "name": "@livery/web",
+  "name": "@yschimke/livery-web",
   "version": "0.0.0",
   "description": "Standalone Remote Compose previews using Livery's Kotlin/Wasm gates",
   "license": "Apache-2.0",

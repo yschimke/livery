@@ -23,7 +23,7 @@ uses an unsigned local catalog. Real hosts configure trusted publisher keys sepa
 from the preview descriptor. See `web/core/README.md` for the API, browser tests and limits.
 
 `livery-web-core` contains the host-neutral Kotlin pipeline and standalone Wasm exports;
-`@livery/web` supplies its browser bridge and player. `livery-web` and `@livery/a2ui`
+`@yschimke/livery-web` supplies its browser bridge and player. `livery-web` and `@yschimke/livery-a2ui`
 remain the optional A2UI adapter over that shared code. Selection, data binding and
 host-action validation still use the common Livery gates.
 
