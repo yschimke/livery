@@ -97,7 +97,7 @@ The sample banner wraps to 112dp instead of its 160dp authored viewport.
 ## Develop
 
 ```sh
-build-brief ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist   # the Wasm module, and the CLI the test builds a catalog with
+build-brief ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist :livery-capture:sampleCatalogs   # the Wasm module, the CLI the test builds a catalog with, and the built sample catalogs
 npm ci && npm run check && npm run build
 npm test                                                    # headless Chromium (Playwright)
 ```

@@ -27,10 +27,12 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Keeps the experimental shared fixture tied to real capture bytes and Livery's existing gates. */
 class ComponentPreviewFixtureTest {
-  private val samples = File("../samples")
+  private val source = File("../samples")
+  // The two-way catalog as built: quantity-stepper's .rc is captured from Kotlin, never committed.
+  private val samples = File(requireNotNull(System.getProperty("livery.samples.two-way")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).parentFile
   private val json = Json { ignoreUnknownKeys = true }
-  private val descriptor = read("component-preview/preview.json")
-  private val cases = read("component-preview/cases.json")
+  private val descriptor = read("component-preview/preview.json", source)
+  private val cases = read("component-preview/cases.json", source)
   private val contract = json.decodeFromJsonElement(Contract.serializer(), read("two-way/contracts/quantity.json"))
   private val ref = json.decodeFromJsonElement(TemplateRef.serializer(), descriptor.getValue("template"))
   private val data = descriptor.getValue("data").jsonObject
@@ -39,7 +41,7 @@ class ComponentPreviewFixtureTest {
   private val entry = TemplateEntry(ref.sha256!!, bytes.size.toLong(), ref.designId!!, contract.ref, target)
   private val design = Design(ref.designId!!, contract.ref, "Quantity stepper")
 
-  private fun read(path: String): JsonObject = json.parseToJsonElement(File(samples, path).readText()).jsonObject
+  private fun read(path: String, root: File = samples): JsonObject = json.parseToJsonElement(File(root, path).readText()).jsonObject
 
   @Test fun descriptorPinsTheRealEligibleArtifactAndBindsItsData() {
     val actualHash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

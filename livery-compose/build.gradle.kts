@@ -48,8 +48,9 @@ kotlin {
   }
 }
 
-tasks.withType<Test>().configureEach { systemProperty("livery.samples", rootProject.file("samples/catalog").absolutePath) }
-
 // The Wasm browser test task is off (see wasmJs above), so there is no Compose UI test bundle for
 // this configuration check to guard; `binaries.executable()` would turn a library into an app.
 tasks.matching { it.name == "checkComposeUiTestConfigurationForWasmJs" }.configureEach { enabled = false }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

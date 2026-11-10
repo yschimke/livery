@@ -22,10 +22,12 @@ const players = process.env.LIVERY_TEST_PLAYER ? [process.env.LIVERY_TEST_PLAYER
 rmSync(site, { recursive: true, force: true });
 mkdirSync(site, { recursive: true });
 
-// The sample catalog plus the two-way one, built by the livery CLI.
+// The sample catalog plus the two-way one, built by the livery CLI from the trees
+// `./gradlew :livery-capture:sampleCatalogs` lays out (their captured designs are build output).
 const src = join(site, 'catalog-src');
-cpSync(join(repo, 'samples/catalog'), src, { recursive: true });
-for (const d of ['contracts', 'designs']) cpSync(join(repo, 'samples/two-way', d), join(src, d), { recursive: true });
+if (!existsSync(join(repo, 'livery-capture/build/samples/catalog'))) throw new Error('run ./gradlew :livery-capture:sampleCatalogs first');
+cpSync(join(repo, 'livery-capture/build/samples/catalog'), src, { recursive: true });
+for (const d of ['contracts', 'designs']) cpSync(join(repo, 'livery-capture/build/samples/two-way', d), join(src, d), { recursive: true });
 const cli = join(repo, 'livery-publish/build/install/livery/bin/livery');
 if (!existsSync(cli)) throw new Error('run ./gradlew :livery-publish:installDist first');
 execFileSync(cli, ['build', src, join(site, 'catalog')], { stdio: 'inherit' });

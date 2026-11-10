@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class KeptExamplesTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   private fun copy(): File = Files.createTempDirectory("kept").toFile().also { sample.copyRecursively(it) }
 

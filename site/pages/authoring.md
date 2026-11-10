@@ -16,8 +16,8 @@ values and emit the actions its contract declares, and each records where the do
 | You write | a `@Composable` with `RemoteText`, `RemoteColumn`, … | a design on UI Builder's canvas |
 | Contract values | `LiveryValues(contract).string("title")`, … | host inputs from `livery ui-builder scaffold` |
 | A wrong name or type | fails the capture | refused by `livery ui-builder import` |
-| Into the catalog | `DesignFolder.write` from a unit test | `livery ui-builder import` |
-| Kept current by | a test that `DesignFolder.check`s the committed files | importing a newer UI Builder revision |
+| Into the catalog | `DesignFolder.write` from a unit test, at build time | `livery ui-builder import` |
+| Kept current by | the build: the `.rc` is build output, never committed | importing a newer UI Builder revision |
 | `source` in the sidecar | `{ "tool": "capture", … }` | `{ "tool": "ui-builder", "design", "revision", "url" }` |
 | Suits | developers, templates next to app code, CI | designers, quick iteration, agents over MCP |
 
@@ -50,7 +50,9 @@ fun StatusTile(v: LiveryValues) {
 }
 ```
 
-Capture each target once and write or check the design's folder:
+Commit the Kotlin, not the `.rc`: capture each target once and write the design's folder into the
+build directory, where a Gradle task lays it over the hand-written catalog source tree
+(`catalog.json`, `contracts/`, each `design.json`):
 
 ```kotlin
 @RunWith(RobolectricTestRunner::class) @Config(sdk = [35], qualifiers = "mdpi")
@@ -58,25 +60,48 @@ class StatusTileTemplates {
   private val catalog = File("../templates")          // your catalog source tree
   private val contract = LiveryCapture.contract(catalog, "live/status-tile@1")
 
-  @Test fun designFolderIsCurrent() = runBlocking {
+  @Test fun captureTileDefault() = runBlocking {
     val context = RuntimeEnvironment.getApplication()
     val launcher = Target("launcher-widget", 7, listOf("widgets"))
     val templates = mapOf(
       "launcher" to LiveryCapture.capture(context, launcher, 200, 100) { StatusTile(LiveryValues(contract)) },
     )
-    val folder = DesignFolder(File(catalog, "designs/tile-default"))
-    if (System.getProperty("livery.capture.update") == "true") folder.write(templates)
-    else assertEquals(emptyList(), folder.check(templates))
+    val out = System.getProperty("livery.capture.out") ?: return@runBlocking  // set by captureTemplates
+    DesignFolder(File(out, "designs/tile-default")).write(templates)
   }
 }
 ```
 
+```kotlin
+// build.gradle.kts: captures into build/, then the source tree plus the captures as build/catalog.
+val captured = layout.buildDirectory.dir("captured-templates")
+val captureTemplates by tasks.registering(Test::class) {
+  val unitTest = tasks.named<Test>("testDebugUnitTest")
+  testClassesDirs = files(unitTest.map { it.testClassesDirs })
+  classpath = files(unitTest.map { it.classpath })
+  filter { includeTestsMatching("*.StatusTileTemplates") }
+  inputs.dir("templates/contracts").withPathSensitivity(PathSensitivity.RELATIVE)
+  outputs.dir(captured)
+  systemProperty("livery.capture.out", captured.get().asFile.absolutePath)
+}
+val catalog by tasks.registering(Sync::class) {
+  into(layout.buildDirectory.dir("catalog"))
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  from(files(captured).builtBy(captureTemplates))
+  from("templates")
+}
+```
+
+Point `livery build` (or the Gradle plugin's `livery { source }`) at `build/catalog`, or publish it
+to an output branch. Livery's own samples work this way: `./gradlew :livery-capture:sampleCatalogs`
+captures `banner-classic`, `poll-card` and `quantity-stepper` into
+`livery-capture/build/samples/`.
+
 - `LiveryCapture.capture` uses the widgets profile for a target with the `widgets` profile. The
   sidecar's `reads` and `emits` come from the captured document, never from hand-written lists.
 - `DesignFolder.write` writes `<name>.rc` and `<name>.json` and removes templates no longer
-  captured; `check` lists what differs, so CI fails when a composable changed and its catalog
-  files didn't. Forward the switch in Gradle with
-  `tasks.withType<Test> { systemProperty("livery.capture.update", findProperty("livery.capture.update") ?: "false") }`.
+  captured. A catalog repository that does commit its `.rc` (another tool's output, say) can keep
+  them current with `check`, which lists what differs from a capture.
 - Lists are `"<list>.<i>.<field>"` with `v.int("<list>.count")`; theme roles are `theme.*`
   colours the host fills.
 - `v.action(name, args)` sends the arguments the action declares, checked when you capture; a

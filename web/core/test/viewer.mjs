@@ -19,7 +19,7 @@ for (const [path, spec] of Object.entries(manifest.files)) {
   const bytes = readFileSync(join(assets, path));
   assert.equal(bytes.length, spec.bytes); assert.equal(createHash('sha256').update(bytes).digest('hex'), spec.sha256);
 }
-execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'samples/two-way'), join(temporary, 'catalog')], { stdio: 'inherit' });
+execFileSync(process.env.LIVERY_CLI ?? join(repo, 'livery-publish/build/install/livery/bin/livery'), ['build', join(repo, 'livery-capture/build/samples/two-way'), join(temporary, 'catalog')], { stdio: 'inherit' });
 cpSync(join(repo, 'samples/component-preview/preview.json'), join(temporary, 'preview.json'));
 // Unknown descriptor metadata is allowed. Keep its Unicode character count below
 // 64 KiB while testing the exact UTF-8 byte boundary, without changing bound data.

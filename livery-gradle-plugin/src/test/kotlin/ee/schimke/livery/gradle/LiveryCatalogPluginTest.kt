@@ -10,7 +10,7 @@ import org.gradle.testkit.runner.TaskOutcome
 
 class LiveryCatalogPluginTest {
   private fun project(inspect: Boolean): File = Files.createTempDirectory("app").toFile().apply {
-    File("../samples/catalog").copyRecursively(File(this, "livery"))
+    File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).copyRecursively(File(this, "livery"))
     File(this, "settings.gradle.kts").writeText("rootProject.name = \"app\"\n")
     File(this, "build.gradle.kts").writeText(
       """

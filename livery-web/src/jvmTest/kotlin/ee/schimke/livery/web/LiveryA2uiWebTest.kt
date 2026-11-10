@@ -42,7 +42,7 @@ import kotlinx.serialization.json.jsonObject
 
 /** The web's Livery component pipeline over the sample catalogs, offline, as a first launch. */
 class LiveryA2uiWebTest {
-  private val samples = File("../samples")
+  private val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).parentFile
   private val tree = Files.createTempDirectory("livery-web").toFile().also { tree ->
     File(samples, "catalog").copyRecursively(tree)
     for (dir in listOf("contracts", "designs")) File(samples, "two-way/$dir").copyRecursively(File(tree, dir))

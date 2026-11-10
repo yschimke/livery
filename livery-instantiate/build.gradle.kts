@@ -35,3 +35,6 @@ kotlin {
     }
   }
 }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

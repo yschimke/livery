@@ -46,7 +46,10 @@ key, which your apps embed). See [Signing](signing.md).
 ## 3. Write a catalog
 
 A catalog is a directory. The repository's [`samples/catalog`](https://github.com/yschimke/livery/tree/main/samples/catalog)
-is a complete one; the smallest is:
+is a complete one once built: its Compose-authored designs (`banner-classic`, `poll-card`) are
+Kotlin, and `./gradlew :livery-capture:sampleCatalogs` captures them into
+`livery-capture/build/samples/catalog`, the tree to point `livery build` at (see
+[Authoring](authoring.md)). The smallest is:
 
 ```
 catalog.json                        { "catalog": "acme", "channel": "main" }

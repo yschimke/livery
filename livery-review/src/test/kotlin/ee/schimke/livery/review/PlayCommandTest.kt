@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PlayCommandTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
   private val out = Files.createTempDirectory("play").toFile()
 
   private fun play(vararg args: String, env: Map<String, String> = emptyMap()) = PlayCommand().run(args.toList(), env)

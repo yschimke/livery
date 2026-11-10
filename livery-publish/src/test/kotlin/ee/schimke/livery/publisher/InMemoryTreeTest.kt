@@ -9,7 +9,7 @@ import okio.fakefilesystem.FakeFileSystem
 
 /** The common catalog code reads a tree in an in-memory file system exactly as it reads one on disk. */
 class InMemoryTreeTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   /** [sample] copied into [fs] at [at]. */
   private fun copy(fs: FakeFileSystem, at: String) = at.toPath().also { root ->

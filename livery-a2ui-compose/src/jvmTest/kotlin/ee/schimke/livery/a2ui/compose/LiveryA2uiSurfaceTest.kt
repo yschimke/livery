@@ -62,7 +62,7 @@ import kotlinx.coroutines.runBlocking
  */
 @OptIn(ExperimentalTestApi::class)
 abstract class LiveryA2uiSurfaceTest(private val documents: DocumentAdmission? = null, private val decider: ee.schimke.livery.client.Decider? = null) {
-  private val samples = File(System.getProperty("livery.samples") ?: "../samples/catalog")
+  private val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" })
 
   /** The sample catalog with the two-way one's contracts and designs added (it needs level 7). */
   private val tree = Files.createTempDirectory("livery-a2ui").toFile().also { tree ->

@@ -424,8 +424,8 @@ is gone when `options.count` is at most `i`. The data does the formatting (`resu
 `mark`), so the agent decides what the results say and the design decides how they look.
 
 `samples/catalog/designs/banner-classic/in-app.rc` was a placeholder, so it is now captured from
-Compose by `livery-capture`'s `SampleBannerTest` (regenerate with
-`-Plivery.capture.write=true`). `banner-bold` stays a placeholder: it reads a data-bound image,
+Compose by `livery-capture`'s `SampleBannerTest` (at build time, by
+`:livery-capture:sampleCatalogs`; the `.rc` is not committed). `banner-bold` stays a placeholder: it reads a data-bound image,
 which `LiveryValues` can't capture yet.
 
 What the prototype taught, and what it doesn't do yet:

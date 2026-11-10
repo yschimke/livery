@@ -41,7 +41,7 @@ import org.robolectric.annotation.Config
  * as votes come in (shares, results, the mark on the chosen option, the summary) is a named value,
  * so new results are pushed into the document already on screen.
  *
- * Regenerate with `./gradlew :livery-capture:testDebugUnitTest -Plivery.capture.write=true`.
+ * Captured into the built sample catalog by `./gradlew :livery-capture:sampleCatalogs`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "mdpi")
@@ -84,11 +84,9 @@ class SamplePollTest {
     }
   }
 
-  @Test fun pollCardIsCurrent() = runBlocking {
+  @Test fun capturesPollCard() = runBlocking {
     val templates = mapOf("in-app" to pollCard())
     assertEquals(listOf("vote"), templates.getValue("in-app").emits)
-    val folder = DesignFolder(File(catalog, "designs/poll-card"))
-    if (System.getProperty("livery.capture.write") == "true") folder.write(templates)
-    assertEquals(emptyList(), folder.check(templates), "regenerate with -Plivery.capture.write=true")
+    SampleCatalogs.write("catalog", "poll-card", templates)
   }
 }

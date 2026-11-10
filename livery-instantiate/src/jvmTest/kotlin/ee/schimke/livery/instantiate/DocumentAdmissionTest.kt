@@ -27,7 +27,7 @@ import kotlinx.serialization.json.Json
  * `live/status-tile@1` in-app document, and copies of it with a shader or an embedded image added.
  */
 class DocumentAdmissionTest {
-  private val samples = File("../samples/catalog")
+  private val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" })
   private val contract = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File(samples, "contracts/status-tile.json").readText())
   private val tile = File(samples, "designs/tile-default/in-app.rc").readBytes()
 

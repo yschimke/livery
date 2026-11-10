@@ -34,7 +34,7 @@ object InlineFixtures {
   val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())
 
   /** The sample's real promo banner document. */
-  val banner: ByteArray = File(System.getProperty("livery.samples") ?: "../samples/catalog", "designs/banner-classic/in-app.rc").readBytes()
+  val banner: ByteArray = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/banner-classic/in-app.rc").readBytes()
 
   /** The banner with a runtime shader defined in it. */
   val bannerWithShader: ByteArray = RcDocumentCodec.decode(banner, RcWireLimits()).let { d ->

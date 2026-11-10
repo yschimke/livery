@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
 
 /** Sample source tree → signed static catalog on disk → the real JVM client reading it via file: URLs. */
 class PublishEndToEndTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   @Test fun buildSignServeResolve() = runBlocking {
     val out = Files.createTempDirectory("catalog").toFile()
@@ -96,7 +96,7 @@ class PublishEndToEndTest {
 private fun kotlinx.serialization.json.JsonElement.jsonObject() = this as kotlinx.serialization.json.JsonObject
 
 class AssetPublishingTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   @Test fun imagesAndFontsAreContentAddressedAndAttached() {
     val m = CatalogBuilder().build(sample, Layout.Static).let { built ->
@@ -129,7 +129,7 @@ class AssetPublishingTest {
 }
 
 class ProtocolLevelTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   @Test fun catalogsWithAssetsRequireTheResourcesLevel() {
     assertEquals(RESOURCES_LEVEL, CatalogBuilder().build(sample, Layout.Static).manifest.minClient)

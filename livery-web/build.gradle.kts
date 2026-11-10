@@ -59,3 +59,6 @@ val webDist = tasks.register<Sync>("webDist") {
   from(optimizeWebWasm.flatMap { it.outputDirectory }) { include("*.wasm") }
   into(layout.buildDirectory.dir("web-dist"))
 }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

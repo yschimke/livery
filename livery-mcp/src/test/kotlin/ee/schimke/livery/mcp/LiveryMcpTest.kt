@@ -23,7 +23,7 @@ import kotlinx.serialization.json.put
 /** The tools against a copy of the sample catalog, whose tile-default, banner-classic and poll-card in-app templates are real documents. */
 class LiveryMcpTest {
   private val src: File = Files.createTempDirectory("catalog").toFile().also {
-    File("../samples/catalog").copyRecursively(it)
+    File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).copyRecursively(it)
   }
   private val tile = File(src, "designs/tile-default/in-app.rc").readBytes()
   private val tileB64 = Base64.getEncoder().encodeToString(tile)
@@ -221,7 +221,7 @@ class LiveryMcpTest {
 
   @Test fun historyWhenTheCatalogIsASubdirectoryOfTheCheckout() = runBlocking<Unit> {
     val repo = Files.createTempDirectory("repo").toFile()
-    val catalog = File(repo, "catalogs/main").also { File("../samples/catalog").copyRecursively(it) }
+    val catalog = File(repo, "catalogs/main").also { File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).copyRecursively(it) }
     fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", repo.path, "-c", "user.name=t", "-c", "user.email=t@t") + a)
       .redirectErrorStream(true).start().also { it.waitFor() }.inputStream.readBytes().decodeToString()
     git("init", "-q"); git("add", "."); git("commit", "-qm", "add catalog")
