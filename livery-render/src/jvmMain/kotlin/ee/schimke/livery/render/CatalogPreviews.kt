@@ -128,7 +128,7 @@ object CatalogPreviews {
           }
           modes(target, packs).forEach { mode ->
             // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
-            val file = "${design.id}/$name/$example/${mode.name}.png"
+            val file = listOf(design.id, name, example, mode.name).joinToString("/") { segment(it) } + ".png"
             val spec = RenderSpec(width, height, density, mode.dark, background = mode.background(target))
             runCatching { TemplateRenderer.png(bytes, bindings + mode.theme, spec, PlaceholderImages, typefaces) }
               .onSuccess { png ->
@@ -173,6 +173,22 @@ object CatalogPreviews {
     val scheme = if (dark) darkColorScheme() else lightColorScheme()
     return Mode(if (dark) "dark" else "light", dark, scheme.toLiveryTheme(), scheme.surface.toArgb().toLong() and 0xFFFFFFFFL)
   }
+
+  /**
+   * [name] as one path segment: anything but `A–Z a–z 0–9 . _ -` percent-encoded (UTF-8), and `.`
+   * or `..` encoded too. An example's label is any string; this keeps `case#1` a file of its own
+   * and `../x` inside the output, and no two names share a segment.
+   */
+  internal fun segment(name: String): String {
+    val safe = name.encodeToByteArray().joinToString("") { b ->
+      val c = (b.toInt() and 0xFF).toChar()
+      if (c.isLetterOrDigit() && c.code < 0x80 || c == '_' || c == '-' || c == '.') c.toString() else "%" + "%02X".format(b.toInt() and 0xFF)
+    }
+    return if (safe == "." || safe == "..") safe.replace(".", "%2E") else safe
+  }
+
+  /** A [segment]-built path as a URL relative to the index: its `%` escaped once more. */
+  internal fun url(file: String): String = file.replace("%", "%25")
 
   /**
    * The size a document was authored at, in dp: its header's pixels over the density it was
@@ -241,7 +257,7 @@ object CatalogPreviews {
       byDesign.groupBy { it.template }.forEach { (template, byTemplate) ->
         append("<h3>${esc(template)} · ${esc(byTemplate.first().surface)} · ${byTemplate.first().widthDp}×${byTemplate.first().heightDp} dp</h3><div class=row>")
         byTemplate.forEach {
-          append("<figure><img src=\"${esc(it.file)}\" width=${it.widthDp} alt=\"${esc("$design $template ${it.example} ${it.mode}")}\">")
+          append("<figure><img src=\"${esc(url(it.file))}\" width=${it.widthDp} alt=\"${esc("$design $template ${it.example} ${it.mode}")}\">")
           append("<figcaption>${esc(it.example)} · ${esc(it.mode)}</figcaption></figure>")
         }
         append("</div>")

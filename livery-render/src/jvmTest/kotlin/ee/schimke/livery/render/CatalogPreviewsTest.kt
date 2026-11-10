@@ -64,6 +64,16 @@ class CatalogPreviewsTest {
     assertTrue(card("dark") < 80, "dark card: ${card("dark")}")
   }
 
+  /** An example's label is any string: its file stays one segment inside the output, and the gallery links to it. */
+  @Test fun anyLabelIsOneSafePathSegment() {
+    assertEquals("on", CatalogPreviews.segment("on"))
+    assertEquals("case%231", CatalogPreviews.segment("case#1"))
+    assertEquals("..%2Fx", CatalogPreviews.segment("../x"))
+    assertEquals("%2E%2E", CatalogPreviews.segment(".."))
+    assertEquals("caf%C3%A9", CatalogPreviews.segment("café"))
+    assertEquals("d/t/case%25231/light.png", CatalogPreviews.url("d/t/case%231/light.png"))
+  }
+
   /** A header's size is pixels at the density it was generated at: a 720×400 document at 2x previews at 360×200 dp. */
   @Test fun aDocumentsSizeIsItsPixelsOverItsDensity() {
     assertEquals(360 to 200, CatalogPreviews.authoredDp(720, 400, 2f, modern = true))
