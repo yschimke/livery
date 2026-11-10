@@ -42,8 +42,14 @@ jobs:
         run: |
           # Compose/Wasm test linking exceeds the default 2 GiB Kotlin daemon heap.
           # Keep parallel work bounded while giving that compiler a dedicated 4 GiB heap.
+          # `build` also captures the sample catalogs' Compose-authored designs into
+          # livery-capture/build/samples (:livery-capture:sampleCatalogs): their .rc are build output.
           ./gradlew build :livery-publish:installDist :livery-mcp:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g
-          livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
+          livery-publish/build/install/livery/bin/livery build livery-capture/build/samples/catalog build/sample-catalog
+      - name: Nothing generated lands in tracked files
+        run: |
+          git status --porcelain --untracked-files=all
+          [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "::error::the build changed or added files outside build/ (generated output belongs in build/, see AGENTS.md)"; exit 1; }
       # `livery play` from the installed CLI, outside Gradle: a template Android 16's widget player
       # disables must fail, and its fix must play.
       - name: livery play on Android 16's widget player
@@ -62,6 +68,12 @@ jobs:
         with:
           name: livery-cli
           path: livery-publish/build/install/livery
+      # The sample catalog as built (its captured designs included), for the same self-tests.
+      - name: Upload the built sample catalog
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sample-catalog-source
+          path: livery-capture/build/samples/catalog
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -119,9 +131,11 @@ jobs:
     needs: build
     uses: ./.github/workflows/catalog-review.yml
     with:
-      source: samples/catalog
+      # The built tree: banner-classic and poll-card are captured from Kotlin, never committed.
+      source: build/sample-catalog-source
+      source-artifact: sample-catalog-source
       livery-artifact: livery-cli
-      # The sample's documents are placeholders, apart from tile-default/in-app.rc.
+      # Some of the sample's documents are placeholders (README.md, samples/catalog).
       inspect: false
       comment: false
       # Runs `livery review` (the renderer in the CLI); with contents: read the images stay in the
@@ -135,7 +149,8 @@ jobs:
     needs: build
     uses: ./.github/workflows/catalog-publish.yml
     with:
-      source: samples/catalog
+      source: build/sample-catalog-source
+      source-artifact: sample-catalog-source
       livery-artifact: livery-cli
       inspect: false
       key-id: dry-run
@@ -171,7 +186,7 @@ jobs:
         run: npm ci
       - name: livery-web's Wasm module and the livery CLI
         working-directory: .
-        run: ./gradlew :livery-web-core:webDist :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
+        run: ./gradlew :livery-web-core:webDist :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist :livery-capture:sampleCatalogs --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx4g -Plivery.wasmOpt="$PWD/web/a2ui/node_modules/binaryen/bin/wasm-opt"
       - name: Publication installer tests
         working-directory: .
         run: node --test scripts/tests/install-component-preview.test.mjs

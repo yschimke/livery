@@ -32,3 +32,6 @@ val playProperties by tasks.registering {
   doLast { out.get().asFile.resolve("livery-play.properties").apply { parentFile.mkdirs(); writeText("robolectric.sdk36=$sdk\n") } }
 }
 sourceSets.main { resources.srcDir(playProperties) }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

@@ -9,6 +9,14 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   authoring tool or host in `livery-protocol` or `livery-client`. An app's concepts are data
   (contracts, tags, action kinds) or an adapter the app owns. Support for an authoring tool or
   design catalog is a separate, optional module.
+- **Source in PRs is Kotlin; `.rc` is build output.** A template authored in Compose is committed
+  as its Kotlin only; its `.rc`, sidecar and renders are produced by Gradle into `build/` (the
+  samples: `livery-capture`'s `Sample*Test`, run by `:livery-capture:sampleCatalogs` into
+  `livery-capture/build/samples/`, which tests read through `gradle/sample-catalogs.gradle.kts`)
+  or published to an output branch, never committed. Committed exceptions: `conformance/`
+  fixtures (shared with the Swift and TypeScript ports), byte-stable test fixtures from other tools
+  (`demo-tile.rc`, `livery-verify`'s fixtures), the sample designs with no Kotlin source yet
+  (`tile-default`, `tile-retro`, `article-card`, `banner-bold`), and site/PR images.
 - **One gate.** Data validity is `ContractBinder`; template selection is `TemplateSelector`. Don't
   fork either per platform or per product; extend them and their tests.
 - **Protocol changes are compatible within a schema.** New manifest fields have defaults and
@@ -52,7 +60,7 @@ install `platforms;android-37.1`. The Swift package needs Xcode; CI runs it on m
 ```sh
 ./gradlew build                 # compile every target + every test
 swift test                      # the Swift package, on macOS
-./gradlew :livery-publish:installDist && livery-publish/build/install/livery/bin/livery build samples/catalog build/sample-catalog
+./gradlew :livery-publish:installDist :livery-capture:sampleCatalogs && livery-publish/build/install/livery/bin/livery build livery-capture/build/samples/catalog build/sample-catalog
 ./gradlew :livery-render:jvmTest -Plivery.render.out=build/renders   # keep the test renders to look at
 scripts/test-agent-attribution.sh
 ```

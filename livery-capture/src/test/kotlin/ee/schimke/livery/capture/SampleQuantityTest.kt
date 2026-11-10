@@ -41,7 +41,7 @@ import org.robolectric.annotation.Config
  * `quantity` input. The document keeps no state of its own, so it always shows the host's value,
  * and a step past the contract's 0…9 is refused by the client, not by the design.
  *
- * Regenerate with `./gradlew :livery-capture:testDebugUnitTest -Plivery.capture.write=true`.
+ * Captured into the built sample catalog by `./gradlew :livery-capture:sampleCatalogs`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "mdpi")
@@ -76,12 +76,10 @@ class SampleQuantityTest {
     }
   }
 
-  @Test fun quantityStepperIsCurrent() = runBlocking {
+  @Test fun capturesQuantityStepper() = runBlocking {
     val templates = mapOf("in-app" to stepper())
     assertEquals(listOf("setQuantity"), templates.getValue("in-app").emits)
-    val folder = DesignFolder(File(catalog, "designs/quantity-stepper"))
-    if (System.getProperty("livery.capture.write") == "true") folder.write(templates)
-    assertEquals(emptyList(), folder.check(templates), "regenerate with -Plivery.capture.write=true")
+    SampleCatalogs.write("two-way", "quantity-stepper", templates)
   }
 
   @Test fun setChecksTheActionAndTheInputsType() = runBlocking {

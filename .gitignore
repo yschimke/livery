@@ -66,3 +66,13 @@ publishing-manifest.json
 # Swift
 .build/
 .swiftpm/
+
+# Templates captured from Kotlin are build output, never source (AGENTS.md): livery-capture's
+# Sample*Test writes them into livery-capture/build/samples/. These keep a copy written into the
+# source tree by hand (DesignFolder.write, `livery-mcp --write`) out of git.
+/samples/catalog/designs/banner-classic/*
+!/samples/catalog/designs/banner-classic/design.json
+/samples/catalog/designs/poll-card/*
+!/samples/catalog/designs/poll-card/design.json
+/samples/two-way/designs/quantity-stepper/*
+!/samples/two-way/designs/quantity-stepper/design.json

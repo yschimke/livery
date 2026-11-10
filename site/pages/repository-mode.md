@@ -72,6 +72,7 @@ jobs:
 | Input | Workflow | |
 |---|---|---|
 | `source` | both | the source tree, relative to the repository root |
+| `source-artifact` | both | a source tree an earlier job uploaded, downloaded to `source`, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with an empty tree, since its base was never committed |
 | `livery-version` | both | the Livery CLI release to run |
 | `inspect` | both | decode every template (`--inspect`); default `true` |
 | `comment` | review | post the report on the pull request; default `true` |

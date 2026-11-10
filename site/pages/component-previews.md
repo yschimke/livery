@@ -11,7 +11,7 @@ inputs, theme changes, width and reset.
 Build and run from a Livery checkout:
 
 ```sh
-./gradlew :livery-web-core:webDist :livery-publish:installDist
+./gradlew :livery-web-core:webDist :livery-publish:installDist :livery-capture:sampleCatalogs
 cd web/core
 npm ci
 npm run build

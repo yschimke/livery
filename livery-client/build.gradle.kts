@@ -53,3 +53,6 @@ kotlin {
 tasks.withType<Test>().configureEach {
   systemProperty("livery.conformance.update", providers.gradleProperty("livery.conformance.update").getOrElse("false"))
 }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

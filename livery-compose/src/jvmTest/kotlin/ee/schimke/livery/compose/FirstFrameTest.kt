@@ -56,7 +56,7 @@ import kotlinx.coroutines.runBlocking
  */
 @OptIn(ExperimentalTestApi::class)
 class FirstFrameTest {
-  private val samples = File(System.getProperty("livery.samples") ?: "../samples/catalog")
+  private val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" })
   private val blobs = MemoryBlobStore()
   private val clock = Clock { 1_000L }
   private val repository = TemplateRepository(

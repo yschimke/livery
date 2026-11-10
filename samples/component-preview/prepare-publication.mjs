@@ -30,7 +30,7 @@ export async function preparePublication(cli, output, revision = 'fixture-1') {
     const dataFile = path.join(work, 'example-data.json');
     await fs.writeFile(dataFile, JSON.stringify(descriptor.data));
     await fs.writeFile(path.join(bundle, 'preview.json'), `${JSON.stringify(descriptor, null, 2)}\n`);
-    const source = path.join(repo, 'samples/two-way');
+    const source = path.join(repo, 'livery-capture/build/samples/two-way');
     await run(cli, ['build', source, path.join(bundle, 'catalog'), '--inspect']);
     await run(cli, ['play', path.join(source, 'designs/quantity-stepper/in-app.rc'),
       '--contract', path.join(source, 'contracts/quantity.json'), '--data', dataFile,

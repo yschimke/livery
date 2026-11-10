@@ -11,8 +11,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
 class NamedDocumentsTest {
-  private val bytes = File("../samples/catalog/designs/tile-default/in-app.rc").readBytes()
-  private val contract = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File("../samples/catalog/contracts/status-tile.json").readText())
+  private val bytes = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/tile-default/in-app.rc").readBytes()
+  private val contract = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "contracts/status-tile.json").readText())
   private val caps = PlayerCapabilities(Surfaces.IN_APP, 7, setOf("androidx"))
   private val query = TemplateQuery(contract.ref, caps)
   private val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()

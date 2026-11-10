@@ -60,7 +60,7 @@ Early. In this repository today:
 | `livery-verify` | tests: plays every launcher widget template, with each contract example, on Android 16's own widget player under Robolectric, and fails on what a home screen would show as an error |
 | `livery-gradle-plugin` | `ee.schimke.composeai.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
-| `samples/catalog` | a promo banner, a feed article and a live tile, with launcher and Wear widget targets, an image and a font. `tile-default/in-app.rc` is a real document that renders; the other `.rc` and font files are placeholders |
+| `samples/catalog` | a promo banner, a feed article, a poll and a live tile, with launcher and Wear widget targets, an image and a font. `banner-classic` and `poll-card` are Kotlin (`livery-capture`'s `Sample*Test`), captured at build time by `./gradlew :livery-capture:sampleCatalogs` into `livery-capture/build/samples/catalog`, never committed; `tile-default/in-app.rc` is a committed real document; the other `.rc` and font files are placeholders |
 
 Planned: the Android View player, phone-to-watch template sync, a web client, and an optional
 server (with an image proxy and live agent sessions). See the
@@ -71,18 +71,19 @@ server (with an image proxy and live agent sessions). See the
 ```sh
 ./gradlew build :livery-publish:installDist
 alias livery=livery-publish/build/install/livery/bin/livery
+samples=livery-capture/build/samples/catalog            # built by `build` (:livery-capture:sampleCatalogs)
 
 livery keygen sample                                   # sample.key (secret), sample.pub (embed in apps)
-livery build samples/catalog build/catalog --key sample.key --key-id sample-1
+livery build $samples build/catalog --key sample.key --key-id sample-1
 livery verify build/catalog --pub sample.pub --key-id sample-1
 
 # As GitHub release assets:
-livery build samples/catalog build/release --github <owner>/<repo> --tag catalog-1 --key sample.key --key-id sample-1
+livery build $samples build/release --github <owner>/<repo> --tag catalog-1 --key sample.key --key-id sample-1
 gh release create catalog-1 build/release/*
 ```
 
-For agents (MCP over stdio): `./gradlew :livery-mcp:installDist`, then
-`livery-mcp/build/install/livery-mcp/bin/livery-mcp samples/catalog`. Try `render_preview` with
+For agents (MCP over stdio): `./gradlew :livery-mcp:installDist :livery-capture:sampleCatalogs`, then
+`livery-mcp/build/install/livery-mcp/bin/livery-mcp livery-capture/build/samples/catalog`. Try `render_preview` with
 `design=tile-default`, `template=in-app`, `example=on`. See
 [AI workflows](site/pages/ai-workflows.md).
 

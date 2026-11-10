@@ -34,3 +34,6 @@ val webDist by tasks.registering(Sync::class) {
   include("*.mjs", "*.wasm", "*.d.mts")
   into(layout.buildDirectory.dir("web-dist"))
 }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

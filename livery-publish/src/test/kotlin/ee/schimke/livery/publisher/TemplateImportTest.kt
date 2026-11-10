@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TemplateImportTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
   private val tile = File(sample, "designs/tile-default/in-app.rc").readBytes()
   private val inApp = Target(surface = "in-app", rcApiLevel = 7)
 

@@ -35,8 +35,7 @@ import org.robolectric.annotation.Config
 
 /**
  * The sample catalog's `banner-classic` in-app template, authored here against `promo/banner@1`
- * and checked against `samples/catalog/designs/banner-classic/`. After changing the composable,
- * regenerate with `./gradlew :livery-capture:testDebugUnitTest -Plivery.capture.write=true`.
+ * and captured into the built sample catalog by `./gradlew :livery-capture:sampleCatalogs`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "mdpi")
@@ -64,11 +63,9 @@ class SampleBannerTest {
     }
   }
 
-  @Test fun bannerClassicIsCurrent() = runBlocking {
+  @Test fun capturesBannerClassic() = runBlocking {
     val templates = mapOf("in-app" to classic())
     assertEquals(listOf("cta", "dismiss"), templates.getValue("in-app").emits)
-    val folder = DesignFolder(File(catalog, "designs/banner-classic"))
-    if (System.getProperty("livery.capture.write") == "true") folder.write(templates)
-    assertEquals(emptyList(), folder.check(templates), "regenerate with -Plivery.capture.write=true")
+    SampleCatalogs.write("catalog", "banner-classic", templates)
   }
 }

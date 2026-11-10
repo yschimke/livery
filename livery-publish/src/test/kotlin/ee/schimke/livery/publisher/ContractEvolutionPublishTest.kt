@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** PROTOCOL.md §4.3 in the publisher: `since`, `requiresMinor`, and minor-to-minor changes. */
 class ContractEvolutionPublishTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   private fun tree(): File = Files.createTempDirectory("evolution").toFile().also { sample.copyRecursively(it) }
 

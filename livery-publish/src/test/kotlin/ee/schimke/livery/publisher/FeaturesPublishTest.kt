@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
  * and recorded in the manifest, and a catalog with any needs a client that gates on them (level 8).
  */
 class FeaturesPublishTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   @Test fun theSampleUsesNoRiskyFeature() {
     val m = CatalogBuilder(now = { 0 }).build(sample, Layout.Static, serial = 1).manifest

@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** Repository mode: seasons in the source tree, and what `livery check` tells a reviewer. */
 class RepositoryModeTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   private fun tree(): File = Files.createTempDirectory("repo-mode").toFile().also { sample.copyRecursively(it) }
 

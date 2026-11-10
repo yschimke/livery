@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Renders the home page's screenshots from samples/catalog with livery-mcp's `render_preview`.
+"""Renders the home page's screenshots from the sample catalog with livery-mcp's `render_preview`.
 
 The tile images on the home page are real: the sample template played with its contract's
 example data by the same renderer agents use. Re-run after changing a sample design:
 
-  ./gradlew :livery-mcp:installDist
+  ./gradlew :livery-mcp:installDist :livery-capture:sampleCatalogs
   python3 site/renders.py
 
 and commit the PNGs in site/assets/home/.
@@ -16,6 +16,8 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MCP = ROOT / "livery-mcp/build/install/livery-mcp/bin/livery-mcp"
+# The built sample catalog: its Compose-authored designs are captured at build time, never committed.
+CATALOG = ROOT / "livery-capture/build/samples/catalog"
 OUT = ROOT / "site/assets/home"
 
 # Only real documents can be drawn: the other sample designs are placeholders until an authoring
@@ -28,7 +30,9 @@ SHOTS = [
 
 
 def main():
-    proc = subprocess.Popen([str(MCP), str(ROOT / "samples/catalog")], stdin=subprocess.PIPE,
+    if not CATALOG.is_dir():
+        raise SystemExit("run ./gradlew :livery-capture:sampleCatalogs first")
+    proc = subprocess.Popen([str(MCP), str(CATALOG)], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True)
     ids = iter(range(1, 1000))
 

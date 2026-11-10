@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /** PROTOCOL.md §8.2 in the publisher: screen templates, `present` actions, screen rules. */
 class ScreensPublishTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   /**
    * The sample, with a details contract shown as a screen: a full-screen design, the banner's

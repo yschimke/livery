@@ -131,3 +131,6 @@ val collectAndroidPlay by tasks.registering {
   }
 }
 distributions { main { contents { into("lib/android-play") { from(collectAndroidPlay, androidStubJar) } } } }
+
+// The tests read the built sample catalogs (their captured designs are build output).
+apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

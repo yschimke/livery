@@ -14,7 +14,7 @@ import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 
 class CatalogImagesTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
   private val catalog = CompatibilityCheck.compareTrees(sample, Files.createTempDirectory("empty").toFile()).after!!
   // banner-bold ships assets/hero.png.
   private val hero = catalog.manifest.assets.first { it.kind == ee.schimke.livery.protocol.AssetKind.Image }.sha256

@@ -27,7 +27,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** The UI Builder authoring flow: scaffold host inputs from a contract, design, export, import. */
 class UiBuilderAuthoringTest {
-  private val sample = File("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
   private val tile = File(sample, "designs/tile-default/in-app.rc").readBytes()
   private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
     createContext("/api/ui-builder/v1/designs/kitchen-tile/export.rc") { ex ->

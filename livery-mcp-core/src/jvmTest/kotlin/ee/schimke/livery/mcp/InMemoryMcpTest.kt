@@ -21,7 +21,7 @@ import okio.fakefilesystem.FakeFileSystem
  */
 class InMemoryMcpTest {
   private val fs = FakeFileSystem()
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/catalog").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
   private val root = "/catalog".toPath().also { root ->
     sample.walkTopDown().filter { it.isFile }.forEach { f ->
       val p = root / f.relativeTo(sample).invariantSeparatorsPath

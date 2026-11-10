@@ -23,6 +23,10 @@ on:
       source:
         type: string
         default: catalog
+      source-artifact:
+        description: Instead of the committed tree, a catalog source tree uploaded earlier in this run and downloaded to `source`, for a catalog whose templates a build generates (Livery's own CI).
+        type: string
+        default: ''
       livery-version:
         type: string
         default: ''
@@ -76,6 +80,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - if: ${{ inputs.source-artifact != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.source-artifact }}
+          path: ${{ inputs.source }}
       - if: ${{ inputs.livery-artifact != '' }}
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

@@ -11,7 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 
 class LiveryWebTest {
-  private val built = CatalogBuilder(now = { 0 }).build(File("../samples/two-way"), Layout.Static, serial = 0)
+  private val built = CatalogBuilder(now = { 0 }).build(File(requireNotNull(System.getProperty("livery.samples.two-way")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }), Layout.Static, serial = 0)
   private val caps = PlayerCapabilities(Surfaces.IN_APP, 7, profiles = setOf("androidx"))
   private val clock = Clock { 1000L }
   private val events = mutableListOf<TemplateEvent>()

@@ -163,9 +163,9 @@ livery build catalog build/release \
     </div>
     <div role="tabpanel" id="tab-cli">
 <pre><code>git clone https://github.com/yschimke/livery &amp;&amp; cd livery
-./gradlew :livery-publish:installDist
+./gradlew :livery-publish:installDist :livery-capture:sampleCatalogs
 export PATH="$PWD/livery-publish/build/install/livery/bin:$PATH"
-livery build samples/catalog build/sample-catalog</code></pre>
+livery build livery-capture/build/samples/catalog build/sample-catalog</code></pre>
       <p>Validate, sign and lay out a catalog for any host. <a href="hosting.html">Hosting →</a></p>
     </div>
     <div role="tabpanel" id="tab-agent">

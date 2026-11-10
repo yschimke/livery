@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class UiBuilderExtensionTest {
-  private val tile = File("../samples/catalog/designs/tile-default/in-app.rc").readBytes()
+  private val tile = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/tile-default/in-app.rc").readBytes()
   private val seen = mutableListOf<String>()
   private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
     createContext("/api/ui-builder/v1/designs/") { ex ->
@@ -43,7 +43,7 @@ class UiBuilderExtensionTest {
   private fun JsonObject.text() = this["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
   @Test fun exportsADesignWithItsRevision() = runBlocking<Unit> {
-    val mcp = LiveryMcp.local(File("../samples/catalog"), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "secret"))))
+    val mcp = LiveryMcp.local(File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }), extensions = listOf(UiBuilderExtension(UiBuilderClient(url, "secret"))))
     val r = mcp.call(UiBuilderExtension.TOOL, JsonObject(mapOf("ui_design" to JsonPrimitive("kitchen-tile"))))
     val body = Json.parseToJsonElement(r.text()).jsonObject
     assertEquals(tile.toList(), Base64.getDecoder().decode(body["rc_base64"]!!.jsonPrimitive.content).toList())

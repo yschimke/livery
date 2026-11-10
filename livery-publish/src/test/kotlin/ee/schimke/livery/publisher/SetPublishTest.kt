@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /** PROTOCOL.md §7.1 in the publisher: `set` actions name a scalar input of their own contract. */
 class SetPublishTest {
-  private val sample = File(System.getProperty("user.dir")).resolve("../samples/two-way").canonicalFile
+  private val sample = File(requireNotNull(System.getProperty("livery.samples.two-way")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
 
   /** The two-way sample, with the quantity contract's `setQuantity` replaced by [action]. */
   private fun tree(action: String): File = Files.createTempDirectory("set").toFile().also { src ->

@@ -16,7 +16,7 @@ import kotlinx.coroutines.runBlocking
 class SignTemplateTest {
   @Test fun aSignedDocumentVerifiesForItsContractOnly() = runBlocking {
     val keys = Signing.generate()
-    val doc = File("../samples/catalog/designs/banner-classic/in-app.rc").readBytes()
+    val doc = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/banner-classic/in-app.rc").readBytes()
     val sig = Signing.signTemplate(doc, "promo/banner@1", keys.privatePkcs8Base64, "app")
     val trusted = listOf(TrustedKey("app", Base64.getDecoder().decode(keys.publicRawBase64)))
     val sha = MessageDigest.getInstance("SHA-256").digest(doc).joinToString("") { "%02x".format(it) }
