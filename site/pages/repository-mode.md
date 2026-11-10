@@ -192,7 +192,10 @@ kept examples are for checking, not for apps.
 `livery play` plays one template with one set of data as that release of Livery plays it, and
 writes a PNG: on rc-players' Compose player (`--surface compose`), or written for a widget and
 played on Android 16's own launcher widget player (`--surface launcher-widget`). It exits 1 when the
-template crashes or is refused, which is what a home screen shows as a warning sign.
+template crashes or is refused, which is what a home screen shows as a warning sign. The widget is
+published as a widget provider publishes it, through rc-players, which first recovers what the
+platform player can't read; `--as-is` hands the player the document without that, to find a
+template that only plays because it is recovered.
 
 ```bash
 livery play designs/tile-default/launcher.rc --contract contracts/status-tile.json \
@@ -221,7 +224,7 @@ against their published SHA-1, into `LIVERY_CACHE` (default `~/.cache/livery`).
 | `livery review <src> --against origin/main --previews <dir>` | the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in `<dir>` (`--image-base <url>` for where they will be served, `--size <w>x<h>` to choose the template) |
 | `livery build <src> <out> --inspect` | everything the publish would refuse |
 | `livery keep-examples <src> --against origin/main` | keeps the example data the base had that the tree no longer has (above) |
-| `livery play <template.rc> --contract <c> --example <e> --surface launcher-widget` | one template, played as this release plays it: a PNG, and exit 1 on a crash (above) |
+| `livery play <template.rc> --contract <c> --example <e> --surface launcher-widget [--as-is]` | one template, played as this release plays it: a PNG, and exit 1 on a crash (above) |
 | `livery-mcp` | the same checks and `render_preview` for agents, with `list_history` and previews at a revision (see [AI workflows](ai-workflows.md)) |
 
 ## Planned

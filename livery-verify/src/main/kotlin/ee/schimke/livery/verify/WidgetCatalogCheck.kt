@@ -42,6 +42,8 @@ object WidgetCatalogCheck {
      * them: by default none, so a template that needs one fails as it would without it.
      */
     images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray? = { _, _, _ -> null },
+    /** False plays each document as it is, without rc-players' recovery ([PlatformWidgetPlayer.play]). */
+    recover: Boolean = true,
   ): List<Failure> {
     // A wrong path must fail the test, not pass it by playing nothing.
     require(File(catalog, "contracts").isDirectory && File(catalog, "designs").isDirectory) {
@@ -78,7 +80,7 @@ object WidgetCatalogCheck {
             is InstantiateResult.Ok -> r.bytes
             is InstantiateResult.Failed -> { failures += Failure(id, name, example, "couldn't be written for a widget: ${r.reason}"); continue }
           }
-          when (val o = PlatformWidgetPlayer.play(activity, doc, w, h)) {
+          when (val o = PlatformWidgetPlayer.play(activity, doc, w, h, recover)) {
             is PlatformWidgetPlayer.Outcome.Played -> Unit
             is PlatformWidgetPlayer.Outcome.Failed -> failures += Failure(id, name, example, o.reason)
           }

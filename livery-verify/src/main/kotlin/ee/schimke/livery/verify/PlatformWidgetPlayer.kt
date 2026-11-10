@@ -7,7 +7,9 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.RemoteViews
 import ee.schimke.composeai.rcwidget.launcher.RcLauncherWidgets
+import ee.schimke.composeai.rcwidget.launcher.platformWidgetDocument
 import java.lang.reflect.Field
 import java.lang.reflect.InvocationTargetException
 
@@ -35,13 +37,22 @@ object PlatformWidgetPlayer {
   /** The platform player's class: the view a draw-instructions RemoteViews inflates. */
   const val PLAYER_CLASS: String = "com.android.internal.widget.remotecompose.player.RemoteComposePlayer"
 
-  /** Plays [document] at [widthPx] × [heightPx] in [activity]'s window and reports how it went. */
-  fun play(activity: Activity, document: ByteArray, widthPx: Int, heightPx: Int): Outcome {
+  /**
+   * Plays [document] at [widthPx] × [heightPx] in [activity]'s window and reports how it went.
+   *
+   * By default the document goes through `RcLauncherWidgets.remoteViews`, as a widget provider's
+   * does, which first recovers what the player can't read (a spacing that is a variable, and on
+   * Android 16 what its level 6 player needs as literals or lacks). [recover] false hands the
+   * player the document as it is, for what a host that builds its own `RemoteViews` would show, or
+   * to find a template that only plays because it is recovered.
+   */
+  fun play(activity: Activity, document: ByteArray, widthPx: Int, heightPx: Int, recover: Boolean = true): Outcome {
     if (Build.VERSION.SDK_INT < RcLauncherWidgets.MIN_HOST_API) {
       return Outcome.Failed("the platform widget player needs API ${RcLauncherWidgets.MIN_HOST_API}; this runs ${Build.VERSION.SDK_INT}")
     }
     val views = try {
-      RcLauncherWidgets.remoteViews(document)
+      if (recover) RcLauncherWidgets.remoteViews(document)
+      else RemoteViews(RemoteViews.DrawInstructions.Builder(listOf(platformWidgetDocument(document, RcLauncherWidgets.targetFor()))).build())
     } catch (e: Throwable) {
       return Outcome.Failed("couldn't be adapted for the platform player: ${chain(e)}")
     }

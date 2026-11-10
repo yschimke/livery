@@ -64,7 +64,8 @@ object WidgetPlay {
           is InstantiateResult.Failed -> PlatformWidgetPlayer.Outcome.Failed("couldn't be written for a widget: ${r.reason}")
           is InstantiateResult.Ok -> {
             val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
-            PlatformWidgetPlayer.play(activity, r.bytes, w, h)
+            // `--as-is`: without the recovery publishing applies (PlatformWidgetPlayer.play).
+            PlatformWidgetPlayer.play(activity, r.bytes, w, h, recover = System.getProperty("livery.play.recover") != "false")
           }
         }
       }
