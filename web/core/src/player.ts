@@ -28,7 +28,7 @@ export type LiveryPlayerFactory = (container: HTMLElement, onAction: (action: Na
  */
 export class RcCanvasPlayer implements LiveryPlayer {
   private readonly handle: RcPlayerHandle;
-  private readonly host: HostApi;
+  private host: HostApi;
   private key?: string;
   private geometry?: string;
   private values = new Map<string, string>();
@@ -42,11 +42,16 @@ export class RcCanvasPlayer implements LiveryPlayer {
   /** Documents loaded and values set, for tests and debugging. */
   readonly stats = { loads: 0, sets: 0 };
 
-  constructor(container: HTMLElement, onAction: (a: NamedAction) => void, private readonly options: { reloadOnResize?: boolean } = {}) {
+  constructor(container: HTMLElement, private readonly onAction: (a: NamedAction) => void, private readonly options: { reloadOnResize?: boolean } = {}) {
     this.handle = createPlayer(container, {});
     this.handle.canvas.style.display = 'block';
-    this.host = createHostApi(this.handle.player);
-    this.host.onAction('*', (value, name) => onAction({ name: name.replace(/^USER:/, ''), valueType: valueTypeOf(value), value }));
+    this.host = this.bindHost();
+  }
+
+  private bindHost(): HostApi {
+    const host = createHostApi(this.handle.player);
+    host.onAction('*', (value, name) => this.onAction({ name: name.replace(/^USER:/, ''), valueType: valueTypeOf(value), value }));
+    return host;
   }
 
   /**
@@ -78,6 +83,10 @@ export class RcCanvasPlayer implements LiveryPlayer {
       await this.handle.loadFromArrayBuffer(document.slice().buffer);
       if (this.disposed) { this.handle.destroy(); return; }
       if (epoch !== this.epoch) return;
+      // The vendor host observes document replacement on a 50ms timer. Bind a fresh host
+      // now, while the new document is present, so show() never loses an immediate tap.
+      this.host.dispose();
+      this.host = this.bindHost();
       this.key = documentKey;
       this.geometry = geometry;
       this.values.clear();
