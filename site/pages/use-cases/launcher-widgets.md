@@ -101,7 +101,11 @@ class LauncherWidgetsPlayTest {
 
 A failure names the design, the template, the example and the exception, such as
 `crashed while drawing: RuntimeException: FloatExpression[63] = ([A_46] 24.0 / ) len = 3`, the
-text Android 16 shows. `PlatformWidgetPlayer.play` plays one document. Robolectric runs Android 16
+text Android 16 shows. `PlatformWidgetPlayer.play` plays one document. Both publish the document as
+the widget provider does, through rc-players, which first recovers what the platform player can't
+read (a row or column spaced by a variable draws nothing; Android 16 needs sizes as literals). Pass
+`recover = false` to play the document as it is and find a template that only plays because it is
+recovered. Robolectric runs Android 16
 on Java 21 only; on JDK 17 and later it also needs
 `--add-opens=java.base/java.io=ALL-UNNAMED --add-exports=java.base/jdk.internal.access=ALL-UNNAMED`
 on the test JVM.

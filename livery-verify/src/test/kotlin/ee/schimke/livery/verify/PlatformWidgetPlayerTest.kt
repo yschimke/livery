@@ -16,7 +16,9 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Templates from a real app (Cadence's headphone widget): one that Android 16's player shows as a
- * warning sign (it reads a measured size where that player evaluates it unmeasured), and its fix.
+ * warning sign when handed it as it is (it reads a measured size where that player evaluates it
+ * unmeasured), and its fix. Published through rc-players (2.31.1 and later), as a widget provider
+ * publishes, the first is recovered and plays too.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -26,7 +28,7 @@ class PlatformWidgetPlayerTest {
   private fun fixture(name: String) = javaClass.getResourceAsStream("/fixtures/$name")!!.readBytes()
 
   @Test fun aTemplateThePlayerDisablesFails() {
-    val outcome = PlatformWidgetPlayer.play(activity, fixture("crashes-on-android-16.rc"), 704, 380)
+    val outcome = PlatformWidgetPlayer.play(activity, fixture("crashes-on-android-16.rc"), 704, 380, recover = false)
     val failed = assertIs<PlatformWidgetPlayer.Outcome.Failed>(outcome)
     assertTrue(failed.reason.startsWith("crashed while drawing: RuntimeException: FloatExpression["), failed.reason)
     assertTrue("ArrayIndexOutOfBoundsException" in failed.reason, failed.reason)
@@ -36,8 +38,16 @@ class PlatformWidgetPlayerTest {
     assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, fixture("plays-on-android-16.rc"), 704, 380))
   }
 
+  /** What rc-players recovers for the launcher plays: the crash, and text the player has no operation for. */
+  @Test fun whatThePublishingPathRecoversPlays() {
+    assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, fixture("crashes-on-android-16.rc"), 704, 380))
+    val text = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, fixture("not-a-widget-document.rc"), 400, 200))
+    val pixels = IntArray(400 * 200).also { text.image.getPixels(it, 0, 400, 0, 0, 400, 200) }
+    assertTrue(pixels.count { it ushr 24 != 0 } > 1000, "the recovered document draws")
+  }
+
   @Test fun aDocumentThePlatformCantReadFails() {
-    val outcome = PlatformWidgetPlayer.play(activity, fixture("not-a-widget-document.rc"), 400, 200)
+    val outcome = PlatformWidgetPlayer.play(activity, fixture("not-a-widget-document.rc"), 400, 200, recover = false)
     val failed = assertIs<PlatformWidgetPlayer.Outcome.Failed>(outcome)
     assertTrue("Unknown operation" in failed.reason || "couldn't be adapted" in failed.reason, failed.reason)
   }
@@ -75,7 +85,9 @@ class PlatformWidgetPlayerTest {
     File(catalog, "contracts/examples/headphone-controls").mkdirs()
     File(catalog, "contracts/examples/headphone-controls/playing-0badf00d.json").writeText(
       """{ "title": "Old track", "short_title": "Old", "playing": true, "mode": 1 }""")
-    val failures = WidgetCatalogCheck.launcherWidgets(activity, catalog, density = 2f)
+    // Published as a widget provider publishes, both designs play: the broken one is recovered.
+    assertEquals(emptyList(), WidgetCatalogCheck.launcherWidgets(activity, catalog, density = 2f))
+    val failures = WidgetCatalogCheck.launcherWidgets(activity, catalog, density = 2f, recover = false)
     assertEquals(listOf("bluetooth", "mp3", "disconnected"), failures.take(3).map { it.example }, failures.toString())
     assertEquals(4, failures.size, failures.toString())
     assertTrue(failures.last().example.startsWith("playing (kept "), failures.toString())
