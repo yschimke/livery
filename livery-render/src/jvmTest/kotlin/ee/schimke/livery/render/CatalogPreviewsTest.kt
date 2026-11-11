@@ -68,8 +68,9 @@ class CatalogPreviewsTest {
 
   /** The matrix as data: every drawn preview is a case, with its document copied and its values bound. */
   @Test fun theMatrixIsExportedAsCasesAnyRendererCanPlay() {
+    val drawn = index.previews.size  // renders first: the export is written by the same run
     val cases = Json.decodeFromString(PreviewCases.serializer(), out.resolve("cases.json").readText())
-    assertEquals(index.previews.size, cases.cases.size)
+    assertEquals(drawn, cases.cases.size)
     val c = cases.cases.first { it.design == "tile-default" && it.example == "on" && it.mode == "dark" }
     assertTrue(out.resolve(c.document).readBytes().isNotEmpty(), c.document)
     assertEquals(NamedValue.Str("Kitchen"), c.values["name"])
