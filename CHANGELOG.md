@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0](https://github.com/yschimke/livery/compare/v0.9.0...v0.10.0) (2026-11-11)
+
+
+### Features
+
+* **capture:** capture with rc-players' Compose Multiplatform creation API, beside AndroidX's ([#64](https://github.com/yschimke/livery/issues/64)) ([ebdbda2](https://github.com/yschimke/livery/commit/ebdbda2e0ccdd6b41a3e53117683ab00e6d00d1a))
+* **gradle:** preview every template in a catalog with renderLiveryPreviews ([#60](https://github.com/yschimke/livery/issues/60)) ([b33df86](https://github.com/yschimke/livery/commit/b33df868fa508d61410a399def63a99b2e7c4f04))
+* **render:** also export the preview matrix in compose-preview's shared shape ([#63](https://github.com/yschimke/livery/issues/63)) ([7890f9e](https://github.com/yschimke/livery/commit/7890f9eb2f05f914f862998d6b771b4adc116d76))
+* **render:** export the preview matrix as cases any renderer can play ([#62](https://github.com/yschimke/livery/issues/62)) ([30bc87d](https://github.com/yschimke/livery/commit/30bc87d07a9a8d06d9b03d949d861651572c6698))
+
 ## [0.9.0](https://github.com/yschimke/livery/compare/v0.8.0...v0.9.0) (2026-11-10)
 
 
