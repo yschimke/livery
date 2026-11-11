@@ -37,6 +37,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 
 /** One picture of a template: drawn with one of its contract's examples, in one [mode]. */
 @Serializable
@@ -179,6 +184,8 @@ object CatalogPreviews {
       source.resolve("designs/${c.design}/${c.template}.rc").copyTo(out.resolve(c.document).apply { parentFile.mkdirs() })
     }
     out.resolve("cases.json").writeText(pretty.encodeToString(PreviewCases.serializer(), matrix))
+    // The same matrix in compose-preview's shared shape, for its render-cases.
+    out.resolve(REMOTE_DOCUMENT_CASES).writeText(pretty.encodeToString(JsonObject.serializer(), remoteDocumentCases(matrix.cases)))
     // The tree's own faces, for a renderer that draws the cases elsewhere.
     source.resolve("fonts").takeIf { it.isDirectory }?.copyRecursively(out.resolve("fonts"))
     val problems = matrix.problems.toMutableList()
@@ -204,6 +211,65 @@ object CatalogPreviews {
       }
     }
   }
+
+  /** The cases in compose-preview's shape, beside `cases.json`. */
+  const val REMOTE_DOCUMENT_CASES: String = "remote-document-cases.json"
+
+  /**
+   * [cases] as compose-preview's `RemoteDocumentCasesV1` (`compose-preview/remote-document-cases/v1`,
+   * in compose-preview-contracts), so its `render-cases` plays them on the platform's own players
+   * (the AndroidX player, a launcher widget's, a watch's) without knowing Livery: each case's
+   * [id], its document, size, mode and background, the target as a player profile, and its values in
+   * the daemon's `kind` form. An image has no daemon type, so it is left at the document's default.
+   */
+  fun remoteDocumentCases(cases: List<PreviewCase>): JsonObject = buildJsonObject {
+    put("schema", "compose-preview/remote-document-cases/v1")
+    putJsonArray("cases") {
+      cases.forEach { c ->
+        addJsonObject {
+          put("id", id(c))
+          put("document", c.document)
+          put("widthDp", c.widthDp)
+          put("heightDp", c.heightDp)
+          put("dark", c.dark)
+          profile(c.target)?.let { put("profile", it) }
+          put("background", argb(c.background))
+          putJsonObject("namedValues") {
+            c.values.forEach { (name, v) -> remoteValue(v)?.let { put(name, it) } }
+          }
+        }
+      }
+    }
+  }
+
+  /** A case's id: its design, template, example and mode, each a [segment] (as its PNG's path). */
+  fun id(c: PreviewCase): String = listOf(c.design, c.template, c.example, c.mode).joinToString("/") { segment(it) }
+
+  /** The platform player a target plays on, as compose-preview names it, or null for its default. */
+  internal fun profile(target: Target): String? = when {
+    "glance-wear" in target.profiles -> "wearWidgets"
+    "widgets" in target.profiles -> if (target.rcApiLevel <= 6) "widgetsV6" else "widgetsV7"
+    "androidx" in target.profiles -> when (target.rcApiLevel) {
+      7 -> "androidx7"
+      8 -> "androidx8"
+      9 -> "androidx9"
+      else -> "androidx"
+    }
+    else -> null
+  }
+
+  /** A value in the daemon's `RemoteNamedValue` form, or null when it has no daemon type (an image). */
+  internal fun remoteValue(v: NamedValue): JsonObject? = when (v) {
+    is NamedValue.Str -> buildJsonObject { put("kind", "string"); put("value", v.value) }
+    is NamedValue.I -> buildJsonObject { put("kind", "int"); put("value", v.value) }
+    is NamedValue.L -> v.value.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.let { buildJsonObject { put("kind", "int"); put("value", it.toInt()) } }
+    is NamedValue.F -> buildJsonObject { put("kind", "float"); put("value", v.value) }
+    is NamedValue.B -> buildJsonObject { put("kind", "bool"); put("value", v.value) }
+    is NamedValue.Color -> buildJsonObject { put("kind", "color"); put("argb", argb(v.argb)) }
+    is NamedValue.Image -> null
+  }
+
+  private fun argb(value: Long): String = "#%08X".format(value and 0xFFFFFFFFL)
 
   /** One way a template is themed in a preview. */
   private class Mode(val name: String, val dark: Boolean, val theme: Bindings, private val surface: Long? = null) {

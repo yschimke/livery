@@ -9,6 +9,10 @@ import java.nio.file.Files
 import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -77,6 +81,35 @@ class CatalogPreviewsTest {
     assertTrue(c.values["theme.surface"] is NamedValue.Color, "the dark scheme's roles are bound")
     assertEquals(Surfaces.IN_APP, c.target.surface)
     assertTrue(c.dark)
+  }
+
+  /** The same matrix in compose-preview's shared shape (RemoteDocumentCasesV1), for its render-cases. */
+  @Test fun theMatrixIsAlsoExportedInComposePreviewsShape() {
+    val drawn = index.previews.size
+    val file = Json.parseToJsonElement(out.resolve(CatalogPreviews.REMOTE_DOCUMENT_CASES).readText()).jsonObject
+    assertEquals("compose-preview/remote-document-cases/v1", file["schema"]!!.jsonPrimitive.content)
+    val cases = file["cases"]!!.jsonArray.map { it.jsonObject }
+    assertEquals(drawn, cases.size)
+    val c = cases.first { it["id"]!!.jsonPrimitive.content == "tile-default/in-app/on/dark" }
+    assertTrue(out.resolve(c["document"]!!.jsonPrimitive.content).isFile)
+    assertEquals("androidx7", c["profile"]!!.jsonPrimitive.content)
+    assertEquals(true, c["dark"]!!.jsonPrimitive.boolean)
+    assertTrue(Regex("#[0-9A-F]{8}").matches(c["background"]!!.jsonPrimitive.content))
+    val values = c["namedValues"]!!.jsonObject
+    assertEquals("string", values["name"]!!.jsonObject["kind"]!!.jsonPrimitive.content)
+    assertEquals("Kitchen", values["name"]!!.jsonObject["value"]!!.jsonPrimitive.content)
+    assertTrue(Regex("#[0-9A-F]{8}").matches(values["theme.surface"]!!.jsonObject["argb"]!!.jsonPrimitive.content))
+    // Each id is unique: it names the case's image.
+    assertEquals(cases.size, cases.map { it["id"]!!.jsonPrimitive.content }.toSet().size)
+  }
+
+  /** A target's profiles name the platform player; an image has no daemon type and is left out. */
+  @Test fun targetsBecomePlayerProfilesAndImagesAreLeftOut() {
+    assertEquals("widgetsV7", CatalogPreviews.profile(Target(Surfaces.LAUNCHER_WIDGET, 7, listOf("widgets"))))
+    assertEquals("wearWidgets", CatalogPreviews.profile(Target(Surfaces.WEAR_WIDGET, 7, listOf("glance-wear"))))
+    assertEquals(null, CatalogPreviews.profile(Target(Surfaces.WEB, 7, listOf("core"))))
+    assertEquals(null, CatalogPreviews.remoteValue(NamedValue.Image("https://example.com/a.png")))
+    assertEquals("#FF6750A4", CatalogPreviews.remoteValue(NamedValue.Color(0xFF6750A4))!!["argb"]!!.jsonPrimitive.content)
   }
 
   /** Exporting alone draws nothing. */

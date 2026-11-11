@@ -174,9 +174,13 @@ values to bind: the example's data and the mode's `theme.*` roles, named as the 
 Any renderer can play the cases, not only this one. Set `previews { draw.set(false) }` to export the
 cases without drawing them.
 
-Drawing the cases with each surface's own player (the AndroidX player, a launcher widget's
-`RemoteViews`, Glance Wear) under Robolectric belongs to compose-preview, which already renders
-Remote Compose on those players. Its reading `cases.json` is *Planned*.
+Beside it, `remote-document-cases.json` holds the same cases in compose-preview's shared shape
+(`RemoteDocumentCasesV1`, in compose-preview-contracts). Each case has an `id`
+(`<design>/<template>/<example>/<mode>`), its target as a player profile (`androidx7`, `widgetsV7`,
+`wearWidgets`), and its values in the daemon's `kind` form; an image value is left at the document's
+default. compose-preview's `render-cases` draws that file with each surface's own player (the AndroidX
+player, a launcher widget's `RemoteViews`, Glance Wear) under Robolectric. That command is *Planned*:
+it is not released yet.
 
 ## In Compose UI Builder
 
