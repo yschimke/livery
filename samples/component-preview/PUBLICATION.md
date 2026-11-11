@@ -5,8 +5,8 @@ quantity-stepper fixture for the publication server. It does not publish to a re
 or establish a new AT Protocol standard.
 
 Use a built Livery CLI with the `play` command (`:livery-publish:installDist`), the built sample
-catalogs (`:livery-capture:sampleCatalogs`), Java and Node 22 or later. The preparation script
-builds the actual two-way catalog (`livery-capture/build/samples/two-way`) with inspection,
+catalogs (`:livery-capture-cmp:sampleCatalogs`), Java and Node 22 or later. The preparation script
+builds the actual two-way catalog (`livery-capture-cmp/build/samples/two-way`) with inspection,
 binds the descriptor's example data through Livery, and renders the captured RC document to
 a 720×160 PNG. The image is a real static rendering; interactive playback belongs to the viewer.
 
@@ -41,7 +41,7 @@ node samples/component-preview/prepare-publication.mjs \
   "$PWD/livery-publish/build/install/livery/bin/livery" \
   build/signed-component-preview signed-1
 livery-publish/build/install/livery/bin/livery build \
-  livery-capture/build/samples/two-way build/signed-component-preview/catalog --inspect \
+  livery-capture-cmp/build/samples/two-way build/signed-component-preview/catalog --inspect \
   --key /private/publisher.key --key-id publisher
 livery-publish/build/install/livery/bin/livery verify \
   build/signed-component-preview/catalog --pub /operator/publisher.pub --key-id publisher

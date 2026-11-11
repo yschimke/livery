@@ -89,4 +89,14 @@ manifest 1.0.0 1.0.0 1.0.0
 printf '{"modules": {"livery-a": "1.0.0", "livery-b": "1.0.0"}}\n' > "$work/m.json"
 git checkout -q -B case v1.0.0
 expect "livery-c" "a module never published: it publishes"
+# A module built from a sibling's sources as well as its own (livery-capture generates its AndroidX
+# LiveryValues from livery-capture-cmp's): the `"../…"` literal in its build file makes that
+# directory its input, with no project dependency between the two.
+git checkout -q -B case v1.0.0
+echo 'val shared = layout.projectDirectory.dir("../livery-c/src/commonMain")' >> livery-a/build.gradle.kts
+git commit -qam "a reads c's sources" && git tag v1.0.1
+manifest 1.0.1 1.0.1 1.0.1
+printf '%s\n' "val c3 = 3" >> livery-c/src/commonMain/c.kt
+git commit -qam "case"
+expect "livery-a livery-b livery-c" "a sibling's sources named by a ../ literal: the module that reads them, and its dependents"
 exit $failed

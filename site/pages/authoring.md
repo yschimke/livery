@@ -3,15 +3,16 @@ order: 21
 
 # Authoring templates
 
-**In one line:** design a template in **Compose code** (AndroidX `remote-creation-compose`) or in
-**Compose UI Builder**, and either way it lands in the catalog the same: a `.rc` document and a
-sidecar read from the document, checked against its contract before it is written.
+**In one line:** design a template in **Compose code** (rc-players' Compose Multiplatform creation
+API on any JVM, or AndroidX `remote-creation-compose` on Android) or in **Compose UI Builder**, and
+either way it lands in the catalog the same: a `.rc` document and a sidecar read from the
+document, checked against its contract before it is written.
 
 Livery takes `.rc` bytes and a sidecar from anything (see [Concepts](concepts.md)). These two
 flows are the supported ones: each starts from the contract, so a template can only read the
 values and emit the actions its contract declares, and each records where the document came from.
 
-| | Compose code (`livery-capture`) | Compose UI Builder (`livery-uibuilder`) |
+| | Compose code (`livery-capture-cmp`, `livery-capture`) | Compose UI Builder (`livery-uibuilder`) |
 |---|---|---|
 | You write | a `@Composable` with `RemoteText`, `RemoteColumn`, … | a design on UI Builder's canvas |
 | Contract values | `LiveryValues(contract).string("title")`, … | host inputs from `livery ui-builder scaffold` |
@@ -26,11 +27,37 @@ in CI, then a signed release (see [Getting started](getting-started.md)).
 
 ## In Compose code
 
-Add `livery-capture` (Android, since 0.2.0) to the module that holds your
-template composables, and capture them from a Robolectric unit test:
+Remote Compose has two creation APIs with the same shape, and Livery has a binding for each. Both
+give you the same `LiveryValues` and `LiveryCapture`, over one shared core (`livery-capture-core`:
+`CapturedTemplate`, `DesignFolder`, `CatalogContracts`), and a template captured through either
+is the same template to Livery.
+
+| | `livery-capture-cmp` | `livery-capture` |
+|---|---|---|
+| Creation API | rc-players' Compose Multiplatform one: `ee.schimke.composeai:rc-creation-compose`, package `ee.schimke.composeai.rccreation.*` | AndroidX's: `androidx.compose.remote:remote-creation-compose` (alpha), package `androidx.compose.remote.creation.*` |
+| Runs on | a plain JVM (a unit test, a build tool, a server), Android; compiled for Wasm, not yet tested in a browser | Android only: a Robolectric unit test |
+| Livery package | `ee.schimke.livery.capture.cmp` | `ee.schimke.livery.capture` |
+| Capture | `LiveryCapture.capture(target, widthDp, heightDp) { … }` | `LiveryCapture.capture(context, target, widthDp, heightDp, profile = …) { … }` |
+| A `widgets` target | written in what a launcher decodes, then checked as `rc-widget-launcher` hands it to the player | captured with `rc-widget-launcher`'s `widgetsProfile` |
+| Available | from the release after 0.9.0 | since 0.2.0 |
+
+**Use `livery-capture-cmp`** unless something forces the other: it needs no Android SDK, no
+Robolectric and no AndroidX alpha, so templates build wherever Kotlin does. **Use
+`livery-capture`** when the template composes with a library built on AndroidX's creation API
+(Wear `remote-material3`, your own AndroidX-typed components), or shares composables with content
+you hand to `rc-widget-launcher` or `rc-widget-wear`, which take AndroidX's types. An app can hold
+both: the two APIs are in different packages, and so are the two bindings.
+
+The two APIs are the same code at different ages: rc-players' follows androidx-main, AndroidX's
+alpha is a release behind it. A few names differ until the alpha catches up, for example
+`fontWeight = RemoteFontWeight.Bold` and `valueChangeAction(…)` on the first where the alpha has
+`FontWeight.Bold` and `valueChange(…)`. `LiveryValues` is identical on both.
 
 ```kotlin
 dependencies {
+  // rc-players' Compose Multiplatform creation API: a Kotlin/JVM or multiplatform module.
+  testImplementation("ee.schimke.composeai:livery-capture-cmp:<version>")
+  // or AndroidX's, in an Android module:
   testImplementation("ee.schimke.composeai:livery-capture:<version>")
   testImplementation("org.robolectric:robolectric:4.17")
 }
@@ -41,6 +68,10 @@ contract's defaults, and its actions as host actions. A name the contract doesn'
 wrong type, throws, so the capture fails rather than the publish:
 
 ```kotlin
+import ee.schimke.composeai.rccreation.compose.layout.*      // or androidx.compose.remote.creation.compose.layout.*
+import ee.schimke.composeai.rccreation.compose.modifier.*
+import ee.schimke.livery.capture.cmp.LiveryValues            // or ee.schimke.livery.capture.LiveryValues
+
 @Composable @RemoteComposable
 fun StatusTile(v: LiveryValues) {
   RemoteColumn(RemoteModifier.fillMaxSize().clickable(v.action("toggle"))) {
@@ -52,12 +83,31 @@ fun StatusTile(v: LiveryValues) {
 
 Commit the Kotlin, not the `.rc`: capture each target once and write the design's folder into the
 build directory, where a Gradle task lays it over the hand-written catalog source tree
-(`catalog.json`, `contracts/`, each `design.json`):
+(`catalog.json`, `contracts/`, each `design.json`). With `livery-capture-cmp` that is an ordinary
+JVM test:
+
+```kotlin
+class StatusTileTemplates {
+  private val catalog = File("../templates")          // your catalog source tree
+  private val contract = CatalogContracts.contract(catalog, "live/status-tile@1")
+
+  @Test fun captureTileDefault() = runBlocking {
+    val launcher = Target("launcher-widget", 7, listOf("widgets"))
+    val templates = mapOf(
+      "launcher" to LiveryCapture.capture(launcher, 200, 100) { StatusTile(LiveryValues(contract)) },
+    )
+    val out = System.getProperty("livery.capture.out") ?: return@runBlocking  // set by captureTemplates
+    DesignFolder(File(out, "designs/tile-default")).write(templates)
+  }
+}
+```
+
+With `livery-capture` the same test runs under Robolectric and hands the capture a `Context`:
 
 ```kotlin
 @RunWith(RobolectricTestRunner::class) @Config(sdk = [35], qualifiers = "mdpi")
 class StatusTileTemplates {
-  private val catalog = File("../templates")          // your catalog source tree
+  private val catalog = File("../templates")
   private val contract = LiveryCapture.contract(catalog, "live/status-tile@1")
 
   @Test fun captureTileDefault() = runBlocking {
@@ -66,7 +116,7 @@ class StatusTileTemplates {
     val templates = mapOf(
       "launcher" to LiveryCapture.capture(context, launcher, 200, 100) { StatusTile(LiveryValues(contract)) },
     )
-    val out = System.getProperty("livery.capture.out") ?: return@runBlocking  // set by captureTemplates
+    val out = System.getProperty("livery.capture.out") ?: return@runBlocking
     DesignFolder(File(out, "designs/tile-default")).write(templates)
   }
 }
@@ -76,7 +126,7 @@ class StatusTileTemplates {
 // build.gradle.kts: captures into build/, then the source tree plus the captures as build/catalog.
 val captured = layout.buildDirectory.dir("captured-templates")
 val captureTemplates by tasks.registering(Test::class) {
-  val unitTest = tasks.named<Test>("testDebugUnitTest")
+  val unitTest = tasks.named<Test>("test")   // "jvmTest" in a multiplatform module, "testDebugUnitTest" in an Android one
   testClassesDirs = files(unitTest.map { it.testClassesDirs })
   classpath = files(unitTest.map { it.classpath })
   filter { includeTestsMatching("*.StatusTileTemplates") }
@@ -93,12 +143,22 @@ val catalog by tasks.registering(Sync::class) {
 ```
 
 Point `livery build` (or the Gradle plugin's `livery { source }`) at `build/catalog`, or publish it
-to an output branch. Livery's own samples work this way: `./gradlew :livery-capture:sampleCatalogs`
-captures `banner-classic`, `poll-card` and `quantity-stepper` into
-`livery-capture/build/samples/`.
+to an output branch. Livery's own samples work this way, on the plain JVM:
+`./gradlew :livery-capture-cmp:sampleCatalogs` captures `banner-classic`, `poll-card` and
+`quantity-stepper` into `livery-capture-cmp/build/samples/`.
 
-- `LiveryCapture.capture` uses the widgets profile for a target with the `widgets` profile. The
-  sidecar's `reads` and `emits` come from the captured document, never from hand-written lists.
+- **A widget target is held to its player.** `livery-capture-cmp` has no AndroidX `Profile` to
+  capture with, so for a `widgets` target (a launcher widget, a notification) it writes the
+  document in what Android 16's player and newer launchers both decode (text as `TextLayout`, the
+  widgets profile in the header) and then checks it the way `rc-widget-launcher` hands a document
+  to the player. A `glance-wear` target is checked against Glance Wear's allow-list, after the
+  adaptation `livery-wear-widgets` applies; it is checked, not played. What the player would
+  refuse fails the capture with the operation it refuses, for example
+  `MODIFIER_TOUCH_DOWN is not supported by Wear widgets`. `livery-verify` plays a launcher widget
+  captured either way on Android 16's own player.
+- `livery-capture`'s `LiveryCapture.capture` uses `rc-widget-launcher`'s widgets profile for a
+  target with the `widgets` profile; pass Glance Wear's own `profile` for a `glance-wear` one.
+- The sidecar's `reads` and `emits` come from the captured document, never from hand-written lists.
 - `DesignFolder.write` writes `<name>.rc` and `<name>.json` and removes templates no longer
   captured. A catalog repository that does commit its `.rc` (another tool's output, say) can keep
   them current with `check`, which lists what differs from a capture.
@@ -117,11 +177,11 @@ captures `banner-classic`, `poll-card` and `quantity-stepper` into
 
 ### Capturing on the JVM with the Gradle plugin
 
-Designs written against rc-players' Compose Multiplatform fork of `remote-creation-compose` capture
-on a plain JVM, with no Robolectric. The catalog plugin runs the capture for you: give it the entry
-point, a `main` called with `<source> <out>`, and it writes the catalog tree into `<out>` from the
-hand-written data in `<source>` (`catalog.json`, themes, placements, fonts) plus the captured
-`designs/` and `contracts/`.
+Designs written against rc-players' Compose Multiplatform creation API (`livery-capture-cmp`)
+capture on a plain JVM, with no Robolectric, so they need no test to run in. The catalog plugin runs
+the capture for you: give it the entry point, a `main` called with `<source> <out>`, and it writes
+the catalog tree into `<out>` from the hand-written data in `<source>` (`catalog.json`, themes,
+placements, fonts) plus the captured `designs/` and `contracts/`.
 
 ```kotlin
 plugins {
@@ -141,8 +201,9 @@ livery {
 `captureLiveryCatalog` runs it in its own JVM on the project's runtime classpath (set
 `capture.classpath` for another), into `build/livery/captured`, emptied first. It is cacheable:
 it re-runs only when the designs' code, the entry point or the hand-written tree changes.
-`buildLiveryCatalog` then builds what it captured. An Android-only design library still captures
-from a Robolectric test, as above; a plugin runner for that is *Planned*.
+`buildLiveryCatalog` then builds what it captured. A design library on AndroidX's creation API
+(`livery-capture`) still captures from a Robolectric test, as above; a plugin runner for that is
+*Planned*.
 
 ### Previews of every template
 

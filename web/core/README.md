@@ -14,7 +14,7 @@ A draft or failed release does not establish public artifact availability.
 From the repository root:
 
 ```sh
-./gradlew :livery-web-core:webDist :livery-publish:installDist :livery-capture:sampleCatalogs
+./gradlew :livery-web-core:webDist :livery-publish:installDist :livery-capture-cmp:sampleCatalogs
 cd web/core
 npm ci
 npm run build

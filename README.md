@@ -53,14 +53,16 @@ Early. In this repository today:
 | `livery-render` | headless PNG renders of templates on the JVM, through rc-players' Compose player; `CatalogPreviews`, every template in a catalog with each example in each mode (the plugin's `renderLiveryPreviews`) |
 | `livery-mcp-core` | the agent tools as a transport-free MCP server in common Kotlin, over any Okio file system; renders, git history and revision checks come from an `McpHost` |
 | `livery-mcp` | `livery-mcp` CLI: agent tools (MCP over stdio) over a catalog source tree: contracts, data and template validation, previews, drafts, one-document previews, version history |
-| `livery-capture` | author templates in Compose: contract-typed named values (`LiveryValues`), capture per target, and a design folder a unit test writes or checks |
+| `livery-capture-cmp` | author templates in Compose with rc-players' Compose Multiplatform creation API: contract-typed named values (`LiveryValues`) and capture per target from a plain JVM test, a server or a browser, with no Android, Robolectric or AndroidX alpha |
+| `livery-capture` | the same on AndroidX's `remote-creation-compose`, from a Robolectric test: for templates composed with AndroidX-only component libraries. Its `LiveryValues` is `livery-capture-cmp`'s, generated against AndroidX's types |
+| `livery-capture-core` | what both share, with no creation API: `ContractChecks`, `CapturedTemplate` (the sidecar read from the document), `DesignFolder`, `CatalogContracts` |
 | `livery-web-core` / `web/core` | experimental: standalone Kotlin/Wasm component-preview pipeline and browser player, with a runnable local quantity-stepper demo; see [web preview](web/core/README.md) |
 | `livery-uibuilder` | optional: Compose UI Builder as an authoring tool: `livery ui-builder scaffold` / `import`, and `ui_builder_*` tools for `livery-mcp` |
 | `livery-review` | `livery review`: the pull request report with each changed design drawn before and after with its contract's examples (a CLI extension that brings `livery-render`) |
 | `livery-verify` | tests: plays every launcher widget template, with each contract example, on Android 16's own widget player under Robolectric, and fails on what a home screen would show as an error |
 | `livery-gradle-plugin` | `ee.schimke.composeai.livery.catalog`: builds a catalog into an Android app's assets, read back with `AndroidBundled.fromAssets` |
 | `conformance/` | fixtures every client must reproduce: selection, binding, resources, signing |
-| `samples/catalog` | a promo banner, a feed article, a poll and a live tile, with launcher and Wear widget targets, an image and a font. `banner-classic` and `poll-card` are Kotlin (`livery-capture`'s `Sample*Test`), captured at build time by `./gradlew :livery-capture:sampleCatalogs` into `livery-capture/build/samples/catalog`, never committed; `tile-default/in-app.rc` is a committed real document; the other `.rc` and font files are placeholders |
+| `samples/catalog` | a promo banner, a feed article, a poll and a live tile, with launcher and Wear widget targets, an image and a font. `banner-classic` and `poll-card` are Kotlin (`livery-capture-cmp`'s `samples/SampleDesigns.kt`), captured at build time by `./gradlew :livery-capture-cmp:sampleCatalogs` into `livery-capture-cmp/build/samples/catalog`, never committed; `tile-default/in-app.rc` is a committed real document; the other `.rc` and font files are placeholders |
 
 Planned: the Android View player, phone-to-watch template sync, a web client, and an optional
 server (with an image proxy and live agent sessions). See the
@@ -71,7 +73,7 @@ server (with an image proxy and live agent sessions). See the
 ```sh
 ./gradlew build :livery-publish:installDist
 alias livery=livery-publish/build/install/livery/bin/livery
-samples=livery-capture/build/samples/catalog            # built by `build` (:livery-capture:sampleCatalogs)
+samples=livery-capture-cmp/build/samples/catalog            # built by `build` (:livery-capture-cmp:sampleCatalogs)
 
 livery keygen sample                                   # sample.key (secret), sample.pub (embed in apps)
 livery build $samples build/catalog --key sample.key --key-id sample-1
@@ -82,8 +84,8 @@ livery build $samples build/release --github <owner>/<repo> --tag catalog-1 --ke
 gh release create catalog-1 build/release/*
 ```
 
-For agents (MCP over stdio): `./gradlew :livery-mcp:installDist :livery-capture:sampleCatalogs`, then
-`livery-mcp/build/install/livery-mcp/bin/livery-mcp livery-capture/build/samples/catalog`. Try `render_preview` with
+For agents (MCP over stdio): `./gradlew :livery-mcp:installDist :livery-capture-cmp:sampleCatalogs`, then
+`livery-mcp/build/install/livery-mcp/bin/livery-mcp livery-capture-cmp/build/samples/catalog`. Try `render_preview` with
 `design=tile-default`, `template=in-app`, `example=on`. See
 [AI workflows](site/pages/ai-workflows.md).
 

@@ -4,7 +4,7 @@
 The tile images on the home page are real: the sample template played with its contract's
 example data by the same renderer agents use. Re-run after changing a sample design:
 
-  ./gradlew :livery-mcp:installDist :livery-capture:sampleCatalogs
+  ./gradlew :livery-mcp:installDist :livery-capture-cmp:sampleCatalogs
   python3 site/renders.py
 
 and commit the PNGs in site/assets/home/.
@@ -17,7 +17,7 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MCP = ROOT / "livery-mcp/build/install/livery-mcp/bin/livery-mcp"
 # The built sample catalog: its Compose-authored designs are captured at build time, never committed.
-CATALOG = ROOT / "livery-capture/build/samples/catalog"
+CATALOG = ROOT / "livery-capture-cmp/build/samples/catalog"
 OUT = ROOT / "site/assets/home"
 
 # Only real documents can be drawn: the other sample designs are placeholders until an authoring
@@ -31,7 +31,7 @@ SHOTS = [
 
 def main():
     if not CATALOG.is_dir():
-        raise SystemExit("run ./gradlew :livery-capture:sampleCatalogs first")
+        raise SystemExit("run ./gradlew :livery-capture-cmp:sampleCatalogs first")
     proc = subprocess.Popen([str(MCP), str(CATALOG)], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True)
     ids = iter(range(1, 1000))

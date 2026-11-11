@@ -418,14 +418,14 @@ reads the new quantity into its `checkout` event. It also checks that the next s
 quantity the agent sent, that a step past the contract's max of 9 is refused and writes nothing,
 and that a literal `quantity` (nowhere to write) is reported to the agent.
 
-The poll's document is a real one, captured from Compose by `livery-capture`'s `SamplePollTest`:
+The poll's document is a real one, captured from Compose by `livery-capture-cmp` (`PollCard` in its `samples/SampleDesigns.kt`):
 every row is the same composable reading `options.<i>.*`, its bar is `fillMaxWidth(share)`, and it
 is gone when `options.count` is at most `i`. The data does the formatting (`result`, `summary`,
 `mark`), so the agent decides what the results say and the design decides how they look.
 
 `samples/catalog/designs/banner-classic/in-app.rc` was a placeholder, so it is now captured from
-Compose by `livery-capture`'s `SampleBannerTest` (at build time, by
-`:livery-capture:sampleCatalogs`; the `.rc` is not committed). `banner-bold` stays a placeholder: it reads a data-bound image,
+Compose by `livery-capture-cmp` (`BannerClassic` in its `samples/SampleDesigns.kt`; at build time, by
+`:livery-capture-cmp:sampleCatalogs`; the `.rc` is not committed). `banner-bold` stays a placeholder: it reads a data-bound image,
 which `LiveryValues` can't capture yet.
 
 What the prototype taught, and what it doesn't do yet:

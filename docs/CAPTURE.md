@@ -13,8 +13,8 @@ Two apps capture templates, two different ways:
 
 | | Confetti | Livery's own samples |
 | --- | --- | --- |
-| Authoring library | rc-players' Compose Multiplatform fork of `remote-creation-compose` (JVM) | AndroidX `remote-creation-compose` |
-| Runs as | a `JavaExec` of the app's own `main` (`generateLiveryCatalog`), cacheable, inputs and outputs declared | Robolectric tests filtered to `Sample*Test` (`captureSamples`), writing when `livery.capture.out` is set |
+| Authoring library | rc-players' Compose Multiplatform creation API (`rc-creation-compose`, JVM) | the same, through `livery-capture-cmp` (they were AndroidX `remote-creation-compose` under Robolectric until rc-players 3.0; `livery-capture` still captures them that way, for `bindingAgreementTest`) |
+| Runs as | a `JavaExec` of the app's own `main` (`generateLiveryCatalog`), cacheable, inputs and outputs declared | plain JVM tests filtered to `SampleCatalogsTest` (`captureSamples`), writing when `livery.capture.out` is set |
 | What lists the designs | a hand-written `AllDesigns` list of `DesignDef(id, contract, targets, tags, …)` | one test per design |
 | Contract checks | at compile time through a typed DSL (Kotlin 2.4 context parameters: a design in `context(ContractScope<SessionContract>)` can only read that contract's inputs); again at capture | at capture time (`LiveryValues` checks every name and type against the contract JSON) |
 | Then | `BuildLiveryCatalog` (this repo's Gradle plugin) checks and bundles; `livery build` publishes | `sampleCatalogs` lays captures over the hand-written tree; `livery build` |
@@ -66,11 +66,12 @@ livery {
 - It runs in a Gradle worker with classloader or process isolation, with the designs' runtime
   classpath and the hand-written tree as inputs and `build/livery/catalogs` as its output:
   cacheable and safe with the configuration cache. `BuildLiveryCatalog` then reads that output.
-- The entry point is one interface in `livery-capture`, which each runner discovers with
+- The entry point is one interface in `livery-capture-core`, which each runner discovers with
   `ServiceLoader`: `LiveryCatalogSource { fun designs(): List<CapturableDesign> }`. Confetti's
   `AllDesigns` and the sample tests are two implementations.
-- Both runners are needed. A JVM worker can't load AndroidX `remote-creation-compose`, and the
-  Compose Multiplatform fork doesn't need Robolectric.
+- Both runners are needed. A JVM worker can't load AndroidX `remote-creation-compose` (the
+  `livery-capture` binding), and rc-players' Compose Multiplatform creation API (the
+  `livery-capture-cmp` binding) doesn't need Robolectric.
 
 ### 2. Find designs with KSP
 
