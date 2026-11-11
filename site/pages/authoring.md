@@ -166,8 +166,17 @@ It writes `<design>/<template>/<example>/<mode>.png`, a `previews.json` index an
 that shows them all. Each picture comes from Compose Multiplatform's player on Skia (`livery-render`),
 in its own JVM. The task resolves `ee.schimke.composeai:livery-render` at the plugin's version from
 the build's repositories; set `previews { classpath.from(…) }` to use another. It is cacheable.
-Drawing each surface with its platform's own player (the AndroidX player, a launcher widget's
-`RemoteViews`, Glance Wear) under Robolectric is *Planned*.
+
+The matrix itself is data too. Every run writes `cases.json`, with the documents it names under
+`documents/` and the tree's `fonts/` beside them. Each case gives the document, its target (surface,
+profiles, container, theme), its size in dp, light or dark, the background behind it, and the named
+values to bind: the example's data and the mode's `theme.*` roles, named as the contract names them.
+Any renderer can play the cases, not only this one. Set `previews { draw.set(false) }` to export the
+cases without drawing them.
+
+Drawing the cases with each surface's own player (the AndroidX player, a launcher widget's
+`RemoteViews`, Glance Wear) under Robolectric belongs to compose-preview, which already renders
+Remote Compose on those players. Its reading `cases.json` is *Planned*.
 
 ## In Compose UI Builder
 
