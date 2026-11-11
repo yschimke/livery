@@ -61,10 +61,38 @@ data class PreviewProblem(val design: String, val template: String?, val example
 data class PreviewIndex(val previews: List<CatalogPreview>, val problems: List<PreviewProblem>)
 
 /**
+ * One cell of a catalog's preview matrix as data, for any renderer: play [document] at [widthDp] ×
+ * [heightDp] on a player for [target] (its surface, profiles, container and theme), in [dark] mode,
+ * with [values] bound (the example's data and the mode's `theme.*` roles, named as the contract
+ * names them: a player resolves a bare name to its `USER:` value), over [background]. An image value
+ * is the example's reference; a renderer that won't fetch draws a placeholder.
+ */
+@Serializable
+data class PreviewCase(
+  val design: String,
+  val template: String,
+  val example: String,
+  val mode: String,
+  val target: Target,
+  /** Relative to `cases.json`: `documents/<design>/<template>.rc`, the template's own bytes. */
+  val document: String,
+  val widthDp: Int,
+  val heightDp: Int,
+  val dark: Boolean,
+  /** ARGB behind the template. */
+  val background: Long,
+  val values: Map<String, NamedValue>,
+)
+
+/** A catalog's [PreviewCase]s and what couldn't become one: `cases.json`. */
+@Serializable
+data class PreviewCases(val cases: List<PreviewCase>, val problems: List<PreviewProblem>)
+
+/**
  * Every template in a catalog source tree, drawn the way it will be seen, with nothing written by
  * hand: for each design's templates, each of its contract's examples, in each mode its target
  * allows, at the size it was made for, over the surface it sits on. What the tree already says
- * decides all of it:
+ * decides all of it ([cases]):
  *
  * - **Data**: the contract's `examples`, each bound through [ContractBinder], the device's gate. An
  *   example that doesn't bind is a [PreviewProblem], not a picture.
@@ -80,21 +108,21 @@ data class PreviewIndex(val previews: List<CatalogPreview>, val problems: List<P
  * - **Fonts** from `fonts/fonts.json`; **images** as one placeholder, so previews never touch the
  *   network.
  *
- * The renders are Compose Multiplatform's player on Skia ([TemplateRenderer]). Writes
- * `<design>/<template>/<example>/<mode>.png`, `previews.json` ([PreviewIndex]) and an `index.html`
- * that shows them all.
+ * [render] writes the matrix as data (`cases.json` and the documents it names, for a renderer on
+ * the platform's own players) and, unless told not to, draws each case with Compose Multiplatform's
+ * player on Skia ([TemplateRenderer]): `<design>/<template>/<example>/<mode>.png`, `previews.json`
+ * ([PreviewIndex]) and an `index.html` that shows them all.
  */
 object CatalogPreviews {
   private val json = Json { ignoreUnknownKeys = true }
+  private val pretty = Json { prettyPrint = true; encodeDefaults = true }
 
-  fun render(source: File, out: File, density: Float = 2f): PreviewIndex {
+  /** The source tree's preview matrix, and what couldn't become a case. Reads only; draws nothing. */
+  fun cases(source: File): PreviewCases {
     require(source.resolve("designs").isDirectory) { "$source has no designs/: not a catalog source tree" }
-    out.deleteRecursively()
-    out.mkdirs()
     val contracts = source.resolve("contracts").jsonFiles().map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val packs = source.resolve("themes").jsonFiles().map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
-    val typefaces = fonts(source.resolve("fonts"))
-    val previews = mutableListOf<CatalogPreview>()
+    val cases = mutableListOf<PreviewCase>()
     val problems = mutableListOf<PreviewProblem>()
     source.resolve("designs").listFiles().orEmpty().filter { it.resolve("design.json").isFile }.sortedBy { it.name }.forEach { dir ->
       val design = json.decodeFromString(Design.serializer(), dir.resolve("design.json").readText())
@@ -112,12 +140,12 @@ object CatalogPreviews {
           return@templates
         }
         val target = json.decodeFromString(TemplateSpec.serializer(), sidecar.readText()).target
-        val bytes = rc.readBytes()
-        val header = runCatching { RcDocumentCodec.decode(bytes, RcWireLimits()).header }.getOrElse {
+        val header = runCatching { RcDocumentCodec.decode(rc.readBytes(), RcWireLimits()).header }.getOrElse {
           problems += PreviewProblem(design.id, name, null, "not a Remote Compose document this player can read: ${it.message}")
           return@templates
         }
         val (width, height) = size(authoredDp(header.width, header.height, header.density, header.modern), target)
+        val document = "documents/${segment(design.id)}/${segment(name)}.rc"
         examples.forEach { (example, data) ->
           val bindings = when (val r = ContractBinder.bind(contract, data)) {
             is BindResult.Ok -> r.bindings
@@ -127,22 +155,53 @@ object CatalogPreviews {
             }
           }
           modes(target, packs).forEach { mode ->
-            // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
-            val file = listOf(design.id, name, example, mode.name).joinToString("/") { segment(it) } + ".png"
-            val spec = RenderSpec(width, height, density, mode.dark, background = mode.background(target))
-            runCatching { TemplateRenderer.png(bytes, bindings + mode.theme, spec, PlaceholderImages, typefaces) }
-              .onSuccess { png ->
-                out.resolve(file).apply { parentFile.mkdirs() }.writeBytes(png)
-                previews += CatalogPreview(design.id, name, target.surface, example, mode.name, file, width, height)
-              }
-              .onFailure { problems += PreviewProblem(design.id, name, example, "${mode.name}: ${it.message}") }
+            cases += PreviewCase(
+              design.id, name, example, mode.name, target, document, width, height, mode.dark,
+              mode.background(target), (bindings + mode.theme).values,
+            )
           }
         }
       }
     }
+    return PreviewCases(cases, problems)
+  }
+
+  /**
+   * Writes [source]'s matrix into [out] as `cases.json` with the documents it names and, when
+   * [draw], draws every case ([PreviewIndex]). Problems from both are in what it returns.
+   */
+  fun render(source: File, out: File, density: Float = 2f, draw: Boolean = true): PreviewIndex {
+    val matrix = cases(source)
+    out.deleteRecursively()
+    out.mkdirs()
+    // The documents each case names, copied once: the export is whole without the source tree.
+    matrix.cases.distinctBy { it.document }.forEach { c ->
+      source.resolve("designs/${c.design}/${c.template}.rc").copyTo(out.resolve(c.document).apply { parentFile.mkdirs() })
+    }
+    out.resolve("cases.json").writeText(pretty.encodeToString(PreviewCases.serializer(), matrix))
+    // The tree's own faces, for a renderer that draws the cases elsewhere.
+    source.resolve("fonts").takeIf { it.isDirectory }?.copyRecursively(out.resolve("fonts"))
+    val problems = matrix.problems.toMutableList()
+    val previews = mutableListOf<CatalogPreview>()
+    if (draw) {
+      val typefaces = fonts(source.resolve("fonts"))
+      matrix.cases.forEach { c ->
+        // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
+        val file = listOf(c.design, c.template, c.example, c.mode).joinToString("/") { segment(it) } + ".png"
+        val spec = RenderSpec(c.widthDp, c.heightDp, density, c.dark, background = c.background)
+        runCatching { TemplateRenderer.png(out.resolve(c.document).readBytes(), Bindings(c.values), spec, PlaceholderImages, typefaces) }
+          .onSuccess { png ->
+            out.resolve(file).apply { parentFile.mkdirs() }.writeBytes(png)
+            previews += CatalogPreview(c.design, c.template, c.target.surface, c.example, c.mode, file, c.widthDp, c.heightDp)
+          }
+          .onFailure { problems += PreviewProblem(c.design, c.template, c.example, "${c.mode}: ${it.message}") }
+      }
+    }
     return PreviewIndex(previews, problems).also { index ->
-      out.resolve("previews.json").writeText(Json { prettyPrint = true }.encodeToString(PreviewIndex.serializer(), index))
-      out.resolve("index.html").writeText(html(index))
+      if (draw) {
+        out.resolve("previews.json").writeText(pretty.encodeToString(PreviewIndex.serializer(), index))
+        out.resolve("index.html").writeText(html(index))
+      }
     }
   }
 
@@ -269,14 +328,19 @@ object CatalogPreviews {
 }
 
 /**
- * `<source> <out>`: renders [source]'s previews into [out] ([CatalogPreviews.render]), and exits 1
- * when any example couldn't be drawn. `renderLiveryPreviews` runs this in its own JVM.
+ * `<source> <out> [--no-draw]`: writes [source]'s preview matrix into [out] (`cases.json`) and
+ * draws it ([CatalogPreviews.render]); `--no-draw` only exports the matrix. Exits 1 when any case
+ * couldn't be made or drawn. `renderLiveryPreviews` runs this in its own JVM.
  */
 fun main(args: Array<String>) {
-  require(args.size == 2) { "usage: <catalog source tree> <out>" }
-  val out = File(args[1])
-  val index = CatalogPreviews.render(File(args[0]), out)
-  println("previews: ${index.previews.size} in ${out.resolve("index.html").absolutePath}")
+  val draw = "--no-draw" !in args
+  val paths = args.filterNot { it == "--no-draw" }
+  require(paths.size == 2) { "usage: <catalog source tree> <out> [--no-draw]" }
+  val out = File(paths[1])
+  val index = CatalogPreviews.render(File(paths[0]), out, draw = draw)
+  val cases = out.resolve("cases.json").absolutePath
+  if (draw) println("previews: ${index.previews.size} in ${out.resolve("index.html").absolutePath}; cases: $cases")
+  else println("cases: $cases")
   index.problems.forEach { System.err.println("${listOfNotNull(it.design, it.template, it.example).joinToString("/")}: ${it.message}") }
   if (index.problems.isNotEmpty()) exitProcess(1)
 }

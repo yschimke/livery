@@ -59,6 +59,17 @@ class RenderLiveryPreviewsTest {
     assertTrue("Reusing configuration cache" in cached.output)
   }
 
+  /** `draw = false` exports the matrix for another renderer and draws nothing. */
+  @Test fun exportsTheCasesWithoutDrawing() {
+    val dir = project()
+    File(dir, "build.gradle.kts").appendText("\nlivery { previews { draw.set(false) } }\n")
+    runner(dir, "renderLiveryPreviews").build()
+    val out = File(dir, "build/livery/previews")
+    assertTrue(File(out, "cases.json").readText().contains("\"documents/tile-default/in-app.rc\""))
+    assertTrue(File(out, "documents/tile-default/in-app.rc").isFile)
+    assertTrue(out.walk().none { it.name.endsWith(".png") })
+  }
+
   /** A template that can't be drawn fails the task, naming it, after the rest are drawn. */
   @Test fun failsOnATemplateItCantDraw() {
     val dir = project(placeholders = true)

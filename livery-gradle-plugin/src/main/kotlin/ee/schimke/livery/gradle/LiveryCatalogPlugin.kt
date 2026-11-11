@@ -90,6 +90,7 @@ class LiveryCatalogPlugin : Plugin<Project> {
       c.defaultDependencies { it.add(project.dependencies.create("ee.schimke.composeai:livery-render:${PluginVersions.liveryRender}")) }
     }
     ext.previews.outputDir.convention(project.layout.buildDirectory.dir("livery/previews"))
+    ext.previews.draw.convention(true)
     project.tasks.register("renderLiveryPreviews", RenderLiveryPreviews::class.java) { t ->
       t.group = "verification"
       t.description = "Previews every template in the Livery catalog, with each example in each mode, into build/livery/previews"
@@ -97,6 +98,7 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.classpath = project.files(project.provider { if (classpath.isEmpty) renderer else classpath })
       t.catalog.set(ext.capture.mainClass.flatMap { capture.flatMap { c -> c.outputDir } }.orElse(ext.source))
       t.outputDir.set(ext.previews.outputDir)
+      t.draw.set(ext.previews.draw)
     }
     project.plugins.withId("com.android.base") {
       project.extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
@@ -136,6 +138,12 @@ abstract class LiveryPreviewsExtension {
 
   /** Where the previews go: `build/livery/previews`, by default. */
   abstract val outputDir: DirectoryProperty
+
+  /**
+   * Draw the previews with Compose Multiplatform's player (true, the default), or only export the
+   * matrix as `cases.json` for a renderer on the platform's own players (false).
+   */
+  abstract val draw: Property<Boolean>
 }
 
 abstract class LiveryCaptureExtension {

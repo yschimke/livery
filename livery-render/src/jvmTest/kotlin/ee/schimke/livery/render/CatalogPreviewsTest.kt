@@ -1,5 +1,6 @@
 package ee.schimke.livery.render
 
+import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.SizeRange
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
@@ -7,6 +8,7 @@ import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kotlinx.serialization.json.Json
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -62,6 +64,28 @@ class CatalogPreviewsTest {
     }
     assertTrue(card("light") > 200, "light card: ${card("light")}")
     assertTrue(card("dark") < 80, "dark card: ${card("dark")}")
+  }
+
+  /** The matrix as data: every drawn preview is a case, with its document copied and its values bound. */
+  @Test fun theMatrixIsExportedAsCasesAnyRendererCanPlay() {
+    val drawn = index.previews.size  // renders first: the export is written by the same run
+    val cases = Json.decodeFromString(PreviewCases.serializer(), out.resolve("cases.json").readText())
+    assertEquals(drawn, cases.cases.size)
+    val c = cases.cases.first { it.design == "tile-default" && it.example == "on" && it.mode == "dark" }
+    assertTrue(out.resolve(c.document).readBytes().isNotEmpty(), c.document)
+    assertEquals(NamedValue.Str("Kitchen"), c.values["name"])
+    assertTrue(c.values["theme.surface"] is NamedValue.Color, "the dark scheme's roles are bound")
+    assertEquals(Surfaces.IN_APP, c.target.surface)
+    assertTrue(c.dark)
+  }
+
+  /** Exporting alone draws nothing. */
+  @Test fun noDrawOnlyExports() {
+    val dir = Files.createTempDirectory("cases").toFile()
+    val index = CatalogPreviews.render(samples, dir, draw = false)
+    assertTrue(index.previews.isEmpty())
+    assertTrue(dir.resolve("cases.json").isFile)
+    assertTrue(!dir.resolve("index.html").exists() && dir.walk().none { it.name.endsWith(".png") })
   }
 
   /** An example's label is any string: its file stays one segment inside the output, and the gallery links to it. */
