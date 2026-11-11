@@ -1,5 +1,7 @@
 plugins {
   alias(libs.plugins.android.library)
+  // For the tests, which author a widget template through both capture bindings.
+  alias(libs.plugins.compose.compiler)
 }
 
 // Plays templates on the players apps ship them to, under Robolectric, and fails on what a device
@@ -38,6 +40,10 @@ dependencies {
 
   testImplementation(kotlin("test-junit"))
   testImplementation(libs.robolectric)
+  // CapturedWidgetTest: a launcher widget captured through each binding, on the platform's player.
+  testImplementation(project(":livery-capture-cmp"))
+  testImplementation(project(":livery-capture"))
+  testImplementation(libs.rc.player.protocol)
 }
 
 // Robolectric's Android 16 SDK, resolved by Gradle so the tests run offline.

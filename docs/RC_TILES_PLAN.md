@@ -93,7 +93,7 @@ artifact for preview and authoring an editable design are separate capabilities 
   a standalone entry point; do not require A2UI or create a second TypeScript binding engine.
 - `livery-publish`, `livery-render`, `livery-uibuilder`: publication, fallback images and
   revision-selected UI Builder export. Public hosting and author-facing sharing remain work.
-- `samples/two-way` and `SampleQuantityTest`: a useful small diagnostic fixture. Its `setQuantity`
+- `samples/two-way` and `QuantityStepper` (`livery-capture-cmp`'s `samples/SampleDesigns.kt`): a useful small diagnostic fixture. Its `setQuantity`
   action writes a validated value back to a host-owned input; no remote application service is
   necessary. Use it to isolate player failures, not as the headline product demo.
 

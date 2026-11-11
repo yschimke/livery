@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "mode": "preview",
   "publicationId": "quantity-stepper",
-  "revision": "fixture-2",
+  "revision": "fixture-3",
   "canonicalUrl": "./",
   "catalog": {
     "manifestUrl": "./catalog/manifest.json"
@@ -10,7 +10,7 @@
   "template": {
     "contract": "shop/quantity@1",
     "designId": "quantity-stepper",
-    "sha256": "920bc74fddcb53ca6bcea1b1317c74303a80760b6205985a5e6e2ee51842d1f2"
+    "sha256": "af79eb48e75a4ada8d46161f6228934b0c573470a61a1f135cda6393d5c78aca"
   },
   "data": {
     "name": "Oat milk, 1 l",

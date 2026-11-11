@@ -25,7 +25,9 @@ order: 24
 | `livery-mcp-core` (the agent tools, transport-free) | JVM, iOS, Wasm | Available from the release after 0.4.0 |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android | Available since 0.2.0; not yet tested against live projects |
-| `livery-capture` | Android (unit tests, Robolectric) | Available since 0.2.0 |
+| `livery-capture-cmp` (authoring on rc-players' Compose Multiplatform creation API) | JVM, Android; compiled for Wasm, not yet tested in a browser | Available from the release after 0.9.0 |
+| `livery-capture` (authoring on AndroidX `remote-creation-compose`) | Android (unit tests, Robolectric) | Available since 0.2.0 |
+| `livery-capture-core` (what both share: `CapturedTemplate`, `DesignFolder`, `CatalogContracts`) | JVM (also what Android resolves); compiled for Wasm | Available from the release after 0.9.0 |
 | Secondary screens (`LiveryScreens`, `LiveryScreenHost`, `.liveryScreens`) | Kotlin, Compose, SwiftUI | Available from the release after 0.2.0; not yet device-tested |
 | `livery-uibuilder` | JVM, iOS, Wasm (the CLI commands on the JVM) | Available (optional: `livery ui-builder` commands and `livery-mcp` tools) |
 | `livery-server` | JVM | Planned |

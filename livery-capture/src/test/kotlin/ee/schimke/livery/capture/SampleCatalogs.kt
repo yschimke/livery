@@ -3,11 +3,11 @@ package ee.schimke.livery.capture
 import java.io.File
 
 /**
- * Where the sample designs go. The repository commits their Kotlin, never their `.rc`:
- * `:livery-capture:captureSamples` runs the `Sample*Test`s with `livery.capture.out` set, and
- * `:livery-capture:sampleCatalogs` lays the captures over `samples/<catalog>/` in
- * `livery-capture/build/samples/`, which every test, the CLI checks and CI read. In the ordinary
- * unit tests the property is unset, and a sample is captured and checked but not written.
+ * Where this binding's captures of the sample designs go: `:livery-capture:captureSamples` runs
+ * [SampleDesignsTest] with `livery.capture.out` set, for `:livery-capture-cmp:bindingAgreementTest`
+ * to compare with rc-players' captures of the same Kotlin. In the ordinary unit tests the property
+ * is unset, and a sample is captured and checked but not written. (The sample catalogs themselves
+ * are built from the Compose Multiplatform captures: `:livery-capture-cmp:sampleCatalogs`.)
  */
 internal object SampleCatalogs {
   fun write(catalog: String, design: String, templates: Map<String, CapturedTemplate>) {

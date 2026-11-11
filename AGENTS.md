@@ -11,8 +11,8 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   design catalog is a separate, optional module.
 - **Source in PRs is Kotlin; `.rc` is build output.** A template authored in Compose is committed
   as its Kotlin only; its `.rc`, sidecar and renders are produced by Gradle into `build/` (the
-  samples: `livery-capture`'s `Sample*Test`, run by `:livery-capture:sampleCatalogs` into
-  `livery-capture/build/samples/`, which tests read through `gradle/sample-catalogs.gradle.kts`)
+  samples: `livery-capture-cmp`'s `samples/SampleDesigns.kt`, captured on the plain JVM by `:livery-capture-cmp:sampleCatalogs` into
+  `livery-capture-cmp/build/samples/`, which tests read through `gradle/sample-catalogs.gradle.kts`)
   or published to an output branch, never committed. Committed exceptions: `conformance/`
   fixtures (shared with the Swift and TypeScript ports), byte-stable test fixtures from other tools
   (`demo-tile.rc`, `livery-verify`'s fixtures), the sample designs with no Kotlin source yet
@@ -60,7 +60,7 @@ install `platforms;android-37.1`. The Swift package needs Xcode; CI runs it on m
 ```sh
 ./gradlew build                 # compile every target + every test
 swift test                      # the Swift package, on macOS
-./gradlew :livery-publish:installDist :livery-capture:sampleCatalogs && livery-publish/build/install/livery/bin/livery build livery-capture/build/samples/catalog build/sample-catalog
+./gradlew :livery-publish:installDist :livery-capture-cmp:sampleCatalogs && livery-publish/build/install/livery/bin/livery build livery-capture-cmp/build/samples/catalog build/sample-catalog
 ./gradlew :livery-render:jvmTest -Plivery.render.out=build/renders   # keep the test renders to look at
 scripts/test-agent-attribution.sh
 ```

@@ -126,7 +126,7 @@ player as an oracle:
 From the repository root (in the cloud, prefix Gradle with `env -u COO_MAVEN_URL`):
 
 ```sh
-build-brief ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist :livery-capture:sampleCatalogs :livery-web:jvmTest
+build-brief ./gradlew :livery-web:webDist :livery-web-compose:webDist :livery-publish:installDist :livery-capture-cmp:sampleCatalogs :livery-web:jvmTest
 cd web/a2ui
 npm ci
 npm install --no-save playwright@1.63.0

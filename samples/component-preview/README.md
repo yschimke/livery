@@ -11,7 +11,7 @@ it does not add a production module or change Livery's normative protocol.
 - `cases.json`: accepted/rejected data and an action trace for two independent preview sessions.
 - `../two-way/contracts/quantity.json`: the real contract, including its bounded `set` action.
 - `quantity-stepper/in-app.rc`: the actual captured document, built from Kotlin
-  (`SampleQuantityTest`) into `livery-capture/build/samples/two-way/`, never committed. Its
+  (`SampleQuantityTest`) into `livery-capture-cmp/build/samples/two-way/`, never committed. Its
   SHA-256 is pinned in the descriptor; changing it requires an intentional fixture revision.
 
 The catalog and document are not copied into this directory. Build the two-way tree (with its
@@ -19,8 +19,8 @@ captured document) when staging a runnable sample, then copy the descriptor besi
 catalog:
 
 ```sh
-./gradlew :livery-publish:installDist :livery-capture:sampleCatalogs
-livery-publish/build/install/livery/bin/livery build livery-capture/build/samples/two-way build/component-preview/catalog
+./gradlew :livery-publish:installDist :livery-capture-cmp:sampleCatalogs
+livery-publish/build/install/livery/bin/livery build livery-capture-cmp/build/samples/two-way build/component-preview/catalog
 cp samples/component-preview/preview.json build/component-preview/preview.json
 ```
 

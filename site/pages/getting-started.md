@@ -47,8 +47,8 @@ key, which your apps embed). See [Signing](signing.md).
 
 A catalog is a directory. The repository's [`samples/catalog`](https://github.com/yschimke/livery/tree/main/samples/catalog)
 is a complete one once built: its Compose-authored designs (`banner-classic`, `poll-card`) are
-Kotlin, and `./gradlew :livery-capture:sampleCatalogs` captures them into
-`livery-capture/build/samples/catalog`, the tree to point `livery build` at (see
+Kotlin, and `./gradlew :livery-capture-cmp:sampleCatalogs` captures them into
+`livery-capture-cmp/build/samples/catalog`, the tree to point `livery build` at (see
 [Authoring](authoring.md)). The smallest is:
 
 ```

@@ -9,13 +9,13 @@ kotlinx-coroutines = "1.11.0"
 compose-multiplatform = "1.12.2"
 # The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
 skiko = "0.150.2"
-rc-players = "2.31.1"
+rc-players = "3.0.0"
 agp = "9.5.0"
 ktor = "3.6.1"
 okio = "3.18.2"
 maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
-glance-wear = "1.0.0-alpha21"
+glance-wear = "1.0.0-alpha22"
 firebase-bom = "35.1.0"
 sentry = "8.62.0"
 datadog = "3.15.0"
@@ -68,6 +68,8 @@ rc-widget-core = { module = "ee.schimke.composeai:rc-widget-core" }
 rc-widget-launcher = { module = "ee.schimke.composeai:rc-widget-launcher" }
 rc-player-protocol = { module = "ee.schimke.composeai:rc-player-protocol" }
 rc-widget-creation = { module = "ee.schimke.composeai:rc-widget-creation" }
+rc-widget-creation-androidx = { module = "ee.schimke.composeai:rc-widget-creation-androidx" }
+rc-creation-compose = { module = "ee.schimke.composeai:rc-creation-compose" }
 compose-remote-creation-compose = { module = "androidx.compose.remote:remote-creation-compose", version.ref = "compose-remote" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 robolectric-sdk35 = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-sdk35" }

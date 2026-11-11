@@ -49,13 +49,16 @@ by sending it in the same tap as the change:
 
 ```kotlin
 val v = LiveryValues(contract)
-val expanded = rememberMutableRemoteBoolean(false)
+val expanded = remember { MutableRemoteBoolean(false) }
 RemoteColumn(
-  RemoteModifier.clickable(combinedAction(valueChange(expanded, !expanded), v.action("expand", mapOf("section" to "specs")))),
+  RemoteModifier.clickable(combinedAction(valueChangeAction(expanded, !expanded), v.action("expand", mapOf("section" to "specs")))),
 ) { … }
 ```
 
-`LiveryValues.action` (in `livery-capture`, see [Authoring templates](authoring.md)) refuses an
+That is `livery-capture-cmp`, on rc-players' creation API. On AndroidX's alpha (`livery-capture`)
+the state is `rememberMutableRemoteBoolean(false)` and the change `valueChange(expanded, !expanded)`.
+
+`LiveryValues.action` (in both, see [Authoring templates](authoring.md)) refuses an
 argument the action doesn't declare, or one that doesn't fit, when you capture. For a list,
 pass the item's position: `v.action("open_item", mapOf("index" to "$i"))`.
 

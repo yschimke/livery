@@ -6,11 +6,11 @@ level-2 baseline the publisher's level tests build on.
 
 - `shop/quantity@1`, design `quantity-stepper`: a quantity with `−` and `+`, each a `set` of
   `quantity` with the value the document computes when tapped. Captured from Compose by
-  `livery-capture`'s `SampleQuantityTest`. Its `.rc` and sidecar are build output, never
-  committed: `./gradlew :livery-capture:sampleCatalogs` lays this tree out with them in
-  `livery-capture/build/samples/two-way`.
+  `livery-capture-cmp` (`QuantityStepper` in its `samples/SampleDesigns.kt`). Its `.rc` and sidecar are build output, never
+  committed: `./gradlew :livery-capture-cmp:sampleCatalogs` lays this tree out with them in
+  `livery-capture-cmp/build/samples/two-way`.
 
 ```sh
-./gradlew :livery-capture:sampleCatalogs
-livery build livery-capture/build/samples/two-way build/two-way
+./gradlew :livery-capture-cmp:sampleCatalogs
+livery build livery-capture-cmp/build/samples/two-way build/two-way
 ```
