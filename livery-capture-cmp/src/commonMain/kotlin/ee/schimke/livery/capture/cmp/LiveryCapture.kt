@@ -1,10 +1,10 @@
 package ee.schimke.livery.capture.cmp
 
 import androidx.compose.runtime.Composable
+import ee.schimke.composeai.rccreation.common.Profile
 import ee.schimke.composeai.rccreation.compose.capture.RemoteCreationDisplayInfo
 import ee.schimke.composeai.rccreation.compose.capture.RemoteDensity
 import ee.schimke.composeai.rccreation.compose.capture.captureCommonRemoteDocument
-import ee.schimke.composeai.rcwidget.RcWidgetTargets
 import ee.schimke.livery.capture.CapturedTemplate
 import ee.schimke.livery.protocol.Target
 
@@ -22,39 +22,40 @@ object LiveryCapture {
    * Captures [content] at [widthDp] × [heightDp] (a size inside [target]'s range) for [target].
    * [source] goes into the sidecar (`tool` is `capture` unless it names another).
    *
-   * A target for a widget player is held to that player, and a capture it would refuse fails here,
-   * with what it refuses, and is never returned:
-   * - `widgets` (a launcher widget or a notification): the document is written in what Android 16's
-   *   level 6 player and the level 7 one both decode (text as `TextLayout`, the widgets profile in
-   *   its header), then checked on each after the recovery `rc-widget-launcher` applies before it
-   *   builds `RemoteViews`. `livery-verify` plays such a capture on Android 16's own player.
-   * - `glance-wear` (a Glance Wear widget): checked against the Wear widget allow-list after the
-   *   adaptation `livery-wear-widgets` instantiates with. It is checked, not played: nothing here
-   *   runs Glance Wear's player.
+   * The capture is written for [profile], and the writer holds it to that: an operation outside the
+   * profile fails the capture with the writer's own message, text is a `TextLayout` where the
+   * profile has no `CoreText`, and the header is the profile's. Nothing is rewritten afterwards,
+   * as in `livery-capture`. The default follows [target]'s `profiles`, as `livery-capture` does:
+   * - `widgets` (a launcher widget or a notification): `RcCaptureProfiles.launcherWidgets`, what
+   *   Android 16's level 6 player and API 37's both decode (`rc-widget-launcher`'s `widgetsProfile`).
+   *   Pass `RcCaptureProfiles.systemThemedLauncherWidgets` for API 37 launchers only, or
+   *   `RcTargetProfile.of(7, …).toCaptureProfile(…)` for a launcher whose table differs.
+   * - `glance-wear`: `RcCaptureProfiles.wearWidgets`, Glance Wear's allow-list.
+   * - `experimental`: `RcCaptureProfiles.androidXExperimental`.
+   * - otherwise `RcPlatformProfiles.ANDROIDX`.
+   *
+   * What a template holds that a player can't read once its values are filled in (a padding or a
+   * background colour that reads a named value on Android 16) is not checked here: the capture is
+   * a template, and the host's instantiation (`livery-instantiate`, `rc-widget-launcher`) makes
+   * those literal. `livery-verify` plays an instantiated capture on Android 16's own player.
    */
   suspend fun capture(
     target: Target,
     widthDp: Int,
     heightDp: Int,
     source: Map<String, String> = emptyMap(),
+    profile: Profile = target.captureProfile(),
     content: @Composable () -> Unit,
   ): CapturedTemplate {
-    val widget = WidgetCaptureTargets.of(target)
-    val captured = captureCommonRemoteDocument(
+    val bytes = captureCommonRemoteDocument(
       creationDisplayInfo = RemoteCreationDisplayInfo(widthDp, heightDp, 160),
       remoteDensity = RemoteDensity.Host,
-      // What a component that asks is told the reader takes: a widget player's own set, or an
-      // app's player, which reads everything this API writes.
-      supportedOperations = widget?.operations ?: APP_OPERATIONS,
+      profile = profile,
       content = content,
     )
-    val bytes = widget?.forPlayer(captured) ?: captured
-    widget?.problems(bytes)?.takeIf { it.isNotEmpty() }?.let { problems ->
+    profile.problems(bytes).takeIf { it.isNotEmpty() }?.let { problems ->
       throw IllegalStateException("the capture wouldn't play as ${target.profiles.joinToString("+")} on ${target.surface}: ${problems.joinToString("; ")}")
     }
     return CapturedTemplate.of(bytes, target, source)
   }
-
-  /** The AndroidX embedded player's operations with its experimental ones: what the Compose player reads too. */
-  private val APP_OPERATIONS: Set<Int> = RcWidgetTargets.App.profile.supportedOpcodes
 }

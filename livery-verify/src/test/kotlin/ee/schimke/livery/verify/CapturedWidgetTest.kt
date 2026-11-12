@@ -17,17 +17,26 @@ import androidx.compose.remote.creation.compose.state.rsp as androidxRsp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import ee.schimke.composeai.rccreation.compose.layout.RemoteArrangement
+import ee.schimke.composeai.rccreation.compose.layout.RemoteCanvas
 import ee.schimke.composeai.rccreation.compose.layout.RemoteColumn
+import ee.schimke.composeai.rccreation.compose.layout.RemoteOffset
+import ee.schimke.composeai.rccreation.compose.layout.RemoteSize
 import ee.schimke.composeai.rccreation.compose.layout.RemoteText
 import ee.schimke.composeai.rccreation.compose.modifier.RemoteModifier
 import ee.schimke.composeai.rccreation.compose.modifier.background
 import ee.schimke.composeai.rccreation.compose.modifier.clickable
 import ee.schimke.composeai.rccreation.compose.modifier.fillMaxSize
+import ee.schimke.composeai.rccreation.compose.modifier.fillMaxWidth
+import ee.schimke.composeai.rccreation.compose.modifier.height
 import ee.schimke.composeai.rccreation.compose.modifier.padding
+import ee.schimke.composeai.rccreation.compose.state.RemoteColor
+import ee.schimke.composeai.rccreation.compose.state.RemotePaint
 import ee.schimke.composeai.rccreation.compose.state.rc
 import ee.schimke.composeai.rccreation.compose.state.rdp
+import ee.schimke.composeai.rccreation.compose.state.rf
 import ee.schimke.composeai.rccreation.compose.state.rsp
 import ee.schimke.composeai.rccreation.compose.text.RemoteFontWeight
+import ee.schimke.composeai.rcplayer.protocol.RcDocument
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcOpcodes
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
@@ -143,5 +152,49 @@ class CapturedWidgetTest {
       assertEquals(0, differing, "$example @${density}x: the two captures draw differently on the platform player\n$report")
     }
     print(report)
+  }
+
+  /**
+   * The capture profile does what AndroidX's `widgetsProfile` does: the tile written through each
+   * binding has the same header (the widgets and experimental profiles, no paint measuring, the same
+   * size and version) and the same set of operations. (The writers differ in the order and number of
+   * some, as BindingAgreementTest's report shows for the in-app captures, so counts are not compared.)
+   */
+  @Test fun theLauncherCapturesHaveTheSameHeaderAndOperations() {
+    val androidx = RcDocumentCodec.decode(androidxTile().bytes, RcWireLimits())
+    val cmp = RcDocumentCodec.decode(cmpTile().bytes, RcWireLimits())
+    assertEquals(androidx.header, cmp.header, "the header")
+    // alpha23's `clickable` also writes an empty AccessibilitySemantics (250), which androidx-main's, and so
+    // rc-players', writes only for a role (rc-players' MIGRATING_CREATION.md, and its AndroidxPlayerParityTest).
+    val withoutSemantics = { document: RcDocument -> document.operations.map { it.opcode }.toSortedSet() - RcOpcodes.ACCESSIBILITY_SEMANTICS }
+    assertEquals(withoutSemantics(androidx), withoutSemantics(cmp), "the operations")
+  }
+
+  /**
+   * Under a profile without `CoreText` the writer names a paint's font axis once, as a `wght` text
+   * in the first canvas that paints, and later canvases read it. A launcher's player has to draw
+   * the second canvas too, as it is handed over and after `rc-widget-launcher`'s recovery.
+   */
+  @Test fun aSecondCanvasPlaysOnThePlatformPlayer() = runBlocking {
+    val template = runBlocking {
+      LiveryCapture.capture(launcher, 200, 100) {
+        RemoteColumn(RemoteModifier.fillMaxSize()) {
+          for (color in listOf(Color.Red, Color.Green)) {
+            RemoteCanvas(RemoteModifier.fillMaxWidth().height(40.rdp)) {
+              drawRect(RemotePaint { this.color = RemoteColor(color) }, RemoteOffset(0f.rf, 0f.rf), RemoteSize(200f.rf, 40f.rf))
+            }
+          }
+        }
+      }
+    }
+    val bindings = assertIs<BindResult.Ok>(ContractBinder.bind(contract, contract.examples.getValue("on"))).bindings
+    val document = assertIs<InstantiateResult.Ok>(TemplateInstantiator { _, _, _ -> null }.instantiate(template.bytes, bindings, 400, 200, numericActions = true)).bytes
+    for (recover in listOf(true, false)) {
+      val outcome = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, document, 400, 200, recover = recover), "recover=$recover plays")
+      val pixels = IntArray(400 * 200).also { outcome.image.getPixels(it, 0, 400, 0, 0, 400, 200) }
+      val red = pixels.count { it == 0xFFFF0000.toInt() }
+      val green = pixels.count { it == 0xFF00FF00.toInt() }
+      assertTrue(red > 4000 && green > 4000, "recover=$recover: both canvases draw (red $red, green $green)")
+    }
   }
 }
