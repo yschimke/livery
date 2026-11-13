@@ -57,3 +57,6 @@ include(":livery-baselineprofile-host")
 project(":livery-baselineprofile-host").projectDir = file("livery-baselineprofile/host")
 include(":livery-baselineprofile")
 project(":livery-baselineprofile").projectDir = file("livery-baselineprofile/generator")
+// Livery templates against their Compose UI twins, flung on a device or emulator.
+include(":livery-benchmark")
+project(":livery-benchmark").projectDir = file("livery-baselineprofile/benchmark")
