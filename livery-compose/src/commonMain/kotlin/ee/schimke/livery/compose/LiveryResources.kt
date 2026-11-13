@@ -8,7 +8,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
+import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import ee.schimke.composeai.rcplayer.compose.RcPreparation
+import ee.schimke.composeai.rcplayer.compose.RcPreprocessor
+import ee.schimke.composeai.rcplayer.edit.forDisplay
 import ee.schimke.composeai.rcplayer.compose.RcPreparedDocument
 import ee.schimke.composeai.rcplayer.compose.RcPreparedDocumentCache
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
@@ -62,12 +65,26 @@ class LiveryResources(
   maxFonts: Int = 32,
   maxImages: Int = 64,
   maxPlans: Int = 128,
+  /**
+   * Rewrites each template for the display it is drawn on before it is prepared, in the background
+   * and once per template and display: by default [ForDisplay] (density hardcoded, values no card
+   * binds frozen, constants folded). Null prepares templates as they were published.
+   */
+  preprocessor: RcPreprocessor? = ForDisplay,
 ) {
   /**
    * The prepared documents, by content: the cache the player's [RcPreparation.Background] reads
    * during composition, so composition only ever looks a template up here.
    */
-  val documents: RcPreparedDocumentCache = RcPreparedDocumentCache(maxTemplates)
+  val documents: RcPreparedDocumentCache = RcPreparedDocumentCache(maxTemplates, preprocessor)
+
+  /**
+   * The display this host's slots are composed on, as the last [LiverySlot] or [LiveryTemplate] to
+   * compose read it (`LocalDensity`): what the calls below prepare for when they are not handed one,
+   * so a template warmed ahead of time is the one composition looks up. Null until something has
+   * composed; pass a display ([rememberLiveryDisplay]) to warm before that.
+   */
+  var display: RcDisplay? = null
   private val typefaces = BoundedCache<String, RcTypefaceLoader>(maxTemplates)
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
@@ -94,22 +111,28 @@ class LiveryResources(
    * the template (each card still gets its own player state). From memory, or prepared now, on the
    * calling thread (it never waits on I/O), and kept. Composition uses [preparedNow] instead.
    */
-  fun prepared(template: LoadedTemplate): RcPreparedDocument = documents.prepareNow(template.bytes)
+  fun prepared(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument =
+    documents.prepareNow(template.bytes, display)
 
-  /** [template]'s prepared document if it is in memory; never prepares. */
-  fun preparedNow(template: LoadedTemplate): RcPreparedDocument? = documents.peek(template.bytes)
+  /** [template]'s prepared document for [display] if it is in memory; never prepares. */
+  fun preparedNow(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
+    documents.peek(template.bytes, display)
 
-  /** [template]'s prepared document, prepared on [Dispatchers.Default] unless it is in memory. */
-  suspend fun prepare(template: LoadedTemplate): RcPreparedDocument = documents.prepare(template.bytes)
+  /**
+   * [template]'s prepared document for [display], rewritten for it and prepared on
+   * [Dispatchers.Default] unless it is in memory.
+   */
+  suspend fun prepare(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument =
+    documents.prepare(template.bytes, display)
 
   /**
    * Gets what [template]'s cards need before they can draw into memory: its prepared document and
    * its fonts (not the images a card shows, which arrive with the card). A card of it then draws
    * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
    */
-  suspend fun readyToDraw(template: LoadedTemplate) {
+  suspend fun readyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display) {
     coroutineScope {
-      launch { prepare(template) }
+      launch { prepare(template, display) }
       launch { runCatching { typefaces(template) } }
     }
   }
@@ -119,9 +142,9 @@ class LiveryResources(
    * call it when a screen of them is coming (a catalog loaded, a list's data arrived), so the
    * first card of each draws on its first frame too. Queries with no template are skipped.
    */
-  suspend fun warm(queries: Iterable<TemplateQuery>) {
+  suspend fun warm(queries: Iterable<TemplateQuery>, display: RcDisplay? = this.display) {
     coroutineScope {
-      for (query in queries) launch { repository.resolve(query)?.let { readyToDraw(it) } }
+      for (query in queries) launch { repository.resolve(query)?.let { readyToDraw(it, display) } }
     }
   }
 
@@ -168,8 +191,8 @@ class LiveryResources(
    * [plan] draws it complete on its first frame. Failures are left for the slot to meet as it would
    * have without a preload: a missing image is fetched again when the card draws.
    */
-  suspend fun preload(plan: RenderPlan) {
-    val document = prepare(plan.template).document
+  suspend fun preload(plan: RenderPlan, display: RcDisplay? = this.display) {
+    val document = prepare(plan.template, display).document
     coroutineScope {
       launch { typefaces(plan.template) }
       val loader = imageLoader { plan.bindings }
@@ -213,6 +236,15 @@ class LiveryResources(
   private fun cachedImage(key: String): ImageBitmap? = decoded[key]
 
   private fun keepImage(key: String, image: ImageBitmap) = decoded.put(key, image)
+
+  companion object {
+    /**
+     * `rc-player-edit`'s `forDisplay`: the template's density and font scale hardcoded, every named
+     * value outside its `USER:` inputs frozen, and the constants that leaves folded, so every card
+     * evaluates fewer expressions.
+     */
+    val ForDisplay: RcPreprocessor = RcPreprocessor { document, display -> document.forDisplay(display.density, display.fontScale) }
+  }
 
   /**
    * A loader is for one document with one set of faces: a refreshed catalog may give the same

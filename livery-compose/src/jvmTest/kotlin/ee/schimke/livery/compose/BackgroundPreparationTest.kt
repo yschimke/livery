@@ -8,7 +8,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import ee.schimke.composeai.rcplayer.compose.RcPreparation
+import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.livery.client.ActionRouter
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.Clock
@@ -34,6 +36,8 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
@@ -95,8 +99,19 @@ class BackgroundPreparationTest {
     assertEquals(0, documents.misses, "a slot composed a template before it was prepared")
   }
 
+  @Test fun aTemplateIsRewrittenForTheDisplayItIsDrawnOn() = runBlocking {
+    val display = RcDisplay(density = 2f)
+    val published = RcDocumentCodec.decode(template.bytes)
+    val prepared = host.resources.prepare(template, display)
+    assertTrue(prepared.document.operations.size < published.operations.size, "forDisplay left the template as published")
+    assertSame(prepared, host.resources.preparedNow(template, display))
+    assertNull(host.resources.preparedNow(template, RcDisplay(density = 3f)), "another display is another rewrite")
+    Unit
+  }
+
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
-    runBlocking { host.resources.readyToDraw(template) }
+    // The test's own density: the display the template is drawn on.
+    runBlocking { host.resources.readyToDraw(template, RcDisplay(density.density, density.fontScale)) }
     mainClock.autoAdvance = false
     setContent { LiveryTemplate(plan(1), host, Modifier.size(320.dp, 120.dp)) }
     mainClock.advanceTimeByFrame()

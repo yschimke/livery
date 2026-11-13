@@ -7,6 +7,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalDensity
+import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,12 +47,15 @@ fun LiverySlot(
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
   val revision by host.repository.revision.collectAsState()
+  // The display the template is prepared for, recorded so a host's warm-up prepares the same one.
+  val display = rememberLiveryDisplay()
+  SideEffect { host.resources.display = display }
   // A slot that already had an answer at this revision (scrolled back, reopened) draws it at once
   // rather than its fallback for a frame; it still replans, and a new answer replaces it.
   val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
   LaunchedEffect(state, revision) {
     val result = plan()
-    if (result is PlanResult.Ready) host.resources.readyToDraw(result.plan.template)
+    if (result is PlanResult.Ready) host.resources.readyToDraw(result.plan.template, display)
     slotId?.let { host.resources.keepPlan(it, key, revision, result) }
     state.value = result
   }
@@ -98,4 +104,15 @@ fun DesignPicker(
       }
     }
   }
+}
+
+/**
+ * The display this composition draws on, as the player prepares a template for it: what to hand
+ * [LiveryResources.warm] or [LiveryResources.preload] so the template they prepare is the one a
+ * slot here looks up.
+ */
+@Composable
+fun rememberLiveryDisplay(): RcDisplay {
+  val density = LocalDensity.current
+  return remember(density.density, density.fontScale) { RcDisplay(density.density, density.fontScale) }
 }

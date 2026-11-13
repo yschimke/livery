@@ -35,6 +35,8 @@ kotlin {
       api(project(":livery-client"))
       api(project.dependencies.platform(libs.rc.players.bom))
       api(libs.rc.player.compose)
+      // forDisplay: templates rewritten for the display they are drawn on (LiveryResources.ForDisplay).
+      implementation(libs.rc.player.edit)
       api(libs.cmp.ui)
       implementation(libs.cmp.runtime)
       implementation(libs.cmp.foundation)

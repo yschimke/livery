@@ -83,6 +83,16 @@ the cards that had to wait, which a test can hold at zero. Pass
 `preparation = RcPreparation.InComposition` to prepare a template's first card in its composition
 instead.
 
+Preparing also rewrites the template for the display it is drawn on (`LiveryResources.ForDisplay`,
+rc-players' `forDisplay`): the density and font scale are hardcoded, values no card binds are frozen,
+and the expressions that leaves are folded, once per template and display, so every card evaluates
+fewer expressions. A slot records its display on the host (`host.resources.display`); to warm before
+anything has composed, pass one: `host.resources.warm(queries, rememberLiveryDisplay())`. Pass
+`preprocessor = null` to `LiveryResources` to play templates exactly as published.
+
+Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
+laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.
+
 ## 4. Evolve the layout
 
 Publish a new design for the same contract and point the feed's items at it, or change the design's

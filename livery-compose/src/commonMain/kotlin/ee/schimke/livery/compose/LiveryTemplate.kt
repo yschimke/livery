@@ -101,6 +101,8 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // Shared by every card of this template: decoding, linking, the layout tree and the state seed are
   // done once per template, not per card, and (by default) off the main thread. Each card's player
   // state is still its own.
+  val display = rememberLiveryDisplay()
+  SideEffect { host.resources.display = display }
   val prepared = rememberRcPreparedDocument(bytes, host.preparation)
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
