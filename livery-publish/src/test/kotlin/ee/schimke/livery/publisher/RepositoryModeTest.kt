@@ -107,8 +107,8 @@ class RepositoryModeTest {
     assertTrue(r.warnings.any { "tile_look: arms or weights changed" in it }, r.warnings.toString())
 
     val md = CompatibilityCheck.markdown(r)
-    assertTrue(md.startsWith("### Livery check against `main`: compatible"), md)
+    assertTrue(md.startsWith("### Compatible with `main`: nothing breaks for existing apps"), md)
     assertTrue("- added season `winter_2026`" in md, md)
-    assertTrue("**For review**" in md, md)
+    assertTrue("**Worth a look**" in md, md)
   }
 }

@@ -121,7 +121,9 @@ object CompatibilityCheck {
 
     val contracts = contractReports(before?.manifest, new.manifest)
     contracts.filter { it.breaking }.forEach { r ->
-      problems += "contract ${r.contract}: ${r.fromMinor} -> ${r.toMinor} is not a minor change: ${r.changes.filter { it.startsWith("breaking") }}"
+      problems += "contract ${r.contract} changed in a way apps built for the old one can't handle: " +
+        r.changes.filter { it.startsWith("breaking") }.joinToString("; ") { it.removePrefix("breaking: ") } +
+        ". Make it an additive change (and raise the contract's minor), or start a new major"
     }
 
     val templates = templateReports(before, new, warnings)
@@ -177,8 +179,9 @@ object CompatibilityCheck {
       val a = before[design to target]
       val b = after[design to target]
       if (b == null) {
-        warnings += "${k.first} ${k.second}: removed; that slot falls back to another design"
-        return@map TemplateReport(k.first, k.second, "removed", previousRequiresMinor = a!!.requiresMinor, previousBytes = a.bytes)
+        val note = "removed: apps get another design for this size or surface"
+        warnings += "${k.first} ${k.second}: $note"
+        return@map TemplateReport(k.first, k.second, "removed", notes = listOf(note), previousRequiresMinor = a!!.requiresMinor, previousBytes = a.bytes)
       }
       val contract = contracts[b.contract]
       val values = contract?.let { valueGuarantees(it, b, new.files["blobs/${b.sha256}.rc"]) }.orEmpty()
@@ -189,18 +192,21 @@ object CompatibilityCheck {
       }
       val notes = mutableListOf<String>()
       fun note(message: String) { notes += message; warnings += "${k.first} ${k.second}: $message" }
-      // Only what this change brings in: an unchanged template's defaults were reviewed before.
+      // Only what this change brings in: a value that already had no default in the base was
+      // reviewed then, so regenerating the template (new sizes, a new player) doesn't repeat it.
       // One note per value, so a value missing defaults across many templates is said once.
-      if (status != "unchanged") values.filterValues { it == "document" }.keys.sorted().forEach {
-        note("`$it` is optional with no contract default; only the template's own default draws when it's missing")
+      val before = if (a == null) emptyMap() else old?.manifest?.contracts.orEmpty().filter { it.ref == a.contract }.maxByOrNull { it.minor }
+        ?.let { valueGuarantees(it, a, old?.files?.get("blobs/${a.sha256}.rc")) }.orEmpty()
+      if (status != "unchanged") values.filterValues { it == "document" }.keys.filter { before[it] != "document" }.sorted().forEach {
+        note("`$it` is optional and its contract gives it no default: when an app leaves it out, the template draws its own built-in fallback")
       }
       // A risky feature is reviewed once, when it arrives: a new template that has one, or a changed one that gains one.
       val featuresAdded = (b.features - a?.features.orEmpty().toSet()).sorted()
       if (featuresAdded.isNotEmpty()) {
-        note("now uses ${featuresAdded.joinToString()} (risky features); it plays only for apps that allow them, and draws another design for the rest")
+        note("now uses ${featuresAdded.joinToString()} (risky features): only apps that allow them play it, the rest get another design")
       }
       if (a != null && b.requiresMinor > a.requiresMinor) {
-        note("now requires minor ${b.requiresMinor} (was ${a.requiresMinor}); apps on an older minor no longer get this design here")
+        note("now needs contract minor ${b.requiresMinor} (was ${a.requiresMinor}): apps still on an older minor get another design")
       }
       TemplateReport(
         k.first, k.second,
@@ -335,7 +341,7 @@ object CompatibilityCheck {
 
   /** The report as people read it in a terminal or a CI log. */
   fun text(r: Report): String = buildString {
-    appendLine("livery check against ${r.against}: ${if (r.ok) "compatible" else "NOT compatible"}")
+    appendLine("livery check against ${short(r.against)}: ${if (r.ok) "compatible: nothing breaks for existing apps" else "NOT compatible: ${plural(r.problems.size, "problem")} to fix"}")
     if (r.contracts.isNotEmpty()) appendLine("\ncontracts")
     for (c in r.contracts) {
       appendLine("  ${c.contract} ${c.fromMinor ?: "-"} -> ${c.toMinor ?: "-"}${if (c.breaking) "  BREAKING" else ""}")
@@ -384,12 +390,6 @@ object CompatibilityCheck {
   }
 
   /**
-   * The report for a pull request comment or a CI job summary: short enough to read. Templates are
-   * summed up per design (a design has one template per target, often dozens), notes that repeat
-   * across a design's templates are said once, and every template is listed in a collapsed section.
-   * [previews] adds before and after images.
-   */
-  /**
    * [r] for a catalog that admits no new risky features (`livery check --deny-new-features`): a
    * template that gains one, a reviewer note otherwise, is a problem.
    */
@@ -398,67 +398,57 @@ object CompatibilityCheck {
       .map { "${it.design} ${it.target}: gains ${it.featuresAdded.joinToString()} (--deny-new-features)" },
   )
 
+  /**
+   * The report for a pull request comment or a CI job summary, written for a reviewer with ten
+   * seconds. The first line is the verdict and what to do; then only what needs a decision (a
+   * problem to fix, or something this change newly does that is worth a look), each said once per
+   * message with the designs it touches; counts, not lists; a table of the designs that changed.
+   * Everything long (every template, any more than a few items) is in a collapsed section.
+   * [previews] adds before and after images.
+   */
   fun markdown(r: Report, previews: List<DesignPreview> = emptyList()): String = buildString {
-    val against = r.against.takeUnless { HASH.matches(it) } ?: r.against.take(7)
-    appendLine("### Livery check against `$against`: ${if (r.ok) "compatible" else "**not compatible**"}")
-    appendLine()
+    val against = short(r.against)
     val changed = r.templates.filter { it.status != "unchanged" }
     val byDesign = r.templates.groupBy { it.design }
     val touched = changed.map { it.design }.distinct()
-    summary(r, changed, touched)?.let { appendLine(it); appendLine() }
+    if (r.ok) appendLine("### Compatible with `$against`: nothing breaks for existing apps")
+    else appendLine("### Not compatible with `$against`: ${plural(r.problems.size, "problem")} to fix")
+    appendLine()
+    summary(r, changed, byDesign.size, touched)?.let { appendLine(it); appendLine() }
     if (r.problems.isNotEmpty()) {
-      appendLine("**Problems** (these fail the check)")
-      r.problems.forEach { appendLine("- ${it.replace("\n", " ")}") }
+      appendLine("**Fix before merging**")
+      r.problems.take(MAX_ITEMS).forEach { appendLine("- ${it.replace("\n", " ")}") }
+      if (r.problems.size > MAX_ITEMS) appendMore(r.problems.drop(MAX_ITEMS).map { it.replace("\n", " ") }, "more problems")
       appendLine()
     }
+    // Template notes are said once per message with the designs they touch; anything else a
+    // reviewer should see (an experiment's weights, a base that doesn't build) is listed as it is.
     val templateWarnings = r.templates.flatMap { t -> t.notes.map { "${t.design} ${t.target}: $it" } }.toSet()
     val grouped = r.templates.flatMap { t -> t.notes.map { it to t.design } }.groupBy({ it.first }, { it.second })
     val other = r.warnings.filter { it !in templateWarnings }
-    if (grouped.isNotEmpty() || other.isNotEmpty()) {
-      appendLine("**For review**")
-      other.forEach { appendLine("- $it") }
-      for ((message, designs) in grouped) {
-        val counts = designs.groupingBy { it }.eachCount().entries.joinToString(", ") { (d, n) -> "`$d` (${templates(n)})" }
-        appendLine("- ${message.replace("|", "\\|")}: $counts")
-      }
+    val reviewItems = other.map { it.replace("\n", " ") } + grouped.map { (message, designs) ->
+      val counts = designs.groupingBy { it }.eachCount().entries
+      val named = counts.take(MAX_NAMED).joinToString(", ") { (d, n) -> "`$d`${if (n > 1) " ($n)" else ""}" }
+      val rest = if (counts.size > MAX_NAMED) " and ${counts.size - MAX_NAMED} more designs" else ""
+      "${message.replace("|", "\\|")}. In ${plural(designs.size, "template")}: $named$rest"
+    }
+    if (reviewItems.isNotEmpty()) {
+      appendLine("**Worth a look**")
+      reviewItems.take(MAX_ITEMS).forEach { appendLine("- $it") }
+      if (reviewItems.size > MAX_ITEMS) appendMore(reviewItems.drop(MAX_ITEMS), "more")
       appendLine()
     }
     val contracts = r.contracts.filter { it.changes.isNotEmpty() || it.fromMinor != it.toMinor }
     if (contracts.isNotEmpty()) {
-      appendLine("**Contracts**")
+      appendLine("**Contracts** (the data a design may read and the actions it may send)")
       for (c in contracts) {
-        appendLine("- `${c.contract}` minor ${c.fromMinor ?: "-"} -> ${c.toMinor ?: "-"}${if (c.breaking) " **breaking**" else ""}")
-        c.changes.forEach { appendLine("  - $it") }
+        val steps = c.changes.map { it.removePrefix("compatible: ").removePrefix("breaking: ") }
+        val what = steps.take(3).joinToString("; ") + if (steps.size > 3) "; and ${steps.size - 3} more" else ""
+        appendLine("- `${c.contract}`${if (c.fromMinor != c.toMinor) " minor ${c.fromMinor ?: "-"} -> ${c.toMinor ?: "-"}" else ""}${if (c.breaking) " **breaking**" else ""}: $what")
       }
       appendLine()
     }
-    if (touched.isNotEmpty()) {
-      appendLine("**Templates**")
-      appendLine()
-      appendLine("| Design | Templates | Size | Reads | Emits | Minor |")
-      appendLine("|---|---|---|---|---|---|")
-      for (design in touched) {
-        val ts = byDesign.getValue(design)
-        val live = ts.filter { it.status != "removed" }
-        val statuses = ts.groupingBy { it.status }.eachCount().entries
-          .sortedBy { STATUS_ORDER.indexOf(it.key) }.joinToString(", ") { (s, n) -> "$n $s" }
-        val size = range(live.map { it.bytes }).let { now ->
-          val was = range(ts.filter { it.status != "added" }.mapNotNull { it.previousBytes })
-          when {
-            now == null -> was?.let { "was $it" } ?: ""
-            was == null || was == now -> now
-            else -> "$now (was $was, ${percent(ts)})"
-          }
-        }
-        fun delta(add: (TemplateReport) -> List<String>, remove: (TemplateReport) -> List<String>) =
-          (ts.flatMap(add).distinct().map { "+$it" } + ts.flatMap(remove).distinct().map { "-$it" }).joinToString(" ")
-        val minors = live.map { it.requiresMinor }.distinct().sorted()
-        val wasMinors = ts.mapNotNull { it.previousRequiresMinor }.distinct().sorted()
-        val minor = minors.joinToString("/") + (wasMinors.takeIf { it.isNotEmpty() && it != minors }?.let { " (was ${it.joinToString("/")})" } ?: "")
-        appendLine("| `$design` | $statuses | $size | ${delta({ it.readsAdded }, { it.readsRemoved })} | ${delta({ it.emitsAdded }, { it.emitsRemoved })} | $minor |")
-      }
-      appendLine()
-    }
+    if (touched.isNotEmpty()) designTable(touched, byDesign)
     if (previews.isNotEmpty()) {
       appendLine("**Previews** (the contract's examples)")
       appendLine()
@@ -479,7 +469,7 @@ object CompatibilityCheck {
         appendLine()
       }
     }
-    for ((title, rules) in listOf("Designs" to r.designs, "Experiments and seasons" to r.experiments, "Placement rules" to r.placements)) {
+    for ((title, rules) in listOf("Designs changed" to r.designs, "Experiments and seasons changed" to r.experiments, "Placement rules changed" to r.placements)) {
       if (rules.isEmpty()) continue
       appendLine("**$title**")
       for (x in rules) {
@@ -490,6 +480,8 @@ object CompatibilityCheck {
     }
     if (changed.isNotEmpty()) {
       appendLine("<details><summary>Every changed template (${changed.size})</summary>")
+      appendLine()
+      appendLine("_A target is the surface, then its size range in dp (width x height), then `L` and the Remote Compose API level._")
       appendLine()
       for ((design, ts) in changed.groupBy { it.design }) {
         for ((status, group) in ts.groupBy { it.status }) {
@@ -506,21 +498,84 @@ object CompatibilityCheck {
     }
   }
 
-  private fun summary(r: Report, changed: List<TemplateReport>, touched: List<String>): String? {
-    val same = r.templates.size - changed.size
+  /** The table of the designs this change touches; columns that would be empty are left out. */
+  private fun StringBuilder.designTable(touched: List<String>, byDesign: Map<String, List<TemplateReport>>) {
+    class Row(val design: String, val changes: String, val size: String, val reads: String, val emits: String, val minor: String)
+    val rows = touched.map { design ->
+      val ts = byDesign.getValue(design)
+      val live = ts.filter { it.status != "removed" }
+      val statuses = ts.filter { it.status != "unchanged" }.groupingBy { it.status }.eachCount().entries
+        .sortedBy { STATUS_ORDER.indexOf(it.key) }.joinToString(", ") { (s, n) -> "$n $s" }
+      val size = range(live.map { it.bytes }).let { now ->
+        val was = range(ts.filter { it.status != "added" }.mapNotNull { it.previousBytes })
+        when {
+          now == null -> was?.let { "was $it" } ?: ""
+          was == null || was == now -> now
+          else -> "$now (was $was, ${percent(ts)})"
+        }
+      }
+      fun delta(add: (TemplateReport) -> List<String>, remove: (TemplateReport) -> List<String>) =
+        (ts.flatMap(add).distinct().map { "+`$it`" } + ts.flatMap(remove).distinct().map { "-`$it`" }).joinToString(" ")
+      val minors = live.map { it.requiresMinor }.distinct().sorted()
+      val wasMinors = ts.mapNotNull { it.previousRequiresMinor }.distinct().sorted()
+      val minor = if (wasMinors.isNotEmpty() && wasMinors != minors) "${minors.joinToString("/")} (was ${wasMinors.joinToString("/")})" else ""
+      Row(design, statuses, size, delta({ it.readsAdded }, { it.readsRemoved }), delta({ it.emitsAdded }, { it.emitsRemoved }), minor)
+    }
+    val cols = buildList<Triple<String, String, (Row) -> String>> {
+      add(Triple("Design", "", { "`${it.design}`" }))
+      add(Triple("Templates", "Templates = one per screen size or surface, with what happened to them", { it.changes }))
+      add(Triple("Size", "Size = the compiled file, with the previous size in brackets", { it.size }))
+      if (rows.any { it.reads.isNotEmpty() }) add(Triple("Reads", "Reads = data fields now read (+) or no longer read (-)", { it.reads }))
+      if (rows.any { it.emits.isNotEmpty() }) add(Triple("Sends", "Sends = actions the design may send, added (+) or removed (-)", { it.emits }))
+      if (rows.any { it.minor.isNotEmpty() }) add(Triple("Needs", "Needs = the contract minor an app must support", { it.minor }))
+    }
+    val table = buildString {
+      appendLine("| " + cols.joinToString(" | ") { it.first } + " |")
+      appendLine("|" + cols.joinToString("") { "---|" })
+      rows.forEach { row -> appendLine("| " + cols.joinToString(" | ") { it.third(row) } + " |") }
+      appendLine()
+      appendLine("_" + cols.map { it.second }.filter { it.isNotEmpty() }.joinToString(" · ") + "_")
+    }
+    if (rows.size > MAX_ROWS) {
+      appendLine("<details><summary>Changed designs (${rows.size})</summary>")
+      appendLine()
+      appendLine(table)
+      appendLine("</details>")
+    } else {
+      appendLine(table)
+    }
+    appendLine()
+  }
+
+  private fun StringBuilder.appendMore(items: List<String>, label: String) {
+    appendLine("<details><summary>${items.size} $label</summary>")
+    appendLine()
+    items.forEach { appendLine("- $it") }
+    appendLine()
+    appendLine("</details>")
+  }
+
+  /** One line of counts: what was compared, and how much of it this change touched. */
+  private fun summary(r: Report, changed: List<TemplateReport>, designs: Int, touched: List<String>): String? {
+    val total = r.templates.size
+    val rules = listOf(Triple(r.designs, "design", "designs"), Triple(r.experiments, "experiment or season", "experiments or seasons"),
+      Triple(r.placements, "placement rule", "placement rules"))
+      .filter { it.first.isNotEmpty() }.map { (x, one, many) -> "${x.size} ${if (x.size == 1) one else many}" }
     val parts = buildList {
-      if (touched.isNotEmpty()) add("${touched.size} design${if (touched.size == 1) "" else "s"} with template changes")
-      changed.groupingBy { it.status }.eachCount().entries.sortedBy { STATUS_ORDER.indexOf(it.key) }
-        .forEach { (s, n) -> add("${templates(n)} $s") }
-      if (same > 0) add("$same unchanged")
-      listOf(Triple(r.designs, "design", "designs"), Triple(r.experiments, "experiment or season", "experiments or seasons"),
-        Triple(r.placements, "placement rule", "placement rules"))
-        .forEach { (rules, one, many) -> if (rules.isNotEmpty()) add("${rules.size} ${if (rules.size == 1) one else many} changed") }
+      if (total > 0) {
+        val counts = changed.groupingBy { it.status }.eachCount().entries.sortedBy { STATUS_ORDER.indexOf(it.key) }
+          .map { (s, n) -> "$n $s" }
+        add("${plural(designs, "design")}, ${plural(total, "template")}: " + if (counts.isEmpty()) "none changed" else counts.joinToString(", ") +
+          (total - changed.size).takeIf { it > 0 }?.let { ", $it unchanged" }.orEmpty())
+      }
+      if (rules.isNotEmpty()) add(rules.joinToString(", ") + " changed")
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
   }
 
-  private fun templates(n: Int) = "$n template${if (n == 1) "" else "s"}"
+  private fun short(ref: String) = ref.takeUnless { HASH.matches(it) } ?: ref.take(7)
+
+  private fun plural(n: Int, noun: String) = "$n $noun${if (n == 1) "" else "s"}"
 
   private fun kb(bytes: Long): String = if (bytes < 1000) "$bytes B" else "${(bytes + 50) / 1000}.${(bytes + 50) % 1000 / 100} KB"
 
@@ -539,8 +594,11 @@ object CompatibilityCheck {
     return if (p > 0) "+$p%" else if (p < 0) "−${-p}%" else "±0%"
   }
 
-  private val HASH = Regex("[0-9a-f]{40}")
+  private val HASH = Regex("[0-9a-f]{40}|[0-9a-f]{64}")
   private val STATUS_ORDER = listOf("added", "changed", "removed", "unchanged")
+  private const val MAX_ITEMS = 6
+  private const val MAX_NAMED = 4
+  private const val MAX_ROWS = 12
   private const val PREVIEW_SCALE = 1
   private const val PREVIEW_MAX = 280
 }
