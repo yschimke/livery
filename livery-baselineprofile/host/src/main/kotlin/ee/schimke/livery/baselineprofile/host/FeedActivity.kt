@@ -39,6 +39,7 @@ import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.compose.LiveryHost
+import ee.schimke.livery.compose.LiveryResources
 import ee.schimke.livery.compose.LiverySlot
 import ee.schimke.livery.compose.rememberLiveryDisplay
 import ee.schimke.livery.compose.toPlayerValues
@@ -86,7 +87,15 @@ class FeedActivity : ComponentActivity() {
       listOf(Capabilities),
       bundled = AndroidBundled.fromAssets(this),
     )
-    val host = LiveryHost(repository, ActionRouter(emptyMap(), { false }, {}, clock), {}, clock)
+    // Room for every card's answer: a slot whose prepared answer was evicted would arrive empty
+    // and replan, which the other modes never do.
+    val host = LiveryHost(
+      repository,
+      ActionRouter(emptyMap(), { false }, {}, clock),
+      {},
+      clock,
+      resources = LiveryResources(repository, maxPlans = ITEMS),
+    )
     val planner = SlotPlanner(repository, {}, clock)
     setContent {
       val display = rememberLiveryDisplay()
