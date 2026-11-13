@@ -66,8 +66,34 @@ coroutineScope {
 }
 ```
 
-`host.resources.preload(plans)` does the loading half for plans you already have. Every cache is
-bounded and drops its oldest entries first; a dropped entry only costs the next card that work again.
+`host.resources.preload(plans)` does the loading half for plans you already have, and
+`host.resources.warm(queries)` gets the templates a screen's queries choose ready before you have
+any data for them (when a catalog loads, say). Every cache is bounded and drops its oldest entries
+first; a dropped entry only costs the next card that work again.
+
+### Nothing is decoded while the feed scrolls
+
+A template is decoded, linked and laid out off the main thread. The host configures the player's
+background preparation (`LiveryHost.preparation`, by default `RcPreparation.Background` over
+`host.resources.documents`): composition only looks a template up, and a slot swaps a new answer in
+only once its template is prepared and its fonts loaded. A feed that scrolls never prepares a
+template on its main thread, whether or not you prepared anything; preparing ahead only decides
+whether a template's first card shows on its first frame. `host.resources.misses` counts
+the cards that had to wait, which a test can hold at zero. A template whose bytes the player cannot
+play (`host.resources.cannotPlay`) never fails the app: warming or preloading skips it, a
+`LiverySlot` draws its `fallback` instead, and a bare `LiveryTemplate` draws nothing. Pass
+`preparation = RcPreparation.InComposition` to prepare a template's first card in its composition
+instead.
+
+Preparing also rewrites the template for the display it is drawn on (`LiveryResources.ForDisplay`,
+rc-players' `forDisplay`): the density and font scale are hardcoded, values no card binds are frozen,
+and the expressions that leaves are folded, once per template and display, so every card evaluates
+fewer expressions. A slot records its display on the host (`host.resources.display`); to warm before
+anything has composed, pass one: `host.resources.warm(queries, rememberLiveryDisplay())`. Pass
+`preprocessor = null` to `LiveryResources` to play templates exactly as published.
+
+Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
+laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.
 
 ## 4. Evolve the layout
 
@@ -82,3 +108,4 @@ versions keep the templates their player can draw.
 - [ ] The feed API validates item data against the contract.
 - [ ] Remote thumbnails through the image proxy.
 - [ ] One `LiveryHost` shared by the whole feed, and `prepareSlot` called for each page's items.
+- [ ] The feed's templates warmed (`host.resources.warm`) when its catalog loads.

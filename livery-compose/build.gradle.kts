@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.android.kmp.library)
+  alias(libs.plugins.androidx.baselineprofile)
   alias(libs.plugins.compose.multiplatform)
   alias(libs.plugins.compose.compiler)
 }
@@ -35,6 +36,8 @@ kotlin {
       api(project(":livery-client"))
       api(project.dependencies.platform(libs.rc.players.bom))
       api(libs.rc.player.compose)
+      // forDisplay: templates rewritten for the display they are drawn on (LiveryResources.ForDisplay).
+      implementation(libs.rc.player.edit)
       api(libs.cmp.ui)
       implementation(libs.cmp.runtime)
       implementation(libs.cmp.foundation)
@@ -45,6 +48,9 @@ kotlin {
       implementation(compose.desktop.currentOs)
       implementation(libs.cmp.ui.test)
     }
+    // The benchmark host's Compose UI twins of the sample designs, held to the templates' pixels
+    // by TwinRenderParityTest.
+    jvmTest.get().kotlin.srcDir(rootProject.file("livery-baselineprofile/twins/kotlin"))
   }
 }
 
@@ -54,3 +60,39 @@ tasks.matching { it.name == "checkComposeUiTestConfigurationForWasmJs" }.configu
 
 // The tests read the built sample catalogs (their captured designs are build output).
 apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))
+
+// Ships this module's share of the baseline profile collected by flinging the sample catalog
+// (livery-baselineprofile/README.md); normal builds only package the checked-in file.
+// Also the Remote Compose player's code on the paths Livery drives (prepared documents, state
+// seeds, background preparation): rc-players ships a profile of its own corpus, and the rules add up.
+baselineProfile {
+  filter {
+    include("ee.schimke.livery.compose.**")
+    include("ee.schimke.composeai.rcplayer.**")
+  }
+  automaticGenerationDuringBuild = false
+  saveInSrc = true
+}
+
+dependencies { baselineProfile(project(":livery-baselineprofile")) }
+
+// `liveryFeedProfile`: a LazyColumn fling of sample cards as Livery slots, the player alone and their
+// Compose UI twins (FeedProfile.kt). -Plivery.feed.contentType=true reuses nodes per template.
+val feedProfileSamples = configurations.create("feedProfileSamples") { isCanBeConsumed = false }
+dependencies.add(feedProfileSamples.name, dependencies.project(mapOf("path" to ":livery-capture-cmp", "configuration" to "sampleCatalogsElements")))
+tasks.register<JavaExec>("liveryFeedProfile") {
+  description = "Fling a LazyColumn of sample cards: Livery slots, the player alone and Compose UI."
+  group = "verification"
+  val test = kotlin.jvm().compilations.getByName("test")
+  classpath = files(test.output.allOutputs, test.runtimeDependencyFiles)
+  mainClass.set("ee.schimke.livery.compose.FeedProfileMain")
+  val samples: FileCollection = feedProfileSamples
+  inputs.files(samples)
+  argumentProviders += CommandLineArgumentProvider {
+    listOf(layout.buildDirectory.dir("profile").get().asFile.absolutePath, samples.singleFile.resolve("catalog").absolutePath)
+  }
+  (findProperty("livery.feed.contentType") as String?)?.let { systemProperty("livery.feed.contentType", it) }
+  (findProperty("livery.feed.lanes") as String?)?.let { systemProperty("livery.feed.lanes", it) }
+  (findProperty("livery.jvmArgs") as String?)?.let { jvmArgs(it.split(' ')) }
+  outputs.upToDateWhen { false }
+}

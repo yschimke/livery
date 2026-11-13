@@ -7,6 +7,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalDensity
+import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +31,10 @@ import ee.schimke.livery.client.TemplateRepository
  * screen reopened), or after [LiveryResources.prepareSlot] with the same id and key, it draws that
  * answer on its first frame instead of [fallback], and replans behind it. Without one it starts
  * from [fallback] every time.
+ *
+ * A new answer replaces what the slot shows only once its template is ready to draw
+ * ([LiveryResources.readyToDraw]: prepared off the main thread, fonts loaded), so the template
+ * draws complete on the frame it appears and composition never prepares it.
  */
 @Composable
 fun LiverySlot(
@@ -40,11 +47,22 @@ fun LiverySlot(
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
   val revision by host.repository.revision.collectAsState()
+  // The display the template is prepared for, recorded so a host's warm-up prepares the same one.
+  val display = rememberLiveryDisplay()
+  SideEffect { host.resources.display = display }
   // A slot that already had an answer at this revision (scrolled back, reopened) draws it at once
   // rather than its fallback for a frame; it still replans, and a new answer replaces it.
   val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
   LaunchedEffect(state, revision) {
-    state.value = plan().also { r -> slotId?.let { host.resources.keepPlan(it, key, revision, r) } }
+    val result = plan().let { planned ->
+      if (planned !is PlanResult.Ready) return@let planned
+      val template = planned.plan.template
+      host.resources.readyToDraw(template, display)
+      // A template whose bytes the player cannot play draws the app's fallback, never nothing.
+      if (host.resources.cannotPlay(template)) PlanResult.Fallback("${template.entry.designId} cannot be played") else planned
+    }
+    slotId?.let { host.resources.keepPlan(it, key, revision, result) }
+    state.value = result
   }
   val result = state.value
   when (val r = result) {
@@ -91,4 +109,15 @@ fun DesignPicker(
       }
     }
   }
+}
+
+/**
+ * The display this composition draws on, as the player prepares a template for it: what to hand
+ * [LiveryResources.warm] or [LiveryResources.preload] so the template they prepare is the one a
+ * slot here looks up.
+ */
+@Composable
+fun rememberLiveryDisplay(): RcDisplay {
+  val density = LocalDensity.current
+  return remember(density.density, density.fontScale) { RcDisplay(density.density, density.fontScale) }
 }

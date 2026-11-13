@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Lets the generator's Macrobenchmark read the app's profile without root. -->
+  <application android:label="Livery profile host">
+    <profileable android:shell="true" />
+    <activity
+      android:name=".CatalogActivity"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+    <!-- The feed :livery-benchmark flings, as Livery templates or as Compose UI (extra "mode"). -->
+    <activity
+      android:name=".FeedActivity"
+      android:exported="true" />
+  </application>
+</manifest>

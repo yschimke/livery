@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.android.kmp.library)
+  alias(libs.plugins.androidx.baselineprofile)
 }
 
 kotlin {
@@ -56,3 +57,13 @@ tasks.withType<Test>().configureEach {
 
 // The tests read the built sample catalogs (their captured designs are build output).
 apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))
+
+// Ships this module's share of the baseline profile collected by flinging the sample catalog
+// (livery-baselineprofile/README.md); normal builds only package the checked-in file.
+baselineProfile {
+  filter { include("ee.schimke.livery.client.**") }
+  automaticGenerationDuringBuild = false
+  saveInSrc = true
+}
+
+dependencies { baselineProfile(project(":livery-baselineprofile")) }
