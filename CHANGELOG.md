@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/yschimke/livery/compare/v0.10.0...v0.11.0) (2026-11-13)
+
+
+### Features
+
+* **capture-cmp:** capture under rc-players' capture Profile instead of rewriting afterwards ([#65](https://github.com/yschimke/livery/issues/65)) ([9ccedd5](https://github.com/yschimke/livery/commit/9ccedd5393a1c9a4967d8c4ee515c7afe6374ea1))
+
 ## [0.10.0](https://github.com/yschimke/livery/compare/v0.9.0...v0.10.0) (2026-11-11)
 
 
