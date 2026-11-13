@@ -66,8 +66,22 @@ coroutineScope {
 }
 ```
 
-`host.resources.preload(plans)` does the loading half for plans you already have. Every cache is
-bounded and drops its oldest entries first; a dropped entry only costs the next card that work again.
+`host.resources.preload(plans)` does the loading half for plans you already have, and
+`host.resources.warm(queries)` gets the templates a screen's queries choose ready before you have
+any data for them (when a catalog loads, say). Every cache is bounded and drops its oldest entries
+first; a dropped entry only costs the next card that work again.
+
+### Nothing is decoded while the feed scrolls
+
+A template is decoded, linked and laid out off the main thread. The host configures the player's
+background preparation (`LiveryHost.preparation`, by default `RcPreparation.Background` over
+`host.resources.documents`): composition only looks a template up, and a slot swaps a new answer in
+only once its template is prepared and its fonts loaded. A feed that scrolls never prepares a
+template on its main thread, whether or not you prepared anything; preparing ahead only decides
+whether a template's first card shows on its first frame. `host.resources.documents.misses` counts
+the cards that had to wait, which a test can hold at zero. Pass
+`preparation = RcPreparation.InComposition` to prepare a template's first card in its composition
+instead.
 
 ## 4. Evolve the layout
 
@@ -82,3 +96,4 @@ versions keep the templates their player can draw.
 - [ ] The feed API validates item data against the contract.
 - [ ] Remote thumbnails through the image proxy.
 - [ ] One `LiveryHost` shared by the whole feed, and `prepareSlot` called for each page's items.
+- [ ] The feed's templates warmed (`host.resources.warm`) when its catalog loads.

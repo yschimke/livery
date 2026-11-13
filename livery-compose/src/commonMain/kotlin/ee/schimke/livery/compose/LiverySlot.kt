@@ -28,6 +28,10 @@ import ee.schimke.livery.client.TemplateRepository
  * screen reopened), or after [LiveryResources.prepareSlot] with the same id and key, it draws that
  * answer on its first frame instead of [fallback], and replans behind it. Without one it starts
  * from [fallback] every time.
+ *
+ * A new answer replaces what the slot shows only once its template is ready to draw
+ * ([LiveryResources.readyToDraw]: prepared off the main thread, fonts loaded), so the template
+ * draws complete on the frame it appears and composition never prepares it.
  */
 @Composable
 fun LiverySlot(
@@ -44,7 +48,10 @@ fun LiverySlot(
   // rather than its fallback for a frame; it still replans, and a new answer replaces it.
   val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
   LaunchedEffect(state, revision) {
-    state.value = plan().also { r -> slotId?.let { host.resources.keepPlan(it, key, revision, r) } }
+    val result = plan()
+    if (result is PlanResult.Ready) host.resources.readyToDraw(result.plan.template)
+    slotId?.let { host.resources.keepPlan(it, key, revision, result) }
+    state.value = result
   }
   val result = state.value
   when (val r = result) {

@@ -8,7 +8,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
+import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcPreparedDocument
+import ee.schimke.composeai.rcplayer.compose.RcPreparedDocumentCache
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocument
@@ -17,6 +19,7 @@ import ee.schimke.livery.client.ImageResolver
 import ee.schimke.livery.client.LoadedTemplate
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RenderPlan
+import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.protocol.AssetKind
 import kotlin.concurrent.atomics.AtomicReference
@@ -33,8 +36,11 @@ import kotlinx.coroutines.withContext
  * A feed draws many cards from few templates, and every card used to decode its template, read and
  * build its fonts, and fetch and decode its images again. Here each of those is done once per
  * content hash and shared:
- * - the **prepared document** (decoded, linked, laid out), per template hash (each card still gets its own player state, seeded
- *   from its own values before its first frame, so no card shows or animates from another's data);
+ * - the **prepared document** (decoded, linked, laid out, its player-state seed built), per template
+ *   content, in the player's own [RcPreparedDocumentCache] ([documents]), which [LiveryHost]
+ *   hands the player as its preparation strategy (each card still gets its own player state,
+ *   seeded from its own values before its first frame, so no card shows or animates from
+ *   another's data);
  * - **fonts**, per font asset hash, so a template whose faces another template already loaded draws
  *   its first frame with them;
  * - **decoded images**, per image reference and size, so an image already shown or preloaded draws
@@ -43,7 +49,9 @@ import kotlinx.coroutines.withContext
  * A [LiveryHost] owns one. An app shares one host (and so one cache) across a screen's slots, and
  * calls [preload] when it knows what is coming: a feed page has arrived, a placement was decided.
  * Every cache is bounded and drops its oldest entries first; dropping one only costs the next card
- * the work again. Reads never block and never touch the disk or the network.
+ * the work again. Reads never block and never touch the disk or the network, and preparing a
+ * document ([prepare], [preload], [warm]) runs on [Dispatchers.Default], never on the caller's
+ * thread.
  */
 class LiveryResources(
   private val repository: TemplateRepository,
@@ -55,7 +63,11 @@ class LiveryResources(
   maxImages: Int = 64,
   maxPlans: Int = 128,
 ) {
-  private val documents = BoundedCache<String, RcPreparedDocument>(maxTemplates)
+  /**
+   * The prepared documents, by content: the cache the player's [RcPreparation.Background] reads
+   * during composition, so composition only ever looks a template up here.
+   */
+  val documents: RcPreparedDocumentCache = RcPreparedDocumentCache(maxTemplates)
   private val typefaces = BoundedCache<String, RcTypefaceLoader>(maxTemplates)
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
@@ -79,11 +91,39 @@ class LiveryResources(
 
   /**
    * [template]'s prepared document: decoded, linked and laid out once, then shared by every card of
-   * the template (each card still gets its own player state). From memory, or prepared now (it
-   * never waits on I/O) and kept.
+   * the template (each card still gets its own player state). From memory, or prepared now, on the
+   * calling thread (it never waits on I/O), and kept. Composition uses [preparedNow] instead.
    */
-  fun prepared(template: LoadedTemplate): RcPreparedDocument =
-    documents[template.entry.sha256] ?: RcPreparedDocument.decode(template.bytes).also { documents.put(template.entry.sha256, it) }
+  fun prepared(template: LoadedTemplate): RcPreparedDocument = documents.prepareNow(template.bytes)
+
+  /** [template]'s prepared document if it is in memory; never prepares. */
+  fun preparedNow(template: LoadedTemplate): RcPreparedDocument? = documents.peek(template.bytes)
+
+  /** [template]'s prepared document, prepared on [Dispatchers.Default] unless it is in memory. */
+  suspend fun prepare(template: LoadedTemplate): RcPreparedDocument = documents.prepare(template.bytes)
+
+  /**
+   * Gets what [template]'s cards need before they can draw into memory: its prepared document and
+   * its fonts (not the images a card shows, which arrive with the card). A card of it then draws
+   * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
+   */
+  suspend fun readyToDraw(template: LoadedTemplate) {
+    coroutineScope {
+      launch { prepare(template) }
+      launch { runCatching { typefaces(template) } }
+    }
+  }
+
+  /**
+   * Prepares, in the background, the templates [queries] choose today (each query's first match):
+   * call it when a screen of them is coming (a catalog loaded, a list's data arrived), so the
+   * first card of each draws on its first frame too. Queries with no template are skipped.
+   */
+  suspend fun warm(queries: Iterable<TemplateQuery>) {
+    coroutineScope {
+      for (query in queries) launch { repository.resolve(query)?.let { readyToDraw(it) } }
+    }
+  }
 
   /** [template]'s decoded document, from [prepared]. */
   fun document(template: LoadedTemplate): RcDocument = prepared(template).document
@@ -129,7 +169,7 @@ class LiveryResources(
    * have without a preload: a missing image is fetched again when the card draws.
    */
   suspend fun preload(plan: RenderPlan) {
-    val document = withContext(Dispatchers.Default) { prepared(plan.template) }.document
+    val document = prepare(plan.template).document
     coroutineScope {
       launch { typefaces(plan.template) }
       val loader = imageLoader { plan.bindings }

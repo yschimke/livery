@@ -17,10 +17,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.runtime.CompositionLocalProvider
+import ee.schimke.composeai.rcplayer.compose.LocalRcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcComposePlayer
+import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
 import ee.schimke.composeai.rcplayer.compose.RcPlayerTheme
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
+import ee.schimke.composeai.rcplayer.compose.rememberRcPreparedDocument
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.composeai.rcplayer.runtime.RcPlayerEvent
 import ee.schimke.livery.client.ActionRouter
@@ -60,6 +64,16 @@ class LiveryHost(
    * across a screen, and [LiveryResources.preload] what is coming.
    */
   val resources: LiveryResources = LiveryResources(repository, images, fallbackTypefaces, fallbackImages),
+  /**
+   * How the player prepares a template's document, configured for every [LiveryTemplate] on this
+   * host and for any player nested inside one. By default [RcPreparation.Background] over
+   * [resources]' document cache: composition only looks a template up, so a list that scrolls never
+   * decodes a template on its main thread. A template's first card that nobody prepared
+   * ([LiveryResources.warm], [LiveryResources.preload], or the [LiverySlot] that planned it) draws
+   * nothing until it is ready, as it already waits for its fonts. [RcPreparation.InComposition]
+   * prepares it in that card's composition instead, on the main thread.
+   */
+  val preparation: RcPreparation = RcPreparation.Background(resources.documents),
 )
 
 /**
@@ -84,9 +98,10 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     values.keys.toList().filter { it !in pushed }.forEach(values::remove)
     values.putAll(pushed)
   }
-  // Shared by every card of this template: decoding, linking and the layout tree are done once per
-  // template, not per card. Each card's player state is still its own.
-  val prepared = remember(bytes, host) { host.resources.prepared(plan.template) }
+  // Shared by every card of this template: decoding, linking, the layout tree and the state seed are
+  // done once per template, not per card, and (by default) off the main thread. Each card's player
+  // state is still its own.
+  val prepared = rememberRcPreparedDocument(bytes, host.preparation)
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
   val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
@@ -105,20 +120,24 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // Leave must name the old item, not the plan that replaced it.
   SideEffect { tracker.plan = plan }
 
-  // A template's fonts load before it draws, so text never reflows from a fallback face.
+  // A template's fonts load before it draws, so text never reflows from a fallback face; and it
+  // draws only once it is prepared, which is never in composition under a background strategy.
   val loader = typefaces ?: return
+  if (prepared == null) return
   Box(modifier.then(host.slotModifier(plan)).onVisibilityChanged(minFractionVisible = VIEWABLE_FRACTION) { visible ->
     tracker.visible(visible, host.clock.nowEpochMs())
   }) {
-    RcComposePlayer(
-      prepared = prepared,
-      imageLoader = imageLoader,
-      modifier = Modifier,
-      theme = host.theme,
-      namedValues = values,
-      onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
-      typefaces = loader,
-    )
+    CompositionLocalProvider(LocalRcPreparation provides host.preparation) {
+      RcComposePlayer(
+        prepared = prepared,
+        imageLoader = imageLoader,
+        modifier = Modifier,
+        theme = host.theme,
+        namedValues = values,
+        onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
+        typefaces = loader,
+      )
+    }
   }
   LaunchedEffect(tracker) {
     withFrameNanos { }
