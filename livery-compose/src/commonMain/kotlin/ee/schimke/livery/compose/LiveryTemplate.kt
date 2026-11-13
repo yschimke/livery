@@ -103,7 +103,11 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // state is still its own.
   val display = rememberLiveryDisplay()
   SideEffect { host.resources.display = display }
+  // Prepared for this display, or else as published if that is what was prepared ahead (a startup
+  // before the display was known): the same pixels, on this frame, rather than none until the
+  // rewrite is ready. The rewrite is still prepared, for the cards after this one.
   val prepared = rememberRcPreparedDocument(bytes, host.preparation)
+    ?: remember(bytes, host) { host.resources.preparedNow(plan.template, display = null) }
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
   val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }

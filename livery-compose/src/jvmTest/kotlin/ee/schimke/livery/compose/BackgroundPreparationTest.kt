@@ -109,6 +109,21 @@ class BackgroundPreparationTest {
     Unit
   }
 
+  /**
+   * A splash screen's `startup` runs before anything has composed. Where the platform cannot say
+   * what display that will be (here, the desktop JVM), the template is prepared as published; the
+   * first card still draws on its first frame, from that.
+   */
+  @Test fun aTemplatePreparedBeforeTheDisplayWasKnownStillDrawsOnTheFirstFrame() = runComposeUiTest {
+    runBlocking {
+      host.resources.readyToDraw(template, display = null)
+    }
+    mainClock.autoAdvance = false
+    setContent { LiveryTemplate(plan(1), host, Modifier.size(320.dp, 120.dp)) }
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(plan(1).slotTag).fetchSemanticsNodes().size)
+  }
+
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
     // The test's own density: the display the template is drawn on.
     runBlocking { host.resources.readyToDraw(template, RcDisplay(density.density, density.fontScale)) }

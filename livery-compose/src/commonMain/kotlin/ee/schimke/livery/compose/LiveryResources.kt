@@ -81,10 +81,14 @@ class LiveryResources(
   /**
    * The display this host's slots are composed on, as the last [LiverySlot] or [LiveryTemplate] to
    * compose read it (`LocalDensity`): what the calls below prepare for when they are not handed one,
-   * so a template warmed ahead of time is the one composition looks up. Null until something has
-   * composed; pass a display ([rememberLiveryDisplay]) to warm before that.
+   * so a template warmed ahead of time is the one composition looks up. Before anything has
+   * composed it is the device's display where the platform knows it (Android's system density and
+   * font scale, which an app's first composition reads unless it overrides them), so a splash
+   * screen's `startup` prepares what the first slot looks up; elsewhere null until something has
+   * composed, and a template that is then drawn for another display plays as published while its
+   * rewrite is prepared ([LiveryTemplate]).
    */
-  var display: RcDisplay? = null
+  var display: RcDisplay? = platformDisplay()
   private val typefaces = BoundedCache<String, RcTypefaceLoader>(maxTemplates)
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
