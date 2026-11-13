@@ -93,6 +93,21 @@ class LiveryResources(
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
   private val plans = BoundedCache<SlotKey, Pair<Long, PlanResult>>(maxPlans)
+  private val heights = BoundedCache<String, Int>(maxTemplates * 4)
+
+  /**
+   * The height [template] last drew at for a width of [widthPx], or null: what a card of it reserves
+   * while it cannot draw yet, so the list around it does not move when it does. Another card's data
+   * may wrap differently, so it is the template's usual height, not this card's.
+   */
+  fun lastHeight(template: LoadedTemplate, widthPx: Int): Int? = heights[heightKey(template, widthPx)]
+
+  /** Records the height [template] drew at for [widthPx], for [lastHeight]. */
+  fun keepHeight(template: LoadedTemplate, widthPx: Int, heightPx: Int) {
+    if (heightPx > 0) heights.put(heightKey(template, widthPx), heightPx)
+  }
+
+  private fun heightKey(template: LoadedTemplate, widthPx: Int) = "${template.entry.sha256}@$widthPx"
 
   /**
    * The answer the [LiverySlot] named [slotId] last planned for [key] at catalog [revision], so a

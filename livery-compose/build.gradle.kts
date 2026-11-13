@@ -75,3 +75,24 @@ baselineProfile {
 }
 
 dependencies { baselineProfile(project(":livery-baselineprofile")) }
+
+// `liveryFeedProfile`: a LazyColumn fling of sample cards as Livery slots, the player alone and their
+// Compose UI twins (FeedProfile.kt). -Plivery.feed.contentType=true reuses nodes per template.
+val feedProfileSamples = configurations.create("feedProfileSamples") { isCanBeConsumed = false }
+dependencies.add(feedProfileSamples.name, dependencies.project(mapOf("path" to ":livery-capture-cmp", "configuration" to "sampleCatalogsElements")))
+tasks.register<JavaExec>("liveryFeedProfile") {
+  description = "Fling a LazyColumn of sample cards: Livery slots, the player alone and Compose UI."
+  group = "verification"
+  val test = kotlin.jvm().compilations.getByName("test")
+  classpath = files(test.output.allOutputs, test.runtimeDependencyFiles)
+  mainClass.set("ee.schimke.livery.compose.FeedProfileMain")
+  val samples: FileCollection = feedProfileSamples
+  inputs.files(samples)
+  argumentProviders += CommandLineArgumentProvider {
+    listOf(layout.buildDirectory.dir("profile").get().asFile.absolutePath, samples.singleFile.resolve("catalog").absolutePath)
+  }
+  (findProperty("livery.feed.contentType") as String?)?.let { systemProperty("livery.feed.contentType", it) }
+  (findProperty("livery.feed.lanes") as String?)?.let { systemProperty("livery.feed.lanes", it) }
+  (findProperty("livery.jvmArgs") as String?)?.let { jvmArgs(it.split(' ')) }
+  outputs.upToDateWhen { false }
+}

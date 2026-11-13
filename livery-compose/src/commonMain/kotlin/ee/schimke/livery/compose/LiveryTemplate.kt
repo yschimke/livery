@@ -15,7 +15,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onVisibilityChanged
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.CompositionLocalProvider
 import ee.schimke.composeai.rcplayer.compose.LocalRcPreparation
@@ -128,11 +131,20 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
 
   // A template's fonts load before it draws, so text never reflows from a fallback face; and it
   // draws only once it is prepared, which is never in composition under a background strategy.
-  val loader = typefaces ?: return
-  if (prepared == null) return
+  val loader = typefaces
+  if (loader == null || prepared == null) {
+    // Nothing to draw yet (a template's first card nobody prepared): hold the height the template
+    // last drew at for this width, so the list does not move when the card arrives.
+    Layout(modifier) { _, constraints ->
+      val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.minWidth
+      val height = host.resources.lastHeight(plan.template, width) ?: 0
+      layout(width, constraints.constrainHeight(height)) {}
+    }
+    return
+  }
   Box(modifier.then(host.slotModifier(plan)).onVisibilityChanged(minFractionVisible = VIEWABLE_FRACTION) { visible ->
     tracker.visible(visible, host.clock.nowEpochMs())
-  }) {
+  }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
     CompositionLocalProvider(LocalRcPreparation provides host.preparation) {
       RcComposePlayer(
         prepared = prepared,

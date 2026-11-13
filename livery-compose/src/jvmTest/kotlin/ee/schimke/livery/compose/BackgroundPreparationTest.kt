@@ -1,6 +1,9 @@
 package ee.schimke.livery.compose
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.Modifier
@@ -122,6 +125,24 @@ class BackgroundPreparationTest {
     setContent { LiveryTemplate(plan(1), host, Modifier.size(320.dp, 120.dp)) }
     mainClock.advanceTimeByFrame()
     assertEquals(1, onAllNodesWithTag(plan(1).slotTag).fetchSemanticsNodes().size)
+  }
+
+  /**
+   * A card that cannot draw yet (its template's first, not prepared) holds the height the template
+   * last drew at for its width, so the list does not move when it arrives.
+   */
+  @Test fun aCardThatCannotDrawYetHoldsItsTemplatesHeight() = runComposeUiTest {
+    val widthPx = with(density) { 320.dp.roundToPx() }
+    host.resources.keepHeight(template, widthPx, 240)
+    mainClock.autoAdvance = false
+    setContent {
+      androidx.compose.foundation.layout.Box(Modifier.testTag("holder")) {
+        LiveryTemplate(plan(1), host, Modifier.width(320.dp))
+      }
+    }
+    mainClock.advanceTimeByFrame()
+    val height = onNodeWithTag("holder").fetchSemanticsNode().size.height
+    assertEquals(240, height, "the waiting card did not hold its template's height")
   }
 
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
