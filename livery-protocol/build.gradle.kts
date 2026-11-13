@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.android.kmp.library)
+  alias(libs.plugins.androidx.baselineprofile)
 }
 
 kotlin {
@@ -27,3 +28,13 @@ kotlin {
     commonTest.dependencies { implementation(kotlin("test")) }
   }
 }
+
+// Ships this module's share of the baseline profile collected by flinging the sample catalog
+// (livery-baselineprofile/README.md); normal builds only package the checked-in file.
+baselineProfile {
+  filter { include("ee.schimke.livery.protocol.**") }
+  automaticGenerationDuringBuild = false
+  saveInSrc = true
+}
+
+dependencies { baselineProfile(project(":livery-baselineprofile")) }

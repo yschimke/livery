@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.android.kmp.library)
+  alias(libs.plugins.androidx.baselineprofile)
   alias(libs.plugins.compose.multiplatform)
   alias(libs.plugins.compose.compiler)
 }
@@ -56,3 +57,18 @@ tasks.matching { it.name == "checkComposeUiTestConfigurationForWasmJs" }.configu
 
 // The tests read the built sample catalogs (their captured designs are build output).
 apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))
+
+// Ships this module's share of the baseline profile collected by flinging the sample catalog
+// (livery-baselineprofile/README.md); normal builds only package the checked-in file.
+// Also the Remote Compose player's code on the paths Livery drives (prepared documents, state
+// seeds, background preparation): rc-players ships a profile of its own corpus, and the rules add up.
+baselineProfile {
+  filter {
+    include("ee.schimke.livery.compose.**")
+    include("ee.schimke.composeai.rcplayer.**")
+  }
+  automaticGenerationDuringBuild = false
+  saveInSrc = true
+}
+
+dependencies { baselineProfile(project(":livery-baselineprofile")) }

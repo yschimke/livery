@@ -51,3 +51,9 @@ include(":livery-review")
 include(":livery-verify")
 include(":livery-gradle-plugin")
 include(":livery-bom")
+// Baseline profiles for the published Android libraries: an app that plays the sample catalog, and
+// the generator that flings it. Neither is published. See livery-baselineprofile/README.md.
+include(":livery-baselineprofile-host")
+project(":livery-baselineprofile-host").projectDir = file("livery-baselineprofile/host")
+include(":livery-baselineprofile")
+project(":livery-baselineprofile").projectDir = file("livery-baselineprofile/generator")
