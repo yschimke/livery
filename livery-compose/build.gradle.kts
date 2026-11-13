@@ -48,6 +48,9 @@ kotlin {
       implementation(compose.desktop.currentOs)
       implementation(libs.cmp.ui.test)
     }
+    // The benchmark host's Compose UI twins of the sample designs, held to the templates' pixels
+    // by TwinRenderParityTest.
+    jvmTest.get().kotlin.srcDir(rootProject.file("livery-baselineprofile/twins/kotlin"))
   }
 }
 

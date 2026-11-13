@@ -3,35 +3,31 @@ package ee.schimke.livery.baselineprofile.host
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import ee.schimke.composeai.rcplayer.compose.RcComposePlayer
+import ee.schimke.composeai.rcplayer.compose.rememberRcPreparedDocument
+import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.livery.client.ActionRouter
 import ee.schimke.livery.client.AndroidBundled
+import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.Clock
+import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.client.FetchResult
 import ee.schimke.livery.client.Fetcher
 import ee.schimke.livery.client.JavaCrypto
@@ -45,24 +41,39 @@ import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.compose.LiveryHost
 import ee.schimke.livery.compose.LiverySlot
 import ee.schimke.livery.compose.rememberLiveryDisplay
+import ee.schimke.livery.compose.toPlayerValues
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
+import ee.schimke.livery.twins.BannerData
+import ee.schimke.livery.twins.BannerTwin
+import ee.schimke.livery.twins.PollData
+import ee.schimke.livery.twins.PollOption
+import ee.schimke.livery.twins.PollTwin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The feed `:livery-benchmark` flings: [ITEMS] cards, alternating the sample catalog's
- * `banner-classic` and `poll-card`, each with its own data. With `mode=livery` each card is a
- * [LiverySlot] playing the template; with `mode=compose` it is [BannerCard] or [PollCard], the same
- * design written directly in Compose UI. The same data, the same list, so the frame timings of the
- * two modes compare the two ways of drawing one card.
+ * `banner-classic` and `poll-card`, each with its own data, drawn one of three ways (`mode`):
+ * - `livery`: a [LiverySlot] per card, as an app's feed is built: planned, bound to the contract,
+ *   tracked for impressions and viewability, playing the template;
+ * - `rc`: the same prepared documents played directly by [RcComposePlayer] with the same values,
+ *   with nothing of Livery around them: the player alone;
+ * - `compose`: the twins (livery-baselineprofile/twins), the same designs written in Compose UI,
+ *   which livery-compose's TwinRenderParityTest holds to the templates' pixels.
+ *
+ * Every mode has everything a card needs in memory before the list shows (Livery: each slot
+ * prepared with `prepareSlot`, as a feed prepares a page; rc: the documents prepared for this
+ * display), so in no mode does a card arrive empty and catch up a frame later.
  */
 class FeedActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    val livery = intent.getStringExtra(MODE) != COMPOSE
-    val items = List(ITEMS) { i -> if (i % 2 == 0) Card.Banner(i) else Card.Poll(i) }
+    val mode = intent.getStringExtra(MODE) ?: LIVERY
+    val cards = List(ITEMS) { i -> if (i % 2 == 0) Card.Banner(i) else Card.Poll(i) }
     val clock = Clock { System.currentTimeMillis() }
     val repository = TemplateRepository(
       StaticSource("https://catalog.invalid/manifest.json"),
@@ -78,111 +89,113 @@ class FeedActivity : ComponentActivity() {
     val host = LiveryHost(repository, ActionRouter(emptyMap(), { false }, {}, clock), {}, clock)
     val planner = SlotPlanner(repository, {}, clock)
     setContent {
-      if (livery) {
-        // A feed warms its templates for this display as its page arrives.
-        val display = rememberLiveryDisplay()
-        LaunchedEffect(display) { host.resources.warm(listOf(Card.Banner(0).query, Card.Poll(1).query), display) }
+      val display = rememberLiveryDisplay()
+      var ready by remember { mutableStateOf(mode == COMPOSE) }
+      // The rc mode's values per card, bound once, as a Livery slot binds its card's data once.
+      val values = remember { mutableStateMapOf<Int, Map<String, RcNamedValue>>() }
+      LaunchedEffect(display) {
+        when (mode) {
+          LIVERY -> coroutineScope {
+            host.resources.display = display
+            cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { planner.forAppData(card.query, card.json) } } }
+          }
+          RC -> {
+            host.resources.warm(listOf(cards[0].query, cards[1].query), display)
+            val manifest = repository.current()
+            cards.forEachIndexed { index, card ->
+              val contract = manifest?.contract(card.query.contract) ?: return@forEachIndexed
+              (ContractBinder.bind(contract, card.json) as? BindResult.Ok)?.let { values[index] = it.bindings.toPlayerValues() }
+            }
+          }
+        }
+        ready = true
       }
+      if (!ready) return@setContent
       LazyColumn(
         Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "feed" },
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
-        items(items.size, key = { it }, contentType = { items[it]::class }) { index ->
-          val card = items[index]
+        items(cards.size, key = { it }, contentType = { cards[it]::class }) { index ->
+          val card = cards[index]
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-          if (livery) {
-            LiverySlot(key = index, host = host, modifier = modifier, slotId = "feed") { planner.forAppData(card.query, card.data) }
-          } else when (card) {
-            is Card.Banner -> BannerCard(card, modifier)
-            is Card.Poll -> PollCard(card, modifier)
+          when (mode) {
+            LIVERY -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
+            RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
+            else -> when (card) {
+              is Card.Banner -> BannerTwin(card.data, modifier)
+              is Card.Poll -> PollTwin(card.data, modifier)
+            }
           }
         }
       }
+    }
+  }
+
+  /** The template, prepared as Livery prepares it, played with the card's values and nothing else. */
+  @Composable
+  private fun PlayerCard(card: Card, values: Map<String, RcNamedValue>, host: LiveryHost, modifier: Modifier) {
+    val bytes = remember(card.query) { cardBytes[card.query.designId] } ?: return
+    val prepared = rememberRcPreparedDocument(bytes, host.preparation) ?: return
+    val named = remember(values) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(values) } }
+    RcComposePlayer(prepared, modifier, namedValues = named)
+  }
+
+  /** The templates' bytes by design, read from the bundled catalog once. */
+  private val cardBytes: Map<String?, ByteArray> by lazy {
+    val dir = "livery"
+    val manifest = assets.open("$dir/manifest.json").use { TemplateRepository.DefaultJson.decodeFromString(ee.schimke.livery.protocol.Manifest.serializer(), it.readBytes().decodeToString()) }
+    listOf("banner-classic", "poll-card").associateWith { design ->
+      val sha = manifest.templates.first { it.designId == design }.sha256
+      assets.open("$dir/${manifest.blobBase}$sha.rc").use { it.readBytes() }
     }
   }
 
   /** One card's data: what a Livery slot binds, and what its Compose UI twin reads. */
   private sealed class Card {
     abstract val query: TemplateQuery
-    abstract val data: JsonObject
+    abstract val json: JsonObject
 
-    class Banner(val index: Int) : Card() {
-      val headline = "Try Premium free #$index"
-      val body = "Offline downloads and no ads for 30 days, for card $index."
-      val cta = "Start trial"
+    class Banner(index: Int) : Card() {
+      val data = BannerData("Try Premium free #$index", "Offline downloads and no ads for 30 days, for card $index.", "Start trial")
       override val query = TemplateQuery("promo/banner@1", Capabilities, designId = "banner-classic")
-      override val data = JsonObject(mapOf("headline" to JsonPrimitive(headline), "body" to JsonPrimitive(body), "cta" to JsonPrimitive(cta)))
+      override val json = JsonObject(mapOf("headline" to JsonPrimitive(data.headline), "body" to JsonPrimitive(data.body), "cta" to JsonPrimitive(data.cta)))
     }
 
-    class Poll(val index: Int) : Card() {
-      val question = "Which language do you write your UI in? (#$index)"
-      val summary = "${100 + index} votes"
-      val options = listOf(Option("Kotlin", 0.52f, "52%"), Option("Swift", 0.27f, "27%"), Option("TypeScript", 0.21f, "21%"))
+    class Poll(index: Int) : Card() {
+      val data = PollData(
+        "Which language do you write your UI in? (#$index)",
+        "${100 + index} votes",
+        listOf(PollOption("Kotlin", 0.52f, "52%", "✓"), PollOption("Swift", 0.27f, "27%"), PollOption("TypeScript", 0.21f, "21%")),
+      )
       override val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
-      override val data = JsonObject(
+      override val json = JsonObject(
         mapOf(
-          "question" to JsonPrimitive(question),
-          "summary" to JsonPrimitive(summary),
-          "options" to JsonArray(options.map { JsonObject(mapOf("label" to JsonPrimitive(it.label), "share" to JsonPrimitive(it.share), "result" to JsonPrimitive(it.result))) }),
+          "question" to JsonPrimitive(data.question),
+          "summary" to JsonPrimitive(data.summary),
+          "options" to JsonArray(
+            data.options.map {
+              JsonObject(
+                buildMap {
+                  put("label", JsonPrimitive(it.label))
+                  put("share", JsonPrimitive(it.share))
+                  put("result", JsonPrimitive(it.result))
+                  if (it.mark.isNotEmpty()) put("mark", JsonPrimitive(it.mark))
+                },
+              )
+            },
+          ),
         ),
       )
     }
   }
 
-  private class Option(val label: String, val share: Float, val result: String)
-
-  /** `banner-classic` (livery-capture-cmp's SampleDesigns.kt `BannerClassic`) in Compose UI. */
-  @Composable
-  private fun BannerCard(card: Card.Banner, modifier: Modifier) {
-    Column(
-      modifier.clip(RoundedCornerShape(16.dp)).background(Surface).padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        BasicText(card.headline, style = TextStyle(OnSurface, 20.sp, FontWeight.Bold))
-        BasicText("✕", Modifier.clickable {}.padding(4.dp), style = TextStyle(OnSurface, 18.sp))
-      }
-      BasicText(card.body, style = TextStyle(OnSurface, 14.sp))
-      Box(Modifier.clip(RoundedCornerShape(20.dp)).background(Primary).clickable {}.padding(horizontal = 20.dp, vertical = 10.dp)) {
-        BasicText(card.cta, style = TextStyle(Color.White, 14.sp, FontWeight.Medium))
-      }
-    }
-  }
-
-  /** `poll-card` (SampleDesigns.kt `PollCard`) in Compose UI, for the options the data has. */
-  @Composable
-  private fun PollCard(card: Card.Poll, modifier: Modifier) {
-    Column(
-      modifier.clip(RoundedCornerShape(16.dp)).background(Surface).padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-      BasicText(card.question, style = TextStyle(OnSurface, 18.sp, FontWeight.Bold))
-      for (option in card.options) {
-        Column(
-          Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {}.padding(vertical = 4.dp),
-          verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            BasicText(option.label, style = TextStyle(OnSurface, 15.sp))
-            BasicText(option.result, style = TextStyle(OnSurface, 14.sp))
-          }
-          Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Track)) {
-            Box(Modifier.fillMaxWidth(option.share).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Primary))
-          }
-        }
-      }
-      BasicText(card.summary, style = TextStyle(OnSurface, 13.sp))
-    }
-  }
-
   companion object {
     const val MODE = "mode"
+    const val LIVERY = "livery"
+    const val RC = "rc"
     const val COMPOSE = "compose"
     const val ITEMS = 200
+    private const val SLOT = "feed"
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
-    private val Surface = Color(0xFFF7F2FA)
-    private val OnSurface = Color(0xFF1D1B20)
-    private val Primary = Color(0xFF6750A4)
-    private val Track = Color(0x1F79747E)
   }
 }

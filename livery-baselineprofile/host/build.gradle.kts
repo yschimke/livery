@@ -34,6 +34,8 @@ android {
   }
   // The sample catalog, built by the livery CLI into the app's assets at livery/.
   sourceSets.getByName("main").assets.directories.add("build/generated/livery-assets")
+  // The Compose UI twins of the sample designs, shared with livery-compose's TwinRenderParityTest.
+  sourceSets.getByName("main").kotlin.directories.add("../twins/kotlin")
 }
 
 kotlin { jvmToolchain(17) }

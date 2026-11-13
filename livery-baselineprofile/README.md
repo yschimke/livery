@@ -41,17 +41,34 @@ The generator runs once, and each task writes its library's filtered share. Add
 
 ## Benchmarking against Compose UI
 
-`FeedActivity` shows one feed in two ways. With `mode=livery`, each card is a `LiverySlot` playing
-the sample template. With `mode=compose`, it is the same design written directly in Compose UI
-(`BannerCard`, `PollCard`). Both modes use the same data and the same list.
+`FeedActivity` shows one feed of 200 sample cards (`banner-classic`, `poll-card`) in three ways:
 
-`FeedScrollBenchmark` runs both against the `benchmarkRelease` host, which is minified and installed
-with the shipped baseline profiles.
+| `mode` | Each card is | What it measures |
+| --- | --- | --- |
+| `livery` | A `LiverySlot`: planned, bound to its contract, tracked for impressions and viewability, playing the template | Livery as an app's feed runs it |
+| `rc` | The same prepared, display-rewritten document, played by `RcComposePlayer` with the same values | The Remote Compose player alone |
+| `compose` | The same design written in Compose UI (`twins/`: `BannerTwin`, `PollTwin`) | The bar to clear |
+
+The comparison is like for like:
+
+- **The same render.** livery-compose's `TwinRenderParityTest` renders each template and its twin
+  with the same data, size and density, and fails if more than 1% of pixels differ beyond
+  antialiasing. Today none do. Both renders are kept in `livery-compose/build/twin-parity/`.
+- **The same structure.** Each twin has the template's layout, modifiers and text, node for node.
+  The one exception: the poll template carries rows for all four of its contract's options and
+  hides the unused ones, while the twin composes only the options the data has, as Compose UI
+  would be written.
+- **Nothing arrives late.** In every mode, what a card needs is in memory before the list shows:
+  `livery` prepares each slot with `prepareSlot`, as a feed prepares a page, and `rc` prepares the
+  documents for the display.
+
+`FeedScrollBenchmark` runs all three against the `benchmarkRelease` host, which is minified and
+installed with the shipped baseline profiles.
 
 `.github/workflows/benchmarks.yml` runs the benchmark on an API 34 emulator for changes to the
-libraries. It writes the two results, and their ratio, to the job summary
+libraries. It writes the results, and each lane's ratio to Compose UI, to the job summary
 (`.github/scripts/benchmark-summary.py`). An emulator's frame times are a rough comparison between
-the two modes, not what a device would show.
+the lanes, not what a device would show.
 
 Locally, on a device:
 

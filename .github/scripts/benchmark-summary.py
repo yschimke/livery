@@ -38,7 +38,7 @@ def pick(row, metric, p):
 def ms(v):
     return "–" if v is None else f"{v:.1f} ms"
 
-print("### Feed fling: Livery templates against Compose UI")
+print("### Feed fling: Livery and the Remote Compose player against Compose UI")
 print()
 print(f"Emulator: {device}. FrameTimingMetric over 5 runs of 6 flings down the same 200 sample cards; a rough comparison, not a device number.")
 print()
@@ -51,13 +51,17 @@ for name, row in rows.items():
         + " | ".join(ms(pick(row, m, p)) for m in ("cpu", "overrun") for p in ("P50", "P90", "P99"))
         + " |"
     )
-livery, compose = rows.get("livery"), rows.get("composeUi")
-if livery and compose:
+compose = rows.get("composeUi")
+if compose:
     print()
-    print("| Livery / Compose UI | p50 | p90 | p99 |")
+    print("| CPU frame duration against Compose UI | p50 | p90 | p99 |")
     print("| --- | ---: | ---: | ---: |")
-    ratios = []
-    for p in ("P50", "P90", "P99"):
-        a, b = pick(livery, "cpu", p), pick(compose, "cpu", p)
-        ratios.append("–" if not a or not b else f"{a / b:.2f}×")
-    print("| CPU frame duration | " + " | ".join(ratios) + " |")
+    for name, label in (("livery", "Livery slots"), ("rcPlayer", "Remote Compose player alone")):
+        row = rows.get(name)
+        if not row:
+            continue
+        ratios = []
+        for p in ("P50", "P90", "P99"):
+            a, b = pick(row, "cpu", p), pick(compose, "cpu", p)
+            ratios.append("–" if not a or not b else f"{a / b:.2f}×")
+        print(f"| {label} | " + " | ".join(ratios) + " |")

@@ -15,8 +15,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The host's feed of sample cards (`FeedActivity`), flung top to bottom, drawn as Livery templates
- * and as the same designs written in Compose UI. Both are compiled with the shipped baseline
+ * The host's feed of sample cards (`FeedActivity`), flung top to bottom, drawn three ways: Livery
+ * slots, the Remote Compose player alone, and the same designs written in Compose UI. Both are compiled with the shipped baseline
  * profiles, as an app installed from a store would be. FrameTimingMetric's frame durations and
  * overruns for the two tests are the comparison; on an emulator they are only a rough one.
  */
@@ -24,8 +24,13 @@ import org.junit.runner.RunWith
 class FeedScrollBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
+  /** Livery slots: planning, binding, events and the player, as an app's feed runs them. */
   @Test fun livery() = fling("livery")
 
+  /** The same prepared documents and values, played by the player with nothing of Livery around it. */
+  @Test fun rcPlayer() = fling("rc")
+
+  /** The same designs written in Compose UI, drawing the same pixels (TwinRenderParityTest). */
   @Test fun composeUi() = fling("compose")
 
   private fun fling(mode: String) =
