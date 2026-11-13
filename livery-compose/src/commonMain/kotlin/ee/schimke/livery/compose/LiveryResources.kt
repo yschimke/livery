@@ -25,8 +25,10 @@ import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.protocol.AssetKind
+import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -94,6 +96,25 @@ class LiveryResources(
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
   private val plans = BoundedCache<SlotKey, Pair<Long, PlanResult>>(maxPlans)
   private val heights = BoundedCache<String, Int>(maxTemplates * 4)
+  private val unplayable = BoundedCache<String, Unit>(maxTemplates)
+  private val missCount = AtomicInt(0)
+
+  /**
+   * How many times a card composed a template that was not prepared yet, so it held its place
+   * instead of drawing on its first frame. Zero for a feed whose templates were all warmed.
+   */
+  val misses: Int
+    get() = missCount.load()
+
+  internal fun recordMiss() {
+    missCount.addAndFetch(1)
+  }
+
+  /**
+   * Whether [template] failed to prepare: its bytes are not a document this player can play (a
+   * catalog's placeholder, a newer wire format). Its cards draw nothing rather than fail the app.
+   */
+  fun cannotPlay(template: LoadedTemplate): Boolean = unplayable[template.entry.sha256] != null
 
   /**
    * The height [template] last drew at for a width of [widthPx], or null: what a card of it reserves
@@ -133,6 +154,15 @@ class LiveryResources(
   fun prepared(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument =
     documents.prepareNow(template.bytes, display)
 
+  /** [prepared], or null for a template that cannot be played, which is remembered ([cannotPlay]). */
+  fun preparedOrNull(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
+    try {
+      prepared(template, display)
+    } catch (_: Exception) {
+      unplayable.put(template.entry.sha256, Unit)
+      null
+    }
+
   /** [template]'s prepared document for [display] if it is in memory; never prepares. */
   fun preparedNow(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
     documents.peek(template.bytes, display)
@@ -145,13 +175,27 @@ class LiveryResources(
     documents.prepare(template.bytes, display)
 
   /**
+   * [prepare], or null for a template that cannot be played, which is remembered ([cannotPlay])
+   * rather than thrown: warming a catalog, or a card, must not fail for one bad template.
+   */
+  suspend fun prepareOrNull(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
+    try {
+      prepare(template, display)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (_: Exception) {
+      unplayable.put(template.entry.sha256, Unit)
+      null
+    }
+
+  /**
    * Gets what [template]'s cards need before they can draw into memory: its prepared document and
    * its fonts (not the images a card shows, which arrive with the card). A card of it then draws
    * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
    */
   suspend fun readyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display) {
     coroutineScope {
-      launch { prepare(template, display) }
+      launch { prepareOrNull(template, display) }
       launch { runCatching { typefaces(template) } }
     }
   }
@@ -211,7 +255,7 @@ class LiveryResources(
    * have without a preload: a missing image is fetched again when the card draws.
    */
   suspend fun preload(plan: RenderPlan, display: RcDisplay? = this.display) {
-    val document = prepare(plan.template, display).document
+    val document = prepareOrNull(plan.template, display)?.document ?: return
     coroutineScope {
       launch { typefaces(plan.template) }
       val loader = imageLoader { plan.bindings }

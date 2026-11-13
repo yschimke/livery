@@ -99,7 +99,7 @@ class BackgroundPreparationTest {
     val documents = host.resources.documents
     assertTrue(list.firstVisibleItemIndex > 50, "the list scrolled")
     assertEquals(1, documents.prepared, "one template, prepared once for every card")
-    assertEquals(0, documents.misses, "a slot composed a template before it was prepared")
+    assertEquals(0, host.resources.misses, "a slot composed a template before it was prepared")
   }
 
   @Test fun aTemplateIsRewrittenForTheDisplayItIsDrawnOn() = runBlocking {
@@ -145,6 +145,37 @@ class BackgroundPreparationTest {
     assertEquals(240, height, "the waiting card did not hold its template's height")
   }
 
+  /**
+   * A catalog can hold bytes this player cannot play (a placeholder, a newer wire format). Warming
+   * skips it and its card draws nothing, rather than failing the app.
+   */
+  @Test fun aTemplateThePlayerCannotPlayDrawsNoCardAndDoesNotFailTheApp() = runComposeUiTest {
+    val placeholder = template.copy(
+      entry = template.entry.copy(sha256 = "placeholder"),
+      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+    )
+    runBlocking { host.resources.readyToDraw(placeholder, RcDisplay(density.density, density.fontScale)) }
+    assertTrue(host.resources.cannotPlay(placeholder))
+    setContent {
+      androidx.compose.foundation.layout.Box(Modifier.testTag("holder")) {
+        LiveryTemplate(RenderPlan(placeholder, contract, Bindings(emptyMap())), host, Modifier.width(320.dp))
+      }
+    }
+    waitForIdle()
+    assertEquals(0, onNodeWithTag("holder").fetchSemanticsNode().size.height)
+  }
+
+  /** Not warmed: the card finds out itself, in the background, and still draws nothing. */
+  @Test fun aCardOfATemplateThePlayerCannotPlayDoesNotFailTheApp() = runComposeUiTest {
+    val placeholder = template.copy(
+      entry = template.entry.copy(sha256 = "placeholder-2"),
+      bytes = "PLACEHOLDER article-card".encodeToByteArray(),
+    )
+    setContent { LiveryTemplate(RenderPlan(placeholder, contract, Bindings(emptyMap())), host, Modifier.width(320.dp)) }
+    waitUntil(timeoutMillis = 10_000) { host.resources.cannotPlay(placeholder) }
+    waitForIdle()
+  }
+
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
     // The test's own density: the display the template is drawn on.
     runBlocking { host.resources.readyToDraw(template, RcDisplay(density.density, density.fontScale)) }
@@ -152,6 +183,6 @@ class BackgroundPreparationTest {
     setContent { LiveryTemplate(plan(1), host, Modifier.size(320.dp, 120.dp)) }
     mainClock.advanceTimeByFrame()
     assertEquals(1, onAllNodesWithTag(plan(1).slotTag).fetchSemanticsNodes().size)
-    assertEquals(0, host.resources.documents.misses)
+    assertEquals(0, host.resources.misses)
   }
 }

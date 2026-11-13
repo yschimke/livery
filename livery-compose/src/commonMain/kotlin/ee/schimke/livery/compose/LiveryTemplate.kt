@@ -27,7 +27,6 @@ import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
 import ee.schimke.composeai.rcplayer.compose.RcPlayerTheme
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
-import ee.schimke.composeai.rcplayer.compose.rememberRcPreparedDocument
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.composeai.rcplayer.runtime.RcPlayerEvent
 import ee.schimke.livery.client.ActionRouter
@@ -109,8 +108,19 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // Prepared for this display, or else as published if that is what was prepared ahead (a startup
   // before the display was known): the same pixels, on this frame, rather than none until the
   // rewrite is ready. The rewrite is still prepared, for the cards after this one.
-  val prepared = rememberRcPreparedDocument(bytes, host.preparation)
-    ?: remember(bytes, host) { host.resources.preparedNow(plan.template, display = null) }
+  val preparedState = remember(bytes, host, display) {
+    val cached = host.resources.preparedNow(plan.template, display)
+      ?: host.resources.preparedNow(plan.template, display = null)
+    if (cached == null && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
+    mutableStateOf(cached)
+  }
+  val inComposition = host.preparation !is RcPreparation.Background
+  if (preparedState.value == null && !inComposition) {
+    LaunchedEffect(bytes, host, display) { preparedState.value = host.resources.prepareOrNull(plan.template, display) }
+  }
+  // [RcPreparation.InComposition]: the host chose to prepare here, on this frame.
+  val prepared = preparedState.value
+    ?: if (inComposition) remember(bytes, host, display) { host.resources.preparedOrNull(plan.template, display) } else null
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
   val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
@@ -132,6 +142,11 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // A template's fonts load before it draws, so text never reflows from a fallback face; and it
   // draws only once it is prepared, which is never in composition under a background strategy.
   val loader = typefaces
+  if (host.resources.cannotPlay(plan.template)) {
+    // Not a document this player can play: no card, rather than an app that fails with it.
+    Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
+    return
+  }
   if (loader == null || prepared == null) {
     // Nothing to draw yet (a template's first card nobody prepared): hold the height the template
     // last drew at for this width, so the list does not move when the card arrives.
@@ -145,7 +160,9 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   Box(modifier.then(host.slotModifier(plan)).onVisibilityChanged(minFractionVisible = VIEWABLE_FRACTION) { visible ->
     tracker.visible(visible, host.clock.nowEpochMs())
   }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
-    CompositionLocalProvider(LocalRcPreparation provides host.preparation) {
+    CompositionLocalProvider(
+      LocalRcPreparation provides host.preparation,
+    ) {
       RcComposePlayer(
         prepared = prepared,
         imageLoader = imageLoader,

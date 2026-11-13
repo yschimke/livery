@@ -78,8 +78,10 @@ background preparation (`LiveryHost.preparation`, by default `RcPreparation.Back
 `host.resources.documents`): composition only looks a template up, and a slot swaps a new answer in
 only once its template is prepared and its fonts loaded. A feed that scrolls never prepares a
 template on its main thread, whether or not you prepared anything; preparing ahead only decides
-whether a template's first card shows on its first frame. `host.resources.documents.misses` counts
-the cards that had to wait, which a test can hold at zero. Pass
+whether a template's first card shows on its first frame. `host.resources.misses` counts
+the cards that had to wait, which a test can hold at zero. A template whose bytes the player cannot
+play (`host.resources.cannotPlay`) draws no card, and warming or preloading skips it, rather than
+failing the app. Pass
 `preparation = RcPreparation.InComposition` to prepare a template's first card in its composition
 instead.
 
