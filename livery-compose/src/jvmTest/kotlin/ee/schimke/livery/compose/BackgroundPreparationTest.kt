@@ -176,6 +176,24 @@ class BackgroundPreparationTest {
     waitForIdle()
   }
 
+  /** In a slot, a template the player cannot play draws the app's fallback, never nothing. */
+  @Test fun aSlotWhoseTemplateCannotPlayDrawsTheAppsFallback() = runComposeUiTest {
+    val placeholder = template.copy(
+      entry = template.entry.copy(sha256 = "placeholder-3"),
+      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+    )
+    var reason: String? = null
+    setContent {
+      LiverySlot(key = 1, host = host, modifier = Modifier.width(320.dp), fallback = { r ->
+        reason = r
+        androidx.compose.foundation.layout.Box(Modifier.size(320.dp, 48.dp).testTag("native"))
+      }) { PlanResult.Ready(RenderPlan(placeholder, contract, Bindings(emptyMap()))) }
+    }
+    waitUntil(timeoutMillis = 10_000) { reason != null }
+    assertEquals(1, onAllNodesWithTag("native").fetchSemanticsNodes().size)
+    assertTrue(reason!!.contains("cannot be played"), "$reason")
+  }
+
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
     // The test's own density: the display the template is drawn on.
     runBlocking { host.resources.readyToDraw(template, RcDisplay(density.density, density.fontScale)) }

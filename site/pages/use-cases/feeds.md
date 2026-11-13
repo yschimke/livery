@@ -80,8 +80,8 @@ only once its template is prepared and its fonts loaded. A feed that scrolls nev
 template on its main thread, whether or not you prepared anything; preparing ahead only decides
 whether a template's first card shows on its first frame. `host.resources.misses` counts
 the cards that had to wait, which a test can hold at zero. A template whose bytes the player cannot
-play (`host.resources.cannotPlay`) draws no card, and warming or preloading skips it, rather than
-failing the app. Pass
+play (`host.resources.cannotPlay`) never fails the app: warming or preloading skips it, a
+`LiverySlot` draws its `fallback` instead, and a bare `LiveryTemplate` draws nothing. Pass
 `preparation = RcPreparation.InComposition` to prepare a template's first card in its composition
 instead.
 

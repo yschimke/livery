@@ -54,8 +54,13 @@ fun LiverySlot(
   // rather than its fallback for a frame; it still replans, and a new answer replaces it.
   val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
   LaunchedEffect(state, revision) {
-    val result = plan()
-    if (result is PlanResult.Ready) host.resources.readyToDraw(result.plan.template, display)
+    val result = plan().let { planned ->
+      if (planned !is PlanResult.Ready) return@let planned
+      val template = planned.plan.template
+      host.resources.readyToDraw(template, display)
+      // A template whose bytes the player cannot play draws the app's fallback, never nothing.
+      if (host.resources.cannotPlay(template)) PlanResult.Fallback("${template.entry.designId} cannot be played") else planned
+    }
     slotId?.let { host.resources.keepPlan(it, key, revision, result) }
     state.value = result
   }
