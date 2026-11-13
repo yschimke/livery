@@ -6,7 +6,10 @@ name: Release
 # this workflow publishes it: the libraries to Maven Central as
 # `ee.schimke.composeai:<module>:<version>` (and the Gradle plugin
 # `ee.schimke.composeai.livery.catalog`), the `livery` and `livery-mcp` CLIs to the release. The
-# release is un-drafted only once Maven, CLI and npm publishing succeed.
+# release is un-drafted once Maven and the CLIs are published: the CLIs are what consumers download
+# (`livery-version` in a catalog workflow), and a draft's assets 404. npm is published in parallel
+# and does not gate the release: a failed npm publish leaves the run red and warns, and is retried
+# with `publish_tag`, instead of keeping every release a draft (v0.6.0 to v0.11.0 were).
 # npm uses trusted publishing: @yschimke/livery-a2ui trusts yschimke/livery, release.yml.
 # Bootstrap the package manually first; no NPM_TOKEN secret is used.
 #
@@ -289,14 +292,19 @@ jobs:
         working-directory: web/a2ui
         run: npm publish --access public
 
-  # Un-drafts the release once everything it promises is published.
+  # Un-drafts the release once Maven and the CLIs are published. It waits for npm to finish (the
+  # standalone viewer zip is attached there) but does not require it to succeed.
   finish-release:
     needs: [release-please, publish, publish-npm]
-    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.publish-npm.result == 'success' }}
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Say so when npm did not publish
+        if: ${{ needs.publish-npm.result != 'success' }}
+        run: |
+          echo "::warning::npm publish or viewer upload ${{ needs.publish-npm.result }}: the release is published without it. Fix npm trusted publishing, then run this workflow with publish_tag=${{ needs.release-please.outputs.publish_tag }}."
       - name: Publish the draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
