@@ -28,6 +28,7 @@ import ee.schimke.livery.protocol.AssetKind
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -168,19 +169,26 @@ class LiveryResources(
     documents.peek(template.bytes, display)
 
   /**
-   * [template]'s prepared document for [display], rewritten for it and prepared on
-   * [Dispatchers.Default] unless it is in memory.
+   * [template]'s prepared document for [display], rewritten for it and prepared on [context]
+   * unless it is in memory.
    */
-  suspend fun prepare(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument =
-    documents.prepare(template.bytes, display)
+  suspend fun prepare(
+    template: LoadedTemplate,
+    display: RcDisplay? = this.display,
+    context: CoroutineContext = Dispatchers.Default,
+  ): RcPreparedDocument = documents.prepare(template.bytes, display, context)
 
   /**
    * [prepare], or null for a template that cannot be played, which is remembered ([cannotPlay])
    * rather than thrown: warming a catalog, or a card, must not fail for one bad template.
    */
-  suspend fun prepareOrNull(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
+  suspend fun prepareOrNull(
+    template: LoadedTemplate,
+    display: RcDisplay? = this.display,
+    context: CoroutineContext = Dispatchers.Default,
+  ): RcPreparedDocument? =
     try {
-      prepare(template, display)
+      prepare(template, display, context)
     } catch (e: CancellationException) {
       throw e
     } catch (_: Exception) {

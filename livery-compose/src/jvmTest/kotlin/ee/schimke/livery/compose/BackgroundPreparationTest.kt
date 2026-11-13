@@ -42,6 +42,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -132,17 +133,32 @@ class BackgroundPreparationTest {
    * last drew at for its width, so the list does not move when it arrives.
    */
   @Test fun aCardThatCannotDrawYetHoldsItsTemplatesHeight() = runComposeUiTest {
-    val widthPx = with(density) { 320.dp.roundToPx() }
-    host.resources.keepHeight(template, widthPx, 240)
-    mainClock.autoAdvance = false
-    setContent {
-      androidx.compose.foundation.layout.Box(Modifier.testTag("holder")) {
-        LiveryTemplate(plan(1), host, Modifier.width(320.dp))
+    // Preparation held until the height is checked, so the card certainly cannot draw yet.
+    val gate = java.util.concurrent.CountDownLatch(1)
+    val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    executor.execute { gate.await() }
+    val resources = LiveryResources(repository)
+    val waiting = LiveryHost(
+      repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock,
+      resources = resources,
+      preparation = RcPreparation.Background(resources.documents, executor.asCoroutineDispatcher()),
+    )
+    try {
+      val widthPx = with(density) { 320.dp.roundToPx() }
+      waiting.resources.keepHeight(template, widthPx, 240)
+      setContent {
+        androidx.compose.foundation.layout.Box(Modifier.testTag("holder")) {
+          LiveryTemplate(plan(1), waiting, Modifier.width(320.dp))
+        }
       }
+      waitForIdle()
+      val height = onNodeWithTag("holder").fetchSemanticsNode().size.height
+      assertEquals(240, height, "the waiting card did not hold its template's height")
+      assertNull(waiting.resources.preparedNow(template), "preparation ran despite the gate")
+    } finally {
+      gate.countDown()
+      executor.shutdown()
     }
-    mainClock.advanceTimeByFrame()
-    val height = onNodeWithTag("holder").fetchSemanticsNode().size.height
-    assertEquals(240, height, "the waiting card did not hold its template's height")
   }
 
   /**

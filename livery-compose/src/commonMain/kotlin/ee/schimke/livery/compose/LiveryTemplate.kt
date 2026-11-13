@@ -114,9 +114,13 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     if (cached == null && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
     mutableStateOf(cached)
   }
-  val inComposition = host.preparation !is RcPreparation.Background
-  if (preparedState.value == null && !inComposition) {
-    LaunchedEffect(bytes, host, display) { preparedState.value = host.resources.prepareOrNull(plan.template, display) }
+  val background = host.preparation as? RcPreparation.Background
+  val inComposition = background == null
+  if (preparedState.value == null && background != null) {
+    // On the host's preparation context, as the player itself would prepare it.
+    LaunchedEffect(bytes, host, display) {
+      preparedState.value = host.resources.prepareOrNull(plan.template, display, background.context)
+    }
   }
   // [RcPreparation.InComposition]: the host chose to prepare here, on this frame.
   val prepared = preparedState.value
