@@ -32,12 +32,17 @@ class SampleDesignsTest {
   private val twoWay = File("../samples/two-way")
   private val context get() = RuntimeEnvironment.getApplication()
 
+  /** The same design as a launcher widget (the `widgets` profile: `widgetsProfile`). */
+  private fun Target.asLauncher() = Target(Surfaces.LAUNCHER_WIDGET, rcApiLevel, listOf("widgets"), size = size)
+
   @Test fun capturesBannerClassic() = runBlocking {
     val contract = LiveryCapture.contract(catalog, "promo/banner@1")
     val target = Target(Surfaces.IN_APP, 7, listOf("androidx"), size = SizeRange(minWidthDp = 280, maxWidthDp = 840))
     val templates = mapOf("in-app" to LiveryCapture.capture(context, target, 360, 160, source = mapOf("design" to "banner-classic")) { BannerClassic(LiveryValues(contract)) })
     assertEquals(listOf("cta", "dismiss"), templates.getValue("in-app").emits)
     SampleCatalogs.write("catalog", "banner-classic", templates)
+    val launcher = LiveryCapture.capture(context, target.asLauncher(), 360, 160) { BannerClassic(LiveryValues(contract)) }
+    SampleCatalogs.writeLauncher("catalog", "banner-classic", launcher)
   }
 
   @Test fun capturesPollCard() = runBlocking {
@@ -46,6 +51,8 @@ class SampleDesignsTest {
     val templates = mapOf("in-app" to LiveryCapture.capture(context, target, 360, 280, source = mapOf("design" to "poll-card")) { PollCard(LiveryValues(contract)) })
     assertEquals(listOf("vote"), templates.getValue("in-app").emits)
     SampleCatalogs.write("catalog", "poll-card", templates)
+    val launcher = LiveryCapture.capture(context, target.asLauncher(), 360, 280) { PollCard(LiveryValues(contract)) }
+    SampleCatalogs.writeLauncher("catalog", "poll-card", launcher)
   }
 
   @Test fun capturesQuantityStepper() = runBlocking {
@@ -54,6 +61,8 @@ class SampleDesignsTest {
     val templates = mapOf("in-app" to LiveryCapture.capture(context, target, 360, 80, source = mapOf("design" to "quantity-stepper")) { QuantityStepper(LiveryValues(contract)) })
     assertEquals(listOf("setQuantity"), templates.getValue("in-app").emits)
     SampleCatalogs.write("two-way", "quantity-stepper", templates)
+    val launcher = LiveryCapture.capture(context, target.asLauncher(), 360, 80) { QuantityStepper(LiveryValues(contract)) }
+    SampleCatalogs.writeLauncher("two-way", "quantity-stepper", launcher)
   }
 
   @Test fun setChecksTheActionAndTheInputsType() {

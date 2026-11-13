@@ -1,6 +1,7 @@
 package ee.schimke.livery.capture.cmp
 
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
+import ee.schimke.composeai.rcplayer.protocol.RcOpcodes
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import ee.schimke.livery.capture.CapturedTemplate
 import ee.schimke.livery.capture.CatalogContracts
@@ -40,15 +41,16 @@ import kotlinx.coroutines.runBlocking
  *   [MAX_DIFFERING_PIXELS].
  *
  * Run by `:livery-capture-cmp:bindingAgreementTest` (part of `check`), which writes what it
- * measured to `build/reports/binding-agreement/report.txt`.
+ * measured to `build/reports/binding-agreement/report.txt`; the same samples as launcher widgets, compared by
+ * header and operations under the launcher profile, go to `launcher-report.txt`.
  */
 class BindingAgreementTest {
-  private class Sample(val catalog: String, val design: String, val contractRef: String, val widthDp: Int, val heightDp: Int, val cmp: suspend () -> CapturedTemplate)
+  private class Sample(val catalog: String, val design: String, val contractRef: String, val widthDp: Int, val heightDp: Int, val cmp: suspend (launcher: Boolean) -> CapturedTemplate)
 
   private val samples = listOf(
-    Sample("catalog", "banner-classic", "promo/banner@1", 360, 160, SampleCatalogs::bannerClassic),
-    Sample("catalog", "poll-card", "social/poll@1", 360, 280, SampleCatalogs::pollCard),
-    Sample("two-way", "quantity-stepper", "shop/quantity@1", 360, 80, SampleCatalogs::quantityStepper),
+    Sample("catalog", "banner-classic", "promo/banner@1", 360, 160, { SampleCatalogs.bannerClassic(it) }),
+    Sample("catalog", "poll-card", "social/poll@1", 360, 280, { SampleCatalogs.pollCard(it) }),
+    Sample("two-way", "quantity-stepper", "shop/quantity@1", 360, 80, { SampleCatalogs.quantityStepper(it) }),
   )
 
   private val androidx = File(assertNotNull(System.getProperty("livery.capture.androidx"), "run :livery-capture-cmp:bindingAgreementTest, which captures the AndroidX side first"))
@@ -57,7 +59,7 @@ class BindingAgreementTest {
   @Test fun theBindingsCaptureTheSameTemplate() {
     for (s in samples) {
       val contract = CatalogContracts.contract(File(SampleCatalogs.source, s.catalog), s.contractRef)
-      val cmp = runBlocking { s.cmp() }
+      val cmp = runBlocking { s.cmp(false) }
       val folder = File(androidx, "${s.catalog}/designs/${s.design}")
       val androidxBytes = File(folder, "in-app.rc").readBytes()
       report.appendLine("${s.catalog}/${s.design} (${s.contractRef})")
@@ -97,6 +99,33 @@ class BindingAgreementTest {
     flush()
   }
 
+  /**
+   * The same samples as launcher widgets: AndroidX under `widgetsProfile` (`:livery-capture`'s
+   * `SampleDesignsTest`), here under `RcCaptureProfiles.launcherWidgets`. Both writers are held to
+   * one profile, so the documents must agree on what the profile fixes: the whole header, and the
+   * operations they use (as a set: the writers differ in how often, as the report shows). There is
+   * no AndroidX player on the JVM to draw the AndroidX capture, so this is the document-level
+   * comparison only; `livery-verify`'s CapturedWidgetTest draws both on Android 16's own player.
+   */
+  @Test fun theBindingsAgreeUnderTheLauncherProfile() {
+    for (s in samples) {
+      val androidxBytes = File(androidx, "launcher-parity/${s.catalog}-${s.design}.rc").readBytes()
+      val cmpBytes = runBlocking { s.cmp(true) }.bytes
+      val a = RcDocumentCodec.decode(androidxBytes, RcWireLimits())
+      val c = RcDocumentCodec.decode(cmpBytes, RcWireLimits())
+      report.appendLine("${s.catalog}/${s.design} as a launcher widget")
+      report.appendLine("  bytes: androidx ${androidxBytes.size}, cmp ${cmpBytes.size}")
+      report.appendLine("  operations (opcode x count) only or more often in one: androidx ${surplus(androidxBytes, cmpBytes)}, cmp ${surplus(cmpBytes, androidxBytes)}")
+      assertEquals(a.header, c.header, "${s.design}: the launcher header")
+      // alpha23's `clickable` also writes an empty AccessibilitySemantics (250), which androidx-main's, and so
+      // rc-players', writes only for a role (rc-players' MIGRATING_CREATION.md).
+      fun used(d: ee.schimke.composeai.rcplayer.protocol.RcDocument) = d.operations.map { it.opcode }.toSortedSet() - RcOpcodes.ACCESSIBILITY_SEMANTICS
+      assertEquals(used(a), used(c), "${s.design}: the operations a launcher capture uses")
+      assertTrue(RcOpcodes.CORE_TEXT !in c.operations.map { it.opcode }, "${s.design}: no CoreText on a launcher")
+    }
+    flush("launcher-report.txt")
+  }
+
   private class Diff(val pixels: Int, val differing: Int, val maxChannelDelta: Int, val inked: Int) {
     override fun toString() = "$differing of $pixels pixels differ, largest channel delta $maxChannelDelta ($inked pixels are not background)"
   }
@@ -133,9 +162,9 @@ class BindingAgreementTest {
     return ca.mapNotNull { (op, n) -> (n - (cb[op] ?: 0)).takeIf { it > 0 }?.let { "$op x$it" } }.ifEmpty { listOf("none") }.joinToString(", ")
   }
 
-  private fun flush() {
+  private fun flush(file: String = "report.txt") {
     print(report)
-    System.getProperty("livery.agreement.report")?.let { File(it).apply { mkdirs() }.resolve("report.txt").writeText(report.toString()) }
+    System.getProperty("livery.agreement.report")?.let { File(it).apply { mkdirs() }.resolve(file).writeText(report.toString()) }
   }
 
   private companion object {

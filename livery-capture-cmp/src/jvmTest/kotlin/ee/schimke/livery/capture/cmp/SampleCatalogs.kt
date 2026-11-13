@@ -24,21 +24,29 @@ internal object SampleCatalogs {
   /** The hand-written sample source trees (`samples/`), from this module's directory. */
   val source = File("../samples")
 
-  suspend fun bannerClassic(): CapturedTemplate {
+  /**
+   * The target a sample is captured for: the in-app one the catalog holds, or, for
+   * `BindingAgreementTest`'s comparison of the two bindings' launcher profiles, the same design as
+   * a launcher widget. Never written into a catalog.
+   */
+  private fun target(launcher: Boolean, size: SizeRange) =
+    if (launcher) Target(Surfaces.LAUNCHER_WIDGET, 7, listOf("widgets"), size = size) else Target(Surfaces.IN_APP, 7, listOf("androidx"), size = size)
+
+  suspend fun bannerClassic(launcher: Boolean = false): CapturedTemplate {
     val contract = CatalogContracts.contract(File(source, "catalog"), "promo/banner@1")
-    val target = Target(Surfaces.IN_APP, 7, listOf("androidx"), size = SizeRange(minWidthDp = 280, maxWidthDp = 840))
+    val target = target(launcher, SizeRange(minWidthDp = 280, maxWidthDp = 840))
     return LiveryCapture.capture(target, 360, 160, source = mapOf("design" to "banner-classic")) { BannerClassic(LiveryValues(contract)) }
   }
 
-  suspend fun pollCard(): CapturedTemplate {
+  suspend fun pollCard(launcher: Boolean = false): CapturedTemplate {
     val contract = CatalogContracts.contract(File(source, "catalog"), "social/poll@1")
-    val target = Target(Surfaces.IN_APP, 7, listOf("androidx"), size = SizeRange(minWidthDp = 280, maxWidthDp = 600))
+    val target = target(launcher, SizeRange(minWidthDp = 280, maxWidthDp = 600))
     return LiveryCapture.capture(target, 360, 280, source = mapOf("design" to "poll-card")) { PollCard(LiveryValues(contract)) }
   }
 
-  suspend fun quantityStepper(): CapturedTemplate {
+  suspend fun quantityStepper(launcher: Boolean = false): CapturedTemplate {
     val contract = CatalogContracts.contract(File(source, "two-way"), "shop/quantity@1")
-    val target = Target(Surfaces.IN_APP, 7, listOf("androidx"), size = SizeRange(minWidthDp = 240, maxWidthDp = 600))
+    val target = target(launcher, SizeRange(minWidthDp = 240, maxWidthDp = 600))
     return LiveryCapture.capture(target, 360, 80, source = mapOf("design" to "quantity-stepper")) { QuantityStepper(LiveryValues(contract)) }
   }
 

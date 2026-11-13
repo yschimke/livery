@@ -14,4 +14,14 @@ internal object SampleCatalogs {
     val out = System.getProperty("livery.capture.out") ?: return
     DesignFolder(File(out, "$catalog/designs/$design")).write(templates)
   }
+
+  /**
+   * A sample captured as a launcher widget (`widgetsProfile`), for BindingAgreementTest to compare
+   * with livery-capture-cmp's capture of it under `RcCaptureProfiles.launcherWidgets`: header and
+   * operations. Beside the catalogs, not in them: a launcher design is not part of the sample catalog.
+   */
+  fun writeLauncher(catalog: String, design: String, template: CapturedTemplate) {
+    val out = System.getProperty("livery.capture.out") ?: return
+    File(out, "launcher-parity").apply { mkdirs() }.resolve("$catalog-$design.rc").writeBytes(template.bytes)
+  }
 }

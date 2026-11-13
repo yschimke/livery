@@ -37,8 +37,8 @@ is the same template to Livery.
 | Creation API | rc-players' Compose Multiplatform one: `ee.schimke.composeai:rc-creation-compose`, package `ee.schimke.composeai.rccreation.*` | AndroidX's: `androidx.compose.remote:remote-creation-compose` (alpha), package `androidx.compose.remote.creation.*` |
 | Runs on | a plain JVM (a unit test, a build tool, a server), Android; compiled for Wasm, not yet tested in a browser | Android only: a Robolectric unit test |
 | Livery package | `ee.schimke.livery.capture.cmp` | `ee.schimke.livery.capture` |
-| Capture | `LiveryCapture.capture(target, widthDp, heightDp) { … }` | `LiveryCapture.capture(context, target, widthDp, heightDp, profile = …) { … }` |
-| A `widgets` target | written in what a launcher decodes, then checked as `rc-widget-launcher` hands it to the player | captured with `rc-widget-launcher`'s `widgetsProfile` |
+| Capture | `LiveryCapture.capture(target, widthDp, heightDp, profile = …) { … }` | `LiveryCapture.capture(context, target, widthDp, heightDp, profile = …) { … }` |
+| A `widgets` target | captured under `RcCaptureProfiles.launcherWidgets` (`rc-widget-creation`) | captured under `rc-widget-launcher`'s `widgetsProfile`, the same operations and header |
 | Available | from the release after 0.9.0 | since 0.2.0 |
 
 **Use `livery-capture-cmp`** unless something forces the other: it needs no Android SDK, no
@@ -147,17 +147,29 @@ to an output branch. Livery's own samples work this way, on the plain JVM:
 `./gradlew :livery-capture-cmp:sampleCatalogs` captures `banner-classic`, `poll-card` and
 `quantity-stepper` into `livery-capture-cmp/build/samples/`.
 
-- **A widget target is held to its player.** `livery-capture-cmp` has no AndroidX `Profile` to
-  capture with, so for a `widgets` target (a launcher widget, a notification) it writes the
-  document in what Android 16's player and newer launchers both decode (text as `TextLayout`, the
-  widgets profile in the header) and then checks it the way `rc-widget-launcher` hands a document
-  to the player. A `glance-wear` target is checked against Glance Wear's allow-list, after the
-  adaptation `livery-wear-widgets` applies; it is checked, not played. What the player would
-  refuse fails the capture with the operation it refuses, for example
-  `MODIFIER_TOUCH_DOWN is not supported by Wear widgets`. `livery-verify` plays a launcher widget
-  captured either way on Android 16's own player.
+- **A target is captured under a profile.** Both bindings take a capture `profile`, which the
+  writer holds the document to: it refuses an operation outside it (for example `Operation 240 is
+  not supported for this version`), writes text as `TextLayout` where the profile has no `CoreText`,
+  and writes the profile's header. Nothing is rewritten afterwards. The default follows the
+  target's `profiles`: `widgets` (a launcher widget, a notification) is
+  `RcCaptureProfiles.launcherWidgets`, the operations Android 16's level 6 player and API 37's both
+  decode (what `livery-capture` calls `widgetsProfile`); `glance-wear` is
+  `RcCaptureProfiles.wearWidgets`, Glance Wear's allow-list; `experimental` is
+  `RcCaptureProfiles.androidXExperimental`, for an app's own player (a flow row, a pattern); anything
+  else is the creation default, `RcPlatformProfiles.ANDROIDX`. A launcher capture does not hold
+  `TextSubtext` (a string cut with `substring`, which a relative time uses), because
+  `launcherWidgets` follows Android 16's level 6 operation table, which lists none. For API 37 launchers only pass `RcCaptureProfiles.systemThemedLauncherWidgets`, or build the
+  profile with `RcTargetProfile.of(7, …).toCaptureProfile(without = …)`.
+- **A capture is a template, not a playable document.** A padding, a spacing or a background
+  colour that reads a named value or the display's density is fine: the host writes the values in
+  (`livery-instantiate`) and `rc-widget-launcher` makes what Android 16 reads only as literals
+  literal. The capture checks only what instantiation can't change, such as an operation outside the
+  profile, or a `drawWithContent` (or a brush background) on an Android 16 launcher, which that
+  player paints until the widget host dies. `livery-verify` plays an instantiated capture on
+  Android 16's own player.
 - `livery-capture`'s `LiveryCapture.capture` uses `rc-widget-launcher`'s widgets profile for a
-  target with the `widgets` profile; pass Glance Wear's own `profile` for a `glance-wear` one.
+  target with the `widgets` profile and the creation default otherwise; pass Glance Wear's own
+  `profile` for a `glance-wear` one.
 - The sidecar's `reads` and `emits` come from the captured document, never from hand-written lists.
 - `DesignFolder.write` writes `<name>.rc` and `<name>.json` and removes templates no longer
   captured. A catalog repository that does commit its `.rc` (another tool's output, say) can keep
