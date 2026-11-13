@@ -21,14 +21,31 @@ catalog/                 the source tree (see Getting started)
 1. Someone (a person, or an agent with `livery-mcp`) edits the tree in a branch and opens a pull
    request.
 2. **Review**: Livery's review workflow builds the tree, decodes every template, compares it with
-   the pull request's base, and posts one comment (updated on every push) with what the change
-   does: contract changes, templates added or changed summed up per design (reads, emits, minor,
-   size range), designs (install policy, revocation), experiments and seasons (schedule,
-   allocation, arms) and placement rules (every field that changed). A note that applies to many
-   templates is said once, with the designs it applies to, and every template is listed in a
-   collapsed section. With `previews: true` the comment also shows each changed design drawn with
-   its contract's examples, before and after. It fails when the change would break installed
-   apps.
+   the pull request's base, and posts one comment (updated on every push) written to be read in
+   ten seconds. Its first line is the verdict and what to do (`Compatible with 58a5852: nothing
+   breaks for existing apps`, or `Not compatible with 58a5852: 2 problems to fix`). Then come only
+   the things that need a decision: problems to fix, and anything this change newly does that is
+   worth a look. A note that applies to many templates is said once, with the designs it applies to,
+   and something the base already had (an optional value with no default, say) is not repeated when
+   a template is only regenerated. Contract changes, designs, experiments and seasons, and placement
+   rules that changed follow, with a table of the designs whose templates changed (size, and the
+   data they read or send only when that changed). Every changed template is in a collapsed
+   section. With `previews: true` the comment also shows each changed design drawn with its
+   contract's examples, before and after. It fails when the change would break installed apps.
+
+   ```text
+   ### Compatible with `58a5852`: nothing breaks for existing apps
+
+   5 designs, 181 templates: 145 changed, 36 unchanged
+
+   **Worth a look**
+   - `subtitle` is optional and its contract gives it no default: when an app leaves it out, the
+     template draws its own built-in fallback. In 1 template: `tile-default`
+
+   | Design | Templates | Size |
+   |---|---|---|
+   | `tile-default` | 1 changed | 7.8 KB (was 7.5 KB, +5%) |
+   ```
 3. Reviewers read the comment and the diff, and approve. Make the review job a required check, and
    put the tree under `CODEOWNERS` so the right people approve.
 4. **Publish**: merging runs the publish workflow: it builds the tree again, signs the manifest

@@ -65,7 +65,7 @@ is neither current nor kept (`livery keep-examples`; see
 feature (a shader, haptics, sound, particles) is noted for review, since it plays only for apps
 that allow it; `--deny-new-features` fails the check instead, for a catalog that admits none.
 `--markdown` prints it for a pull
-request comment, summed up per design; `--json` prints the same report for other tools; agents get
+request comment: a verdict first, then only what needs a decision, summed up per design; `--json` prints the same report for other tools; agents get
 it from the MCP server's `check_compatibility`. `livery review` prints the markdown with pictures:
 each changed design drawn with its contract's examples, before and after (see
 [Repository mode](repository-mode.md#pictures-in-the-review)).

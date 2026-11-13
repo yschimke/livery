@@ -37,21 +37,21 @@ class CompatibilityCheckTest {
     assertEquals(listOf("subtitle"), launcher.readsAdded)
     assertEquals(1, launcher.requiresMinor)
     assertEquals(mapOf("available" to "default", "is_on" to "default", "name" to "required", "state" to "required", "subtitle" to "document"), launcher.values)
-    assertTrue(r.warnings.any { "now requires minor 1" in it }, r.warnings.toString())
-    assertTrue(r.warnings.any { "`subtitle` is optional with no contract default" in it }, r.warnings.toString())
+    assertTrue(r.warnings.any { "now needs contract minor 1" in it }, r.warnings.toString())
+    assertTrue(r.warnings.any { "`subtitle` is optional and its contract gives it no default" in it }, r.warnings.toString())
     assertTrue("compatible" in CompatibilityCheck.text(r))
 
     // The comment sums templates up per design and says each note once, with the designs it's in.
     val md = CompatibilityCheck.markdown(r)
-    assertTrue("| `tile-default` | 1 changed, " in md, md)
-    assertTrue("- `subtitle` is optional with no contract default; only the template's own default draws when it's missing: `tile-default` (1 template)" in md, md)
+    assertTrue("| `tile-default` | 1 changed | " in md, md)
+    assertTrue("- `subtitle` is optional and its contract gives it no default: when an app leaves it out, the template draws its own built-in fallback. In 1 template: `tile-default`" in md, md)
     assertTrue("<details><summary>Every changed template (1)</summary>" in md, md)
     assertFalse("tile-default launcher-widget" in md.substringBefore("<details>"), "no per-template warnings above the fold: $md")
   }
 
   @Test fun aCommentNamesAShortRevision() {
     val r = CompatibilityCheck.compare(sample, copy(), against = "a489de5cf731f0b53e20591bf3375a60bfd92bb2")
-    assertTrue(CompatibilityCheck.markdown(r).startsWith("### Livery check against `a489de5`: compatible"))
+    assertTrue(CompatibilityCheck.markdown(r).startsWith("### Compatible with `a489de5`: nothing breaks for existing apps"))
   }
 
   @Test fun aBreakingChangeUnderTheSameMajorFails() {
@@ -59,7 +59,7 @@ class CompatibilityCheckTest {
     new.edit("contracts/status-tile.json") { it.replace("\"maxLength\": 40", "\"maxLength\": 20") }
     val r = CompatibilityCheck.compare(new, sample)
     assertFalse(r.ok)
-    assertTrue(r.problems.single().startsWith("contract live/status-tile@1: 0 -> 0 is not a minor change"), r.problems.toString())
+    assertTrue(r.problems.single().startsWith("contract live/status-tile@1 changed in a way apps built for the old one can't handle"), r.problems.toString())
     assertTrue("NOT compatible" in CompatibilityCheck.text(r))
   }
 
