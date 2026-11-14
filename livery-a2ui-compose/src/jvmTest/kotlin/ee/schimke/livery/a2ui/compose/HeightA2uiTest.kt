@@ -18,7 +18,7 @@ import kotlin.test.Test
 @OptIn(ExperimentalTestApi::class)
 class HeightA2uiTest : InlineSurfaceTest(null) {
   @Test fun unboundedCatalogUsesAuthoredHeight() = runComposeUiTest {
-    send(create, components("""{"sha256":"${java.security.MessageDigest.getInstance("SHA-256").digest(InlineFixtures.banner).joinToString("") { "%02x".format(it) }}"}"""))
+    send(create, components("""{"sha256":"${InlineFixtures.banner.sha256().hex()}"}"""))
     setContent {
       MaterialTheme {
         Box(Modifier.width(360.dp).verticalScroll(rememberScrollState())) {

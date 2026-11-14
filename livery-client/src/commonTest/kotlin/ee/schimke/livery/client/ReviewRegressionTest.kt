@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.protocol.Decision
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.Target
@@ -26,14 +28,14 @@ class ReviewRegressionTest {
   private fun blobFor(sha: String) = names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
 
   /** Serves [manifest] unsigned; [gate], when set, holds the manifest request until completed. */
-  private class Host(val manifest: Manifest, val blob: (String) -> ByteArray?) : Fetcher {
+  private class Host(val manifest: Manifest, val blob: (String) -> ByteString?) : Fetcher {
     var gate: CompletableDeferred<Unit>? = null
     var down = false
     override suspend fun get(url: String, etag: String?): FetchResult {
       if (down) return FetchResult.Failed(503, "down")
       if (url.endsWith("manifest.json")) {
         gate?.await()
-        return FetchResult.Ok(Json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray(), "e")
+        return FetchResult.Ok(Json.encodeToString(Manifest.serializer(), manifest).encodeUtf8(), "e")
       }
       if (url.endsWith(".sig.json")) return FetchResult.Failed(404, "unsigned")
       return blob(url.substringAfterLast('/').removeSuffix(".rc"))?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
@@ -101,9 +103,9 @@ class SecondReviewRegressionTest {
   private val q = TemplateQuery("live/status-tile@1", inApp8)
   private var now = 1_000L
 
-  private class Host(val manifest: Manifest, val blob: (String) -> ByteArray?) : Fetcher {
+  private class Host(val manifest: Manifest, val blob: (String) -> ByteString?) : Fetcher {
     override suspend fun get(url: String, etag: String?): FetchResult = when {
-      url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray(), null)
+      url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), manifest).encodeUtf8(), null)
       url.endsWith(".sig.json") -> FetchResult.Failed(404, "unsigned")
       else -> blob(url.substringAfterLast('/').removeSuffix(".rc"))?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
     }
@@ -172,7 +174,7 @@ class FourthReviewRegressionTest {
     ))
     val host = Fetcher { url, _ ->
       when {
-        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), m).encodeToByteArray(), null)
+        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), m).encodeUtf8(), null)
         url.endsWith("$sha.rc") -> FetchResult.Ok(shared, null)
         else -> FetchResult.Failed(404, "no")
       }

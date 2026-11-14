@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.client.FileBlobStore
 import ee.schimke.livery.client.FileKeyValueStore
 import ee.schimke.livery.client.JavaCrypto
@@ -39,8 +40,8 @@ class PublishEndToEndTest {
     val out = Files.createTempDirectory("catalog").toFile()
     val keys = Signing.generate()
     val built = CatalogBuilder(now = { 1_795_000_000_000 }).build(sample, Layout.Static, serial = 7)
-    built.files.forEach { (p, b) -> File(out, p).apply { parentFile.mkdirs() }.writeBytes(b) }
-    File(out, Manifest.FILE).writeBytes(built.manifestBytes)
+    built.files.forEach { (p, b) -> File(out, p).apply { parentFile.mkdirs() }.writeBytes(b.toByteArray()) }
+    File(out, Manifest.FILE).writeBytes(built.manifestBytes.toByteArray())
     File(out, Manifest.SIGNATURE_FILE).writeText(Json.encodeToString(ManifestSignature.serializer(), Signing.sign(built.manifestBytes, keys.privatePkcs8Base64, "sample-1")))
 
     val cache = Files.createTempDirectory("cache").toFile()
@@ -48,7 +49,7 @@ class PublishEndToEndTest {
     val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf("widgets"), livePush = false)
     val repo = TemplateRepository(
       StaticSource(out.toURI().toString().trimEnd('/')), KtorFetcher(local = LocalFetcher()), JavaCrypto,
-      TrustPolicy.Signed(listOf(TrustedKey("sample-1", Base64.getDecoder().decode(keys.publicRawBase64)))),
+      TrustPolicy.Signed(listOf(TrustedKey("sample-1", Base64.getDecoder().decode(keys.publicRawBase64).toByteString()))),
       FileBlobStore(File(cache, "blobs")), FileKeyValueStore(File(cache, "kv")), { 1_795_000_000_000 }, listOf(inApp, launcher),
     )
     assertEquals(RefreshResult.Updated(7), repo.refresh())

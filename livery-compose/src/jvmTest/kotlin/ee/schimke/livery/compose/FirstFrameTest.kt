@@ -1,5 +1,7 @@
 package ee.schimke.livery.compose
 
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import androidx.compose.foundation.layout.Column
 import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.testTag
@@ -94,7 +96,7 @@ class FirstFrameTest {
 
   init {
     runBlocking {
-      blobs.put(FONT, File(samples, "fonts/Placeholder-Bold.ttf").readBytes())
+      blobs.put(FONT, File(samples, "fonts/Placeholder-Bold.ttf").readBytes().toByteString())
       blobs.put(PICTURE, png())
     }
   }
@@ -102,7 +104,7 @@ class FirstFrameTest {
   private fun template(sha256: String = "banner") = LoadedTemplate(
     entry = TemplateEntry(sha256, 0, "banner-classic", contract.ref, Target(Surfaces.IN_APP, 7)),
     design = null,
-    bytes = File(samples, "designs/banner-classic/in-app.rc").readBytes(),
+    bytes = File(samples, "designs/banner-classic/in-app.rc").readBytes().toByteString(),
     origin = LoadedTemplate.Origin.Bundled,
     contract = contract,
     assets = listOf(AssetEntry(FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700), license = "OFL-1.1")),
@@ -286,7 +288,7 @@ class FirstFrameTest {
   }
 
   @Test fun aTemplateWithMoreFacesThanTheCacheKeepsGetsThemAll() = runBlocking {
-    runBlocking { blobs.put(OTHER_FONT, File(samples, "fonts/Placeholder-Bold.ttf").readBytes()) }
+    runBlocking { blobs.put(OTHER_FONT, File(samples, "fonts/Placeholder-Bold.ttf").readBytes().toByteString()) }
     val small = LiveryResources(repository, maxFonts = 1)
     val twoFaces = template().copy(assets = listOf(
       AssetEntry(FONT, 0, "font/ttf", AssetKind.Font, font = FontFace("Placeholder Sans", 700), license = "OFL-1.1"),
@@ -314,7 +316,7 @@ class FirstFrameTest {
     Unit
   }
 
-  private fun png(): ByteArray = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB), "png", it) }.toByteArray()
+  private fun png(): ByteString = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB), "png", it) }.toByteArray().toByteString()
 
   private companion object {
     const val FALLBACK = "fallback"

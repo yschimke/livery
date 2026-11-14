@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.FontFace
@@ -32,7 +34,7 @@ class ResourcesTest {
   }
 
   @Test fun templatesAreHandedOutOnlyWithTheirAssets() = runTest {
-    val font = "font-bytes".encodeToByteArray()
+    val font = "font-bytes".encodeUtf8()
     val fontSha = FakeCrypto.sha(font)
     val base = Fx.manifest()
     val m = base.copy(
@@ -43,7 +45,7 @@ class ResourcesTest {
     val names = listOf("default-v7", "default-v8", "default-launcher")
     val host = Fetcher { url, _ ->
       when {
-        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), m).encodeToByteArray(), null)
+        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), m).encodeUtf8(), null)
         url.endsWith("$fontSha.ttf") -> if (fontUp) FetchResult.Ok(font, null) else FetchResult.Failed(503, "down")
         else -> names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == url.substringAfterLast('/').removeSuffix(".rc") }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no")
       }
@@ -57,7 +59,7 @@ class ResourcesTest {
     val t = repo.resolve(q)!!
     assertEquals(fontSha, t.fontAsset(FontFace("Figtree", 700))?.sha256, "nearest weight")
     assertNull(t.fontAsset(FontFace("Figtree", 400, italic = true)))
-    assertEquals(font.toList(), repo.asset(fontSha)?.toList())
+    assertEquals(font, repo.asset(fontSha))
   }
 }
 
@@ -83,7 +85,7 @@ class CachedImageTest {
     override suspend fun get(url: String, etag: String?): FetchResult = get(url, etag) { false }
     override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (to: String) -> Boolean): FetchResult {
       requests += url
-      return FetchResult.Ok("png:$url".encodeToByteArray(), null)
+      return FetchResult.Ok("png:$url".encodeUtf8(), null)
     }
   }
 

@@ -27,6 +27,7 @@ import ee.schimke.livery.publisher.build
 import java.io.File
 import java.nio.file.Files
 import kotlin.io.encoding.Base64
+import okio.ByteString.Companion.toByteString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -141,7 +142,7 @@ class LiveryA2uiWebTest {
     val qty = props("""{"name":"Socks","price":"£4","quantity":1}""")
     val r = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", qty, LiveryA2uiWeb.Space(widthDp = 360)))
     // The template as published, its values beside it: the player keeps the document and sets them.
-    assertEquals(built.files.entries.first { it.key.contains(r.sha256) }.value.toList(), r.document.toList())
+    assertEquals(built.files.entries.first { it.key.contains(r.sha256) }.value, r.document)
     assertEquals(JsonPrimitive("Socks"), r.values["name"])
     assertEquals(JsonPrimitive(1), r.values["quantity"])
     val again = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", JsonObject(qty + ("quantity" to JsonPrimitive(3))), LiveryA2uiWeb.Space(widthDp = 360)))
@@ -229,13 +230,13 @@ class LiveryA2uiWebTest {
     val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
     // Other bytes than any catalog lists (a per-request document): the catalog's banner with one unused text more.
     val catalogBytes = built.files.entries.first { it.key.contains(chosen.sha256) }.value
-    val doc = RcDocumentCodec.decode(catalogBytes, RcWireLimits())
-    val bytes = RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "per request")))
+    val doc = RcDocumentCodec.decode(catalogBytes.toByteArray(), RcWireLimits())
+    val bytes = RcDocumentCodec.encode(doc.copy(operations = doc.operations + ee.schimke.composeai.rcplayer.protocol.RcTextData(9001, "per request"))).toByteString()
     val sha = JavaCrypto.sha256Hex(bytes)
     val signature = Base64.encode(java.security.Signature.getInstance("Ed25519").run {
-      initSign(pair.private); update(ee.schimke.livery.client.TemplateSignatures.message("promo/banner@1", sha)); sign()
+      initSign(pair.private); update(ee.schimke.livery.client.TemplateSignatures.message("promo/banner@1", sha).toByteArray()); sign()
     })
-    val admission = DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())))
+    val admission = DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray().toByteString())))
     val fetched = mutableListOf<String>()
     var available = false
     val web = LiveryA2uiWeb(
@@ -282,7 +283,7 @@ class LiveryA2uiWebTest {
     // A page whose signed limit is smaller than the document never keeps it.
     val small = LiveryA2uiWeb(
       repository, SlotPlanner(repository, { events += it }, clock), caps, { events += it }, clock, null,
-      DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())), maxSignedBytes = 16),
+      DocumentAdmission(JavaCrypto, listOf(ee.schimke.livery.client.TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray().toByteString())), maxSignedBytes = 16),
       fetcher = object : RedirectingFetcher {
         override suspend fun get(url: String, etag: String?) = get(url, etag) { true }
         override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult =
@@ -332,7 +333,7 @@ class LiveryA2uiWebTest {
     // And the agent's own document.
     val bytes = built.files.entries.first { it.key.contains(r.sha256) }.value
     val admitting = web(DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)))
-    val inline = admitting.render("PromoBanner", JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes)}"}"""))), LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/doc"))
+    val inline = admitting.render("PromoBanner", JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes.toByteArray())}"}"""))), LiveryA2uiWeb.Space(decisionId = "a2ui:chat-1/doc"))
     admitting.shown(assertIs<LiveryA2uiWeb.Rendered.Ready>(inline).id)
     assertEquals("a2ui:chat-1/doc", events.last().decisionId)
   }
@@ -363,7 +364,7 @@ class LiveryA2uiWebTest {
     // The document the catalog plays for this data (some sample files are placeholders, not documents).
     val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
     val bytes = built.files.entries.first { it.key.contains(chosen.sha256) }.value
-    val withDoc = JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes)}"}""")))
+    val withDoc = JsonObject(promo + ("template" to props("""{"inline":"${Base64.encode(bytes.toByteArray())}"}""")))
     assertTrue("no documents" in (web().render("PromoBanner", withDoc) as LiveryA2uiWeb.Rendered.Fallback).reason)
     val admitting = web(DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)))
     val r = admitting.render("PromoBanner", withDoc).let { assertIs<LiveryA2uiWeb.Rendered.Ready>(it, it.toString()) }
@@ -376,9 +377,9 @@ class LiveryA2uiWebTest {
     // The catalog's promo document with an image bound to `hero`, sent as an admitted inline document.
     val chosen = web().render("PromoBanner", promo) as LiveryA2uiWeb.Rendered.Ready
     val plain = built.files.entries.first { it.key.contains(chosen.sha256) }.value
-    val d = RcDocumentCodec.decode(plain, RcWireLimits())
-    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "livery:value/hero".encodeToByteArray())) + d.operations))
-    val png = File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes()
+    val d = RcDocumentCodec.decode(plain.toByteArray(), RcWireLimits())
+    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "livery:value/hero".encodeToByteArray())) + d.operations)).toByteString()
+    val png = File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes().toByteString()
     val fetched = mutableListOf<String>()
     val fetcher = object : RedirectingFetcher {
       override suspend fun get(url: String, etag: String?) = get(url, etag, Long.MAX_VALUE) { false }
@@ -391,7 +392,7 @@ class LiveryA2uiWebTest {
       DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("promo/"), maxBytes = 1 shl 20)),
       ImageResolver(repository, fetcher, JavaCrypto, directHosts = setOf("img.example")),
     )
-    val props = JsonObject(promo + ("hero" to JsonPrimitive("https://img.example/hero.png")) + ("template" to props("""{"inline":"${Base64.encode(withImage)}"}""")))
+    val props = JsonObject(promo + ("hero" to JsonPrimitive("https://img.example/hero.png")) + ("template" to props("""{"inline":"${Base64.encode(withImage.toByteArray())}"}""")))
 
     assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("PromoBanner", props, LiveryA2uiWeb.Space(widthDp = 360)))
     assertEquals(emptyList(), fetched, "rendering never waits on the network")
@@ -426,21 +427,21 @@ class LiveryA2uiWebTest {
     // A quantity document (no image input) that draws a fixed https image.
     val chosen = web().render("ShopQuantity", props("""{"name":"Socks"}""")) as LiveryA2uiWeb.Rendered.Ready
     val plain = built.files.entries.first { it.key.contains(chosen.sha256) }.value
-    val d = RcDocumentCodec.decode(plain, RcWireLimits())
-    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "https://img.example/logo.png".encodeToByteArray())) + d.operations))
+    val d = RcDocumentCodec.decode(plain.toByteArray(), RcWireLimits())
+    val withImage = RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9000, 1, 1, 0, RcBitmapData.ENCODING_URL, "https://img.example/logo.png".encodeToByteArray())) + d.operations)).toByteString()
     val fetched = mutableListOf<String>()
     val fetcher = object : RedirectingFetcher {
       override suspend fun get(url: String, etag: String?) = get(url, etag, Long.MAX_VALUE) { false }
       override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean): FetchResult {
         fetched += url
-        return FetchResult.Ok(File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes(), null)
+        return FetchResult.Ok(File(samples, "catalog/designs/banner-bold/assets/hero.png").readBytes().toByteString(), null)
       }
     }
     val web = web(
       DocumentAdmission(JavaCrypto, emptyList(), agentBytes = AgentBytesPolicy(setOf("shop/"), maxBytes = 1 shl 20)),
       ImageResolver(repository, fetcher, JavaCrypto, directHosts = setOf("img.example")),
     )
-    val p = props("""{"name":"Socks","template":{"inline":"${Base64.encode(withImage)}"}}""")
+    val p = props("""{"name":"Socks","template":{"inline":"${Base64.encode(withImage.toByteArray())}"}}""")
     assertIs<LiveryA2uiWeb.Rendered.Waiting>(web.render("ShopQuantity", p), "the web player draws no image from a URL, so it is fetched and written in")
     assertTrue(web.fetchImages())
     val ready = assertIs<LiveryA2uiWeb.Rendered.Ready>(web.render("ShopQuantity", p))

@@ -1,5 +1,6 @@
 package ee.schimke.livery.compose
 
+import okio.ByteString.Companion.toByteString
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -123,7 +124,7 @@ class TwinRenderParityTest {
     val template = LoadedTemplate(
       entry = TemplateEntry(design, 0, design, contract.ref, Target(Surfaces.IN_APP, 7)),
       design = null,
-      bytes = File(samples, "designs/$design/in-app.rc").readBytes(),
+      bytes = File(samples, "designs/$design/in-app.rc").readBytes().toByteString(),
       origin = LoadedTemplate.Origin.Bundled,
       contract = contract,
     )

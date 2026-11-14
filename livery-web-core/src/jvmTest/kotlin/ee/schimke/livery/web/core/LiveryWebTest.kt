@@ -1,5 +1,6 @@
 package ee.schimke.livery.web.core
 
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.client.*
 import ee.schimke.livery.protocol.*
 import ee.schimke.livery.publisher.CatalogBuilder
@@ -22,7 +23,7 @@ class LiveryWebTest {
     val fetcher = Fetcher { url, _ ->
       check(refreshing) { "render must not fetch" }
       when {
-        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), built.manifest).encodeToByteArray(), null)
+        url.endsWith("manifest.json") -> FetchResult.Ok(Json.encodeToString(Manifest.serializer(), built.manifest).encodeUtf8(), null)
         bundled -> built.files.entries.firstOrNull { url.endsWith(it.key) }?.value?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "missing")
         else -> FetchResult.Failed(503, "offline")
       }

@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -19,12 +21,12 @@ class KtorFetcherTest {
       else -> respond("body", HttpStatusCode.OK, headersOf(HttpHeaders.ETag, "\"v1\""))
     }
   }
-  private val local = Fetcher { url, _ -> FetchResult.Ok(url.encodeToByteArray(), null) }
+  private val local = Fetcher { url, _ -> FetchResult.Ok(url.encodeUtf8(), null) }
   private val fetcher = KtorFetcher(HttpClient(engine) { liveryDefaults() }, local)
 
   @Test fun okCarriesTheEtagAndRevalidates() = runTest {
     val ok = assertIs<FetchResult.Ok>(fetcher.get("https://cdn.example/manifest.json", null))
-    assertEquals("body", ok.bytes.decodeToString())
+    assertEquals("body", ok.bytes.utf8())
     assertEquals("\"v1\"", ok.etag)
     assertEquals(FetchResult.NotModified, fetcher.get("https://cdn.example/manifest.json", ok.etag))
   }
@@ -36,7 +38,7 @@ class KtorFetcherTest {
   }
 
   @Test fun localSchemesGoToTheLocalFetcher() = runTest {
-    assertEquals("asset://catalog/manifest.json", assertIs<FetchResult.Ok>(fetcher.get("asset://catalog/manifest.json", null)).bytes.decodeToString())
+    assertEquals("asset://catalog/manifest.json", assertIs<FetchResult.Ok>(fetcher.get("asset://catalog/manifest.json", null)).bytes.utf8())
   }
 }
 
@@ -55,7 +57,7 @@ class KtorRedirectTest {
   private val fetcher = KtorFetcher(HttpClient(engine) { liveryDefaults() })
 
   @Test fun followsAllowedRedirectsItself() = runTest {
-    assertEquals("ok", assertIs<FetchResult.Ok>(fetcher.get("https://trusted.example/hop", null) { true }).bytes.decodeToString())
+    assertEquals("ok", assertIs<FetchResult.Ok>(fetcher.get("https://trusted.example/hop", null) { true }).bytes.utf8())
     assertEquals(listOf("https://trusted.example/hop", "https://trusted.example/final"), contacted)
   }
 

@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Manifest
@@ -36,7 +37,7 @@ class ComponentPreviewFixtureTest {
   private val contract = json.decodeFromJsonElement(Contract.serializer(), read("two-way/contracts/quantity.json"))
   private val ref = json.decodeFromJsonElement(TemplateRef.serializer(), descriptor.getValue("template"))
   private val data = descriptor.getValue("data").jsonObject
-  private val bytes = File(samples, "two-way/designs/quantity-stepper/in-app.rc").readBytes()
+  private val bytes = File(samples, "two-way/designs/quantity-stepper/in-app.rc").readBytes().toByteString()
   private val target = json.decodeFromJsonElement(Target.serializer(), read("two-way/designs/quantity-stepper/in-app.json").getValue("target"))
   private val entry = TemplateEntry(ref.sha256!!, bytes.size.toLong(), ref.designId!!, contract.ref, target)
   private val design = Design(ref.designId!!, contract.ref, "Quantity stepper")
@@ -44,7 +45,7 @@ class ComponentPreviewFixtureTest {
   private fun read(path: String, root: File = samples): JsonObject = json.parseToJsonElement(File(root, path).readText()).jsonObject
 
   @Test fun descriptorPinsTheRealEligibleArtifactAndBindsItsData() {
-    val actualHash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    val actualHash = MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()).joinToString("") { "%02x".format(it) }
     assertEquals(actualHash, ref.sha256, "recapturing requires an intentional preview fixture revision")
     assertEquals(contract.ref, ref.contract)
     assertIs<BindResult.Ok>(ContractBinder.bind(contract, data))

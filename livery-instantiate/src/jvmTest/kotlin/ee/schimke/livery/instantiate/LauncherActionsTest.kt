@@ -1,5 +1,6 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcHostMetadataAction
 import ee.schimke.composeai.rcplayer.protocol.RcHostNamedAction
@@ -16,8 +17,8 @@ import kotlinx.coroutines.runBlocking
 
 /** The tile fixture taps with one named host action carrying a text value. */
 class LauncherActionsTest {
-  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes()
-  private val document = RcDocumentCodec.decode(tile, RcWireLimits())
+  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes().toByteString()
+  private val document = RcDocumentCodec.decode(tile.toByteArray(), RcWireLimits())
 
   @Test fun namedTapsBecomeNumericOnesWithTheirValueAsMetadata() {
     val name = RcHostActionRewrites.actionNames(document).single()

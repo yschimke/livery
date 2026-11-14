@@ -1,12 +1,13 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.PlacementRule
 import ee.schimke.livery.protocol.ThemePack
 import ee.schimke.livery.protocol.ManifestSignature
 import ee.schimke.livery.protocol.TemplateRef
-import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -23,7 +24,7 @@ import kotlinx.serialization.json.Json
 
 class RepositoryTest {
   private val json = Json { encodeDefaults = false }
-  private val key = "pk".encodeToByteArray()
+  private val key = "pk".encodeUtf8()
 
   /** A fake host: the manifest, its signature and every blob in [Fx.manifest]. */
   private inner class Host(var manifest: Manifest, var signed: Boolean = true) : Fetcher {
@@ -37,11 +38,11 @@ class RepositoryTest {
       requests += url
       if (down) return FetchResult.Failed(503, "down")
       if (blobsDown && !url.endsWith(".json")) return FetchResult.Failed(503, "blobs down")
-      val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
+      val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeUtf8()
       return when {
         url.endsWith("manifest.json") -> if (etag == "e${manifest.serial}") FetchResult.NotModified else FetchResult.Ok(bytes, "e${manifest.serial}")
         url.endsWith("manifest.sig.json") -> if (!signed) FetchResult.Failed(404, "none") else
-          FetchResult.Ok(json.encodeToString(ManifestSignature.serializer(), ManifestSignature(keyId = "k", signature = Base64.encode(key + bytes.size.toString().encodeToByteArray()))).encodeToByteArray(), null)
+          FetchResult.Ok(json.encodeToString(ManifestSignature.serializer(), ManifestSignature(keyId = "k", signature = okio.Buffer().write(key).write(bytes.size.toString().encodeUtf8()).readByteString().base64())).encodeUtf8(), null)
         else -> {
           val sha = url.substringAfterLast('/').removeSuffix(".rc")
           if (pauseSha == null || pauseSha == sha) {

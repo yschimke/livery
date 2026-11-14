@@ -37,6 +37,7 @@ import ee.schimke.composeai.rcwidget.creation.toCaptureProfile
 import ee.schimke.livery.capture.CatalogContracts
 import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
+import okio.ByteString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -61,11 +62,11 @@ class WidgetTargetsTest {
     }
   }
 
-  private fun decode(bytes: ByteArray): RcDocument = RcDocumentCodec.decode(bytes, RcWireLimits())
+  private fun decode(bytes: ByteString): RcDocument = RcDocumentCodec.decode(bytes.toByteArray(), RcWireLimits())
 
-  private fun opcodes(bytes: ByteArray) = decode(bytes).operations.map { it.opcode }
+  private fun opcodes(bytes: ByteString) = decode(bytes).operations.map { it.opcode }
 
-  private fun header(bytes: ByteArray) = decode(bytes).header.properties.associate { it.key to it.value }
+  private fun header(bytes: ByteString) = decode(bytes).header.properties.associate { it.key to it.value }
 
   @Test fun aTargetsProfilesChooseTheCaptureProfile() {
     assertSame(RcCaptureProfiles.launcherWidgets, launcher.captureProfile())
@@ -173,7 +174,7 @@ class WidgetTargetsTest {
   }
 
   /** Where each text named `wght` is: its index in the document and how many containers deep. */
-  private fun axisNames(bytes: ByteArray): List<Pair<Int, Int>> {
+  private fun axisNames(bytes: ByteString): List<Pair<Int, Int>> {
     var depth = 0
     val found = ArrayList<Pair<Int, Int>>()
     for ((i, op) in decode(bytes).operations.withIndex()) {

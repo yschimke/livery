@@ -1,5 +1,7 @@
 package ee.schimke.livery.compose
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString.Companion.encodeUtf8
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.platform.testTag
@@ -69,7 +71,7 @@ class BackgroundPreparationTest {
   private val template = LoadedTemplate(
     entry = TemplateEntry("banner", 0, "banner-classic", contract.ref, Target(Surfaces.IN_APP, 7)),
     design = null,
-    bytes = File(samples, "designs/banner-classic/in-app.rc").readBytes(),
+    bytes = File(samples, "designs/banner-classic/in-app.rc").readBytes().toByteString(),
     origin = LoadedTemplate.Origin.Bundled,
     contract = contract,
   )
@@ -105,7 +107,7 @@ class BackgroundPreparationTest {
 
   @Test fun aTemplateIsRewrittenForTheDisplayItIsDrawnOn() = runBlocking {
     val display = RcDisplay(density = 2f)
-    val published = RcDocumentCodec.decode(template.bytes)
+    val published = RcDocumentCodec.decode(template.bytes.toByteArray())
     val prepared = host.resources.prepare(template, display)
     assertTrue(prepared.document.operations.size < published.operations.size, "forDisplay left the template as published")
     assertSame(prepared, host.resources.preparedNow(template, display))
@@ -168,7 +170,7 @@ class BackgroundPreparationTest {
   @Test fun aTemplateThePlayerCannotPlayDrawsNoCardAndDoesNotFailTheApp() = runComposeUiTest {
     val placeholder = template.copy(
       entry = template.entry.copy(sha256 = "placeholder"),
-      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+      bytes = "PLACEHOLDER banner-bold".encodeUtf8(),
     )
     runBlocking { host.resources.readyToDraw(placeholder, RcDisplay(density.density, density.fontScale)) }
     assertTrue(host.resources.cannotPlay(placeholder))
@@ -185,7 +187,7 @@ class BackgroundPreparationTest {
   @Test fun aCardOfATemplateThePlayerCannotPlayDoesNotFailTheApp() = runComposeUiTest {
     val placeholder = template.copy(
       entry = template.entry.copy(sha256 = "placeholder-2"),
-      bytes = "PLACEHOLDER article-card".encodeToByteArray(),
+      bytes = "PLACEHOLDER article-card".encodeUtf8(),
     )
     setContent { LiveryTemplate(RenderPlan(placeholder, contract, Bindings(emptyMap())), host, Modifier.width(320.dp)) }
     waitUntil(timeoutMillis = 10_000) { host.resources.cannotPlay(placeholder) }
@@ -196,7 +198,7 @@ class BackgroundPreparationTest {
   @Test fun aSlotWhoseTemplateCannotPlayDrawsTheAppsFallback() = runComposeUiTest {
     val placeholder = template.copy(
       entry = template.entry.copy(sha256 = "placeholder-3"),
-      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+      bytes = "PLACEHOLDER banner-bold".encodeUtf8(),
     )
     var reason: String? = null
     setContent {
@@ -218,7 +220,7 @@ class BackgroundPreparationTest {
     val inComposition = LiveryHost(repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, preparation = RcPreparation.InComposition)
     val placeholder = template.copy(
       entry = template.entry.copy(sha256 = "placeholder-4"),
-      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+      bytes = "PLACEHOLDER banner-bold".encodeUtf8(),
     )
     var reason: String? = null
     setContent {

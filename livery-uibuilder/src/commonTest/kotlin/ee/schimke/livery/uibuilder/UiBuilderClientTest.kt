@@ -1,5 +1,6 @@
 package ee.schimke.livery.uibuilder
 
+import okio.ByteString.Companion.toByteString
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -26,7 +27,7 @@ class UiBuilderClientTest {
 
   @Test fun exportsWithTheRevisionItDrew() = runTest {
     val e = client.export("kitchen-tile", revision = 7)
-    assertEquals(listOf<Byte>(1, 2, 3), e.bytes.toList())
+    assertEquals(byteArrayOf(1, 2, 3).toByteString(), e.bytes)
     assertEquals(42L, e.revision)
     assertEquals("https://ui.example/api/ui-builder/v1/designs/kitchen-tile", e.url)
     // The token is escaped in the query, and the revision asked for is sent.

@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.protocol.Target
 import java.io.File
 import java.nio.file.Files
@@ -11,7 +12,7 @@ import kotlin.test.assertTrue
 
 class TemplateImportTest {
   private val sample = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).canonicalFile
-  private val tile = File(sample, "designs/tile-default/in-app.rc").readBytes()
+  private val tile = File(sample, "designs/tile-default/in-app.rc").readBytes().toByteString()
   private val inApp = Target(surface = "in-app", rcApiLevel = 7)
 
   private fun tree(): File = Files.createTempDirectory("import").toFile().also { sample.copyRecursively(it) }
@@ -22,7 +23,7 @@ class TemplateImportTest {
     assertEquals("live/status-tile@1", i.contract)
     assertEquals(listOf("is_on", "state"), i.spec.reads)
     assertEquals(listOf("toggle"), i.spec.emits)
-    assertTrue(File(src, "designs/tile-retro/imported.rc").readBytes().contentEquals(tile))
+    assertTrue(File(src, "designs/tile-retro/imported.rc").readBytes().toByteString() == tile)
     assertTrue("\"tool\": \"capture\"" in File(src, "designs/tile-retro/imported.json").readText())
     CatalogBuilder().build(src, Layout.Static)
   }

@@ -1,5 +1,6 @@
 package ee.schimke.livery.verify
 
+import okio.ByteString.Companion.toByteString
 import android.app.Activity
 import java.io.File
 import java.nio.file.Files
@@ -63,9 +64,9 @@ class PlatformWidgetPlayerTest {
     File(catalog, "designs/d/assets").mkdirs()
     File(catalog, "designs/d/assets/hero.png").writeBytes(png)
     val sha = java.security.MessageDigest.getInstance("SHA-256").digest(png).joinToString("") { "%02x".format(it) }
-    val resolve = WidgetCatalogCheck.images(catalog) { ref, _, _ -> if (ref == "https://x/y.png") byteArrayOf(9) else null }
-    assertTrue(resolve("asset:$sha", 10, 10).contentEquals(png))
-    assertTrue(resolve("https://x/y.png", 10, 10).contentEquals(byteArrayOf(9)), "the caller's images")
+    val resolve = WidgetCatalogCheck.images(catalog) { ref, _, _ -> if (ref == "https://x/y.png") byteArrayOf(9).toByteString() else null }
+    assertTrue(resolve("asset:$sha", 10, 10) == png.toByteString())
+    assertTrue(resolve("https://x/y.png", 10, 10) == byteArrayOf(9).toByteString(), "the caller's images")
     assertEquals(null, resolve("asset:" + "0".repeat(64), 10, 10))
   }
 
