@@ -9,7 +9,7 @@ kotlinx-coroutines = "1.11.0"
 compose-multiplatform = "1.12.2"
 # The skiko (Skia) version compose-multiplatform resolves: livery-render ships its natives per platform.
 skiko = "0.150.2"
-rc-players = "3.5.0"
+rc-players = "3.5.1"
 agp = "9.5.0"
 # Baseline profiles (livery-baselineprofile/): the Gradle plugin and the macrobenchmark runtime ship
 # together; keep them on one version.
