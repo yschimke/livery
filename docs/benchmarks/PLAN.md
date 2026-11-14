@@ -22,9 +22,10 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   design that really fills the screen needs its own twin.
 - Start-up is measured to a first frame with the document in it. The Livery lanes are a `LiverySlot`,
   as an app writes one, with no host code around it: Livery's first-frame budget holds the first frame
-  for the slot's answer, and the activity calls `reportFullyDrawn()` on Livery's `Impression` event.
-  So `timeToInitialDisplayMs` is the first frame Livery draws, and `timeToFullDisplayMs` the frame
-  after its impression.
+  for the slot's answer, and the activity calls `reportFullyDrawn()` on Livery's `Impression` event
+  (which comes after the template's first frame, so it adds no frame of its own; the twin and the
+  player report after the frame that composed the document). So `timeToInitialDisplayMs` is the first
+  frame Livery draws, and `timeToFullDisplayMs` the frame after its impression.
 
 ## Status
 

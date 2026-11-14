@@ -130,7 +130,9 @@ class DocumentActivity : ComponentActivity() {
       LaunchedEffect(contentDrawn) {
         if (contentDrawn && !drawn) {
           // After the first frame that has the document in it: the start-up benchmark's end point.
-          withFrameNanos { }
+          // The twin and the player know only that they composed it, so they wait for that frame;
+          // Livery's Impression already comes after the template's first frame, so it reports now.
+          if (lane == COMPOSE || lane == RC) withFrameNanos { }
           drawn = true
           reportFullyDrawn()
           // StartupTimingMetric ends "full display" at the first frame drawn after this report. A

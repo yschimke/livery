@@ -114,8 +114,10 @@ plan needs), which is in these numbers.
   manifest now removes the initializer from any app that uses it, so no lane here has it. Livery loads
   emoji itself two frames after its first template draws (`LiveryEmoji`), as it does in an app. That
   happens during a Livery lane's run, and never in the Compose UI twin's or the player alone's.
-- **Reported fully drawn after the document draws.** The activity asks for one more frame after
-  `reportFullyDrawn()`, since `StartupTimingMetric` ends at the next frame drawn.
+- **Reported fully drawn after the document draws.** The Compose UI and player lanes report after the
+  frame that composed the document. The Livery lanes report on Livery's `Impression` event, which already
+  comes after the template's first frame, so they don't wait a frame more. Every lane then asks for one
+  more frame after `reportFullyDrawn()`, since `StartupTimingMetric` ends at the next frame drawn.
 
 ## What the traces show
 
