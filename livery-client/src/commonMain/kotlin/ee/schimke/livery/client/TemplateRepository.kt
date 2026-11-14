@@ -37,6 +37,17 @@ data class LoadedTemplate(
   /** The images and fonts it needs, all on disk (or bundled) when it is handed out. */
   val assets: List<AssetEntry> = emptyList(),
 ) {
+  /**
+   * Equal when it is the same document from the same place: [entry] carries the verified SHA-256 of
+   * [bytes], so comparing the bytes themselves (a pass over the whole document, which Compose state and
+   * plan caches would repeat) adds nothing. The hash is the entry's, never computed here.
+   */
+  override fun equals(other: Any?): Boolean =
+    this === other || (other is LoadedTemplate && entry == other.entry && origin == other.origin &&
+      design == other.design && contract == other.contract && assets == other.assets)
+
+  override fun hashCode(): Int = entry.sha256.hashCode() * 31 + origin.hashCode()
+
   enum class Origin { Fresh, Stale, Bundled }
 }
 
