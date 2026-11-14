@@ -17,6 +17,10 @@
     <activity
       android:name=".FeedActivity"
       android:exported="true" />
+    <!-- An infinite feed of Livery cards from androidx Paging, preparing ahead of the scroll (extras "ahead", "pageDelayMs"). -->
+    <activity
+      android:name=".PagingActivity"
+      android:exported="true" />
     <!-- One template filling the screen, for DocumentBenchmark (extra "lane"). -->
     <activity
       android:name=".DocumentActivity"

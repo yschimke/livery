@@ -59,10 +59,31 @@ class FeedScrollBenchmark {
 
   @Test fun liveryEmbeddedPausable() = fling("livery-embedded", Options.Pausable)
 
-  private enum class Options(val apply: Intent.() -> Unit) {
-    None({}),
-    CacheWindow({ putExtra("cacheAhead", 1f).putExtra("cacheBehind", 0.5f) }),
-    Pausable({ putExtra("pausable", true) }),
+  /**
+   * Lazy: nothing prepared up front, each slot plans as it composes (planning made to take 20 ms, as an app's own
+   * work does). `liveryLazyNoAhead` has the slots alone; `liveryLazyAhead` adds LiveryPrepareAhead with 8 cards ahead
+   * of the scroll; `liveryLazyAheadCacheWindow` also gives the list a cache window.
+   */
+  @Test fun liveryLazyNoAhead() = fling("livery", Options.LazyNoAhead)
+
+  @Test fun liveryLazyAhead() = fling("livery", Options.LazyAhead)
+
+  @Test fun liveryLazyAheadCacheWindow() = fling("livery", Options.LazyAheadCacheWindow)
+
+  /** An infinite feed from androidx Paging (PagingActivity), pages of 20 taking 300 ms, planning 20 ms a card. */
+  @Test fun pagingNoAhead() = fling("livery", Options.PagingNoAhead)
+
+  @Test fun pagingAhead() = fling("livery", Options.PagingAhead)
+
+  private enum class Options(val activity: String = "FeedActivity", val apply: Intent.() -> Unit) {
+    PagingNoAhead("PagingActivity", { putExtra("ahead", -1).putExtra("planDelayMs", 20L) }),
+    PagingAhead("PagingActivity", { putExtra("ahead", 8).putExtra("planDelayMs", 20L) }),
+    LazyNoAhead(apply = { putExtra("ahead", -1).putExtra("planDelayMs", 20L) }),
+    LazyAhead(apply = { putExtra("ahead", 8).putExtra("planDelayMs", 20L) }),
+    LazyAheadCacheWindow(apply = { putExtra("ahead", 8).putExtra("planDelayMs", 20L).putExtra("cacheAhead", 1f).putExtra("cacheBehind", 0.5f) }),
+    None(apply = {}),
+    CacheWindow(apply = { putExtra("cacheAhead", 1f).putExtra("cacheBehind", 0.5f) }),
+    Pausable(apply = { putExtra("pausable", true) }),
   }
 
   private fun fling(mode: String, options: Options = Options.None) =
@@ -87,7 +108,7 @@ class FeedScrollBenchmark {
 
   private fun MacrobenchmarkScope.startFeed(mode: String, options: Options) {
     startActivityAndWait(
-      Intent().setClassName(PACKAGE, "$PACKAGE.FeedActivity").putExtra("mode", mode).apply(options.apply)
+      Intent().setClassName(PACKAGE, "$PACKAGE.${options.activity}").putExtra("mode", mode).apply(options.apply)
     )
     device.wait(Until.hasObject(By.res("feed")), 15_000)
   }

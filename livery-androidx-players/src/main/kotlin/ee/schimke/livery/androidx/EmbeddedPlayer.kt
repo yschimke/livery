@@ -18,11 +18,12 @@ internal class EmbeddedPlayer : ParsingPlayerBase() {
   override fun Play(request: PlayerRequest) {
     val current = rememberUpdatedState(request)
     // The card's values are in the state before the player composes it, so the first frame shows them, not the template's defaults.
+    val written = remember(request.template.entry.sha256) { mutableMapOf<String, RcNamedValue>() }
     val state = remember(request.template.entry.sha256) {
-      RcPlayerState(RemoteDocument(request.template.bytes.toByteArray()).document, "USER").also { it.seed(request.values) }
+      RcPlayerState(RemoteDocument(request.template.bytes.toByteArray()).document, "USER").also { it.seed(request.values, written) }
     }
     // Later changes: a write to a state the document reads recomposes only what reads it.
-    SideEffect { state.seed(request.values) }
+    SideEffect { state.seed(request.values, written) }
     RcPlayer(
       state = state,
       modifier = request.modifier,
@@ -30,7 +31,13 @@ internal class EmbeddedPlayer : ParsingPlayerBase() {
     )
   }
 
-  private fun RcPlayerState.seed(values: Map<String, RcNamedValue>) {
+  /**
+   * Writes [values] and clears what an earlier call wrote that is no longer there (an optional input the data stopped
+   * binding goes back to the document's own value). A long has no state in the embedded player, so it is not shown.
+   */
+  private fun RcPlayerState.seed(values: Map<String, RcNamedValue>, written: MutableMap<String, RcNamedValue>) {
+    (written.keys - values.keys).forEach { clearOverride(it, "USER"); written.remove(it) }
+    values.forEach { (name, v) -> if (v !is RcNamedValue.LongValue) written[name] = v }
     values.forEach { (name, v) ->
       when (v) {
         is RcNamedValue.Text -> stringState(name, "USER").value = v.value
