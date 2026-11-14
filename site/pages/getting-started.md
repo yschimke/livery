@@ -142,6 +142,27 @@ val host = LiveryHost(repository, actions, events, clock,
 It is told the slot, contract and design when they are known (`LiveryPlaceholder`). By default nothing
 is drawn there; a `LiverySlot`'s own `fallback` replaces it for that slot.
 
+**A feed you do not know up front.** An app with every item in hand can `preload` or `prepareSlot` them all.
+One that pages, or fetches as it goes, keeps the cards just ahead of the scroll prepared instead, so each draws
+complete when it scrolls in. `LiveryPrepareAhead` follows a lazy list: `count` is how many items you have now
+(it grows as pages arrive), `plan` is the call the item's slot makes, and the slot uses the same `slotId` and
+key. Return a null key (or a null plan) for an item that has not loaded:
+
+```kotlin
+val state = rememberLazyListState()
+LiveryPrepareAhead(state, host, slotId = "feed", count = { items.itemCount }, ahead = 8,
+  key = { items.peek(it)?.id }) { i -> items.peek(i)?.let { planner.forAppData(query(it), json(it)) } }
+LazyColumn(state = state) {
+  items(items.itemCount, key = items.itemKey { it.id }) { i ->
+    items[i]?.let { LiverySlot(key = it.id, host = host, slotId = "feed") { planner.forAppData(query(it), json(it)) } }
+  }
+}
+```
+
+`items` is androidx Paging's `LazyPagingItems`; `peek` reads what is loaded without asking for more. Eight cards
+ahead keeps up with a fast fling on a phone; `LiveryResources(maxPlans = …)` should hold the window and what the
+list keeps composed. `PagingActivity` in [`livery-baselineprofile/host`](https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host) is a working example.
+
 **Emoji load after the first screen (Android).** Compose's text brings in `androidx.emoji2`, whose
 initializer runs at process start, on the main thread, before the first frame. Livery's manifest turns
 it off, and Livery loads emoji itself, off the main thread, two frames after the app's first template

@@ -38,6 +38,7 @@ import ee.schimke.livery.client.Fetcher
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.client.MemoryBlobStore
 import ee.schimke.livery.client.MemoryKeyValueStore
+import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.SlotPlanner
 import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateQuery
@@ -45,7 +46,9 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.androidx.LiveryAndroidxPlayers
 import ee.schimke.livery.compose.LiveryHost
+import ee.schimke.livery.compose.DEFAULT_PREPARE_AHEAD
 import ee.schimke.livery.compose.LiveryPlayer
+import ee.schimke.livery.compose.LiveryPrepareAhead
 import ee.schimke.livery.compose.LiveryResources
 import ee.schimke.livery.compose.LiverySlot
 import ee.schimke.livery.compose.rememberLiveryDisplay
@@ -58,6 +61,7 @@ import ee.schimke.livery.twins.PollData
 import ee.schimke.livery.twins.PollOption
 import ee.schimke.livery.twins.PollTwin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -135,16 +139,25 @@ class FeedActivity : ComponentActivity() {
       },
     )
     val planner = SlotPlanner(repository, {}, clock)
+    // Lazy: the Livery modes prepare nothing up front. Each slot plans as it composes, and LiveryPrepareAhead keeps
+    // [lazyAhead] cards ahead of the scroll position prepared (-1: slots only, no prepare-ahead). planDelayMs stands in
+    // for an app's own work to plan an item (a database read, a network call).
+    val lazyAhead = if (intent.hasExtra(AHEAD)) intent.getIntExtra(AHEAD, DEFAULT_PREPARE_AHEAD) else null
+    val planDelayMs = intent.getLongExtra(PLAN_DELAY_MS, 0L)
+    suspend fun plan(card: Card): PlanResult {
+      if (planDelayMs > 0) delay(planDelayMs)
+      return planner.forAppData(card.query, card.json)
+    }
     setContent {
       val display = rememberLiveryDisplay()
-      var ready by remember { mutableStateOf(mode == COMPOSE) }
+      var ready by remember { mutableStateOf(mode == COMPOSE || (lazyAhead != null && mode.startsWith("livery"))) }
       // The rc mode's values per card, bound once, as a Livery slot binds its card's data once.
       val values = remember { mutableStateMapOf<Int, Map<String, RcNamedValue>>() }
       LaunchedEffect(display) {
         when (mode) {
           LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> coroutineScope {
             host.resources.display = display
-            cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { planner.forAppData(card.query, card.json) } } }
+            if (lazyAhead == null) cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { plan(card) } } }
           }
           RC -> {
             host.resources.warm(listOf(cards[0].query, cards[1].query), display)
@@ -159,6 +172,9 @@ class FeedActivity : ComponentActivity() {
       }
       if (!ready) return@setContent
       val listState = if (cacheWindow != null) rememberLazyListState(cacheWindow) else rememberLazyListState()
+      if (lazyAhead != null && lazyAhead >= 0 && mode.startsWith("livery")) {
+        LiveryPrepareAhead(listState, host, SLOT, count = { cards.size }, ahead = lazyAhead) { index -> plan(cards[index]) }
+      }
       LazyColumn(
         Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId = true; testTag = "feed" },
         state = listState,
@@ -168,7 +184,7 @@ class FeedActivity : ComponentActivity() {
           val card = cards[index]
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
+            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { plan(card) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
@@ -200,7 +216,7 @@ class FeedActivity : ComponentActivity() {
   }
 
   /** One card's data: what a Livery slot binds, and what its Compose UI twin reads. */
-  private sealed class Card {
+  internal sealed class Card {
     abstract val query: TemplateQuery
     abstract val json: JsonObject
 
@@ -251,12 +267,15 @@ class FeedActivity : ComponentActivity() {
     /** Extras: the list's cache window ahead of and behind the viewport, as fractions of it. */
     const val CACHE_AHEAD = "cacheAhead"
     const val CACHE_BEHIND = "cacheBehind"
+    /** Extras: lazy preparation (see onCreate): cards kept prepared ahead of the scroll, and a made-up planning delay. */
+    const val AHEAD = "ahead"
+    const val PLAN_DELAY_MS = "planDelayMs"
     /** Extra: pausable composition in prefetch (see the class). */
     const val PAUSABLE = "pausable"
     /** The flag's value as the library ships it, read before any launch sets it. */
     @OptIn(ExperimentalFoundationApi::class)
     private val DefaultPausable = ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled
     private const val SLOT = "feed"
-    private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
+    internal val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
 }

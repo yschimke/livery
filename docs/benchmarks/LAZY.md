@@ -1,0 +1,56 @@
+# Lazy feeds: preparing ahead of the scroll
+
+Pixel 9, Android 17, release build with its baseline profile, 14 November 2026; markdown only, not on the public site. A
+feed that does not prepare every card up front plans each one as its slot composes, and
+[`LiveryPrepareAhead`](../../livery-compose/src/commonMain/kotlin/ee/schimke/livery/compose/LiveryPrepareAhead.kt) keeps the
+cards just ahead of the scroll position planned and prepared (`ahead` of them after the last visible one). Planning is made
+to take 20 ms a card here, as an app's own work (a database read, a network call) would; the earlier feed lanes prepared all
+200 cards before showing the list and planned in no time.
+
+Lanes (`FeedScrollBenchmark`, one run of 5 iterations, six flings each):
+
+| Lane | What |
+| --- | --- |
+| `liveryLazyNoAhead` | nothing prepared up front, slots only (the app prepares nothing ahead) |
+| `liveryLazyAhead` | `LiveryPrepareAhead(ahead = 8)` |
+| `liveryLazyAheadCacheWindow` | the same, with the list's cache window (one viewport ahead, half behind) |
+| `pagingNoAhead` / `pagingAhead` | `PagingActivity`: an endless androidx Paging feed (pages of 20 taking 300 ms), slots only / with `ahead = 8` |
+
+## Frame CPU (p50 / p90 / p99, ms) and the margin before a missed frame (overrun p99)
+
+| Lane | p50 | p90 | p99 | overrun p99 | frames |
+| --- | --- | --- | --- | --- | --- |
+| everything prepared up front (`livery`, earlier run) | 3.8 | 5.9 | 8.3 | -6.0 | 665 |
+| `liveryLazyNoAhead` | 2.9 | 7.4 | 11.1 | -3.0 | 657 |
+| `liveryLazyAhead` | 3.9 | 6.0 | 8.4 | -5.9 | 661 |
+| `liveryLazyAheadCacheWindow` | 3.3 | 7.4 | 10.1 | -3.8 | 648 |
+| `pagingNoAhead` | 3.1 | 7.5 | 11.5 | -2.4 | 603 |
+| `pagingAhead` | 3.5 | 5.6 | 8.1 | -6.0 | 650 |
+
+- **Preparing 8 cards ahead gives back the up-front numbers.** `liveryLazyAhead` is level with preparing all 200 before the
+  list shows (p90 6.0 against 5.9, p99 8.4 against 8.3), and `pagingAhead` is at or under it, without the app knowing the feed.
+- **Slots alone have a worse tail**: p99 11.1 and 11.5 ms against 8.1 to 8.4, with the margin before a missed frame
+  down from about 6 ms to 2.4 to 3.0. Their median is lower, which is not a win: a card that arrives before its plan is a
+  placeholder and is cheap to draw, so the median counts fewer real cards. The frame timing does not count how many cards
+  drew late; that needs its own counter (planned).
+- **The cache window did not help on top of it** in this run: p90 7.4 and p99 10.1 against 6.0 and 8.4 for `ahead` alone.
+  One run, so read it as "no better".
+- No lane missed a frame (overrun stays negative).
+
+## Running them
+
+Gradle's connected-test task was killed repeatedly part-way through on this machine ("daemon disappeared") from a point I did
+not find; the runs here are the same instrumentation started with `adb`, on the APKs Gradle built:
+
+```sh
+adb install -r livery-baselineprofile/host/build/outputs/apk/benchmarkRelease/livery-baselineprofile-host-benchmarkRelease.apk
+adb install -r livery-baselineprofile/benchmark/build/outputs/apk/benchmarkRelease/livery-benchmark-benchmarkRelease.apk
+adb shell am instrument -w -e class ee.schimke.livery.benchmark.FeedScrollBenchmark#liveryLazyAhead \
+  -e additionalTestOutputDir /sdcard/Download/out ee.schimke.livery.benchmark/androidx.test.runner.AndroidJUnitRunner
+```
+
+## Not measured
+
+- Cards drawn as placeholders (how often a card reached the screen unprepared), which is what `ahead` is for.
+- Other window sizes (`ahead` of 2, 4, 16), and a planning cost other than 20 ms.
+- A cold start of the paging feed, and a scroll back over cards the plan cache has evicted.

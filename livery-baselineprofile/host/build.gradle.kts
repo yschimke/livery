@@ -48,6 +48,8 @@ dependencies {
   implementation(project(":livery-compose"))
   implementation(project(":livery-androidx-players"))
   implementation(libs.androidx.activity.compose)
+  // PagingActivity: an infinite feed of Livery cards from a PagingSource.
+  implementation(libs.androidx.paging.compose)
   // DocumentActivity follows getting-started's startup: the splash screen held until the first screen is ready.
   implementation(libs.androidx.core.splashscreen)
   implementation(libs.cmp.foundation)
