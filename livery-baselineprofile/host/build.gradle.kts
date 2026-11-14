@@ -47,6 +47,8 @@ val sampleCatalogs by configurations.creating { isCanBeConsumed = false }
 dependencies {
   implementation(project(":livery-compose"))
   implementation(libs.androidx.activity.compose)
+  // DocumentActivity follows getting-started's startup: the splash screen held until the first screen is ready.
+  implementation(libs.androidx.core.splashscreen)
   implementation(libs.cmp.foundation)
   liveryCli(project(":livery-publish"))
   sampleCatalogs(project(mapOf("path" to ":livery-capture-cmp", "configuration" to "sampleCatalogsElements")))

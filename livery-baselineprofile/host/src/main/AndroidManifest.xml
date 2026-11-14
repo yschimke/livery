@@ -20,7 +20,8 @@
     <!-- One template filling the screen, for DocumentBenchmark (extra "lane"). -->
     <activity
       android:name=".DocumentActivity"
-      android:exported="true" />
+      android:exported="true"
+      android:theme="@style/Theme.Host.Starting" />
 
     <!--
       No emoji initializer at process start, in every lane: Livery's own manifest removes androidx

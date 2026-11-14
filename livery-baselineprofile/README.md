@@ -82,7 +82,9 @@ On an emulator, add
 ## Full-screen document
 
 `DocumentActivity` draws the sample catalog's `poll-card` filling the screen, chosen by the `lane`
-extra: `livery`, `livery-incomposition` (prepared on the main thread in the first composition),
-`rc` or `compose` (the twin). Tapping it pushes new data. `DocumentBenchmark` records cold
+extra: `livery` (its first screen prepared by Livery's `startup`, the splash screen up until then),
+`livery-nostartup` (planned as the slot composes, within the first-frame budget), `livery-nodefer`,
+`livery-noflat`, `livery-incomposition` (prepared on the main thread in the first composition),
+`rc` or `compose` (the twin, which builds nothing of Livery). Tapping it pushes new data. `DocumentBenchmark` records cold
 start to first frame and frame timing across ten changes for each lane. What is built and what is
 planned is in [`docs/benchmarks/PLAN.md`](../docs/benchmarks/PLAN.md).

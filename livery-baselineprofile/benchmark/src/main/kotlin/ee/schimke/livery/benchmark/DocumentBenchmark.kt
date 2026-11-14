@@ -17,12 +17,15 @@ import org.junit.runner.RunWith
 
 /**
  * One template filling the screen (`DocumentActivity`, the sample catalog's `poll-card`), in each
- * lane the host offers: Livery with its defaults, with one optimisation off (preparation in
- * composition, deferral, flat layout), the player alone, and the Compose UI twin.
+ * lane the host offers: Livery with its defaults, with one optimisation off (Livery's startup,
+ * preparation in composition, deferral, flat layout), the player alone, and the Compose UI twin.
  *
- * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
- *   Livery lanes are a plain `LiverySlot`, so `timeToInitialDisplayMs` is the first frame Livery draws,
- *   within its first-frame budget; the activity reports fully drawn on Livery's `Impression` event).
+ * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`).
+ *   The Livery lanes are a plain `LiverySlot`. `livery` prepares its first screen with Livery's
+ *   startup and keeps the splash screen up until then, as getting-started has it; `livery-nostartup`
+ *   plans as the slot composes, its first frame waiting within the first-frame budget. Either way
+ *   `timeToInitialDisplayMs` is the first frame Livery draws, and the activity reports fully drawn on
+ *   Livery's `Impression` event.
  * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *
@@ -34,6 +37,7 @@ class DocumentBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
   @Test fun liveryStartup() = startup("livery")
+  @Test fun liveryNoStartupStartup() = startup("livery-nostartup")
   @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
   @Test fun liveryNoDeferStartup() = startup("livery-nodefer")
   @Test fun liveryNoFlatStartup() = startup("livery-noflat")

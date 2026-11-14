@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    DocumentActivity's starting theme, for androidx.core:core-splashscreen: every lane installs the
+    splash screen, and the Livery lanes that use Livery's startup keep it up until their first screen
+    is prepared, as getting-started tells an app to. After it, the host's own theme.
+  -->
+  <style name="Theme.Host.Starting" parent="Theme.SplashScreen">
+    <item name="postSplashScreenTheme">@android:style/Theme.DeviceDefault.NoActionBar</item>
+  </style>
+</resources>
