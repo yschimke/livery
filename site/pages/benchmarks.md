@@ -85,17 +85,22 @@ here.
 
 ### Cold start
 
-Process start to the first frame with the document in it (`timeToFullDisplayMs`). *Initial display* is
-shown for completeness: for the Remote Compose lanes it is an earlier, empty frame, so it understates the time.
+Process start to the first frame with the document in it (`timeToFullDisplayMs`).
 
-| Lane | Full display | Initial display |
-| --- | ---: | ---: |
-| Compose UI | 196 ms | 184 ms |
-| Player alone | 234 ms | 148 ms |
-| Livery | 232 ms | 146 ms |
-| Livery, no deferral | 230 ms | 154 ms |
-| Livery, no flat layout | 245 ms | 149 ms |
-| Livery, preparing in composition | 222 ms | 145 ms |
+| Lane | Full display |
+| --- | ---: |
+| Compose UI | 196 ms |
+| Player alone | 234 ms |
+| Livery | 232 ms |
+| Livery, no deferral | 230 ms |
+| Livery, no flat layout | 245 ms |
+| Livery, preparing in composition | 222 ms |
+
+*Initial display* (`timeToInitialDisplayMs`) is left out of this run: the host then drew an empty frame
+on the Remote Compose lanes while they planned, so it understated their time. The host now holds its
+first frame until the document can draw, as an app keeps its splash screen up until its first screen is
+ready, so initial display is the first frame with the document on every lane. *Planned*: those numbers,
+with the next device run.
 
 The Compose UI twin reaches a drawn document about 35 ms before the Remote Compose lanes, which sit within
 15 ms of each other. The Livery lanes also plan ten data variants before their first draw (nine more than one

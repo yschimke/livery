@@ -20,8 +20,10 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   template takes its own height, so it is a card on a full screen, not a design that fills the
   height) and `thePollTwinMatchesInTheFullScreenFrame` holds the twin to the template there. A
   design that really fills the screen needs its own twin.
-- Start-up is measured to a first frame with the document in it: the activity calls
-  `reportFullyDrawn()` after that frame, so read `timeToFullDisplayMs`, not the initial display time.
+- Start-up is measured to a first frame with the document in it: the activity holds its first frame
+  until the document can draw (as an app keeps its splash screen up), so `timeToInitialDisplayMs` is
+  that frame on every lane, and calls `reportFullyDrawn()` after it, so `timeToFullDisplayMs` is the
+  frame after.
 
 ## Status
 
