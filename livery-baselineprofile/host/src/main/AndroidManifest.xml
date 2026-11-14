@@ -15,5 +15,9 @@
     <activity
       android:name=".FeedActivity"
       android:exported="true" />
+    <!-- One template filling the screen, for DocumentBenchmark (extra "lane"). -->
+    <activity
+      android:name=".DocumentActivity"
+      android:exported="true" />
   </application>
 </manifest>
