@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.14.0](https://github.com/yschimke/livery/compare/v0.13.0...v0.14.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **client:** okio ByteString for template, blob, asset and image bytes ([#88](https://github.com/yschimke/livery/issues/88))
+
+### Features
+
+* **client:** okio ByteString for template, blob, asset and image bytes ([#88](https://github.com/yschimke/livery/issues/88)) ([c6d027a](https://github.com/yschimke/livery/commit/c6d027a258cdf324e9319fa510f9b23a1947620f))
+
+
+### Bug Fixes
+
+* **deps:** rc-players 3.5.1 ([#90](https://github.com/yschimke/livery/issues/90)) ([bfd6b50](https://github.com/yschimke/livery/commit/bfd6b50b9607c5c72c183e81068375522a56458e))
+
 ## [0.13.0](https://github.com/yschimke/livery/compare/v0.12.0...v0.13.0) (2026-11-14)
 
 
