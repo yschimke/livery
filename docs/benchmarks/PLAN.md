@@ -33,7 +33,7 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
 
 | Scenario | State |
 | --- | --- |
-| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; the JVM profile has its own lanes |
+| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; Livery and Compose UI each with a cache window (one viewport ahead, half behind) and with pausable composition in prefetch; the JVM profile has its own lanes |
 | Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nostartup, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
 | Document: data change | `DocumentBenchmark.*Change` (`FrameTimingMetric` over 10 taps); first change not yet separated |
 | Document: warm re-open, continuous animation, resize / theme | Planned |
