@@ -7,7 +7,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import ee.schimke.livery.client.PlanResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -61,25 +63,43 @@ fun LiveryPrepareAhead(
     val inFlight = HashSet<Any?>()
     // The collector and the workers on [context] both touch the set.
     val lock = Mutex()
-    // The keys are part of what is observed, so an item that loads (a paging placeholder becoming an item) without the
-    // window or the count moving still gets requested.
-    snapshotFlow {
-      val window = prepareWindow(currentFirst.value(), currentLast.value(), currentCount.value(), ahead, behind)
-      window.map { it to currentKey.value(it) }
-    }.collect { window ->
-      for ((index, itemKey) in window) {
+    // The keys and the repository's revision are part of what is observed: an item that loads (a paging placeholder
+    // becoming an item) without the window or the count moving, and a catalog refresh or install (which makes every kept
+    // answer unusable), both get the window requested again.
+    val window = snapshotFlow {
+      val range = prepareWindow(currentFirst.value(), currentLast.value(), currentCount.value(), ahead, behind)
+      // A key callback over a list that has just shrunk can throw: that item is not there, so it has no key.
+      range.map { it to runCatching { currentKey.value(it) }.getOrNull() }
+    }
+    combine(window, host.repository.revision) { items, revision -> items to revision }.collect { (items, revision) ->
+      for ((index, itemKey) in items) {
         // No key: the item is not loaded yet; asked again when its key appears.
         if (itemKey == null) continue
         // Already planned at this revision and still in memory (bounded: an evicted answer is asked for again).
-        if (host.resources.lastPlan(slotId, itemKey, host.repository.revision.value) != null) continue
+        if (host.resources.lastPlan(slotId, itemKey, revision) != null) continue
         if (!lock.withLock { inFlight.add(itemKey) }) continue
         // Off the main thread: the app's planning and the preparation run on [context], one request per item.
         launch(context) {
           try {
-            val result = currentPlan.value(index)
-            // Items can be inserted or removed while this runs: keep the answer only if the index still names the item
-            // it was asked for, so a slot never shows another item's data under this key.
-            if (result != null && currentKey.value(index) == itemKey) host.resources.prepareSlot(slotId, itemKey) { result }
+            // A catalog change while it plans (the revision moved on, and this key was in flight so the new window skipped
+            // it) plans it again, a few times at most.
+            var at = revision
+            repeat(MAX_REPLANS) {
+              val result = currentPlan.value(index)
+              val sameItem = runCatching { currentKey.value(index) == itemKey }.getOrDefault(false)
+              if (!sameItem) return@launch
+              val now = host.repository.revision.value
+              if (result != null && now == at) {
+                host.resources.prepareSlot(slotId, itemKey) { result }
+                return@launch
+              }
+              if (result == null) return@launch
+              at = now
+            }
+          } catch (e: CancellationException) {
+            throw e
+          } catch (_: Exception) {
+            // An item that went away while it was planned (an index past the end of a list that shrank), or a plan that failed: nothing to keep.
           } finally {
             withContext(NonCancellable) { lock.withLock { inFlight.remove(itemKey) } }
           }
@@ -121,6 +141,9 @@ internal fun prepareWindow(first: Int, last: Int, count: Int, ahead: Int, behind
   val to = (maxOf(first, last) + ahead).coerceAtMost(count - 1)
   return if (from > to) IntRange.EMPTY else from..to
 }
+
+/** How many times a request is planned again when the catalog changes under it. */
+private const val MAX_REPLANS = 3
 
 /** Enough to stay ahead of a fast fling on a phone, without planning a feed's worth. */
 const val DEFAULT_PREPARE_AHEAD: Int = 8
