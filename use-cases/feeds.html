@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feeds · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a class="current" href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="feeds">Feeds<a class="headerlink" href="#feeds" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> a feed page is a list of template references plus data; a handful of installed
+templates draw thousands of items, and each page ships data only.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<ul>
+<li>The feed's <strong>templates</strong> are few, <code>"install": "Always"</code>, so they are on disk before the feed
+  loads.</li>
+<li>Your <strong>feed API</strong> returns <code>FeedPage</code>s: items, each with a template reference and its data.</li>
+<li>An item whose template can't play (missing, too new for this player, bad data) falls back to your
+  native row; the feed never shows a hole.</li>
+</ul>
+<h2 id="1-a-feed-page">1. A feed page<a class="headerlink" href="#1-a-feed-page" title="Permanent link">#</a></h2>
+<pre><code class="language-json">{
+  &quot;feed&quot;: &quot;home&quot;, &quot;next&quot;: &quot;c2&quot;,
+  &quot;items&quot;: [
+    { &quot;id&quot;: &quot;a1&quot;, &quot;template&quot;: { &quot;designId&quot;: &quot;article-card&quot;, &quot;contract&quot;: &quot;feed/article@1&quot; },
+      &quot;data&quot;: { &quot;title&quot;: &quot;Remote Compose in production&quot;, &quot;source&quot;: &quot;Engineering&quot;,
+                &quot;published&quot;: 1793000000, &quot;tags&quot;: [{ &quot;label&quot;: &quot;android&quot; }] } }
+  ]
+}
+</code></pre>
+<h2 id="2-load-and-draw">2. Load and draw<a class="headerlink" href="#2-load-and-draw" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val feedClient = FeedClient { feed, cursor -&gt; api.page(feed, cursor) }   // your API
+
+LazyColumn {
+  items(page.items, key = { it.id }) { item -&gt;
+    // Keyed on the whole item: a refresh that changes an item's data or template replans it.
+    LiverySlot(key = item, host = host, slotId = &quot;home-feed&quot;, fallback = { NativeArticleRow(item) }) {
+      planner.forFeedItem(TemplateQuery(&quot;feed/article@1&quot;, inApp, widthDp = 360), item)
+    }
+  }
+}
+</code></pre>
+<p>Each item is its own measured view: <code>Impression</code> and <code>Viewable</code> carry the item id.</p>
+<h2 id="3-draw-every-card-on-its-first-frame">3. Draw every card on its first frame<a class="headerlink" href="#3-draw-every-card-on-its-first-frame" title="Permanent link">#</a></h2>
+<p>Every card of a template shares that template's prepared document (decoded, linked and laid out once), fonts and images, kept in memory
+by the host (<code>host.resources</code>, a <code>LiveryResources</code>). So only a template's very first card does any
+work before it can draw; every later card draws complete on the frame it first appears, with its own
+data and no animation from another card's values. Share one <code>LiveryHost</code> across the feed.</p>
+<p>With a <code>slotId</code> (a name for the slot on this host), a slot also remembers its answer per key, so an
+item scrolled away and back shows its card at once instead of the fallback. When a page arrives,
+prepare its items before they scroll into view. <code>prepareSlot</code> makes the same planning call as the
+slot, for the same <code>slotId</code> and key, keeps the answer and loads the item's document, fonts
+and images, so even an item's first frame shows the finished card rather than the fallback:</p>
+<pre><code class="language-kotlin">// When a page arrives, before it scrolls into view:
+coroutineScope {
+  page.items.forEach { item -&gt;
+    launch { host.resources.prepareSlot(&quot;home-feed&quot;, item) { planner.forFeedItem(query, item) } }
+  }
+}
+</code></pre>
+<p><code>host.resources.preload(plans)</code> does the loading half for plans you already have, and
+<code>host.resources.warm(queries)</code> gets the templates a screen's queries choose ready before you have
+any data for them (when a catalog loads, say). Every cache is bounded and drops its oldest entries
+first; a dropped entry only costs the next card that work again.</p>
+<h3 id="nothing-is-decoded-while-the-feed-scrolls">Nothing is decoded while the feed scrolls<a class="headerlink" href="#nothing-is-decoded-while-the-feed-scrolls" title="Permanent link">#</a></h3>
+<p>A template is decoded, linked and laid out off the main thread. The host configures the player's
+background preparation (<code>LiveryHost.preparation</code>, by default <code>RcPreparation.Background</code> over
+<code>host.resources.documents</code>): composition only looks a template up, and a slot swaps a new answer in
+only once its template is prepared and its fonts loaded. A feed that scrolls never prepares a
+template on its main thread, whether or not you prepared anything; preparing ahead only decides
+whether a template's first card shows on its first frame. <code>host.resources.misses</code> counts
+the cards that had to wait, which a test can hold at zero. A template whose bytes the player cannot
+play (<code>host.resources.cannotPlay</code>) never fails the app: warming or preloading skips it, a
+<code>LiverySlot</code> draws its <code>fallback</code> instead, and a bare <code>LiveryTemplate</code> draws nothing. Pass
+<code>preparation = RcPreparation.InComposition</code> to prepare a template's first card in its composition
+instead.</p>
+<p>Preparing also rewrites the template for the display it is drawn on (<code>LiveryResources.ForDisplay</code>,
+rc-players' <code>forDisplay</code>): the density and font scale are hardcoded, values no card binds are frozen,
+and the expressions that leaves are folded, once per template and display, so every card evaluates
+fewer expressions. A slot records its display on the host (<code>host.resources.display</code>); to warm before
+anything has composed, pass one: <code>host.resources.warm(queries, rememberLiveryDisplay())</code>. Pass
+<code>preprocessor = null</code> to <code>LiveryResources</code> to play templates exactly as published.</p>
+<p>While a list scrolls, the work that remains is per card on screen. Two host settings cut it:</p>
+<ul>
+<li><code>LiveryHost.deferLayoutAnimations</code> (on by default): a template that can only change through its
+  data skips the lookahead pass behind its bounds animations until its data first changes, and then
+  animates as before. That pass otherwise runs over every card on every frame a list scrolls. A
+  template that animates, reads the clock, scrolls, takes input or writes its own state keeps the
+  pass from its first frame. Pass <code>false</code> to play every template exactly as AndroidX does.</li>
+<li><code>LiveryHost.flattenLayout</code> (on by default): a template's plain boxes, rows, columns and texts are
+  laid out and drawn by their container in one node, rather than one composable each. Tap targets,
+  data-driven badges and custom components stay components of their own, the texts stay in the
+  semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
+  the per-component path. It renders the same pixels, and applies only while layout animations are
+  deferred. Pass <code>false</code> to give every component its own composable.</li>
+</ul>
+<p>Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
+laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.</p>
+<h2 id="4-evolve-the-layout">4. Evolve the layout<a class="headerlink" href="#4-evolve-the-layout" title="Permanent link">#</a></h2>
+<p>Publish a new design for the same contract and point the feed's items at it, or change the design's
+template in place: the next refresh downloads it, and items render with it from then on. Old app
+versions keep the templates their player can draw.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">Feed templates <code>Always</code>, for every surface the feed appears on.</li>
+<li class="task">A native fallback row for every contract.</li>
+<li class="task">The feed API validates item data against the contract.</li>
+<li class="task">Remote thumbnails through the image proxy.</li>
+<li class="task">One <code>LiveryHost</code> shared by the whole feed, and <code>prepareSlot</code> called for each page's items.</li>
+<li class="task">The feed's templates warmed (<code>host.resources.warm</code>) when its catalog loads.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/feeds.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

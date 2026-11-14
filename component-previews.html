@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Component previews · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a class="current" href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="interactive-component-previews">Interactive component previews<a class="headerlink" href="#interactive-component-previews" title="Permanent link">#</a></h1>
+<p>The experimental standalone web host plays the quantity-stepper fixture without A2UI
+or the UI Builder editor. Two embeds can share published RC bytes while retaining
+independent local values. Its controls demonstrate validated <code>set</code> actions, example
+inputs, theme changes, width and reset.</p>
+<p>Build and run from a Livery checkout:</p>
+<pre><code class="language-sh">./gradlew :livery-web-core:webDist :livery-publish:installDist :livery-capture-cmp:sampleCatalogs
+cd web/core
+npm ci
+npm run build
+npm run demo
+</code></pre>
+<p>The command prints a local URL; it does not deploy a service. The example deliberately
+uses an unsigned local catalog. Real hosts configure trusted publisher keys separately
+from the preview descriptor. See <code>web/core/README.md</code> for the API, browser tests and limits.</p>
+<p><code>livery-web-core</code> contains the host-neutral Kotlin pipeline and standalone Wasm exports;
+<code>@yschimke/livery-web</code> supplies its browser bridge and player. <code>livery-web</code> and <code>@yschimke/livery-a2ui</code>
+remain the optional A2UI adapter over that shared code. Selection, data binding and
+host-action validation still use the common Livery gates.</p>
+<p>The current descriptor pins a design/hash, permits same-origin references and supports
+local preview state. Incompatible or missing content shows fallback. A preview bookmark
+or toggle is not an account write. Custom font parity and accessibility of drawn controls
+remain to be established before claiming a general-purpose embed.</p>
+<h2 id="host-the-viewer">Host the viewer<a class="headerlink" href="#host-the-viewer" title="Permanent link">#</a></h2>
+<p>After building the package, <code>npm run bundle</code> writes a standalone <code>viewer-dist/</code>
+and ZIP. A host serves those assets under <code>/assets/livery-preview/</code> and renders the
+publication page with the descriptor URL, canonical revision URL and operator trust
+configuration. Follow <code>web/core/HOSTING.md</code>; the server does not need a Livery source
+checkout or an A2UI runtime. The optional JVM <code>livery-server</code> library supplies a
+filesystem publication store and Ktor routes for metadata, fallback pages, embeds and
+artifacts. The application supplies configuration, public storage and its security
+policy; see <code>livery-server/README.md</code>. Consume a release that includes the module;
+staged local artifacts are development verification only.</p>
+<p>The full page offers Bluesky's normal compose intent, system sharing when available,
+and copy-link with a manual fallback. These share the canonical revision, not local
+control edits, and never post automatically. Embed mode retains theme/reset and an
+open-page link. <code>npm run test:viewer</code> exercises the extracted ZIP with the actual RC
+player. Successfully published future releases attach the versioned viewer ZIP;
+a local build or draft release is not a public dependency.</p>
+<p>The operator installer and optional <code>samples/dokka-preview</code> example provide immutable
+publication and real documentation embeds. The server library makes the read-only
+hosting implementation reusable by other Ktor applications.</p>
+<p><strong>Planned:</strong> authenticated editor publishing, UI Builder share controls, Heron rendering,
+Confetti public-session data and later AT interoperability. None is required by the local
+quantity-stepper demonstration.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/component-previews.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

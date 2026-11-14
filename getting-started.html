@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a class="current" href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">#</a></h1>
+<p>From nothing to a signed catalog on a GitHub release, read by an app, in five steps.</p>
+<h2 id="1-get-the-tools">1. Get the tools<a class="headerlink" href="#1-get-the-tools" title="Permanent link">#</a></h2>
+<p>The libraries are published to Maven Central as <code>ee.schimke.composeai:&lt;module&gt;</code>, from the first
+release on. Each release attaches the <code>livery</code> and <code>livery-mcp</code> CLIs as zips. A release publishes
+only the modules that changed, so modules can sit at different versions: import <code>livery-bom</code> and
+name the modules without one, and the BOM gives each the version it is published at:</p>
+<pre><code class="language-kotlin">dependencies {
+  implementation(platform(&quot;ee.schimke.composeai:livery-bom:&lt;version&gt;&quot;))
+  implementation(&quot;ee.schimke.composeai:livery-client&quot;)   // fetch, verify, cache, select, bind
+  implementation(&quot;ee.schimke.composeai:livery-compose&quot;)  // LiveryTemplate, LiverySlot
+  // launcher and Wear widgets, notifications: livery-launcher-widgets, livery-wear-widgets, livery-notifications
+  // Firebase Analytics, Remote Config experiments, Firestore frequency caps: livery-firebase
+}
+</code></pre>
+<p>The Swift package isn't tagged yet; use it from a checkout. To build the CLI from source:</p>
+<pre><code class="language-bash">git clone https://github.com/yschimke/livery
+cd livery
+./gradlew :livery-publish:installDist
+export PATH=&quot;$PWD/livery-publish/build/install/livery/bin:$PATH&quot;
+livery
+</code></pre>
+<p>Building the Android targets needs <code>ANDROID_HOME</code> with <code>platforms;android-37.1</code> installed.</p>
+<h2 id="2-make-a-signing-key">2. Make a signing key<a class="headerlink" href="#2-make-a-signing-key" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery keygen acme
+</code></pre>
+<p>This writes <code>acme.key</code> (the private key: a CI secret, never committed) and <code>acme.pub</code> (the public
+key, which your apps embed). See <a href="signing.html">Signing</a>.</p>
+<h2 id="3-write-a-catalog">3. Write a catalog<a class="headerlink" href="#3-write-a-catalog" title="Permanent link">#</a></h2>
+<p>A catalog is a directory. The repository's <a href="https://github.com/yschimke/livery/tree/main/samples/catalog"><code>samples/catalog</code></a>
+is a complete one once built: its Compose-authored designs (<code>banner-classic</code>, <code>poll-card</code>) are
+Kotlin, and <code>./gradlew :livery-capture-cmp:sampleCatalogs</code> captures them into
+<code>livery-capture-cmp/build/samples/catalog</code>, the tree to point <code>livery build</code> at (see
+<a href="authoring.html">Authoring</a>). The smallest is:</p>
+<pre><code>catalog.json                        { &quot;catalog&quot;: &quot;acme&quot;, &quot;channel&quot;: &quot;main&quot; }
+contracts/banner.json               the data the template reads (see Concepts)
+designs/banner-classic/design.json  { &quot;id&quot;: &quot;banner-classic&quot;, &quot;contract&quot;: &quot;promo/banner@1&quot;,
+                                      &quot;title&quot;: &quot;Classic&quot;, &quot;install&quot;: &quot;Always&quot; }
+designs/banner-classic/in-app.rc    the document, from any authoring tool
+designs/banner-classic/in-app.json  { &quot;target&quot;: { &quot;surface&quot;: &quot;in-app&quot;, &quot;rcApiLevel&quot;: 7,
+                                      &quot;profiles&quot;: [&quot;androidx&quot;] },
+                                      &quot;reads&quot;: [&quot;headline&quot;, &quot;cta&quot;], &quot;emits&quot;: [&quot;cta&quot;] }
+</code></pre>
+<p><code>livery build</code> refuses a catalog with problems instead of publishing it: a template reading a
+value its contract doesn't declare, an example that doesn't fit its contract, a duplicate id. Add
+<code>--inspect</code> to also decode every <code>.rc</code> and check it against its sidecar.</p>
+<h2 id="4-publish-it-as-a-github-release">4. Publish it as a GitHub release<a class="headerlink" href="#4-publish-it-as-a-github-release" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery build catalog build/release --github acme/app-templates --tag catalog-1 \
+  --key acme.key --key-id acme-1
+gh release create catalog-1 build/release/* --repo acme/app-templates --title &quot;Catalog 1&quot;
+</code></pre>
+<p>Use a repository for catalog releases only, so its "latest" release is always the catalog. For
+other hosts, see <a href="hosting.html">Hosting</a>.</p>
+<h2 id="5-read-it-in-the-app">5. Read it in the app<a class="headerlink" href="#5-read-it-in-the-app" title="Permanent link">#</a></h2>
+<p><strong>Kotlin (Android, desktop, iOS)</strong>: the libraries from step 1. Livery's Compose Multiplatform
+version is a floor for your app's, so check it matches the Compose (or androidx Compose BOM) you
+ship. To try unreleased changes, use a checkout through a composite build instead
+(<code>includeBuild("../livery")</code> and version <code>0.1.0-SNAPSHOT</code>).</p>
+<p>The repository below reads only the network. To also ship a copy in the app (first launch,
+offline), build the catalog into its assets with the <code>ee.schimke.composeai.livery.catalog</code> Gradle
+plugin and pass <code>bundled = AndroidBundled.fromAssets(context)</code>; see <a href="hosting.html">Hosting</a>.</p>
+<pre><code class="language-kotlin">val inApp = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf(&quot;androidx&quot;))
+// A template that uses a risky feature (shaders, haptics, sound, …) plays only where you allow it:
+// PlayerCapabilities(…, features = setOf(&quot;shaders&quot;)). None by default.
+val repository = TemplateRepository(
+  source = GitHubReleaseSource(&quot;acme&quot;, &quot;app-templates&quot;),
+  fetcher = KtorFetcher(),           // OkHttp on Android and the JVM, Darwin on iOS
+  crypto = JavaCrypto,               // JVM and Android
+  trust = TrustPolicy.Signed(listOf(TrustedKey(&quot;acme-1&quot;, Base64.decode(ACME_PUB)))),
+  blobs = FileBlobStore(File(context.cacheDir, &quot;livery/blobs&quot;)),
+  kv = FileKeyValueStore(File(context.filesDir, &quot;livery&quot;)),
+  clock = { System.currentTimeMillis() },
+  targets = listOf(inApp),
+)
+repository.refresh()                 // from your background scheduler, and at start
+</code></pre>
+<p><strong>No blank first screen.</strong> If the app's first screen has Livery slots, keep the splash screen up
+until they are prepared (answers planned, documents, fonts and images in memory), so the screen
+appears complete. <code>startup</code> never waits longer than its limit (800 ms by default) and keeps
+preparing in the background after it:</p>
+<pre><code class="language-kotlin">// Android, androidx.core:core-splashscreen, in onCreate before setContent
+val startup = host.resources.startup(lifecycleScope) {
+  prepareSlot(&quot;home.top&quot;, data) { planner.forAppData(query, data) }   // the slot's slotId, key and call
+}
+installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
+</code></pre>
+<p>The slot itself is <code>LiverySlot(key = data, host = host, slotId = "home.top") { … }</code>. On desktop, iOS
+and the web, <code>startup.await()</code> before showing the first screen.</p>
+<p><strong>Swift (iOS, macOS)</strong>:</p>
+<pre><code class="language-swift">// Package.swift
+.package(url: &quot;https://github.com/yschimke/livery&quot;, branch: &quot;main&quot;)
+</code></pre>
+<pre><code class="language-swift">let repository = TemplateRepository(
+  source: GitHubReleaseSource(owner: &quot;acme&quot;, repo: &quot;app-templates&quot;),
+  trust: .signed([TrustedKey(keyId: &quot;acme-1&quot;, publicKey: Data(base64Encoded: acmePub)!)]),
+  blobs: FileBlobStore(directory: caches.appendingPathComponent(&quot;livery&quot;)),
+  kv: FileKeyValueStore(directory: support.appendingPathComponent(&quot;livery&quot;)),
+  targets: [PlayerCapabilities(surface: Surfaces.inApp, maxRcApiLevel: 7, profiles: [&quot;core&quot;])])
+_ = await repository.refresh()
+</code></pre>
+<p>Then pick a use case: each page goes from the contract to a deployment checklist.</p>
+<blockquote>
+<p>Rendering never waits on the network. <code>refresh()</code> downloads in the background; slots draw from
+what is on disk, then the bundled catalog, then your native fallback.</p>
+</blockquote>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/getting-started.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

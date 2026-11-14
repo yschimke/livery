@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signing · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a class="current" href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="signing">Signing<a class="headerlink" href="#signing" title="Permanent link">#</a></h1>
+<p>Every production manifest is signed. A compromised host or CDN can't push designs, hide a
+revocation or roll a catalog back.</p>
+<h2 id="keys">Keys<a class="headerlink" href="#keys" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery keygen acme          # acme.key (secret), acme.pub (embed in apps)
+</code></pre>
+<ul>
+<li><code>acme.key</code> is PKCS#8 in Base64. Keep it in CI secrets; never commit it.</li>
+<li><code>acme.pub</code> is the raw 32-byte Ed25519 public key in Base64. Apps embed it with a key id.</li>
+</ul>
+<pre><code class="language-kotlin">TrustPolicy.Signed(listOf(TrustedKey(&quot;acme-1&quot;, Base64.decode(ACME_PUB))))
+</code></pre>
+<pre><code class="language-swift">.signed([TrustedKey(keyId: &quot;acme-1&quot;, publicKey: Data(base64Encoded: acmePub)!)])
+</code></pre>
+<h2 id="sign-and-verify">Sign and verify<a class="headerlink" href="#sign-and-verify" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery build catalog out --key acme.key --key-id acme-1
+livery verify out --pub acme.pub --key-id acme-1
+</code></pre>
+<p>The signature (<code>manifest.sig.json</code>) is Ed25519 over the exact bytes of <code>manifest.json</code>. Never
+re-encode or reformat the manifest after signing; serve it byte for byte.</p>
+<h2 id="partner-keys">Partner keys<a class="headerlink" href="#partner-keys" title="Permanent link">#</a></h2>
+<p>A key can be limited to contract prefixes. An ad partner's key that may sign only <code>ads/</code>:</p>
+<pre><code class="language-kotlin">TrustedKey(&quot;adnet-1&quot;, adnetPub, contractPrefixes = setOf(&quot;ads/&quot;))
+</code></pre>
+<p>A manifest signed by that key that mentions any other contract is rejected.</p>
+<h2 id="signing-one-document">Signing one document<a class="headerlink" href="#signing-one-document" title="Permanent link">#</a></h2>
+<p>A document sent with a message instead of through a catalog (an A2UI <code>template</code>) carries its own
+signature, by the same keys and held to the same contract prefixes (PROTOCOL.md §3.4):</p>
+<pre><code class="language-bash">livery sign-template designs/banner-classic/in-app.rc --contract promo/banner@1 --key acme.key --key-id acme-1
+</code></pre>
+<p>It prints the template JSON to send, <code>{"inline": &lt;base64&gt;, "signature": {...}}</code>. The client still
+checks the document against its contract, and plays a signed one only if it uses no risky feature
+(shaders, haptics, sound, particles, embedded images or fonts, wake) that the app hasn't opted into.
+An unsigned document plays only under the app's unsigned-document policy, and never with a risky
+feature (PROTOCOL.md §3.5).</p>
+<p>Catalog templates are held to the same features. <code>livery build</code> records the ones a document uses
+in its manifest entry (<code>features</code>, and the catalog then needs protocol level 8), and selection
+skips a template whose features the player doesn't allow, <code>PlayerCapabilities.features</code>, empty by
+default, so a shader design draws only where an app opted into <code>shaders</code>.</p>
+<h2 id="rotation">Rotation<a class="headerlink" href="#rotation" title="Permanent link">#</a></h2>
+<p>Ship the new public key in an app release alongside the old one, then sign with the new key once
+enough installs have it. Remove the old key from a later release.</p>
+<h2 id="freshness-and-the-kill-switch">Freshness and the kill switch<a class="headerlink" href="#freshness-and-the-kill-switch" title="Permanent link">#</a></h2>
+<ul>
+<li><code>serial</code> must grow per channel; a lower one is refused (rollback protection).</li>
+<li>After <code>expiresAt</code> (default 14 days after the build) the catalog is stale but still played for a
+  grace period; then apps stop using it.</li>
+<li><code>revoked: true</code> on a design or template withdraws it at the next refresh; <code>minClient</code> keeps a
+  catalog away from apps too old for it.</li>
+</ul>
+<blockquote>
+<p><code>TrustPolicy.AllowUnsigned</code> exists for development and preview channels only.</p>
+</blockquote>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/signing.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

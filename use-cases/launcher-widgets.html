@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launcher widgets · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a class="current" href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="launcher-widgets">Launcher widgets<a class="headerlink" href="#launcher-widgets" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> subclass <code>LiveryLauncherWidgetProvider</code>, return a plan for the widget's cell, and
+Livery instantiates the template at that size, publishes it, and routes taps back to you.</p>
+<p>Android 16 (API 36) and later play Remote Compose documents in <code>RemoteViews</code> draw instructions;
+older launchers get your fallback. Built on rc-players' <code>rc-widget-launcher</code>.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<p>A launcher can't receive pushed values, so on every update and resize the provider:</p>
+<ol>
+<li>asks you for a plan for the widget's cell (<code>WidgetSlot</code> with its dp size);</li>
+<li>writes the values and images into the template (<code>livery-instantiate</code>). Updates never wait on
+   the network: a template or image that isn't on the device yet draws your fallback, is fetched in the
+   background, and the widget updates again;</li>
+<li>rewrites the template's named taps into the numeric actions a launcher sends;</li>
+<li>publishes the result.</li>
+</ol>
+<h2 id="1-publish-a-widget-template">1. Publish a widget template<a class="headerlink" href="#1-publish-a-widget-template" title="Permanent link">#</a></h2>
+<p>Give the design a template for the launcher, sized for widget cells:</p>
+<pre><code class="language-json">{ &quot;target&quot;: { &quot;surface&quot;: &quot;launcher-widget&quot;, &quot;rcApiLevel&quot;: 7, &quot;profiles&quot;: [&quot;widgets&quot;],
+              &quot;size&quot;: { &quot;minWidthDp&quot;: 110, &quot;maxWidthDp&quot;: 400, &quot;minHeightDp&quot;: 40, &quot;maxHeightDp&quot;: 400 } },
+  &quot;reads&quot;: [&quot;name&quot;, &quot;state&quot;], &quot;emits&quot;: [&quot;toggle&quot;] }
+</code></pre>
+<p>Keep what the launcher gets small: launchers expect documents of a few tens of kilobytes
+(<code>documentMaxBytes</code>, 50 000 by default). That is the instantiated document. The template can hold
+a conditional layout (<code>RemoteStateLayout</code> on a named value) with a branch for each state:
+instantiation writes the values in and the launcher's player draws the live branch. Every branch
+stays in the document, so count them all against <code>documentMaxBytes</code> (rc-players drops a branch only
+when it defines no values, which a Compose capture's branches always do). Templates may be up to
+the capabilities' <code>maxBytes</code> (500 000 by default).</p>
+<h2 id="2-the-provider">2. The provider<a class="headerlink" href="#2-the-provider" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">class TileWidget : LiveryLauncherWidgetProvider() {
+  override suspend fun plan(context: Context, slot: WidgetSlot): PlanResult =
+    app(context).planner.forAppData(slot.query(&quot;live/status-tile@1&quot;), app(context).tileData())
+
+  override fun images(context: Context) = app(context).images // an ImageResolver
+
+  override suspend fun onTap(context: Context, widgetId: Int, tap: WidgetTap) {
+    if (tap.action == &quot;toggle&quot;) app(context).toggle()
+    updateAll(context, TileWidget::class.java)
+  }
+
+  override fun fallback(context: Context, widgetId: Int, reason: String) =
+    RemoteViews(context.packageName, R.layout.tile_widget_fallback)
+
+  // Opening the app is an activity, which a broadcast receiver may not start.
+  override fun tapIntent(context: Context, widgetId: Int, actionId: Int, action: String) =
+    if (action == &quot;open&quot;) RcLauncherWidgets.actionActivity(context, launchIntent(context), widgetId, actionId)
+    else super.tapIntent(context, widgetId, actionId, action)
+}
+</code></pre>
+<p>Register it like any <code>AppWidgetProvider</code> in the manifest, with an <code>appwidget-provider</code> XML. Call
+<code>LiveryLauncherWidgetProvider.updateAll(context, TileWidget::class.java)</code> when the data or the
+catalog changes.</p>
+<h2 id="3-make-sure-the-template-is-on-disk">3. Make sure the template is on disk<a class="headerlink" href="#3-make-sure-the-template-is-on-disk" title="Permanent link">#</a></h2>
+<p>Add the launcher's capabilities to the repository's <code>targets</code>, so <code>Always</code> and installed designs
+download their launcher templates with every refresh, before anyone places a widget:</p>
+<pre><code class="language-kotlin">val launcher = PlayerCapabilities(Surfaces.LAUNCHER_WIDGET, 7, setOf(&quot;widgets&quot;), livePush = false, maxBytes = 500_000)
+TemplateRepository(..., targets = listOf(inApp, launcher))
+</code></pre>
+<h2 id="4-fail-the-build-when-the-launcher-would-show-an-error">4. Fail the build when the launcher would show an error<a class="headerlink" href="#4-fail-the-build-when-the-launcher-would-show-an-error" title="Permanent link">#</a></h2>
+<p>Android 16's widget player doesn't let a template's exception out: it catches it while drawing,
+disables itself and draws a red warning sign, on someone's home screen. <code>livery-verify</code> plays every
+launcher template in the catalog, with each of its contract's examples and the older preview data
+the catalog keeps (see <a href="../repository-mode.html#older-preview-data">Repository mode</a>), on that player under
+Robolectric, and reports each one that crashes, that the player refuses, or that can't be written
+for a widget:</p>
+<pre><code class="language-kotlin">// testImplementation(&quot;ee.schimke.composeai:livery-verify:&lt;version&gt;&quot;), with Robolectric
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36])
+class LauncherWidgetsPlayTest {
+  @Test fun everyTemplatePlaysOnAndroid16() = runBlocking {
+    val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+    val failures = WidgetCatalogCheck.launcherWidgets(activity, File(&quot;src/main/livery&quot;), maxBytes = 500_000)
+    assertEquals(emptyList(), failures)
+  }
+}
+</code></pre>
+<p>A failure names the design, the template, the example and the exception, such as
+<code>crashed while drawing: RuntimeException: FloatExpression[63] = ([A_46] 24.0 / ) len = 3</code>, the
+text Android 16 shows. <code>PlatformWidgetPlayer.play</code> plays one document. Both publish the document as
+the widget provider does, through rc-players, which first recovers what the platform player can't
+read (a row or column spaced by a variable draws nothing; Android 16 needs sizes as literals). Pass
+<code>recover = false</code> to play the document as it is and find a template that only plays because it is
+recovered. Robolectric runs Android 16
+on Java 21 only; on JDK 17 and later it also needs
+<code>--add-opens=java.base/java.io=ALL-UNNAMED --add-exports=java.base/jdk.internal.access=ALL-UNNAMED</code>
+on the test JVM.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">A <code>launcher-widget</code> template per design and size tier; its instantiated document inside
+      <code>documentMaxBytes</code>.</li>
+<li class="task">Taps that open the app go through <code>tapIntent</code> as activities.</li>
+<li class="task">The launcher in the repository's <code>targets</code>.</li>
+<li class="task">A <code>RemoteViews</code> fallback for Android 15 and older, and for failures.</li>
+<li class="task"><code>WidgetCatalogCheck.launcherWidgets</code> in a test, so a template the launcher can't play fails
+      the build.</li>
+<li class="task"><code>updateAll</code> on data and catalog changes.</li>
+<li class="task">Images through <code>ImageResolver</code>; the widget can load nothing itself.</li>
+</ul>
+<blockquote>
+<p>Not yet verified on a device in CI. Taps carry a template action's text value as metadata;
+numeric action values are dropped on launchers.</p>
+</blockquote>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/launcher-widgets.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platforms · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a class="current" href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="platforms">Platforms<a class="headerlink" href="#platforms" title="Permanent link">#</a></h1>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Platforms</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>livery-protocol</code>, <code>livery-client</code></td>
+<td>Android, JVM, iOS, Wasm</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-compose</code></td>
+<td>Android, desktop, iOS, Wasm (Compose Multiplatform)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-bom</code> (a <code>platform(…)</code> with every module's version)</td>
+<td>Gradle and Maven</td>
+<td>From the next release</td>
+</tr>
+<tr>
+<td><code>livery-compose-material3</code> (<code>ColorScheme.toLiveryTheme()</code>)</td>
+<td>Android, desktop, iOS, Wasm (Compose Multiplatform)</td>
+<td>Available from the release after 0.4.0</td>
+</tr>
+<tr>
+<td><code>livery-instantiate</code></td>
+<td>Android, JVM, iOS, Wasm</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-launcher-widgets</code></td>
+<td>Android 16+</td>
+<td>Available; not yet device-tested in CI</td>
+</tr>
+<tr>
+<td><code>livery-verify</code></td>
+<td>Robolectric (Android 16, Java 21)</td>
+<td>Available: launcher widgets on Android 16's own player</td>
+</tr>
+<tr>
+<td><code>Livery</code>, <code>LiveryUI</code> (Swift package)</td>
+<td>iOS 15, macOS 12, watchOS 8, tvOS 15</td>
+<td>Available; CI on macOS</td>
+</tr>
+<tr>
+<td><code>livery-catalog</code> (catalog build and check, on any Okio file system)</td>
+<td>JVM, iOS, Wasm</td>
+<td>Available from the release after 0.4.0</td>
+</tr>
+<tr>
+<td><code>livery-publish</code> (<code>livery</code> CLI)</td>
+<td>JVM</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-gradle-plugin</code> (<code>ee.schimke.composeai.livery.catalog</code>)</td>
+<td>Gradle, Android apps</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-wear-widgets</code></td>
+<td>Wear OS (Glance Wear)</td>
+<td>Available; not yet device-tested in CI</td>
+</tr>
+<tr>
+<td><code>livery-notifications</code></td>
+<td>Android 16+</td>
+<td>Available; not yet device-tested in CI</td>
+</tr>
+<tr>
+<td><code>livery-firebase</code></td>
+<td>Android</td>
+<td>Available (Firebase Analytics, Remote Config, Firestore); not yet tested against a live project</td>
+</tr>
+<tr>
+<td><code>@yschimke/livery-a2ui</code> (<code>web/a2ui</code>): Livery components in A2UI's Lit, React and Angular renderers, over <code>livery-web</code> (Wasm)</td>
+<td>Browsers</td>
+<td>Built; not yet on npm</td>
+</tr>
+<tr>
+<td><code>@yschimke/livery-web</code> (a <code>&lt;livery-template&gt;</code> element outside A2UI)</td>
+<td>Browsers</td>
+<td>Planned</td>
+</tr>
+<tr>
+<td><code>livery-render</code></td>
+<td>JVM (Linux, macOS, Windows)</td>
+<td>Available</td>
+</tr>
+<tr>
+<td><code>livery-mcp-core</code> (the agent tools, transport-free)</td>
+<td>JVM, iOS, Wasm</td>
+<td>Available from the release after 0.4.0</td>
+</tr>
+<tr>
+<td><code>livery-mcp</code> (<code>livery-mcp</code> CLI)</td>
+<td>JVM</td>
+<td>Available; live sessions planned</td>
+</tr>
+<tr>
+<td><code>livery-datadog</code>, <code>livery-sentry</code>, <code>livery-amplitude</code></td>
+<td>Android</td>
+<td>Available since 0.2.0; not yet tested against live projects</td>
+</tr>
+<tr>
+<td><code>livery-capture-cmp</code> (authoring on rc-players' Compose Multiplatform creation API)</td>
+<td>JVM, Android; compiled for Wasm, not yet tested in a browser</td>
+<td>Available from the release after 0.9.0</td>
+</tr>
+<tr>
+<td><code>livery-capture</code> (authoring on AndroidX <code>remote-creation-compose</code>)</td>
+<td>Android (unit tests, Robolectric)</td>
+<td>Available since 0.2.0</td>
+</tr>
+<tr>
+<td><code>livery-capture-core</code> (what both share: <code>CapturedTemplate</code>, <code>DesignFolder</code>, <code>CatalogContracts</code>)</td>
+<td>JVM (also what Android resolves); compiled for Wasm</td>
+<td>Available from the release after 0.9.0</td>
+</tr>
+<tr>
+<td>Secondary screens (<code>LiveryScreens</code>, <code>LiveryScreenHost</code>, <code>.liveryScreens</code>)</td>
+<td>Kotlin, Compose, SwiftUI</td>
+<td>Available from the release after 0.2.0; not yet device-tested</td>
+</tr>
+<tr>
+<td><code>livery-uibuilder</code></td>
+<td>JVM, iOS, Wasm (the CLI commands on the JVM)</td>
+<td>Available (optional: <code>livery ui-builder</code> commands and <code>livery-mcp</code> tools)</td>
+</tr>
+<tr>
+<td><code>livery-server</code></td>
+<td>JVM</td>
+<td>Planned</td>
+</tr>
+</tbody>
+</table>
+<h2 id="kotlin">Kotlin<a class="headerlink" href="#kotlin" title="Permanent link">#</a></h2>
+<ul>
+<li>HTTP through Ktor: OkHttp on Android and the JVM, Darwin on iOS, <code>fetch</code> on Wasm.</li>
+<li><code>JavaCrypto</code> (JVM, Android 13+) verifies Ed25519; on older Android or other targets pass your
+  own <code>Crypto</code>.</li>
+<li>Android modules compile against SDK 37.1.</li>
+</ul>
+<h2 id="compose-multiplatform">Compose Multiplatform<a class="headerlink" href="#compose-multiplatform" title="Permanent link">#</a></h2>
+<p><code>LiveryTemplate(plan, host)</code> plays a render plan through rc-players' Compose player;
+<code>LiverySlot(key, host) { plan }</code> plans and falls back, replanning when <code>key</code> changes or the
+repository's <code>revision</code> does (a refreshed catalog, an install). Catalog images and fonts go through the
+player's own loaders.</p>
+<h2 id="swift">Swift<a class="headerlink" href="#swift" title="Permanent link">#</a></h2>
+<p>A native SwiftPM package with no dependencies beyond the system: <code>URLSession</code>, CryptoKit, SwiftUI.
+<code>LiverySlotView</code> takes any player view. For rc-players' native Swift player, add
+<a href="https://github.com/yschimke/livery/blob/main/swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift"><code>swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift</code></a>
+to your app beside your own <code>RcNativePlayerUIKit</code> dependency.</p>
+<pre><code class="language-swift">LiverySlotView(key: decision.decisionId, actions: router, events: analytics,
+  plan: { await planner.forDecision(query, decision) },
+  player: { LiveryRcNativePlayer(input: $0) },
+  fallback: { _ in NativeBanner() })
+</code></pre>
+<h2 id="conformance">Conformance<a class="headerlink" href="#conformance" title="Permanent link">#</a></h2>
+<p>Kotlin and Swift run the same fixtures in
+<a href="https://github.com/yschimke/livery/tree/main/conformance"><code>conformance/</code></a>: selection, binding,
+resources and signing must give identical answers on every platform.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/platforms.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live content · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a class="current" href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="live-content">Live content<a class="headerlink" href="#live-content" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> the app pushes its own live values (a thermostat, a score, a timer) into a
+template, and people can install skins that draw the same data differently.</p>
+<p>This is the Home Assistant case: cards are templates, entity states are the data, and skins are
+designs people install.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<ul>
+<li>The <strong>contract</strong> names the app's own values (<code>name</code>, <code>state</code>, <code>is_on</code>, <code>level</code>).</li>
+<li>The <strong>app</strong> computes them and calls <code>SlotPlanner.forAppData</code> whenever they change; the player
+  pushes the new values without restarting the document, so only updates animate.</li>
+<li><strong>Skins</strong> are <code>OnRequest</code> designs: listed with previews, downloaded only when installed.</li>
+</ul>
+<h2 id="1-draw-with-live-data">1. Draw with live data<a class="headerlink" href="#1-draw-with-live-data" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val state by viewModel.kitchen.collectAsState()
+var chosenSkin by rememberSaveable { mutableStateOf&lt;String?&gt;(null) }
+// The key is everything the plan reads: new data or a newly chosen skin replans the slot.
+LiverySlot(key = state to chosenSkin, host = host, fallback = { NativeTile(state) }) {
+  planner.forAppData(
+    TemplateQuery(&quot;live/status-tile@1&quot;, inApp, designId = chosenSkin),
+    buildJsonObject { put(&quot;name&quot;, state.name); put(&quot;state&quot;, state.label); put(&quot;is_on&quot;, state.on) },
+  )
+}
+</code></pre>
+<h2 id="2-let-people-pick-a-skin">2. Let people pick a skin<a class="headerlink" href="#2-let-people-pick-a-skin" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val designs = rememberDesigns(repository, &quot;live/status-tile@1&quot;) // refreshes after installs
+DesignPicker(designs, onChoose = { d -&gt;
+  scope.launch { if (d.installed || repository.install(d.design.id)) chosenSkin = d.design.id }
+}, preview = { d -&gt; AsyncImage(d.previews.firstOrNull()?.url, null) })
+</code></pre>
+<p><code>repository.preview(designId, query)</code> plays a design once without installing it, so the picker can
+show it live with the person's own data.</p>
+<h2 id="3-a-design-for-one-item">3. A design for one item<a class="headerlink" href="#3-a-design-for-one-item" title="Permanent link">#</a></h2>
+<p>A design can be tagged for one item or group (a keynote, a track) and drawn only there. Pass the
+queries most specific first: the first that has a template decides, in one pass over the catalog,
+and the plain query draws everything else.</p>
+<pre><code class="language-kotlin">planner.forAppData(
+  listOf(
+    query.copy(tags = mapOf(&quot;session&quot; to session.id)),
+    query.copy(tags = mapOf(&quot;track&quot; to session.track)),
+    query,
+  ),
+  data,
+)
+</code></pre>
+<p>Give each tagged design a variant of its own (<code>variant = "track"</code>), so the plain query's <code>default</code>
+design still wins for every other item. See <a href="https://github.com/yschimke/livery/blob/main/docs/PROTOCOL.md#54-most-specific-first">PROTOCOL.md §5.4</a>.</p>
+<h2 id="4-bundle-a-fallback-catalog">4. Bundle a fallback catalog<a class="headerlink" href="#4-bundle-a-fallback-catalog" title="Permanent link">#</a></h2>
+<p>Build the same catalog into the app's assets with the <code>ee.schimke.composeai.livery.catalog</code> Gradle plugin,
+and pass <code>AndroidBundled.fromAssets(context)</code> as the repository's <code>bundled</code>. A first launch with no
+network then still draws the built-in design. See <a href="../hosting.html#bundled-fallback">Hosting</a>.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">The built-in design <code>Always</code>; skins <code>OnRequest</code>, with previews.</li>
+<li class="task">A bundled catalog in the app's assets.</li>
+<li class="task">A native fallback for each contract.</li>
+<li class="task">The chosen design id persisted per slot.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/live-content.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

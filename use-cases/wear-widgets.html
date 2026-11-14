@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wear widgets · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a class="current" href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="wear-widgets">Wear widgets<a class="headerlink" href="#wear-widgets" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> subclass <code>LiveryWearWidget</code>, return a plan for the widget's container, and Livery
+instantiates the template for that container on that watch and turns its taps into your
+<code>PendingIntent</code>s.</p>
+<p>Built on Glance Wear (<code>androidx.glance.wear</code> 1.0.0-alpha21) and rc-players' <code>rc-widget-core</code> Wear
+frames. Module: <code>livery-wear-widgets</code>.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<p>A Wear widget host can't receive pushed values or load anything, so each time the host asks for a
+render the widget:</p>
+<ol>
+<li>asks you for a plan for the widget's container (<code>WearWidgetSlot</code>: its type, size, padding and
+   corner radius as the host reports them);</li>
+<li>writes the values and images into the template (<code>livery-instantiate</code>). Renders never wait on
+   the network: a template or image that isn't on the watch yet draws your fallback, is fetched in the
+   background, and the widget is asked to render again;</li>
+<li>frames it in the container: the container's padding, corners and fill go into the template's
+   <code>wear.container.*</code> named values, the watch's density and font scale are folded in, and anything
+   the Wear widget player can't read is rewritten (rc-players' <code>RcWearTemplates.instantiate</code>);</li>
+<li>turns each distinct tap into a <code>PendingIntent</code> you build, since that is the only action the host
+   runs.</li>
+</ol>
+<h2 id="1-publish-wear-templates">1. Publish Wear templates<a class="headerlink" href="#1-publish-wear-templates" title="Permanent link">#</a></h2>
+<p>One template per container type, with a baked dark theme:</p>
+<pre><code class="language-json">{ &quot;target&quot;: { &quot;surface&quot;: &quot;wear-widget&quot;, &quot;rcApiLevel&quot;: 7, &quot;profiles&quot;: [&quot;glance-wear&quot;],
+              &quot;container&quot;: &quot;wear:small&quot;, &quot;theme&quot;: &quot;baked:dark&quot; },
+  &quot;reads&quot;: [&quot;name&quot;, &quot;state&quot;, &quot;is_on&quot;], &quot;emits&quot;: [&quot;toggle&quot;] }
+</code></pre>
+<p>Draw the container's padding, corner radius and fill from the <code>wear.container.horizontal_padding</code>,
+<code>wear.container.vertical_padding</code>, <code>wear.container.corner_radius</code> and <code>wear.container.color</code> named
+values (rc-players' <code>RcWearContainer</code>), so one capture fits every watch's containers.</p>
+<p>Taps must have constant arguments, such as <code>{"entity":"light.kitchen"}</code>. A <code>PendingIntent</code> is fixed
+when the widget is published, so a tap whose arguments are an expression can't be carried; it is
+left out (the host ignores it).</p>
+<h2 id="2-the-widget">2. The widget<a class="headerlink" href="#2-the-widget" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">abstract class TileWidget : LiveryWearWidget() {
+  override suspend fun plan(context: Context, slot: WearWidgetSlot): PlanResult =
+    app(context).planner.forAppData(slot.query(&quot;live/status-tile@1&quot;), app(context).tileData())
+
+  override fun images(context: Context) = app(context).images // an ImageResolver
+
+  override fun tapIntent(context: Context, instanceId: Int, index: Int, tap: WidgetTap): PendingIntent =
+    PendingIntent.getBroadcast(
+      context, instanceId * 100 + index,
+      Intent(context, TileTapReceiver::class.java)
+        .putExtra(&quot;action&quot;, tap.action)
+        .putExtra(&quot;args&quot;, Bundle().apply { tap.args.forEach { (k, v) -&gt; putString(k, v) } }),
+      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+  override fun fallback(context: Context, slot: WearWidgetSlot, reason: String): WearWidgetData =
+    WearWidgetDocument(WearWidgetBrush.color(Color.DarkGray.rc)) { RemoteText(&quot;Open the app&quot;.rs) }
+}
+
+class TileSmallWidget : TileWidget()
+class TileLargeWidget : TileWidget()
+
+@AssociateWithGlanceWearWidget(TileSmallWidget::class)
+class TileSmallWidgetService : GlanceWearWidgetService() { override val widget = TileSmallWidget() }
+
+@AssociateWithGlanceWearWidget(TileLargeWidget::class)
+class TileLargeWidgetService : GlanceWearWidgetService() { override val widget = TileLargeWidget() }
+</code></pre>
+<p><code>TileTapReceiver</code> runs the action, usually through an <code>ActionRouter</code>, then calls
+<code>TileSmallWidget().triggerUpdateAll(context)</code> (and the same for the large widget) so the widgets
+show the new state.</p>
+<p>Declare each service in the manifest with <code>androidx.glance.wear.action.BIND_WIDGET_PROVIDER</code> and a
+<code>wearwidget-provider</code> descriptor that names its container type. Glance Wear's picker offers one
+container type per service.</p>
+<h2 id="3-make-sure-the-template-is-on-the-watch">3. Make sure the template is on the watch<a class="headerlink" href="#3-make-sure-the-template-is-on-the-watch" title="Permanent link">#</a></h2>
+<p>Rendering never waits on the network, so the blob must already be in the watch's repository when
+the host asks:</p>
+<ul>
+<li><strong>An LTE or Wi-Fi watch</strong> runs its own <code>TemplateRepository</code> with both containers in <code>targets</code>:</li>
+</ul>
+<p><code>kotlin
+  val small = PlayerCapabilities(Surfaces.WEAR_WIDGET, 7, setOf("glance-wear"), livePush = false,
+    themes = setOf("baked:dark"), container = "wear:small")
+  TemplateRepository(..., targets = listOf(small, small.copy(container = "wear:large")))</code></p>
+<ul>
+<li><strong>A watch that relies on its phone</strong> gets the verified blobs from the phone app over the Data
+  Layer. <em>Planned:</em> a Livery Data Layer source. Until then, write the blobs the phone sends into
+  the watch's <code>BlobStore</code> and the manifest into a <code>BundledSource</code>.</li>
+</ul>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">A <code>wear-widget</code> template for each of <code>wear:small</code> and <code>wear:large</code>, drawing its container
+      from the <code>wear.container.*</code> named values.</li>
+<li class="task">Taps with constant arguments only.</li>
+<li class="task">One widget subclass and service per container type, each with its <code>wearwidget-provider</code>.</li>
+<li class="task">A fallback for a widget whose template isn't on the watch yet.</li>
+<li class="task">Blobs on the watch before the widget is placed (watch repository or phone sync).</li>
+<li class="task"><code>triggerUpdateAll</code> after a tap or a data change.</li>
+</ul>
+<blockquote>
+<p>Not yet verified on a watch in CI. The document pipeline is covered by <code>livery-instantiate</code>'s
+tests against a real tile document.</p>
+</blockquote>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/wear-widgets.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

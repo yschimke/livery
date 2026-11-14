@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Images and fonts · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a class="current" href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="images-and-fonts">Images and fonts<a class="headerlink" href="#images-and-fonts" title="Permanent link">#</a></h1>
+<p>A template never fetches anything itself; every image and font it draws comes through the client.</p>
+<h2 id="catalog-assets">Catalog assets<a class="headerlink" href="#catalog-assets" title="Permanent link">#</a></h2>
+<p>Put images a design needs in <code>designs/&lt;id&gt;/assets/</code> and fonts in <code>fonts/</code> with <code>fonts/fonts.json</code>:</p>
+<pre><code class="language-json">[ { &quot;file&quot;: &quot;Figtree-SemiBold.ttf&quot;, &quot;family&quot;: &quot;Figtree&quot;, &quot;weight&quot;: 600, &quot;license&quot;: &quot;OFL-1.1&quot; } ]
+</code></pre>
+<p>A template lists the families it uses (<code>"fonts": ["Figtree"]</code>, or <code>google:</code> / <code>system:</code> families).
+Assets are content-addressed and verified, and download with the template; a template is never
+handed out without them. Catalogs with assets require protocol level 2 clients.</p>
+<h2 id="images-in-data">Images in data<a class="headerlink" href="#images-in-data" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>asset:&lt;sha256&gt;</code></td>
+<td>a catalog image</td>
+</tr>
+<tr>
+<td><code>https://…</code></td>
+<td>a remote image, through the image proxy or an allowlisted host</td>
+</tr>
+<tr>
+<td><code>app:&lt;key&gt;</code></td>
+<td>an image your app supplies (an avatar, an entity picture)</td>
+</tr>
+</tbody>
+</table>
+<p>Anything else is refused by the contract check. A template draws a data-bound image from the URL
+<code>livery:value/&lt;input&gt;</code>.</p>
+<h2 id="the-image-proxy">The image proxy<a class="headerlink" href="#the-image-proxy" title="Permanent link">#</a></h2>
+<p>Declare it in <code>catalog.json</code>; <code>livery build</code> writes it into the manifest:</p>
+<pre><code class="language-json">&quot;imageProxy&quot;: {
+  &quot;urlTemplate&quot;: &quot;https://img.acme.example/{width}x{height}/{format}?u={url}&quot;,
+  &quot;sourceHosts&quot;: [&quot;cdn.adnet.example&quot;], &quot;maxWidthPx&quot;: 1600, &quot;maxHeightPx&quot;: 1600
+}
+</code></pre>
+<p>The device then talks only to the proxy: images arrive sized for the slot, in one format, without
+cookies or trackers. Without a proxy, only hosts the app allowlists (<code>ImageResolver(directHosts = …)</code>)
+are fetched. Redirects are checked hop by hop, URLs with user info are refused, and downloads stop at
+<code>maxBytes</code>.</p>
+<pre><code class="language-kotlin">val images = ImageResolver(repository, KtorFetcher(), JavaCrypto, directHosts = setOf(&quot;cdn.acme.example&quot;),
+  app = { key, w, h -&gt; avatars.load(key, w, h) })
+val host = LiveryHost(repository, actions, events, clock, images = images)
+</code></pre>
+<p>The host keeps what it loads in memory (<code>host.resources</code>): decoded images by reference and size, and
+fonts by asset hash. A picture or a face that any slot on the host has already drawn appears on the
+next slot's first frame, and a template whose faces another template loaded draws without waiting. An <code>app:</code> image is the app's own and may change under the same key,
+so it is asked for every time; give your <code>app</code> loader its own memory cache to draw it on the first
+frame.
+<code>host.resources.preload(plan)</code> loads a plan's document, fonts and images ahead of time, and
+<code>host.resources.readyToDraw(template)</code> its document and fonts; both prepare the document off the main
+thread.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/images-and-fonts.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

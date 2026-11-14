@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmarks · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a class="current" href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">#</a></h1>
+<p>What a template costs against the same screen written in Compose UI, measured on a real phone. Every
+lane draws the same pixels: <code>TwinRenderParityTest</code> renders each template and its Compose UI twin and
+fails if more than 1% of pixels differ, in the feed's card size and in the full-screen frame below.</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td>The hand-written twin of the design</td>
+</tr>
+<tr>
+<td>Player alone</td>
+<td>The prepared document played by <code>RcComposePlayer</code>, nothing of Livery around it</td>
+</tr>
+<tr>
+<td>Livery</td>
+<td><code>LiverySlot</code> / <code>LiveryTemplate</code> with the defaults: background preparation, deferred layout animations, flat layout</td>
+</tr>
+<tr>
+<td>Livery, no deferral</td>
+<td><code>deferLayoutAnimations = false</code> (flat layout needs the deferral, so it is off too)</td>
+</tr>
+<tr>
+<td>Livery, no flat layout</td>
+<td><code>flattenLayout = false</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">#</a></h2>
+<p><strong>Pixel 9, Android 17 (API 37), rc-players 3.3.0, 14 November 2026.</strong> Macrobenchmark on a
+<code>benchmarkRelease</code> build with the shipped baseline profiles, 5 iterations per test. One device, lanes run
+one after another rather than interleaved: differences of a few tenths of a millisecond are inside the
+noise, and are shown so you can see that, not as a ranking.</p>
+<h3 id="feed-fling">Feed fling<a class="headerlink" href="#feed-fling" title="Permanent link">#</a></h3>
+<p>6 flings down 200 sample cards (<code>banner-classic</code> and <code>poll-card</code>), <code>FrameTimingMetric</code>. A frame's CPU
+time, and its overrun against the 16.7 ms budget (negative is time to spare).</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">Frames</th>
+<th style="text-align: right;">CPU p50</th>
+<th style="text-align: right;">CPU p90</th>
+<th style="text-align: right;">CPU p99</th>
+<th style="text-align: right;">Overrun p99</th>
+<th style="text-align: right;">p50 against Compose UI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">655</td>
+<td style="text-align: right;">3.8 ms</td>
+<td style="text-align: right;">5.9 ms</td>
+<td style="text-align: right;">8.0 ms</td>
+<td style="text-align: right;">−6.3 ms</td>
+<td style="text-align: right;">1.00×</td>
+</tr>
+<tr>
+<td>Player alone</td>
+<td style="text-align: right;">669</td>
+<td style="text-align: right;">4.1 ms</td>
+<td style="text-align: right;">6.5 ms</td>
+<td style="text-align: right;">8.9 ms</td>
+<td style="text-align: right;">−5.3 ms</td>
+<td style="text-align: right;">1.08×</td>
+</tr>
+<tr>
+<td>Livery</td>
+<td style="text-align: right;">663</td>
+<td style="text-align: right;">3.4 ms</td>
+<td style="text-align: right;">6.0 ms</td>
+<td style="text-align: right;">9.2 ms</td>
+<td style="text-align: right;">−4.8 ms</td>
+<td style="text-align: right;">0.89×</td>
+</tr>
+<tr>
+<td>Livery, no deferral</td>
+<td style="text-align: right;">677</td>
+<td style="text-align: right;">4.1 ms</td>
+<td style="text-align: right;">6.3 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.5 ms</td>
+<td style="text-align: right;">1.08×</td>
+</tr>
+<tr>
+<td>Livery, no flat layout</td>
+<td style="text-align: right;">674</td>
+<td style="text-align: right;">4.0 ms</td>
+<td style="text-align: right;">6.3 ms</td>
+<td style="text-align: right;">9.3 ms</td>
+<td style="text-align: right;">−4.8 ms</td>
+<td style="text-align: right;">1.05×</td>
+</tr>
+</tbody>
+</table>
+<p>What this says: on a current phone no lane misses a frame (every overrun is negative), and the lanes
+are within about a millisecond of each other. Livery's median is the lowest here, but its 99th
+percentile (9.2 ms) is above the Compose UI twin's (8.0 ms). With the optimisations off, Livery's
+median moves to the player-alone figure, the direction the deferral and flat layout are meant to move
+it. With one run per lane, this does not show that Livery is faster or slower than Compose UI.</p>
+<h3 id="full-screen-document">Full-screen document<a class="headerlink" href="#full-screen-document" title="Permanent link">#</a></h3>
+<p>One template (<code>poll-card</code>) in a padded, top-aligned, full-width frame; the sample template takes its
+own height, so this is a card on a full screen. Tapping the document pushes new data, ten times.</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">Frames over 10 changes</th>
+<th style="text-align: right;">CPU p50</th>
+<th style="text-align: right;">CPU p90</th>
+<th style="text-align: right;">CPU p99</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">4.7 ms</td>
+<td style="text-align: right;">5.9 ms</td>
+<td style="text-align: right;">9.5 ms</td>
+</tr>
+<tr>
+<td>Player alone</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">3.7 ms</td>
+<td style="text-align: right;">8.1 ms</td>
+<td style="text-align: right;">9.2 ms</td>
+</tr>
+<tr>
+<td>Livery</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">3.8 ms</td>
+<td style="text-align: right;">7.0 ms</td>
+<td style="text-align: right;">9.5 ms</td>
+</tr>
+<tr>
+<td>Livery, no deferral</td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">3.5 ms</td>
+<td style="text-align: right;">6.7 ms</td>
+<td style="text-align: right;">9.1 ms</td>
+</tr>
+<tr>
+<td>Livery, no flat layout</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">3.4 ms</td>
+<td style="text-align: right;">7.4 ms</td>
+<td style="text-align: right;">10.7 ms</td>
+</tr>
+</tbody>
+</table>
+<p>The Remote Compose lanes draw two to three frames per change where the twin draws one, most likely
+because the document animates the change and the twin switches at once (not yet confirmed). Per-frame
+cost is comparable; the number of frames differs.</p>
+<h3 id="cold-start">Cold start<a class="headerlink" href="#cold-start" title="Permanent link">#</a></h3>
+<p>Process start to the first frame with the document in it (<code>timeToFullDisplayMs</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">Full display</th>
+<th style="text-align: right;">Initial display</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">690 ms</td>
+<td style="text-align: right;">186 ms</td>
+</tr>
+<tr>
+<td>Player alone</td>
+<td style="text-align: right;">692 ms</td>
+<td style="text-align: right;">148 ms</td>
+</tr>
+<tr>
+<td>Livery</td>
+<td style="text-align: right;">695 ms</td>
+<td style="text-align: right;">151 ms</td>
+</tr>
+<tr>
+<td>Livery, no deferral</td>
+<td style="text-align: right;">695 ms</td>
+<td style="text-align: right;">152 ms</td>
+</tr>
+<tr>
+<td>Livery, no flat layout</td>
+<td style="text-align: right;">697 ms</td>
+<td style="text-align: right;">150 ms</td>
+</tr>
+<tr>
+<td>Livery, preparing in composition</td>
+<td style="text-align: right;">680 ms</td>
+<td style="text-align: right;">147 ms</td>
+</tr>
+</tbody>
+</table>
+<p><strong>These do not separate the lanes.</strong> Every lane, the Compose UI twin included, takes about 690 ms to
+full display, so that time is dominated by something the lanes share, and we have not yet found what.
+Do not read a difference into them.</p>
+<h2 id="what-is-not-measured-yet">What is not measured yet<a class="headerlink" href="#what-is-not-measured-yet" title="Permanent link">#</a></h2>
+<p><em>Planned</em>: a warm second visit; continuous animation and idle frames; resize and theme change; a
+per-template split and counts of documents prepared and reused; background preparation traces; memory;
+baseline profile on against off; a low-end device. The plan, in order, is
+<a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/PLAN.md"><code>docs/benchmarks/PLAN.md</code></a>.</p>
+<h2 id="reproduce">Reproduce<a class="headerlink" href="#reproduce" title="Permanent link">#</a></h2>
+<p>With a phone connected (a device with a low battery is refused, as it throttles):</p>
+<pre><code class="language-sh">./gradlew :livery-benchmark:connectedBenchmarkReleaseAndroidTest
+</code></pre>
+<p>The raw medians behind these tables are in
+<a href="https://github.com/yschimke/livery/tree/main/docs/benchmarks/results"><code>docs/benchmarks/results/</code></a>.
+The host app and benchmarks are in <code>livery-baselineprofile/</code>; its README describes each lane. A
+JVM profile (<code>:livery-compose:liveryFeedProfile</code>) gives the same comparison without a device, with
+software rendering, for quick iteration.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/benchmarks.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

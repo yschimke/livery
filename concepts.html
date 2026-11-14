@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concepts · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a class="current" href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="concepts">Concepts<a class="headerlink" href="#concepts" title="Permanent link">#</a></h1>
+<h2 id="contracts">Contracts<a class="headerlink" href="#contracts" title="Permanent link">#</a></h2>
+<p>A contract is the interface between a template and the app that plays it. Templates bind
+<code>id@major</code>; a later minor may only add optional inputs and actions, so every template of a major
+keeps working (see <a href="#versions-within-a-major">Versions within a major</a>).</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;promo/banner&quot;, &quot;major&quot;: 1, &quot;dataSource&quot;: &quot;Decision&quot;,
+  &quot;inputs&quot;: {
+    &quot;headline&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true, &quot;maxLength&quot;: 40 },
+    &quot;hero&quot;:     { &quot;type&quot;: &quot;image&quot; },
+    &quot;accent&quot;:   { &quot;type&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#FF6750A4&quot; }
+  },
+  &quot;lists&quot;: { &quot;tags&quot;: { &quot;item&quot;: { &quot;label&quot;: { &quot;type&quot;: &quot;string&quot; } }, &quot;max&quot;: 3 } },
+  &quot;actions&quot;: { &quot;cta&quot;: { &quot;kind&quot;: &quot;navigate&quot;, &quot;args&quot;: { &quot;route&quot;: { &quot;type&quot;: &quot;string&quot; } } } },
+  &quot;examples&quot;: { &quot;default&quot;: { &quot;headline&quot;: &quot;Try Premium free&quot; } }
+}
+</code></pre>
+<ul>
+<li>Types are <code>string</code>, <code>int</code>, <code>long</code>, <code>float</code>, <code>bool</code>, <code>color</code> (<code>#RRGGBB</code>, <code>#AARRGGBB</code>) and <code>image</code>.</li>
+<li>Lists flatten to <code>tags.count</code>, <code>tags.0.label</code>, … because Remote Compose named values are flat.</li>
+<li>Data that doesn't fit is <strong>refused, not dropped</strong>: an unknown key, a wrong type, an over-long
+  string. The same check runs in the app, the publisher, decision servers and agent tools.</li>
+</ul>
+<h3 id="declaring-a-contract-in-kotlin">Declaring a contract in Kotlin<a class="headerlink" href="#declaring-a-contract-in-kotlin" title="Permanent link">#</a></h3>
+<p>An app that owns its contracts can declare them once in Kotlin with <code>ContractDef</code>
+(<code>livery-protocol</code>, from the release after 0.4.0) and generate the JSON from it. Each input and
+action is a typed handle, so the app that fills a contract and the Compose code that draws it
+share one declaration, and a rename breaks both at compile time:</p>
+<pre><code class="language-kotlin">object SessionContract : ContractDef(&quot;conf/session&quot;, major = 1, title = &quot;Session card&quot;) {
+  val title = string(&quot;title&quot;, required = true, maxLength = 120)
+  val speakers = string(&quot;speakers&quot;, maxLength = 80, description = &quot;names, comma separated&quot;)
+  val live = bool(&quot;live&quot;, default = false)
+  val theme = themeRoles()                         // theme.primary, theme.onSurface, …
+  val open = action(&quot;open&quot;, &quot;app:open-session&quot;)
+  val tickets = action(&quot;tickets&quot;, ActionKinds.OPEN_URL, arg = &quot;url&quot;)
+
+  override val examples get() = mapOf(
+    &quot;default&quot; to mapOf(title to &quot;Building adaptive apps&quot;, speakers to &quot;Jane Doe&quot;, live to true),
+  )
+}
+
+val json = Json.encodeToString(Contract.serializer(), SessionContract.toContract())  // contracts/session.json
+val data = SessionContract.data(mapOf(SessionContract.title to session.title))      // for ContractBinder
+</code></pre>
+<ul>
+<li>The builders mirror the types and every <code>InputSpec</code> field: <code>string</code>, <code>int</code>, <code>long</code>, <code>float</code>,
+  <code>bool</code>, <code>color</code> (ARGB default, optional <code>role</code>), <code>image</code>, and <code>input(name, spec)</code> for anything
+  else; <code>action(name, kind, args)</code>, <code>action(name, kind, arg = "url")</code> for one required string
+  argument, and <code>setAction(name, input)</code> for a <code>set</code>.</li>
+<li><code>toContract()</code> is the protocol's own <code>Contract</code>, in declaration order. A name declared twice, a
+  <code>since</code> above the contract's minor, a required input with a <code>since</code>, or an example keyed by
+  another contract's handle fails at once.</li>
+<li><code>themeRoles()</code> declares the theme roles as <code>role</code>-tagged colour inputs; it takes any list of
+  <code>theme.&lt;role&gt;</code> names, such as <code>ThemeRoles.MATERIAL3</code> for every Material 3 colour role.</li>
+</ul>
+<h3 id="versions-within-a-major">Versions within a major<a class="headerlink" href="#versions-within-a-major" title="Permanent link">#</a></h3>
+<p>Apps already installed keep the contract minor they were built with, so a new minor may only add
+what an old app can ignore, and each addition says when it arrived with <code>since</code>:</p>
+<pre><code class="language-json">{ &quot;id&quot;: &quot;promo/banner&quot;, &quot;major&quot;: 1, &quot;minor&quot;: 2,
+  &quot;inputs&quot;:  { &quot;subtitle&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;since&quot;: 2 } },
+  &quot;actions&quot;: { &quot;share&quot;: { &quot;kind&quot;: &quot;app:share&quot;, &quot;since&quot;: 2 } } }
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Within the major (new minor)</th>
+<th>Needs a new major</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add an optional input, list, list field or action, with <code>since</code></td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr>
+<td>Loosen a limit (<code>maxLength</code>, <code>min</code>/<code>max</code>, a list's <code>max</code>)</td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr>
+<td>Change a description, an example or a default</td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr>
+<td>Add a required input, or make one required</td>
+<td></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>Remove an input or action; change a type, an action's <code>kind</code> or <code>args</code></td>
+<td></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>Tighten a limit</td>
+<td></td>
+<td>✓</td>
+</tr>
+</tbody>
+</table>
+<p>The publisher refuses a catalog that breaks these rules. It also gives every template a
+<code>requiresMinor</code>: the newest <code>since</code> among what it reads and emits. An app says which minor it
+implements, and is never offered a template that needs a newer one; an older version of the same
+design plays instead:</p>
+<pre><code class="language-kotlin">TemplateQuery(&quot;promo/banner@1&quot;, caps, minor = 1)   // or slot.query(&quot;promo/banner@1&quot;, minor = 1)
+</code></pre>
+<p>Leave <code>minor</code> out to accept any. Before a change ships, <code>livery check</code> compares the catalog with
+the version already published (see <a href="hosting.html#checking-a-change">Hosting</a>).</p>
+<p>Apps on a Livery client from before minors (protocol level 2) don't filter this way: they may get
+a template whose new input they don't fill (it draws its own default) or whose new action they
+can't route (the button does nothing). Decide per catalog, or per contract, in <code>catalog.json</code>:</p>
+<pre><code class="language-json">&quot;minorPolicy&quot;: { &quot;default&quot;: &quot;lenient&quot;, &quot;contracts&quot;: { &quot;promo/banner@1&quot;: &quot;strict&quot; } }
+</code></pre>
+<p><strong>Lenient</strong> (the default) lets those clients keep updating. <strong>Strict</strong> raises the manifest's
+<code>minClient</code> to 3 as soon as a template of that contract needs a newer minor, so those clients
+refuse the update and keep the templates they had.</p>
+<h2 id="designs-templates-and-targets">Designs, templates and targets<a class="headerlink" href="#designs-templates-and-targets" title="Permanent link">#</a></h2>
+<p>A <strong>design</strong> is a look for one contract (<code>banner-classic</code>, <code>banner-bold</code>). It has one or more
+<strong>templates</strong>, each a values-free <code>.rc</code> for one <strong>target</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Target field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>surface</code></td>
+<td><code>in-app</code>, <code>launcher-widget</code>, <code>wear-widget</code>, <code>wear-app</code>, <code>web</code>, <code>desktop</code>, <code>tv</code>, <code>snapshot</code></td>
+</tr>
+<tr>
+<td><code>rcApiLevel</code>, <code>profiles</code></td>
+<td>the document's Remote Compose level and operation profiles</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>the dp range it lays out for (it carries its own size tiers)</td>
+</tr>
+<tr>
+<td><code>theme</code></td>
+<td><code>host</code> (colours pushed as <code>theme.*</code>) or <code>baked:light</code> / <code>baked:dark</code></td>
+</tr>
+<tr>
+<td><code>container</code></td>
+<td>a fixed host container, e.g. <code>wear:small</code></td>
+</tr>
+</tbody>
+</table>
+<p>The client picks, from what's on disk, the chosen design's richest template the player can draw
+with the tightest size fit; else the preferred variant's, else <code>default</code>'s.</p>
+<p>A <strong>theme pack</strong> (<code>themes/&lt;id&gt;.json</code>) is named values, usually <code>theme.*</code> colours, that a slot pushes
+beside its data: <code>repository.theme("dusk")</code> gives them as bindings to pass as <code>extra</code>. Changing a
+pack recolours every template that reads those names, with no new document. To use the app's own
+Material 3 colours (dynamic colour included), <code>livery-compose-material3</code> gives
+<code>MaterialTheme.colorScheme.toLiveryTheme()</code> as the same bindings, with <code>theme.surface</code> from the
+scheme's <code>surfaceContainerHigh</code> (the surface a card sits on) unless you pass another. Theme packs and
+placement rules come from <code>repository.current()</code>: the downloaded catalog, or the bundled one before
+the first download.</p>
+<h2 id="install-policies">Install policies<a class="headerlink" href="#install-policies" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Downloaded</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Always</code></td>
+<td>every refresh</td>
+<td>the built-in look, hot placements, feed templates</td>
+</tr>
+<tr>
+<td><code>OnRequest</code></td>
+<td>when installed</td>
+<td>skins and themes people pick</td>
+</tr>
+<tr>
+<td><code>OnDemand</code></td>
+<td>when first needed</td>
+<td>ad creatives, rare feed templates</td>
+</tr>
+</tbody>
+</table>
+<p>A design nobody installed is never drawn by surprise. A <strong>preview</strong> downloads one template without
+installing it, so a picker can show it live.</p>
+<p>A design with <code>"automatic": false</code> is downloaded as its policy says but never picked by itself: it
+draws only when named, or when an experiment arm or a season picks it, and pickers don't offer it
+(see <a href="repository-mode.html#seasonal-variants">Repository mode</a>).</p>
+<h2 id="data-reaches-a-template-three-ways">Data reaches a template three ways<a class="headerlink" href="#data-reaches-a-template-three-ways" title="Permanent link">#</a></h2>
+<ol>
+<li><strong>Live push</strong>: in-app players get values before the first frame, then each change.</li>
+<li><strong>Instantiate</strong>: launcher and Wear widgets can't receive pushes, so the values are written into
+   the document (<code>livery-instantiate</code>).</li>
+<li><strong>Server instantiate</strong>: the same, on a server, for email or notification snapshots.</li>
+</ol>
+<h2 id="catalogs-channels-and-trust">Catalogs, channels and trust<a class="headerlink" href="#catalogs-channels-and-trust" title="Permanent link">#</a></h2>
+<p>A catalog channel (<code>main</code>, <code>staging</code>, <code>pr-123</code>) is one signed <code>manifest.json</code> plus immutable,
+content-addressed files. Apps verify the Ed25519 signature with keys they embed, refuse a lower
+<code>serial</code> than one they accepted, and stop using a catalog a grace period after it expires. See
+<a href="signing.html">Signing</a> and the <a href="protocol.html">protocol</a>.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/concepts.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

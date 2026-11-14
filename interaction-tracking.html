@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interaction tracking · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a class="current" href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="interaction-tracking">Interaction tracking<a class="headerlink" href="#interaction-tracking" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> a template reports what the user did through the actions its contract declares,
+so every tap is named the same whichever design drew it, and carries only the arguments the
+contract allows. Livery reports when a template is seen and for how long, and hands all of it to
+your analytics, Datadog or Sentry.</p>
+<h2 id="why-not-autocapture">Why not autocapture<a class="headerlink" href="#why-not-autocapture" title="Permanent link">#</a></h2>
+<p>Tap-tracking SDKs (Sentry, Datadog, Amplitude's autocapture) find the tapped node in the app's
+own Compose layout tree and name it by a tag. A Livery template is one player node: its buttons
+are inside a Remote Compose document, not in that tree. So those tools see a tap on the slot, at
+best, and a design swapped from the server would change every name they track anyway.</p>
+<p>Livery tracks interactions by <strong>contract action</strong> instead. <code>expand</code> is <code>expand</code> in the built-in
+design and in the experiment's retro design, so its tap-through compares across A/B arms
+(see <a href="analytics-and-experiments.html">Analytics and experiments</a>).</p>
+<h2 id="actions-are-the-interactions">Actions are the interactions<a class="headerlink" href="#actions-are-the-interactions" title="Permanent link">#</a></h2>
+<p>Every action a template emits goes through one check (<code>ActionGate</code>, PROTOCOL.md §7) before it is
+routed:</p>
+<ul>
+<li>an action the contract doesn't declare, a required argument missing, or a declared one of the
+  wrong type or out of range is dropped and reported as an <code>Error</code>;</li>
+<li>the <code>Action</code> event carries <strong>only the declared arguments</strong> (<code>args</code>, <code>arg_&lt;name&gt;</code> in analytics);
+  an argument the contract doesn't declare still reaches the app's handler, but never an event,
+  so free text can't leak into analytics by accident.</li>
+</ul>
+<pre><code class="language-json">&quot;actions&quot;: {
+  &quot;open&quot;:   { &quot;kind&quot;: &quot;navigate&quot;, &quot;args&quot;: { &quot;route&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true, &quot;maxLength&quot;: 40 } } },
+  &quot;expand&quot;: { &quot;kind&quot;: &quot;track&quot;, &quot;since&quot;: 1,
+              &quot;args&quot;: { &quot;section&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;maxLength&quot;: 20 },
+                        &quot;index&quot;: { &quot;type&quot;: &quot;int&quot;, &quot;min&quot;: 0, &quot;max&quot;: 9 } } }
+}
+</code></pre>
+<p>Argument types are <code>string</code>, <code>int</code>, <code>long</code>, <code>float</code> and <code>bool</code>; <code>livery build</code> refuses others.</p>
+<h2 id="tracking-what-only-changes-the-template">Tracking what only changes the template<a class="headerlink" href="#tracking-what-only-changes-the-template" title="Permanent link">#</a></h2>
+<p>A <code>track</code> action needs no handler: the client records it and does nothing else. Use it for an
+interaction that only changes the template's own state, an expanded card, a tab, a carousel page,
+by sending it in the same tap as the change:</p>
+<pre><code class="language-kotlin">val v = LiveryValues(contract)
+val expanded = remember { MutableRemoteBoolean(false) }
+RemoteColumn(
+  RemoteModifier.clickable(combinedAction(valueChangeAction(expanded, !expanded), v.action(&quot;expand&quot;, mapOf(&quot;section&quot; to &quot;specs&quot;)))),
+) { … }
+</code></pre>
+<p>That is <code>livery-capture-cmp</code>, on rc-players' creation API. On AndroidX's alpha (<code>livery-capture</code>)
+the state is <code>rememberMutableRemoteBoolean(false)</code> and the change <code>valueChange(expanded, !expanded)</code>.</p>
+<p><code>LiveryValues.action</code> (in both, see <a href="authoring.html">Authoring templates</a>) refuses an
+argument the action doesn't declare, or one that doesn't fit, when you capture. For a list,
+pass the item's position: <code>v.action("open_item", mapOf("index" to "$i"))</code>.</p>
+<h2 id="seen-and-for-how-long">Seen, and for how long<a class="headerlink" href="#seen-and-for-how-long" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Impression</code></td>
+<td>the first frame drew</td>
+</tr>
+<tr>
+<td><code>Viewable</code></td>
+<td>at least half on screen for an unbroken second (Compose's <code>onVisibilityChanged</code>)</td>
+</tr>
+<tr>
+<td><code>Leave</code></td>
+<td>it left the screen, or the slot showed another item; <code>durationMs</code> is the time it was at least half on screen</td>
+</tr>
+</tbody>
+</table>
+<p>A feed is one template per item, so each item has its own <code>Impression</code>, <code>Viewable</code> and <code>Leave</code>.
+Visibility <em>inside</em> one document (which row of a list in a single template scrolled into view)
+isn't reported: the player doesn't say. See Planned.</p>
+<h2 id="integrations">Integrations<a class="headerlink" href="#integrations" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>livery-firebase</code></td>
+<td><code>FirebaseAnalyticsSink</code>: events in Firebase Analytics, exposures as user properties</td>
+</tr>
+<tr>
+<td><code>livery-amplitude</code></td>
+<td><code>AmplitudeAnalyticsSink</code>: events in Amplitude, exposures as user properties</td>
+</tr>
+<tr>
+<td><code>livery-datadog</code></td>
+<td><code>DatadogRumEventSink</code>: a tap is a RUM <code>TAP</code> action <code>livery &lt;action&gt;</code>, <code>Error</code> and <code>Fallback</code> are RUM errors, the rest <code>CUSTOM</code> actions, all with <code>livery.*</code> attributes</td>
+</tr>
+<tr>
+<td><code>livery-sentry</code></td>
+<td><code>SentryBreadcrumbEventSink</code>: events as breadcrumbs (a tap is a <code>ui.click</code> user crumb), so an issue shows the templates seen and tapped before it; <code>SentryCompose.slotModifier</code> puts Sentry's tag on each slot</td>
+</tr>
+<tr>
+<td>any other</td>
+<td>an <code>AnalyticsSink</code> (flat events) or an <code>EventSink</code> (Livery's own events)</td>
+</tr>
+</tbody>
+</table>
+<p>Each adds its SDK as <code>compileOnly</code>: the app brings and starts its own. Combine them:</p>
+<pre><code class="language-kotlin">val events = eventSinks(
+  AnalyticsEventSink(FirebaseAnalyticsSink(Firebase.analytics)),
+  DatadogRumEventSink(),
+  SentryBreadcrumbEventSink(),
+)
+</code></pre>
+<h3 id="tagging-the-slot">Tagging the slot<a class="headerlink" href="#tagging-the-slot" title="Permanent link">#</a></h3>
+<p>So that a tool which names a tapped node by its tag attributes the tap to the right slot, each
+template's node carries <code>plan.slotTag</code> (<code>livery:&lt;placement, or the contract&gt;:&lt;design&gt;</code>): a
+<code>testTag</code> in Compose by default, the accessibility identifier in SwiftUI. Supply your own with
+<code>LiveryHost(…, slotModifier = SentryCompose.slotModifier)</code>.</p>
+<h2 id="widgets-and-notifications">Widgets and notifications<a class="headerlink" href="#widgets-and-notifications" title="Permanent link">#</a></h2>
+<p>A launcher widget, a Wear widget or a notification never reports drawing: the system shows it,
+and whether anyone looked is unknown. So they have no <code>Impression</code>, <code>Viewable</code> or <code>Leave</code>, and
+their experiment exposure is up to the host (<code>Experiments.exposed</code>, when it knows the user saw
+it). Their taps arrive through the app's <code>PendingIntent</code> or receiver and go through the same
+<code>ActionRouter</code>, so <code>Action</code> events, with their declared arguments, are the same as in the app.</p>
+<h2 id="planned">Planned<a class="headerlink" href="#planned" title="Permanent link">#</a></h2>
+<ul>
+<li><strong>Visibility inside a document.</strong> A player feature, in rc-players, to tell the host when a
+  tagged component of a document comes into view, for lists inside one template. Until then, use
+  one template per item.</li>
+<li><strong>Swift integrations.</strong> The Swift package checks actions, records <code>track</code> actions, carries
+  declared arguments and reports <code>Leave</code>; analytics sinks for Swift are still to come.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/interaction-tracking.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

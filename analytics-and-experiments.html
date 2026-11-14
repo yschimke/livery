@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analytics and experiments · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a class="current" href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="analytics-and-experiments">Analytics and experiments<a class="headerlink" href="#analytics-and-experiments" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> send Livery's events to any analytics pipeline, run A/B tests over designs and
+placements from the catalog, and keep frequency caps across a user's devices. Firebase is built
+in (<code>livery-firebase</code>); anything else plugs in through an interface.</p>
+<h2 id="analytics">Analytics<a class="headerlink" href="#analytics" title="Permanent link">#</a></h2>
+<p>Every slot reports <code>TemplateEvent</code>s: <code>Impression</code>, <code>Viewable</code>, <code>Action</code>, <code>Dismiss</code>, <code>Fallback</code>,
+<code>Error</code>, <code>Exposure</code> and <code>Leave</code>, each with its placement, decision, design, template and the
+experiment arms that shaped it. <code>AnalyticsEventSink</code> turns them into flat events
+(<code>livery_impression</code>, <code>livery_action</code>, … with <code>placement</code>, <code>design_id</code>, <code>template</code>, <code>action</code>,
+<code>arg_&lt;name&gt;</code>, <code>duration_ms</code>, <code>exp_&lt;experiment&gt;</code> parameters) that fit Firebase's and most
+pipelines' limits, and hands them to every <code>AnalyticsSink</code> you give it:</p>
+<pre><code class="language-kotlin">val events = AnalyticsEventSink(
+  FirebaseAnalyticsSink(Firebase.analytics),            // livery-firebase
+  AmplitudeAnalyticsSink(amplitude),                    // livery-amplitude
+  AnalyticsSink { name, params -&gt; segment.track(name, params) },  // or your warehouse, …
+)
+val planner = SlotPlanner(repository, events, clock)   // with experiments: see below
+</code></pre>
+<p>What a tap reports, and the integrations for Datadog and Sentry, are on
+<a href="interaction-tracking.html">Interaction tracking</a>.</p>
+<p>A pipeline that throws doesn't stop the others. To also keep Livery's raw events (a debug log, a
+test probe), combine sinks with <code>eventSinks(events, EventSink { log(it) })</code>.</p>
+<h2 id="ab-tests">A/B tests<a class="headerlink" href="#ab-tests" title="Permanent link">#</a></h2>
+<p>Experiments live in the catalog, in <code>experiments/&lt;any&gt;.json</code>, and ship in the manifest:</p>
+<pre><code class="language-json">{ &quot;id&quot;: &quot;tile_look&quot;, &quot;allocationBasisPoints&quot;: 5000,
+  &quot;conditions&quot;: { &quot;platforms&quot;: [&quot;android&quot;] },
+  &quot;arms&quot;: [
+    { &quot;id&quot;: &quot;control&quot; },
+    { &quot;id&quot;: &quot;retro&quot;, &quot;designs&quot;: { &quot;live/status-tile@1&quot;: &quot;tile-retro&quot; } }
+  ] }
+</code></pre>
+<ul>
+<li>An experiment's <code>id</code> is lowercase letters, digits and <code>_</code> (at most 20): it becomes the
+  <code>exp_&lt;id&gt;</code> analytics parameter and the <code>livery_exp_&lt;id&gt;</code> Remote Config key as it is.</li>
+<li>Users who match the conditions during the schedule are enrolled at <code>allocationBasisPoints</code>
+  (5000: half of them), each in one sticky arm in proportion to the arms' <code>weight</code>s. Raising the
+  allocation only adds users; nobody changes arm.</li>
+<li>An arm's <code>designs</code> pick the design a contract's slots draw when the app didn't choose one. Here,
+  enrolled users in <code>retro</code> see the retro tile everywhere it has a template. An arm picks only a
+  design automatic selection may: <code>Always</code>, or installed. Make a design you test <code>Always</code>, or it
+  plays only for people who installed it.</li>
+<li><code>control</code> names no design, so its users draw the usual choice, and their plans still carry
+  <code>tile_look: control</code>: the control group is exposed and counted like the other arms. Only
+  experiments that name a design for a contract touch its slots; the first of those that enrols the
+  user decides.</li>
+<li>A season (<code>seasons/&lt;id&gt;.json</code>) is a design for everyone between two dates, written as a one-arm
+  experiment; see <a href="repository-mode.html#seasonal-variants">Repository mode</a>.</li>
+<li>A placement rule can be limited to an arm, to test copy, timing or a different creative:
+  <code>"arm": { "experiment": "promo_copy", "arm": "b" }</code>. A catalog with such a rule requires
+  protocol level 4, so older clients, which would show it to everyone, keep their previous
+  catalog. Design arms don't: an older client simply draws what the control arm does.</li>
+<li>The first time a template an arm chose actually draws (its <code>Impression</code>), Livery emits one
+  <code>Exposure</code> event, for design arms and arm-targeted placements alike. Analyse exposures, not
+  assignments: a user assigned to an arm they never saw isn't in the test.</li>
+</ul>
+<pre><code class="language-kotlin">val experiments = Experiments(
+  manifest = { repository.manifest() },
+  context = { DecisionContext(now, &quot;android&quot;, locale, appVersion, bucketingId, segments) },
+  assigner = FirstAssigner(RemoteConfigAssigner(Firebase.remoteConfig), LocalBucketing),
+  events = events,
+)
+// Slots report through experiments.sink: every event passes on, and an arm's first impression
+// adds its exposure. A widget, which reports no impressions, calls experiments.exposed(…) itself.
+SlotPlanner(repository, experiments.sink, clock, experiments)
+LocalRulesDecider({ repository.manifest() }, caps, experiments = LocalBucketing)
+</code></pre>
+<p><strong>Assignment is local by default</strong> (<code>LocalBucketing</code>): no service, offline, the same arm on
+Android, iOS and the server for the same bucketing id. To run experiments from Firebase A/B
+Testing or your own service, implement <code>ExperimentAssigner</code>. <code>RemoteConfigAssigner</code> reads the
+Remote Config parameter <code>livery_exp_&lt;experiment&gt;</code>, which holds the arm id. An assigner answers
+only from what's on the device. Call Remote Config's <code>fetchAndActivate()</code> at app start as usual;
+until it has an answer, the next assigner in the <code>FirstAssigner</code> does.</p>
+<h2 id="frequency-caps-across-devices">Frequency caps across devices<a class="headerlink" href="#frequency-caps-across-devices" title="Permanent link">#</a></h2>
+<p>A placement rule's <code>frequency</code> (<code>{ "maxImpressions": 2, "perSeconds": 604800 }</code>: twice a week)
+counts impressions on the device. <code>KeyValueFrequencyStore</code> keeps that count across restarts. To
+cap per user rather than per device, use <code>SyncedFrequencyStore</code> with a <code>FrequencyBackend</code>.
+Firestore is built in, and anything with "push records, pull records since" fits:</p>
+<pre><code class="language-kotlin">val caps = SyncedFrequencyStore(kv, FirestoreFrequencyBackend(Firebase.firestore, user.uid), deviceId, clock)
+val decider = LocalRulesDecider({ repository.manifest() }, caps, experiments = assigner)
+caps.sync()   // at app start, on a schedule, after a placement draws
+</code></pre>
+<p>Decisions read only the local count, so a slot never waits on the network. Impressions queue
+while offline and go up on the next <code>sync()</code>, and each one is counted once however often it syncs.
+A cap is at most one sync out of date. With Firestore, store impressions under
+<code>livery/&lt;userId&gt;/impressions</code> and write security rules so each user reads and writes only their own.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">One <code>AnalyticsEventSink</code> shared by every slot, planner and action router.</li>
+<li class="task">A stable, resettable <code>bucketingId</code> per install (not an advertising id), kept across launches.</li>
+<li class="task">Experiments reviewed in the catalog like any change; <code>livery build</code> refuses unknown designs,
+      arms and rules for arms that don't exist.</li>
+<li class="task"><code>fetchAndActivate()</code> at start when Remote Config assigns arms.</li>
+<li class="task"><code>caps.sync()</code> at start and after impressions when caps are shared; Firestore rules per user.</li>
+</ul>
+<h2 id="planned">Planned<a class="headerlink" href="#planned" title="Permanent link">#</a></h2>
+<ul>
+<li>The Swift package decodes experiments, assigns arms (<code>LocalBucketing</code>), applies arms to placement
+  rules and draws design arms (<code>Experiments</code>, <code>SlotPlanner(…, experiments:)</code>, with the same arms
+  and designs as Kotlin by the conformance fixtures). Analytics sinks and synced frequency caps are
+  still to come.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/analytics-and-experiments.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

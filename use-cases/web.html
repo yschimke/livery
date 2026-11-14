@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The web · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a class="current" href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="the-web">The web<a class="headerlink" href="#the-web" title="Permanent link">#</a></h1>
+<p><code>@yschimke/livery-a2ui</code> renders Livery contracts in A2UI's Lit, React and Angular surfaces. The common
+Kotlin pipeline, compiled to Wasm, selects and verifies templates and gates actions. The
+TypeScript Remote Compose player draws them on a canvas and updates named values live.
+An optional <code>player: 'cmp'</code> uses the in-page Compose Multiplatform player; it is prepared before
+catalog registration and supports the same framework adapters. CMP keeps authored height when
+root measurement is unavailable. Its runtime and bundled fonts increase download and viewport
+costs; see <code>docs/A2UI-CMP.md</code> for the measured tradeoffs.
+The package is built; its first npm publication requires the owner of the <code>@yschimke</code> scope.</p>
+<p>Use <code>LiverySession.open({ catalog, keys })</code>, then <code>liveryCatalog(session, { catalogId })</code> for Lit,
+or one of the framework adapters below. Outside A2UI, a standalone <code>&lt;livery-template&gt;</code> element
+is still <strong>Planned</strong>. <code>livery-compose</code> also runs in browsers through Compose Multiplatform.</p>
+<p>The host's <code>--livery-a2ui-height</code> sets a fixed height. Without it, components wrap the measured
+root content, respecting an explicit target minimum. The sample banner takes 112dp instead of
+its authored 160dp. Documents without measurable root content retain the authored fallback.</p>
+<p><strong>Hosting for the web:</strong> GitHub release downloads send no CORS headers, so a browser must read a
+catalog from GitHub Pages, a CDN or a design server instead (<a href="../hosting.html">Hosting</a>).</p>
+<h3 id="npm-releases">npm releases<a class="headerlink" href="#npm-releases" title="Permanent link">#</a></h3>
+<p><code>@yschimke/livery-a2ui</code> follows the repository version. Release-please updates its package and lockfile;
+merging the release PR builds and checks the npm tarball, then publishes it alongside Maven.
+The first publication is bootstrapped manually under the npm account owning <code>@yschimke</code>.
+Then configure npm trusted publishing for GitHub owner <code>yschimke</code>, repository <code>livery</code>,
+workflow <code>release.yml</code>, with no environment and direct publishing allowed. Subsequent releases
+use GitHub Actions OIDC; no <code>NPM_TOKEN</code> secret is required. The bundled
+<code>@yschimke/livery-web</code> dependency does not need a separate registry publication.
+See the <a href="https://github.com/yschimke/livery/blob/main/web/a2ui/PUBLISHING.md">first-publish instructions</a>. <code>npm run pack:check</code> checks the files and
+relative runtime imports in the actual tarball in CI. The TypeScript player remains vendored
+with its provenance until rc-players publishes a supported npm package.</p>
+<h3 id="react-and-angular">React and Angular<a class="headerlink" href="#react-and-angular" title="Permanent link">#</a></h3>
+<p>The same session and controller power all three web renderers. Use
+<code>liveryReactCatalog(session, options)</code> from <code>@yschimke/livery-a2ui/react</code> with React's <code>A2uiSurface</code>, or
+<code>liveryAngularCatalog(session, options)</code> from <code>@yschimke/livery-a2ui/angular</code> with Angular's
+<code>provideA2Ui({ catalogs: [catalog] })</code> and <code>SurfaceComponent</code>. Install the matching optional peers:
+React 18/19 with <code>@a2ui/react</code> 0.15; Angular 21 with <code>@a2ui/angular</code> 0.14 (which uses web_core 0.15).
+Angular applications also configure A2UI's <code>provideMarkdownRenderer()</code> for the basic components.
+The Angular entry ships partial compilation for the application's Angular linker.</p>
+<p><code>options.base</code> extends the selected renderer's catalog. Actions, data-model paths, themes,
+decision ids, retry and height behavior are shared. <code>fallback</code> returns a Lit template for Lit,
+a React node for React, or a DOM node/string for Angular. <code>npm test</code> runs the same sample catalog
+and all interaction checks once per renderer; <code>CHROMIUM_PATH</code> can select a local Chromium binary.</p>
+<h3 id="persistent-browser-cache">Persistent browser cache<a class="headerlink" href="#persistent-browser-cache" title="Permanent link">#</a></h3>
+<p>Web sessions default to IndexedDB for blobs and small named documents. A session with playable cached templates reads
+its catalog immediately and refreshes in the background. A cached manifest without playable
+blobs first retries prefetch, so an interrupted download cannot register an empty component catalog.
+Template rendering does not
+wait for a network response. The existing repository still owns expiry, stale grace, install
+policy, blob eviction and image-cache metadata. Browser storage can be cleared or evicted by
+the browser; this is a cache, not durable application data.</p>
+<p>Set <code>persistentCache: false</code> in <code>LiverySession.open</code> for memory-only sessions (also useful in
+hosts that deny IndexedDB or Web Locks). Persistent caching requires a secure origin
+(HTTPS or localhost) and Web Locks; refreshes sharing a namespace are serialized across sessions and tabs. Cache namespaces include the catalog and trust configuration:
+switching from an unsigned development catalog to signed trust cannot reuse the old manifest.
+The browser suite reloads with all catalog requests blocked and checks that cached templates
+draw, that memory-only sessions cannot use this cache offline, and that a different trust configuration
+cannot inherit the cached unsigned catalog. Serving an application's shell offline remains the
+host application's responsibility.</p>
+<h3 id="wasm-distribution-size">Wasm distribution size<a class="headerlink" href="#wasm-distribution-size" title="Permanent link">#</a></h3>
+<p><code>webDist</code> runs Kotlin's pinned Binaryen optimizer before packaging. On the 0.6.0 baseline this
+reduces raw Wasm from 4,749,595 to 1,454,082 bytes (69.4%). Ktor remains in the module to preserve
+its fetch and redirect contract. <code>docs/WASM-SIZE.md</code> records section and dependency measurements;
+<code>scripts/wasm-size.py</code> reproduces the breakdown for subsequent builds.</p>
+<p>Content height is read from the player's normal layout at the current viewport constraints.
+The size query does not run a second measure pass or alter expressions, animations or scroll
+state. Fill-height, weighted-height and scrolling layouts retain their authored-height fallback.</p>
+<p>When replacing a cached catalog, refresh keeps the previous manifest active until its required
+replacement templates and assets finish downloading. Failed downloads keep the playable cache;
+the accepted serial watermark is still persisted immediately so rollback protection survives a
+failure or interruption. Kotlin and Swift use the same activation order.</p>
+<h2 id="contract-queries-and-named-documents">Contract queries and named documents<a class="headerlink" href="#contract-queries-and-named-documents" title="Permanent link">#</a></h2>
+<p><code>@yschimke/livery-a2ui</code> uses the Kotlin client compiled to Wasm and the TypeScript player. It accepts
+contract inputs, design preferences, inline documents, exact hashes and contract queries.
+The agent's <code>template: {"query": {"offer": "summer"}}</code> sends only params to the app's endpoint:</p>
+<pre><code class="language-typescript">const session = await LiverySession.open({
+  catalog: &quot;https://catalog.example/main/&quot;,
+  keys: [{ keyId: &quot;app&quot;, publicKey: publicKeyBase64 }],
+  decisionEndpoint: &quot;https://app.example/v1/decisions/query&quot;,
+  decisionContext: {
+    platform: &quot;web&quot;, locale: &quot;en-GB&quot;, appVersion: 4, bucketingId: appScopedId,
+  },
+});
+</code></pre>
+<p>The installed automatic template draws while the query runs, then the decided template takes
+its place if it can play and its data binds. A missing or invalid answer keeps the automatic
+choice. The Lit component handles the background fetch; a custom host calls <code>fetchPending()</code>
+when a render returns <code>pending</code>, then renders again. Named hashes never substitute another design.
+A custom host reports an impression after drawing each new <code>presentationKey</code>, while using
+<code>documentKey</code> to decide when to reload the player. A server decision can reuse the automatic
+document and still receive its own impression.
+A standalone signed URL must use a catalog host; its redirects, byte size, hash and signature are
+checked. Without an explicit page height, the measured root height respects the target minimum;
+the authored height is used when measurement is unavailable.</p>
+<p>Compose offers the same forms through <code>LiveryA2uiHost(decider = ..., decisionContext = ...,
+documentFetcher = ...)</code>. Its height rule also applies to inline and named documents. Surface
+identity and <code>createSurface</code> theme access still require upstream A2UI API changes.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/web.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI workflows · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a class="current" href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="ai-workflows">AI workflows<a class="headerlink" href="#ai-workflows" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> point any agent at <code>livery-mcp &lt;catalog&gt;</code>, and it gets the contract, the gate
+and a render, but never the signing key.</p>
+<p>Livery doesn't assume one way of working with agents. Every workflow gets the same three things:
+<strong>the contract</strong> (what a template may read and do), <strong>the gate</strong> (the contract check and the
+publisher's validation) and <strong>a render</strong> to look at. Drafts are unsigned and play only in preview
+channels. Production catalogs are signed with a key the agent doesn't hold.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>The agent produces</th>
+<th>It reaches users by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Repository + CI</td>
+<td>template source or <code>.rc</code> in a pull request</td>
+<td>the PR's preview channel, then <code>main</code> on merge</td>
+</tr>
+<tr>
+<td>Campaign generation</td>
+<td>data only: copy, images, placement rules</td>
+<td>a reviewer approving the rule or decision</td>
+</tr>
+<tr>
+<td>Runtime personalisation</td>
+<td>data per request, inside a contract</td>
+<td>your decision server, validated twice</td>
+</tr>
+<tr>
+<td>On-device</td>
+<td>a choice among installed designs, or data</td>
+<td>at once; nothing new is downloaded</td>
+</tr>
+<tr>
+<td>Live co-editing <em>(planned)</em></td>
+<td>drafts in a session with a person</td>
+<td>the person accepting it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-give-the-agent-the-tools">1. Give the agent the tools<a class="headerlink" href="#1-give-the-agent-the-tools" title="Permanent link">#</a></h2>
+<p><code>livery-mcp</code> is a Model Context Protocol server over stdio. It works on a catalog source tree, the
+same one <code>livery build</code> reads.</p>
+<pre><code class="language-sh">./gradlew :livery-mcp:installDist
+livery-mcp/build/install/livery-mcp/bin/livery-mcp path/to/catalog            # read-only
+livery-mcp/build/install/livery-mcp/bin/livery-mcp path/to/catalog --write \
+  --preview-out build/previews                                                # drafts and previews
+</code></pre>
+<p>Add it to an agent like any stdio MCP server. In Claude Code:</p>
+<pre><code class="language-sh">claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-out build/previews
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>list_contracts</code>, <code>get_contract</code></td>
+<td>what each contract lets a template read and emit, with its examples</td>
+</tr>
+<tr>
+<td><code>list_designs</code></td>
+<td>the designs for a contract, with each template's target and declared reads and emits</td>
+</tr>
+<tr>
+<td><code>validate_data</code></td>
+<td>binds data the way every client does (<code>ContractBinder</code>): the values it would play, or every problem</td>
+</tr>
+<tr>
+<td><code>validate_template</code></td>
+<td>decodes a <code>.rc</code> and reads its own named values and actions, checked against the contract; returns the sidecar to submit</td>
+</tr>
+<tr>
+<td><code>render_preview</code></td>
+<td>a PNG of a template with an example or the agent's data, at a size and density, light or dark</td>
+</tr>
+<tr>
+<td><code>submit_draft</code> (<code>--write</code>)</td>
+<td>writes a template into the tree only if the document matches its sidecar and the whole catalog still builds</td>
+</tr>
+<tr>
+<td><code>build_preview</code> (<code>--preview-out</code>)</td>
+<td>an unsigned catalog for a preview channel; the catalog's own channel is refused</td>
+</tr>
+<tr>
+<td><code>publish_preview</code> (<code>--preview-out</code>)</td>
+<td>one document on its own, as an unsigned catalog of one design, checked against its contract</td>
+</tr>
+<tr>
+<td><code>list_history</code></td>
+<td>a design's templates' versions from the catalog's git log; <code>render_preview</code> with <code>revision</code> draws one</td>
+</tr>
+<tr>
+<td><code>a2ui_component_schema</code></td>
+<td>the catalog's contracts as A2UI components: one component's JSON schema, or the whole A2UI catalog to prompt with</td>
+</tr>
+<tr>
+<td><code>validate_a2ui</code></td>
+<td>an A2UI message (or several) checked before it is sent: each Livery component's properties, actions, template and design, and its values through the contract gate (bindings too, given <code>data_model</code>)</td>
+</tr>
+<tr>
+<td><code>check_compatibility</code></td>
+<td>the catalog against a git revision (default <code>HEAD</code>) or another tree, as <code>livery check</code> does: contract changes marked compatible or breaking, and per template what it reads and emits, the minor it requires and which values only its own default covers</td>
+</tr>
+<tr>
+<td><code>ui_builder_export</code> (<code>--ui-builder</code>)</td>
+<td>a Compose UI Builder design at a revision, as a document with its <code>source</code></td>
+</tr>
+<tr>
+<td><code>ui_builder_scaffold</code> (<code>--ui-builder</code>)</td>
+<td>a contract as UI Builder host inputs, to add to a design before laying it out</td>
+</tr>
+</tbody>
+</table>
+<p>The server never signs anything. A failed draft is never left in the tree.</p>
+<h2 id="just-a-preview">Just a preview<a class="headerlink" href="#just-a-preview" title="Permanent link">#</a></h2>
+<p>Not every document has to join the catalog to be looked at. <code>publish_preview</code> (or
+<code>livery preview &lt;doc.rc&gt; &lt;out&gt; --src &lt;catalog&gt; --contract &lt;id@major&gt;</code>) writes one document as a
+catalog of its own, on a channel named after its hash (<code>preview-&lt;hash&gt;</code>). Point a debug build's
+repository at it, or serve the directory. It is checked against the contract like any template,
+and it expires in a week.</p>
+<h2 id="versions">Versions<a class="headerlink" href="#versions" title="Permanent link">#</a></h2>
+<p>Every template entry can say where it came from: its sidecar's <code>source</code> (<code>tool</code>, <code>design</code>,
+<code>revision</code>, <code>commit</code>) is copied into the manifest. In the repository workflow, git is the history.
+<code>list_history</code> shows the commits that changed each template, and <code>render_preview</code> with
+<code>revision=&lt;commit&gt;</code> draws it as it was then, so an agent or reviewer can compare versions before
+changing one.</p>
+<h2 id="compose-ui-builder">Compose UI Builder<a class="headerlink" href="#compose-ui-builder" title="Permanent link">#</a></h2>
+<p>Start the server with <code>--ui-builder https://&lt;ui builder host&gt;</code> and <code>UI_BUILDER_TOKEN</code> set
+(module <code>livery-uibuilder</code>). <code>ui_builder_scaffold</code> gives the agent a contract as UI Builder host
+inputs to add to the design first, so it reads Livery's names. <code>ui_builder_export</code> returns a design's document at a revision, or its
+latest, with <code>source: {tool: ui-builder, design, revision}</code>. From there it is a document like any
+other: <code>validate_template</code>, <code>render_preview</code>, then <code>submit_draft</code> with that <code>source</code> in the
+sidecar, or <code>publish_preview</code>. To move a template to a newer UI Builder revision, export that
+revision and submit it again; <code>list_history</code> shows each step. Without an agent, the same flow is
+<code>livery ui-builder scaffold</code> and <code>livery ui-builder import</code> (see <a href="authoring.html">Authoring templates</a>).</p>
+<h2 id="embedding-the-server">Embedding the server<a class="headerlink" href="#embedding-the-server" title="Permanent link">#</a></h2>
+<p>The tools themselves are <code>livery-mcp-core</code> (Kotlin Multiplatform: JVM, iOS, Wasm), with no
+transport: <code>LiveryMcp.handle</code> takes one JSON-RPC message and returns its response, as a <code>suspend</code>
+function, so a host or an extension can wait on the network. It reads the
+catalog through an Okio <code>FileSystem</code>, so an IDE plugin, a browser or an agent's own process can
+serve a tree from disk or from memory:</p>
+<pre><code class="language-kotlin">val mcp = LiveryMcp(SourceTree(fileSystem, &quot;/catalog&quot;.toPath()), writable = true, previewOut = &quot;/previews&quot;.toPath())
+val response = mcp.handle(request)   // suspend; null for a notification
+</code></pre>
+<p>What only some hosts can do comes through <code>McpHost</code>: <code>render</code> (a PNG of a template), <code>history</code>
+(the catalog's commits) and <code>check</code> against a git revision. Without one, those tools say this
+host can't, and <code>check_compatibility</code> compares against another tree on the same file system.
+On the JVM, <code>LiveryMcp.local(dir)</code> serves a directory with <code>JvmMcpHost</code> (Skia renders, <code>git</code>),
+as the <code>livery-mcp</code> CLI does. Extensions are common code too: <code>UiBuilderExtension</code> exports over
+Ktor wherever the server runs, passed in <code>extensions</code>.</p>
+<h2 id="2-repository-ci-start-here">2. Repository + CI (start here)<a class="headerlink" href="#2-repository-ci-start-here" title="Permanent link">#</a></h2>
+<ol>
+<li>The agent works in a branch with the server above: it reads the contract, validates and renders
+   its document, and calls <code>submit_draft</code>.</li>
+<li>CI runs <code>livery build --inspect</code> and <code>livery check --against origin/main</code>. The build refuses
+   undeclared reads, bad examples and bad payloads, and decodes every <code>.rc</code> to check it against its
+   sidecar and its contract's types; the check refuses a contract change apps already installed
+   would break, and lists what the branch changes for review. CI then publishes the branch to a
+   <code>pr-&lt;n&gt;</code> channel.</li>
+<li>Reviewers point a debug build at that channel and look at it with real data.</li>
+<li>Merging publishes <code>main</code>, signed by CI.</li>
+</ol>
+<h2 id="prefer-data-over-documents">Prefer data over documents<a class="headerlink" href="#prefer-data-over-documents" title="Permanent link">#</a></h2>
+<p>Generating copy and images for a reviewed template is safer, cheaper and easier to review than
+generating a template. Give the agent the contract and its examples, ask for a dataset, and check
+it with <code>validate_data</code> (in your own server, <code>ContractBinder.bind</code>). Over-long strings, unknown keys
+and wrong types are refused before anyone sees them. <code>render_preview</code> with that data shows the
+result on every template of the design.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task"><code>livery-mcp</code> in the agent's tools, pointed at the catalog source in a working branch.</li>
+<li class="task"><code>--write</code> only where the agent works in a branch; read-only everywhere else.</li>
+<li class="task">CI runs <code>livery build --inspect</code> and <code>livery check --against origin/main</code>, then signs with a
+      key the agent can't read.</li>
+<li class="task">Preview channels for review, never the production channel.</li>
+</ul>
+<h2 id="planned">Planned<a class="headerlink" href="#planned" title="Permanent link">#</a></h2>
+<ul>
+<li>Live sessions over a relay, with <code>livery-server</code> (as Home Assistant's agent sessions work today):
+  <code>await_feedback</code>, <code>send_message</code> and <code>set_status</code>, so a person and an agent edit together with
+  the person's real data on screen.</li>
+<li><code>compile_rc_json</code>: RC authoring JSON to <code>.rc</code>, for agents that write documents directly.</li>
+<li>Pictures in <code>check_compatibility</code>: each changed design rendered before and after with every
+  example, as <code>livery review</code> does for a pull request.</li>
+<li><code>livery check --against &lt;release URL&gt;</code>: a published catalog as the baseline, not only a git
+  revision or a source tree.</li>
+<li>Retired versions in the manifest, so a decision or feed item pinned to an older template's hash
+  keeps playing after the design moves on.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/ai-workflows.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

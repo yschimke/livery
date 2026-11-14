@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repository mode · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a class="current" href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="repository-mode">Repository mode<a class="headerlink" href="#repository-mode" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> run Livery from a GitHub repository alone. Every change to what your apps show
+(a template, a design, a placement rule, an A/B test, a seasonal variant) is a pull request; CI
+validates it and posts a review report; merging publishes it, signed. No server, no console.</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">#</a></h2>
+<pre><code>catalog/                 the source tree (see Getting started)
+  catalog.json
+  contracts/  designs/  placements/  experiments/  seasons/  themes/
+.github/workflows/
+  catalog-review.yml     on pull requests: build, inspect, compare with the base, draw, comment
+  catalog-publish.yml    on main: build, sign, release
+</code></pre>
+<ol>
+<li>Someone (a person, or an agent with <code>livery-mcp</code>) edits the tree in a branch and opens a pull
+   request.</li>
+<li><strong>Review</strong>: Livery's review workflow builds the tree, decodes every template, compares it with
+   the pull request's base, and posts one comment (updated on every push) written to be read in
+   ten seconds. Its first line is the verdict and what to do (<code>Compatible with 58a5852: nothing
+   breaks for existing apps</code>, or <code>Not compatible with 58a5852: 2 problems to fix</code>). Then come only
+   the things that need a decision: problems to fix, and anything this change newly does that is
+   worth a look. A note that applies to many templates is said once, with the designs it applies to,
+   and something the base already had (an optional value with no default, say) is not repeated when
+   a template is only regenerated. Contract changes, designs, experiments and seasons, and placement
+   rules that changed follow, with a table of the designs whose templates changed (size, and the
+   data they read or send only when that changed). Every changed template is in a collapsed
+   section. With <code>previews: true</code> the comment also shows each changed design drawn with its
+   contract's examples, before and after. It fails when the change would break installed apps.</li>
+</ol>
+<p><code>``text
+   ### Compatible with</code>58a5852`: nothing breaks for existing apps</p>
+<p>5 designs, 181 templates: 145 changed, 36 unchanged</p>
+<p><strong>Worth a look</strong>
+   - <code>subtitle</code> is optional and its contract gives it no default: when an app leaves it out, the
+     template draws its own built-in fallback. In 1 template: <code>tile-default</code></p>
+<table>
+<thead>
+<tr>
+<th>Design</th>
+<th>Templates</th>
+<th>Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tile-default</code></td>
+<td>1 changed</td>
+<td>7.8 KB (was 7.5 KB, +5%)</td>
+</tr>
+<tr>
+<td>```</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>3. Reviewers read the comment and the diff, and approve. Make the review job a required check, and</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>put the tree under <code>CODEOWNERS</code> so the right people approve.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4. <strong>Publish</strong>: merging runs the publish workflow: it builds the tree again, signs the manifest</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>with the key in a repository secret, and releases it. Apps pick it up on their next refresh.</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Rolling back is a revert: the revert publishes like any change, with a higher serial, so apps take
+it.</p>
+<h2 id="set-up">Set up<a class="headerlink" href="#set-up" title="Permanent link">#</a></h2>
+<p>Generate a signing key once, keep the private half as a secret and embed the public half in your
+apps (see <a href="signing.html">Signing</a>):</p>
+<pre><code class="language-bash">livery keygen acme
+gh secret set LIVERY_SIGNING_KEY &lt; acme.key
+</code></pre>
+<p>Then call Livery's reusable workflows, pinned to a release:</p>
+<pre><code class="language-yaml"># .github/workflows/catalog.yml
+name: Catalog
+on:
+  pull_request: { paths: ['catalog/**'] }
+  push: { branches: [main], paths: ['catalog/**'] }
+jobs:
+  review:
+    if: github.event_name == 'pull_request'
+    uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0 }
+    permissions: { contents: read, pull-requests: write }
+  publish:
+    if: github.event_name == 'push'
+    uses: yschimke/livery/.github/workflows/catalog-publish.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0, key-id: acme-1, tag: catalog }
+    secrets: { signing-key: '${{ secrets.LIVERY_SIGNING_KEY }}' }
+    permissions: { contents: write }
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Workflow</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td>both</td>
+<td>the source tree, relative to the repository root</td>
+</tr>
+<tr>
+<td><code>source-artifact</code></td>
+<td>both</td>
+<td>a source tree an earlier job uploaded, downloaded to <code>source</code>, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with an empty tree, since its base was never committed</td>
+</tr>
+<tr>
+<td><code>livery-version</code></td>
+<td>both</td>
+<td>the Livery CLI release to run</td>
+</tr>
+<tr>
+<td><code>inspect</code></td>
+<td>both</td>
+<td>decode every template (<code>--inspect</code>); default <code>true</code></td>
+</tr>
+<tr>
+<td><code>comment</code></td>
+<td>review</td>
+<td>post the report on the pull request; default <code>true</code></td>
+</tr>
+<tr>
+<td><code>previews</code></td>
+<td>review</td>
+<td>draw each changed design before and after with its contract's examples; default <code>false</code>. Needs <code>contents: write</code> (below)</td>
+</tr>
+<tr>
+<td><code>preview-size</code></td>
+<td>review</td>
+<td>draw the templates covering this size, <code>&lt;w&gt;x&lt;h&gt;</code> in dp; default each design's largest</td>
+</tr>
+<tr>
+<td><code>key-id</code></td>
+<td>publish</td>
+<td>the key id apps trust</td>
+</tr>
+<tr>
+<td><code>tag</code></td>
+<td>publish</td>
+<td>a rolling release tag (below); empty for a new <code>catalog-&lt;run&gt;</code> release marked latest</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Where it publishes.</strong> With <code>tag</code>, every publish updates that one release: templates and images
+are content-addressed, so only missing ones go up, beside the old ones, and the signature and
+manifest last. Publishes run one at a time per release, and one never replaces a newer catalog
+(a higher serial).
+Apps read it with <code>GitHubReleaseSource(owner, repo, tag = "catalog")</code>, and the repository's
+"latest" release stays the app's own, so the catalog can live in the app's repository. Without
+<code>tag</code>, each publish is a new release marked latest, for a repository that holds only the catalog
+(<code>GitHubReleaseSource(owner, repo)</code>). See <a href="hosting.html">Hosting</a> for other hosts.</p>
+<h2 id="ab-tests-are-pull-requests">A/B tests are pull requests<a class="headerlink" href="#ab-tests-are-pull-requests" title="Permanent link">#</a></h2>
+<p>An experiment is a file; starting, growing and ending it are edits the review report explains:</p>
+<pre><code class="language-json">// catalog/experiments/tile_look.json
+{ &quot;id&quot;: &quot;tile_look&quot;, &quot;allocationBasisPoints&quot;: 1000,
+  &quot;startEpochMs&quot;: 1796083200000, &quot;endEpochMs&quot;: 1798761600000,
+  &quot;arms&quot;: [ { &quot;id&quot;: &quot;control&quot; }, { &quot;id&quot;: &quot;retro&quot;, &quot;designs&quot;: { &quot;live/status-tile@1&quot;: &quot;tile-retro&quot; } } ] }
+</code></pre>
+<ul>
+<li>Raising <code>allocationBasisPoints</code> only adds users; the report says so.</li>
+<li>Lowering it, or changing arms or weights, is flagged for review: users already enrolled can move
+  between arms, so analyse the result as a new test (or start one under a new id).</li>
+<li>Ending a test is setting <code>endEpochMs</code>, or deleting the file; the report lists who goes back to
+  the usual designs.</li>
+</ul>
+<p>How experiments assign and report is on <a href="analytics-and-experiments.html">Analytics and experiments</a>.</p>
+<h2 id="seasonal-variants">Seasonal variants<a class="headerlink" href="#seasonal-variants" title="Permanent link">#</a></h2>
+<p>A season swaps the design a contract's slots draw, for everyone, between two dates:</p>
+<pre><code class="language-json">// catalog/seasons/winter.json
+{ &quot;id&quot;: &quot;winter_2026&quot;, &quot;start&quot;: &quot;2026-12-01&quot;, &quot;end&quot;: &quot;2027-01-07&quot;,
+  &quot;designs&quot;: { &quot;live/status-tile@1&quot;: &quot;tile-winter&quot; } }
+</code></pre>
+<ul>
+<li><code>start</code> is inclusive and <code>end</code> exclusive: a date (midnight UTC) or an instant with its offset
+  (<code>2026-12-01T00:00:00+13:00</code>). <code>conditions</code> (platforms, locales, segments) narrow it.</li>
+<li>The season's design is <code>Always</code> (downloaded with the catalog, so the day it starts needs no
+  network) and <code>"automatic": false</code>, so ordinary selection never picks it, whatever else fits:
+  only the season draws it, and pickers don't offer it. <code>livery build</code> refuses a season whose
+  design isn't both, and two seasons over one contract at once. A catalog with such a design
+  requires protocol level 6 (clients from Livery 0.3).</li>
+</ul>
+<p><code>json
+  // catalog/designs/tile-winter/design.json
+  { "id": "tile-winter", "contract": "live/status-tile@1", "title": "Winter",
+    "install": "Always", "automatic": false }</code>
+- A season is written into the manifest as a one-arm experiment at full allocation, so any client
+  that draws experiment design arms draws seasons (give the slot's planner an <code>Experiments</code>), and
+  analytics see it as <code>exp_&lt;id&gt;</code>. Seasons come before the catalog's own experiments: a season
+  replaces a design under test while it runs.
+- Ship the season's design ahead of time: apps download <code>Always</code> designs with the catalog, so on
+  the day it switches without the network.</p>
+<h2 id="pictures-in-the-review">Pictures in the review<a class="headerlink" href="#pictures-in-the-review" title="Permanent link">#</a></h2>
+<p><code>previews: true</code> draws, for each design the change adds, changes or removes, one of its templates
+with every example in its contract (up to four), before and after: the template covering
+<code>preview-size</code>, or the one with the largest smallest size, drawn at that size. The data is the
+contract's own examples, so the same picture means the same pixels: a design whose templates
+changed but draw the same (an optimisation) shows one row marked unchanged. Placeholders and
+documents that don't decode are listed as not drawn.</p>
+<p>The comment shows images from GitHub, so the workflow commits them, alone, to a branch of their
+own, <code>livery-previews/pr-&lt;number&gt;</code>, replaced on every push, and cites that commit. That needs
+<code>contents: write</code>:</p>
+<pre><code class="language-yaml">  review:
+    uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0, previews: true }
+    permissions: { contents: write, pull-requests: write }
+</code></pre>
+<p>Without it (or from a fork) the comment names the files instead, and the run's <code>livery-previews</code>
+artifact has them. Delete the branches of closed pull requests whenever you like.</p>
+<h2 id="older-preview-data">Older preview data<a class="headerlink" href="#older-preview-data" title="Permanent link">#</a></h2>
+<p>A contract's <code>examples</code> are the data every template is previewed, reviewed and verified with. When a
+change edits or drops one, the old data doesn't stop mattering: an installed app may still send data
+shaped like it. So it is kept, beside the contract, and every template stays checked with it:</p>
+<pre><code>contracts/
+  status-tile.json
+  examples/
+    status-tile/
+      on-1a2b3c4d.json     the data `on` had before, named by its hash
+</code></pre>
+<p><code>livery check</code> fails while the base has example data that is neither in the contract (under any
+name) nor kept, and when a kept example no longer binds to the contract. Keep it with:</p>
+<pre><code class="language-bash">livery keep-examples catalog --against origin/main
+</code></pre>
+<p>Review pictures draw each kept example after the current ones, labelled <code>on (kept 1a2b3c4d)</code>, and
+<code>livery-verify</code> plays every launcher widget with them too. The catalog build ignores the folder:
+kept examples are for checking, not for apps.</p>
+<h2 id="playing-a-template-as-a-release-played-it">Playing a template as a release played it<a class="headerlink" href="#playing-a-template-as-a-release-played-it" title="Permanent link">#</a></h2>
+<p><code>livery play</code> plays one template with one set of data as that release of Livery plays it, and
+writes a PNG: on rc-players' Compose player (<code>--surface compose</code>), or written for a widget and
+played on Android 16's own launcher widget player (<code>--surface launcher-widget</code>). It exits 1 when the
+template crashes or is refused, which is what a home screen shows as a warning sign. The widget is
+published as a widget provider publishes it, through rc-players, which first recovers what the
+platform player can't read; <code>--as-is</code> hands the player the document without that, to find a
+template that only plays because it is recovered.</p>
+<pre><code class="language-bash">livery play designs/tile-default/launcher.rc --contract contracts/status-tile.json \
+  --example on --surface launcher-widget --size 352x190 --out tile.png
+</code></pre>
+<p>Every Livery release ships it, so to try a template as an app on an older release plays it,
+download that release's CLI and run the same command:</p>
+<pre><code class="language-bash">v=0.3.0
+curl -fsSL -o livery-$v.zip https://github.com/yschimke/livery/releases/download/v$v/livery-$v.zip
+unzip -q livery-$v.zip &amp;&amp; livery-$v/bin/livery play …
+</code></pre>
+<p><code>--example</code> takes a contract example or, with <code>--catalog &lt;src&gt;</code>, a kept one (<code>on (kept 1a2b3c4d)</code>).
+The widget player runs under Robolectric in a Java 21 JVM (<code>LIVERY_JAVA</code>, else <code>JAVA_HOME</code>); on
+first use it downloads Android 16 and Robolectric's native graphics from Maven Central, checked
+against their published SHA-1, into <code>LIVERY_CACHE</code> (default <code>~/.cache/livery</code>).</p>
+<h2 id="review-tools">Review tools<a class="headerlink" href="#review-tools" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>livery check &lt;src&gt; --against origin/main --inspect</code></td>
+<td>the review report in a terminal; <code>--markdown</code> for a comment, <code>--json</code> for other tools; <code>--deny-new-features</code> fails when a template gains a risky feature</td>
+</tr>
+<tr>
+<td><code>livery review &lt;src&gt; --against origin/main --previews &lt;dir&gt;</code></td>
+<td>the markdown report with pictures: each changed design drawn with its contract's examples, before and after, as PNGs in <code>&lt;dir&gt;</code> (<code>--image-base &lt;url&gt;</code> for where they will be served, <code>--size &lt;w&gt;x&lt;h&gt;</code> to choose the template)</td>
+</tr>
+<tr>
+<td><code>livery build &lt;src&gt; &lt;out&gt; --inspect</code></td>
+<td>everything the publish would refuse</td>
+</tr>
+<tr>
+<td><code>livery keep-examples &lt;src&gt; --against origin/main</code></td>
+<td>keeps the example data the base had that the tree no longer has (above)</td>
+</tr>
+<tr>
+<td><code>livery play &lt;template.rc&gt; --contract &lt;c&gt; --example &lt;e&gt; --surface launcher-widget [--as-is]</code></td>
+<td>one template, played as this release plays it: a PNG, and exit 1 on a crash (above)</td>
+</tr>
+<tr>
+<td><code>livery-mcp</code></td>
+<td>the same checks and <code>render_preview</code> for agents, with <code>list_history</code> and previews at a revision (see <a href="ai-workflows.html">AI workflows</a>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="planned">Planned<a class="headerlink" href="#planned" title="Permanent link">#</a></h2>
+<ul>
+<li>Preview channels per pull request, for a debug build to play before merging.</li>
+<li>Which Livery release each app release ships, recorded by the Gradle plugin, so a review can play
+  every changed template as the app releases still in use play it (<code>livery play</code> from each
+  release, for the app's last six months or each minor version).</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/repository-mode.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

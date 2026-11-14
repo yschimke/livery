@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive ads · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a class="current" href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="interactive-ads">Interactive ads<a class="headerlink" href="#interactive-ads" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> your ad server answers a placement with a template reference and the ad's data;
+Livery draws exactly that creative with that data, or nothing at all.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<ul>
+<li>The <strong>template</strong> is the creative's layout, published and signed in a catalog (by you, or by an
+  ad partner whose key may sign only <code>ads/</code> contracts).</li>
+<li>The <strong>decision</strong> comes from your ad server at request time: which template (by design or exact
+  blob), the data (copy, image URLs), tracking URLs and experiment arms.</li>
+<li>The client <strong>never substitutes</strong> another template for a decision, and checks the data against
+  the contract before drawing.</li>
+</ul>
+<h2 id="1-the-contract">1. The contract<a class="headerlink" href="#1-the-contract" title="Permanent link">#</a></h2>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;ads/banner&quot;, &quot;major&quot;: 1, &quot;dataSource&quot;: &quot;Decision&quot;,
+  &quot;inputs&quot;: {
+    &quot;headline&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true, &quot;maxLength&quot;: 40 },
+    &quot;cta&quot;:      { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true, &quot;maxLength&quot;: 18 },
+    &quot;hero&quot;:     { &quot;type&quot;: &quot;image&quot;, &quot;required&quot;: true }
+  },
+  &quot;actions&quot;: { &quot;click&quot;: { &quot;kind&quot;: &quot;open-url&quot;, &quot;args&quot;: { &quot;url&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true } } } }
+}
+</code></pre>
+<h2 id="2-publish-the-creatives">2. Publish the creatives<a class="headerlink" href="#2-publish-the-creatives" title="Permanent link">#</a></h2>
+<p>Each creative is a design (<code>ads-hero-v3</code>) with a template per surface you serve. Mark them
+<code>"install": "OnDemand"</code>, so they download when first decided, not with every refresh.</p>
+<p>If a partner publishes creatives, give them their own key and trust it only for <code>ads/</code>:</p>
+<pre><code class="language-kotlin">TrustedKey(&quot;partner-1&quot;, partnerPub, contractPrefixes = setOf(&quot;ads/&quot;))
+</code></pre>
+<h2 id="3-the-decision-your-server-returns">3. The decision your server returns<a class="headerlink" href="#3-the-decision-your-server-returns" title="Permanent link">#</a></h2>
+<pre><code class="language-json">{
+  &quot;placement&quot;: &quot;feed.inline-1&quot;,
+  &quot;decisionId&quot;: &quot;d-7f3a&quot;,
+  &quot;template&quot;: { &quot;designId&quot;: &quot;ads-hero-v3&quot; },
+  &quot;data&quot;: { &quot;headline&quot;: &quot;Winter sale&quot;, &quot;cta&quot;: &quot;Shop now&quot;, &quot;hero&quot;: &quot;https://cdn.adnet.example/w.jpg&quot; },
+  &quot;tracking&quot;: { &quot;impression&quot;: [&quot;https://t.adnet.example/i?d=7f3a&quot;], &quot;click&quot;: [&quot;https://t.adnet.example/c?d=7f3a&quot;] }
+}
+</code></pre>
+<p>Pin <code>"sha256"</code> instead of <code>designId</code> to serve one exact blob. Validate <code>data</code> on the server with the
+same contract before answering.</p>
+<h2 id="4-draw-it">4. Draw it<a class="headerlink" href="#4-draw-it" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val decision = adServer.decide(&quot;feed.inline-1&quot;)                // your call; returns a Decision
+LiverySlot(key = decision?.decisionId, host = host, fallback = { /* nothing */ }) {
+  if (decision == null) PlanResult.Fallback(&quot;no fill&quot;)
+  else planner.forDecision(TemplateQuery(&quot;ads/banner@1&quot;, inApp, widthDp = 360), decision)
+}
+</code></pre>
+<p><code>Impression</code> fires after the first frame and <code>Viewable</code> after an unbroken second at least half on
+screen; route them, and the decision's tracking URLs, through your <code>EventSink</code>.</p>
+<h2 id="5-images">5. Images<a class="headerlink" href="#5-images" title="Permanent link">#</a></h2>
+<p>Ad images are remote. Serve them through an image proxy declared in the catalog, so the device talks
+to one host you trust, never the advertiser's. See <a href="../images-and-fonts.html">Images and fonts</a>.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">A partner key scoped to <code>ads/</code> contracts, if partners publish.</li>
+<li class="task">Creatives <code>OnDemand</code>; the decision names a design or an exact <code>sha256</code>.</li>
+<li class="task">Server-side contract validation of <code>data</code> before answering.</li>
+<li class="task"><code>imageProxy</code> in the catalog, with <code>sourceHosts</code> limited to the ad CDNs.</li>
+<li class="task"><code>open-url</code> allowlist in the <code>ActionRouter</code> covering click-through hosts.</li>
+<li class="task">Impression and viewability events wired to your measurement.</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/ads.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

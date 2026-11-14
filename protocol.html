@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocol · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a class="current" href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="protocol">Protocol<a class="headerlink" href="#protocol" title="Permanent link">#</a></h1>
+<p>The normative specification is <a href="https://github.com/yschimke/livery/blob/main/docs/PROTOCOL.md"><code>docs/PROTOCOL.md</code></a>:
+files and addressing, the manifest, signing and trust, contracts and binding, selection, resources,
+actions, decisions, feeds and events. The design rationale is in
+<a href="https://github.com/yschimke/livery/blob/main/docs/DESIGN.md"><code>docs/DESIGN.md</code></a>.</p>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>§1 Files</td>
+<td><code>manifest.json</code>, <code>manifest.sig.json</code>, content-addressed blobs, assets, previews</td>
+</tr>
+<tr>
+<td>§2 Manifest</td>
+<td>contracts, designs, templates, targets, protocol levels (2 adds resources)</td>
+</tr>
+<tr>
+<td>§3 Signing</td>
+<td>Ed25519 over the exact manifest bytes; scoped keys; serial; expiry</td>
+</tr>
+<tr>
+<td>§4 Contracts</td>
+<td>typed inputs, lists, actions; binding refuses rather than drops</td>
+</tr>
+<tr>
+<td>§5 Selection</td>
+<td>eligibility, ranking, most specific first; exact references play exactly or not at all</td>
+</tr>
+<tr>
+<td>§6 Resources</td>
+<td>image references, the image proxy, redirects, fonts</td>
+</tr>
+<tr>
+<td>§7 Actions</td>
+<td>named host actions with JSON arguments; numeric ones on launchers</td>
+</tr>
+<tr>
+<td>§8 Decisions</td>
+<td>local rules, rollouts, feeds, events</td>
+</tr>
+</tbody>
+</table>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/protocol.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

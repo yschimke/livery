@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authoring templates · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a class="current" href="authoring.html">Authoring templates</a></li>
+<li><a href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="authoring-templates">Authoring templates<a class="headerlink" href="#authoring-templates" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> design a template in <strong>Compose code</strong> (rc-players' Compose Multiplatform creation
+API on any JVM, or AndroidX <code>remote-creation-compose</code> on Android) or in <strong>Compose UI Builder</strong>, and
+either way it lands in the catalog the same: a <code>.rc</code> document and a sidecar read from the
+document, checked against its contract before it is written.</p>
+<p>Livery takes <code>.rc</code> bytes and a sidecar from anything (see <a href="concepts.html">Concepts</a>). These two
+flows are the supported ones: each starts from the contract, so a template can only read the
+values and emit the actions its contract declares, and each records where the document came from.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Compose code (<code>livery-capture-cmp</code>, <code>livery-capture</code>)</th>
+<th>Compose UI Builder (<code>livery-uibuilder</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You write</td>
+<td>a <code>@Composable</code> with <code>RemoteText</code>, <code>RemoteColumn</code>, …</td>
+<td>a design on UI Builder's canvas</td>
+</tr>
+<tr>
+<td>Contract values</td>
+<td><code>LiveryValues(contract).string("title")</code>, …</td>
+<td>host inputs from <code>livery ui-builder scaffold</code></td>
+</tr>
+<tr>
+<td>A wrong name or type</td>
+<td>fails the capture</td>
+<td>refused by <code>livery ui-builder import</code></td>
+</tr>
+<tr>
+<td>Into the catalog</td>
+<td><code>DesignFolder.write</code> from a unit test, at build time</td>
+<td><code>livery ui-builder import</code></td>
+</tr>
+<tr>
+<td>Kept current by</td>
+<td>the build: the <code>.rc</code> is build output, never committed</td>
+<td>importing a newer UI Builder revision</td>
+</tr>
+<tr>
+<td><code>source</code> in the sidecar</td>
+<td><code>{ "tool": "capture", … }</code></td>
+<td><code>{ "tool": "ui-builder", "design", "revision", "url" }</code></td>
+</tr>
+<tr>
+<td>Suits</td>
+<td>developers, templates next to app code, CI</td>
+<td>designers, quick iteration, agents over MCP</td>
+</tr>
+</tbody>
+</table>
+<p>Both end the same way: <code>livery build</code> (with <code>--inspect</code>) and <code>livery check --against origin/main</code>
+in CI, then a signed release (see <a href="getting-started.html">Getting started</a>).</p>
+<h2 id="in-compose-code">In Compose code<a class="headerlink" href="#in-compose-code" title="Permanent link">#</a></h2>
+<p>Remote Compose has two creation APIs with the same shape, and Livery has a binding for each. Both
+give you the same <code>LiveryValues</code> and <code>LiveryCapture</code>, over one shared core (<code>livery-capture-core</code>:
+<code>CapturedTemplate</code>, <code>DesignFolder</code>, <code>CatalogContracts</code>), and a template captured through either
+is the same template to Livery.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>livery-capture-cmp</code></th>
+<th><code>livery-capture</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Creation API</td>
+<td>rc-players' Compose Multiplatform one: <code>ee.schimke.composeai:rc-creation-compose</code>, package <code>ee.schimke.composeai.rccreation.*</code></td>
+<td>AndroidX's: <code>androidx.compose.remote:remote-creation-compose</code> (alpha), package <code>androidx.compose.remote.creation.*</code></td>
+</tr>
+<tr>
+<td>Runs on</td>
+<td>a plain JVM (a unit test, a build tool, a server), Android; compiled for Wasm, not yet tested in a browser</td>
+<td>Android only: a Robolectric unit test</td>
+</tr>
+<tr>
+<td>Livery package</td>
+<td><code>ee.schimke.livery.capture.cmp</code></td>
+<td><code>ee.schimke.livery.capture</code></td>
+</tr>
+<tr>
+<td>Capture</td>
+<td><code>LiveryCapture.capture(target, widthDp, heightDp, profile = …) { … }</code></td>
+<td><code>LiveryCapture.capture(context, target, widthDp, heightDp, profile = …) { … }</code></td>
+</tr>
+<tr>
+<td>A <code>widgets</code> target</td>
+<td>captured under <code>RcCaptureProfiles.launcherWidgets</code> (<code>rc-widget-creation</code>)</td>
+<td>captured under <code>rc-widget-launcher</code>'s <code>widgetsProfile</code>, the same operations and header</td>
+</tr>
+<tr>
+<td>Available</td>
+<td>from the release after 0.9.0</td>
+<td>since 0.2.0</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Use <code>livery-capture-cmp</code></strong> unless something forces the other: it needs no Android SDK, no
+Robolectric and no AndroidX alpha, so templates build wherever Kotlin does. <strong>Use
+<code>livery-capture</code></strong> when the template composes with a library built on AndroidX's creation API
+(Wear <code>remote-material3</code>, your own AndroidX-typed components), or shares composables with content
+you hand to <code>rc-widget-launcher</code> or <code>rc-widget-wear</code>, which take AndroidX's types. An app can hold
+both: the two APIs are in different packages, and so are the two bindings.</p>
+<p>The two APIs are the same code at different ages: rc-players' follows androidx-main, AndroidX's
+alpha is a release behind it. A few names differ until the alpha catches up, for example
+<code>fontWeight = RemoteFontWeight.Bold</code> and <code>valueChangeAction(…)</code> on the first where the alpha has
+<code>FontWeight.Bold</code> and <code>valueChange(…)</code>. <code>LiveryValues</code> is identical on both.</p>
+<pre><code class="language-kotlin">dependencies {
+  // rc-players' Compose Multiplatform creation API: a Kotlin/JVM or multiplatform module.
+  testImplementation(&quot;ee.schimke.composeai:livery-capture-cmp:&lt;version&gt;&quot;)
+  // or AndroidX's, in an Android module:
+  testImplementation(&quot;ee.schimke.composeai:livery-capture:&lt;version&gt;&quot;)
+  testImplementation(&quot;org.robolectric:robolectric:4.17&quot;)
+}
+</code></pre>
+<p><code>LiveryValues</code> hands out the contract's values as named Remote Compose values, with the
+contract's defaults, and its actions as host actions. A name the contract doesn't declare, or the
+wrong type, throws, so the capture fails rather than the publish:</p>
+<pre><code class="language-kotlin">import ee.schimke.composeai.rccreation.compose.layout.*      // or androidx.compose.remote.creation.compose.layout.*
+import ee.schimke.composeai.rccreation.compose.modifier.*
+import ee.schimke.livery.capture.cmp.LiveryValues            // or ee.schimke.livery.capture.LiveryValues
+
+@Composable @RemoteComposable
+fun StatusTile(v: LiveryValues) {
+  RemoteColumn(RemoteModifier.fillMaxSize().clickable(v.action(&quot;toggle&quot;))) {
+    RemoteText(v.string(&quot;name&quot;), color = v.color(&quot;theme.primary&quot;))
+    RemoteText(v.string(&quot;state&quot;))
+  }
+}
+</code></pre>
+<p>Commit the Kotlin, not the <code>.rc</code>: capture each target once and write the design's folder into the
+build directory, where a Gradle task lays it over the hand-written catalog source tree
+(<code>catalog.json</code>, <code>contracts/</code>, each <code>design.json</code>). With <code>livery-capture-cmp</code> that is an ordinary
+JVM test:</p>
+<pre><code class="language-kotlin">class StatusTileTemplates {
+  private val catalog = File(&quot;../templates&quot;)          // your catalog source tree
+  private val contract = CatalogContracts.contract(catalog, &quot;live/status-tile@1&quot;)
+
+  @Test fun captureTileDefault() = runBlocking {
+    val launcher = Target(&quot;launcher-widget&quot;, 7, listOf(&quot;widgets&quot;))
+    val templates = mapOf(
+      &quot;launcher&quot; to LiveryCapture.capture(launcher, 200, 100) { StatusTile(LiveryValues(contract)) },
+    )
+    val out = System.getProperty(&quot;livery.capture.out&quot;) ?: return@runBlocking  // set by captureTemplates
+    DesignFolder(File(out, &quot;designs/tile-default&quot;)).write(templates)
+  }
+}
+</code></pre>
+<p>With <code>livery-capture</code> the same test runs under Robolectric and hands the capture a <code>Context</code>:</p>
+<pre><code class="language-kotlin">@RunWith(RobolectricTestRunner::class) @Config(sdk = [35], qualifiers = &quot;mdpi&quot;)
+class StatusTileTemplates {
+  private val catalog = File(&quot;../templates&quot;)
+  private val contract = LiveryCapture.contract(catalog, &quot;live/status-tile@1&quot;)
+
+  @Test fun captureTileDefault() = runBlocking {
+    val context = RuntimeEnvironment.getApplication()
+    val launcher = Target(&quot;launcher-widget&quot;, 7, listOf(&quot;widgets&quot;))
+    val templates = mapOf(
+      &quot;launcher&quot; to LiveryCapture.capture(context, launcher, 200, 100) { StatusTile(LiveryValues(contract)) },
+    )
+    val out = System.getProperty(&quot;livery.capture.out&quot;) ?: return@runBlocking
+    DesignFolder(File(out, &quot;designs/tile-default&quot;)).write(templates)
+  }
+}
+</code></pre>
+<pre><code class="language-kotlin">// build.gradle.kts: captures into build/, then the source tree plus the captures as build/catalog.
+val captured = layout.buildDirectory.dir(&quot;captured-templates&quot;)
+val captureTemplates by tasks.registering(Test::class) {
+  val unitTest = tasks.named&lt;Test&gt;(&quot;test&quot;)   // &quot;jvmTest&quot; in a multiplatform module, &quot;testDebugUnitTest&quot; in an Android one
+  testClassesDirs = files(unitTest.map { it.testClassesDirs })
+  classpath = files(unitTest.map { it.classpath })
+  filter { includeTestsMatching(&quot;*.StatusTileTemplates&quot;) }
+  inputs.dir(&quot;templates/contracts&quot;).withPathSensitivity(PathSensitivity.RELATIVE)
+  outputs.dir(captured)
+  systemProperty(&quot;livery.capture.out&quot;, captured.get().asFile.absolutePath)
+}
+val catalog by tasks.registering(Sync::class) {
+  into(layout.buildDirectory.dir(&quot;catalog&quot;))
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  from(files(captured).builtBy(captureTemplates))
+  from(&quot;templates&quot;)
+}
+</code></pre>
+<p>Point <code>livery build</code> (or the Gradle plugin's <code>livery { source }</code>) at <code>build/catalog</code>, or publish it
+to an output branch. Livery's own samples work this way, on the plain JVM:
+<code>./gradlew :livery-capture-cmp:sampleCatalogs</code> captures <code>banner-classic</code>, <code>poll-card</code> and
+<code>quantity-stepper</code> into <code>livery-capture-cmp/build/samples/</code>.</p>
+<ul>
+<li><strong>A target is captured under a profile.</strong> Both bindings take a capture <code>profile</code>, which the
+  writer holds the document to: it refuses an operation outside it (for example <code>Operation 240 is
+  not supported for this version</code>), writes text as <code>TextLayout</code> where the profile has no <code>CoreText</code>,
+  and writes the profile's header. Nothing is rewritten afterwards. The default follows the
+  target's <code>profiles</code>: <code>widgets</code> (a launcher widget, a notification) is
+  <code>RcCaptureProfiles.launcherWidgets</code>, the operations Android 16's level 6 player and API 37's both
+  decode (what <code>livery-capture</code> calls <code>widgetsProfile</code>); <code>glance-wear</code> is
+  <code>RcCaptureProfiles.wearWidgets</code>, Glance Wear's allow-list; <code>experimental</code> is
+  <code>RcCaptureProfiles.androidXExperimental</code>, for an app's own player (a flow row, a pattern); anything
+  else is the creation default, <code>RcPlatformProfiles.ANDROIDX</code>. A launcher capture does not hold
+  <code>TextSubtext</code> (a string cut with <code>substring</code>, which a relative time uses), because
+  <code>launcherWidgets</code> follows Android 16's level 6 operation table, which lists none. For API 37 launchers only pass <code>RcCaptureProfiles.systemThemedLauncherWidgets</code>, or build the
+  profile with <code>RcTargetProfile.of(7, …).toCaptureProfile(without = …)</code>.</li>
+<li><strong>A capture is a template, not a playable document.</strong> A padding, a spacing or a background
+  colour that reads a named value or the display's density is fine: the host writes the values in
+  (<code>livery-instantiate</code>) and <code>rc-widget-launcher</code> makes what Android 16 reads only as literals
+  literal. The capture checks only what instantiation can't change, such as an operation outside the
+  profile, or a <code>drawWithContent</code> (or a brush background) on an Android 16 launcher, which that
+  player paints until the widget host dies. <code>livery-verify</code> plays an instantiated capture on
+  Android 16's own player.</li>
+<li><code>livery-capture</code>'s <code>LiveryCapture.capture</code> uses <code>rc-widget-launcher</code>'s widgets profile for a
+  target with the <code>widgets</code> profile and the creation default otherwise; pass Glance Wear's own
+  <code>profile</code> for a <code>glance-wear</code> one.</li>
+<li>The sidecar's <code>reads</code> and <code>emits</code> come from the captured document, never from hand-written lists.</li>
+<li><code>DesignFolder.write</code> writes <code>&lt;name&gt;.rc</code> and <code>&lt;name&gt;.json</code> and removes templates no longer
+  captured. A catalog repository that does commit its <code>.rc</code> (another tool's output, say) can keep
+  them current with <code>check</code>, which lists what differs from a capture.</li>
+<li>Lists are <code>"&lt;list&gt;.&lt;i&gt;.&lt;field&gt;"</code> with <code>v.int("&lt;list&gt;.count")</code>; theme roles are <code>theme.*</code>
+  colours the host fills.</li>
+<li><code>v.action(name, args)</code> sends the arguments the action declares, checked when you capture; a
+  <code>track</code> action reports a tap that only changes the template's own state, combined with it (see
+  <a href="interaction-tracking.html">Interaction tracking</a>).</li>
+<li><code>v.set(name, value)</code> sends a <code>set</code> action: the person changed the input it names (a toggle, a
+  stepper) to <code>value</code>, which the document computes when tapped, as in
+  <code>v.set("setQuantity", v.int("quantity") + 1)</code>. The host writes it back and the new value comes
+  back in as the input, so the template keeps no state of its own. <code>set</code> is checked against the
+  input's type when you capture; a value past the input's limits is refused by the client. A
+  catalog with a <code>set</code> needs protocol level 7. See
+  <a href="https://github.com/yschimke/livery/tree/main/samples/two-way"><code>samples/two-way</code></a>.</li>
+</ul>
+<h3 id="capturing-on-the-jvm-with-the-gradle-plugin">Capturing on the JVM with the Gradle plugin<a class="headerlink" href="#capturing-on-the-jvm-with-the-gradle-plugin" title="Permanent link">#</a></h3>
+<p>Designs written against rc-players' Compose Multiplatform creation API (<code>livery-capture-cmp</code>)
+capture on a plain JVM, with no Robolectric, so they need no test to run in. The catalog plugin runs
+the capture for you: give it the entry point, a <code>main</code> called with <code>&lt;source&gt; &lt;out&gt;</code>, and it writes
+the catalog tree into <code>&lt;out&gt;</code> from the hand-written data in <code>&lt;source&gt;</code> (<code>catalog.json</code>, themes,
+placements, fonts) plus the captured <code>designs/</code> and <code>contracts/</code>.</p>
+<pre><code class="language-kotlin">plugins {
+  kotlin(&quot;jvm&quot;)
+  id(&quot;ee.schimke.composeai.livery.catalog&quot;) version &quot;&lt;version&gt;&quot;
+}
+
+livery {
+  source.set(layout.projectDirectory.dir(&quot;catalog&quot;))   // the hand-written data only
+  capture {
+    mainClass.set(&quot;com.example.catalog.CaptureKt&quot;)     // main(args): args[0] source, args[1] out
+    jvmArgs.add(&quot;-Djava.awt.headless=true&quot;)             // optional
+  }
+}
+</code></pre>
+<p><code>captureLiveryCatalog</code> runs it in its own JVM on the project's runtime classpath (set
+<code>capture.classpath</code> for another), into <code>build/livery/captured</code>, emptied first. It is cacheable:
+it re-runs only when the designs' code, the entry point or the hand-written tree changes.
+<code>buildLiveryCatalog</code> then builds what it captured. A design library on AndroidX's creation API
+(<code>livery-capture</code>) still captures from a Robolectric test, as above; a plugin runner for that is
+<em>Planned</em>.</p>
+<h3 id="previews-of-every-template">Previews of every template<a class="headerlink" href="#previews-of-every-template" title="Permanent link">#</a></h3>
+<p><code>renderLiveryPreviews</code> draws every template in the catalog (the captured tree, when there is a
+capture) with nothing written by hand. What the tree already says decides what it draws:</p>
+<ul>
+<li><strong>Data</strong>: each of the contract's <code>examples</code>, bound through <code>ContractBinder</code> as on a device. An
+  example that doesn't bind fails the task, after the rest are drawn.</li>
+<li><strong>Modes</strong>: a <code>host</code>-themed template in <code>light</code> and <code>dark</code> (Material 3's baseline scheme bound to
+  its <code>theme.*</code> roles, as an app pushes its own) and under each theme pack in <code>themes/</code>
+  (<code>theme-&lt;id&gt;</code>); a <code>baked:dark</code> or <code>baked:light</code> template once, in its own mode.</li>
+<li><strong>Size</strong>: the document's own (the size it was captured at), kept inside its target's range.</li>
+<li><strong>Background</strong>: the scheme's or theme pack's surface, else the mode's (black on a watch).</li>
+<li><strong>Fonts</strong> from <code>fonts/fonts.json</code>, and one placeholder for every image: no network.</li>
+</ul>
+<pre><code class="language-bash">./gradlew renderLiveryPreviews   # build/livery/previews/index.html
+</code></pre>
+<p>It writes <code>&lt;design&gt;/&lt;template&gt;/&lt;example&gt;/&lt;mode&gt;.png</code>, a <code>previews.json</code> index and an <code>index.html</code>
+that shows them all. Each picture comes from Compose Multiplatform's player on Skia (<code>livery-render</code>),
+in its own JVM. The task resolves <code>ee.schimke.composeai:livery-render</code> at the plugin's version from
+the build's repositories; set <code>previews { classpath.from(…) }</code> to use another. It is cacheable.</p>
+<p>The matrix itself is data too. Every run writes <code>cases.json</code>, with the documents it names under
+<code>documents/</code> and the tree's <code>fonts/</code> beside them. Each case gives the document, its target (surface,
+profiles, container, theme), its size in dp, light or dark, the background behind it, and the named
+values to bind: the example's data and the mode's <code>theme.*</code> roles, named as the contract names them.
+Any renderer can play the cases, not only this one. Set <code>previews { draw.set(false) }</code> to export the
+cases without drawing them.</p>
+<p>Beside it, <code>remote-document-cases.json</code> holds the same cases in compose-preview's shared shape
+(<code>RemoteDocumentCasesV1</code>, in compose-preview-contracts). Each case has an <code>id</code>
+(<code>&lt;design&gt;/&lt;template&gt;/&lt;example&gt;/&lt;mode&gt;</code>), its target as a player profile (<code>androidx7</code>, <code>widgetsV7</code>,
+<code>wearWidgets</code>), and its values in the daemon's <code>kind</code> form; an image value is left at the document's
+default. compose-preview's <code>render-cases</code> draws that file with each surface's own player (the AndroidX
+player, a launcher widget's <code>RemoteViews</code>, Glance Wear) under Robolectric. That command is <em>Planned</em>:
+it is not released yet.</p>
+<h2 id="in-compose-ui-builder">In Compose UI Builder<a class="headerlink" href="#in-compose-ui-builder" title="Permanent link">#</a></h2>
+<p><strong>1. Start from the contract.</strong> Turn it into UI Builder host inputs: state variables with
+<code>"persistence": "host"</code>, named exactly as Livery binds them, with the contract's defaults as their
+initial values:</p>
+<pre><code class="language-bash">livery ui-builder scaffold templates --contract live/status-tile@1 &gt; host-inputs.json
+</code></pre>
+<pre><code class="language-json">{ &quot;stateVariables&quot;: {
+    &quot;is_on&quot;: { &quot;type&quot;: &quot;value&quot;, &quot;valueType&quot;: &quot;bool&quot;, &quot;initialValue&quot;: false, &quot;nullable&quot;: false, &quot;persistence&quot;: &quot;host&quot; },
+    &quot;name&quot;:  { &quot;type&quot;: &quot;text&quot;, &quot;valueType&quot;: &quot;string&quot;, &quot;initialValue&quot;: &quot;&quot;, &quot;nullable&quot;: false, &quot;persistence&quot;: &quot;host&quot; } } }
+</code></pre>
+<p>Add them to the design's <code>stateVariables</code> and bind controls to them. A host input is read-only in
+the design; a tap goes to the host as a host action named like the contract's action. Theme roles,
+colours and images aren't host inputs (the command lists what it left out). Lists get
+<code>&lt;list&gt;.count</code> and every item up to the list's <code>max</code> (<code>--items &lt;n&gt;</code> for fewer).</p>
+<p><strong>2. Import a revision into the catalog:</strong></p>
+<pre><code class="language-bash">UI_BUILDER_TOKEN=… livery ui-builder import kitchen-tile templates \
+  --as tile-default/launcher \
+  --target '{&quot;surface&quot;:&quot;launcher-widget&quot;,&quot;rcApiLevel&quot;:7,&quot;profiles&quot;:[&quot;widgets&quot;]}' \
+  --api https://&lt;ui builder host&gt; --revision 42
+</code></pre>
+<p>It exports the design (its latest revision without <code>--revision</code>), reads what the document reads
+and emits, refuses it when that doesn't fit the design's contract, writes
+<code>designs/tile-default/launcher.rc</code> and its sidecar with
+<code>source: {tool: ui-builder, design, revision, url}</code>, and builds the whole tree, undoing the import
+if the catalog no longer builds. To move a template to a newer revision, import that revision and
+commit the change.</p>
+<p><strong>With an agent</strong>: <code>livery-mcp --ui-builder https://&lt;ui builder host&gt;</code> offers the same two steps
+as tools, <code>ui_builder_scaffold</code> and <code>ui_builder_export</code> (see <a href="ai-workflows.html">AI workflows</a>).</p>
+<h2 id="any-other-tool">Any other tool<a class="headerlink" href="#any-other-tool" title="Permanent link">#</a></h2>
+<p><code>livery import</code> puts any document into a design, with the same checks and a sidecar read from the
+document:</p>
+<pre><code class="language-bash">livery import build/tile.rc templates --as tile-default/in-app \
+  --target '{&quot;surface&quot;:&quot;in-app&quot;,&quot;rcApiLevel&quot;:7}' --source tool=my-exporter --source commit=$(git rev-parse HEAD)
+</code></pre>
+<p><code>livery ui-builder import</code> is this command with UI Builder's export in front of it.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/authoring.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

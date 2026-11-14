@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interstitials, dialogs and full screens · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a class="current" href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="interstitials-dialogs-and-full-screens">Interstitials, dialogs and full screens<a class="headerlink" href="#interstitials-dialogs-and-full-screens" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> show a template as a dialog, a sheet or a full screen, either at a moment the app
+chooses (an interstitial) or when a template's button opens it ("Learn more"), one level deep,
+from what is already on the device.</p>
+<h2 id="two-ways-in-one-model">Two ways in, one model<a class="headerlink" href="#two-ways-in-one-model" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>An interstitial</th>
+<th>A screen a template opens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Opened by</td>
+<td>the app, at its moment: <code>screens.maybeShow("app.launch")</code></td>
+<td>a tap on a <code>present</code> action</td>
+</tr>
+<tr>
+<td>Decided by</td>
+<td>the placement's rules (schedule, audience, arm, frequency cap)</td>
+<td>the opening decision's <code>screens</code>, the app's data, or the placement's rules</td>
+</tr>
+<tr>
+<td>Shown as</td>
+<td>the rule's <code>presentation</code>, or the placement's default</td>
+<td>the screen's <code>presentation</code>, or the placement's default</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How</strong> a screen shows is a presentation: <code>dialog</code> (centred over a scrim), <code>sheet</code> (along the
+bottom) or <code>fullscreen</code>. The app lists each screen placement with the presentations it allows, so
+a catalog or a server can never put a full screen where the app only allows a sheet:</p>
+<pre><code class="language-kotlin">val placements = listOf(
+  ScreenPlacement(&quot;app.launch&quot;, &quot;promo/details@1&quot;, setOf(Presentation.Fullscreen)),
+  ScreenPlacement(&quot;promo.details&quot;, &quot;promo/details@1&quot;, setOf(Presentation.Sheet, Presentation.Fullscreen)),
+)
+</code></pre>
+<p>A screen's template is built for its presentation: its target's container is <code>screen:dialog</code>,
+<code>screen:sheet</code> or <code>screen:fullscreen</code>, and <code>livery build</code> refuses one whose contract declares no
+<code>dismiss</code> action, so every screen can be closed from itself as well as with back.</p>
+<h2 id="setting-it-up">Setting it up<a class="headerlink" href="#setting-it-up" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val caps = { _: Presentation -&gt; PlayerCapabilities(Surfaces.IN_APP, 7, setOf(&quot;androidx&quot;)) }
+// Screens open only from what is on the device: prefetch their templates with the slots'.
+val repository = TemplateRepository(…, targets = listOf(inAppCaps) + LiveryScreens.targets(placements, caps))
+val rules = LocalRulesDecider({ repository.current() }, frequency)   // the bundled catalog until one downloads
+val screens = LiveryScreens(planner, rules, { decisionContext() }, placements, caps, events, clock,
+  appData = { placement, args -&gt; if (placement == &quot;promo.details&quot;) detailsFor(args[&quot;item&quot;]) else null },
+  downloads = applicationScope,   // fetches, for next time, what a screen couldn't open without
+)
+val actions = ActionRouter(screens.handlers(dismissInline = { plan, _, _ -&gt; hideBanner(plan) }) + myHandlers, allowlist, events, clock)
+val host = LiveryHost(repository, actions, events, clock)
+
+setContent {
+  App(host)
+  LiveryScreenHost(screens, host)   // draws the screens over the app
+}
+// At the app's moment:
+lifecycleScope.launch { screens.maybeShow(&quot;app.launch&quot;) }
+</code></pre>
+<p>In SwiftUI, <code>LiveryScreens(planner:placements:caps:context:decide:appData:recordImpression:)</code>
+with <code>.liveryScreens(LiveryScreensModel(screens), actions:, events:) { input in … }</code> on the root
+view (a full-screen cover on iOS, a sheet where the platform has none).</p>
+<h2 id="an-interstitial">An interstitial<a class="headerlink" href="#an-interstitial" title="Permanent link">#</a></h2>
+<p>A placement rule for a screen placement, with its presentation and a frequency cap:</p>
+<pre><code class="language-json">{ &quot;id&quot;: &quot;whats-new-7&quot;, &quot;placement&quot;: &quot;app.launch&quot;, &quot;presentation&quot;: &quot;fullscreen&quot;,
+  &quot;template&quot;: { &quot;designId&quot;: &quot;whats-new&quot; }, &quot;data&quot;: { &quot;title&quot;: &quot;What's new in 7.0&quot; },
+  &quot;conditions&quot;: { &quot;minAppVersion&quot;: 700 }, &quot;frequency&quot;: { &quot;maxImpressions&quot;: 1, &quot;perSeconds&quot;: 31536000 } }
+</code></pre>
+<p><code>maybeShow</code> shows it if its rules allow it now, the template is on the device, and no screen is
+already showing; showing it counts towards its cap. Two overlapping calls show it once. An experiment arm can hold it back for a
+control group (see <a href="../analytics-and-experiments.html">Analytics and experiments</a>).</p>
+<h2 id="a-screen-a-template-opens">A screen a template opens<a class="headerlink" href="#a-screen-a-template-opens" title="Permanent link">#</a></h2>
+<p>The contract declares the action, the placement it opens and the arguments it carries:</p>
+<pre><code class="language-json">&quot;details&quot;: { &quot;kind&quot;: &quot;present&quot;, &quot;placement&quot;: &quot;promo.details&quot;,
+             &quot;args&quot;: { &quot;item&quot;: { &quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true, &quot;maxLength&quot;: 40 } } }
+</code></pre>
+<p>Where the opened screen's data comes from, in order:</p>
+<ol>
+<li><strong>The opening decision</strong>: an ad or promotion ships its detail screen with it, so opening it
+   needs no request: <code>"screens": { "details": { "template": { "designId": "details" }, "data": { … }, "presentation": "sheet" } }</code>.
+   The screen's events carry the decision id <code>&lt;decision&gt;&gt;details</code> and the opener's arms.</li>
+<li><strong>The app's data</strong> for the placement and the action's declared arguments (<code>appData</code>).</li>
+<li><strong>The placement's rules.</strong></li>
+</ol>
+<h2 id="one-level-deep">One level deep<a class="headerlink" href="#one-level-deep" title="Permanent link">#</a></h2>
+<p>A screen opened from a slot, or by the app, may open one more (a dialog's "See all" opening a full
+screen); a screen opened from a screen can't open another, and the tap is reported as a
+<code>Fallback</code>. Closing a screen closes the one it opened.</p>
+<h2 id="what-gets-reported">What gets reported<a class="headerlink" href="#what-gets-reported" title="Permanent link">#</a></h2>
+<p>A screen is a slot to analytics: <code>Impression</code>, <code>Viewable</code>, <code>Action</code> and <code>Leave</code> (its time on
+screen), plus a <code>Dismiss</code> with <code>detail</code> <code>action</code> (its own close), <code>system</code> (back, a swipe, a scrim
+tap) or <code>replaced</code>. A screen that can't open (not allowed, not on the device, too deep) is a
+<code>Fallback</code> with the reason.</p>
+<h2 id="full-screens-and-insets">Full screens and insets<a class="headerlink" href="#full-screens-and-insets" title="Permanent link">#</a></h2>
+<p>A full-screen template gets the window's safe-area insets as <code>livery.inset.top</code>, <code>.bottom</code>,
+<code>.start</code> and <code>.end</code> (dp), named values the host writes like a Wear container's frame: read them to
+pad around cut-outs and system bars. A contract needn't declare them.</p>
+<h2 id="widgets-and-notifications">Widgets and notifications<a class="headerlink" href="#widgets-and-notifications" title="Permanent link">#</a></h2>
+<p>A launcher widget, Wear widget or notification can't present a screen itself: its app handles the
+tap (a <code>PendingIntent</code> or receiver) and calls <code>present</code> or <code>maybeShow</code> once it opens.</p>
+<h2 id="requires">Requires<a class="headerlink" href="#requires" title="Permanent link">#</a></h2>
+<p>Catalogs with <code>present</code> actions or screen rules require protocol level 5 (PROTOCOL.md §8.2), so
+older clients keep their previous catalog.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/screens.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

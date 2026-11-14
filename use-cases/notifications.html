@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a class="current" href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="notifications">Notifications<a class="headerlink" href="#notifications" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> ask <code>LiveryNotifications</code> for a notification's body, set it as the custom
+expanded view, and taps come back to your <code>LiveryNotificationReceiver</code>.</p>
+<p>Android 16 (API 36) and later play Remote Compose documents in a notification's <code>RemoteViews</code>, as
+launchers do for widgets; older devices get no body, and you post your plain notification. Built
+on rc-players' <code>rc-widget-launcher</code>.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<p>SystemUI can't receive pushed values, so each time you post or update the notification:</p>
+<ol>
+<li>you plan the template and data for the body (<code>NotificationSlot</code>: the shade's width, at most
+   256dp tall, which Android caps a custom expanded body at);</li>
+<li>Livery writes the values and images into the template (<code>livery-instantiate</code>) and rewrites its
+   named taps into the numeric actions SystemUI sends;</li>
+<li>you set the result with <code>setCustomBigContentView</code> and post.</li>
+</ol>
+<p>Nothing waits on the network: a template or image that isn't on the device yet gives no body, and
+<code>fetchMissed()</code> downloads it so you can post the notification again with the same id.</p>
+<h2 id="1-publish-a-notification-template">1. Publish a notification template<a class="headerlink" href="#1-publish-a-notification-template" title="Permanent link">#</a></h2>
+<pre><code class="language-json">{ &quot;target&quot;: { &quot;surface&quot;: &quot;notification&quot;, &quot;rcApiLevel&quot;: 7, &quot;profiles&quot;: [&quot;widgets&quot;],
+              &quot;size&quot;: { &quot;minWidthDp&quot;: 280, &quot;maxWidthDp&quot;: 600, &quot;minHeightDp&quot;: 64, &quot;maxHeightDp&quot;: 256 } },
+  &quot;reads&quot;: [&quot;title&quot;, &quot;state&quot;], &quot;emits&quot;: [&quot;toggle&quot;, &quot;open&quot;] }
+</code></pre>
+<p>Keep the instantiated document small (<code>documentMaxBytes</code>, 50 000 by default); templates may be up
+to the capabilities' <code>maxBytes</code> (500 000). A conditional layout keeps every branch in the
+document, as for <a href="launcher-widgets.html">launcher widgets</a>.</p>
+<h2 id="2-render-and-post">2. Render and post<a class="headerlink" href="#2-render-and-post" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val notifications = LiveryNotifications(images = app.images) // an ImageResolver
+
+suspend fun post(context: Context, id: Int, data: JsonObject) {
+  val render = notifications.render(
+    context, id,
+    plan = { slot -&gt; app.planner.forAppData(slot.query(&quot;live/status-card@1&quot;), data) },
+    tapIntent = { actionId, action -&gt;
+      if (action == &quot;open&quot;) RcLauncherWidgets.actionActivity(context, launchIntent(context), id, actionId)
+      else LiveryNotificationReceiver.tapBroadcast(context, StatusTaps::class.java, id, actionId, action)
+    },
+  )
+  val builder = NotificationCompat.Builder(context, CHANNEL)
+    .setSmallIcon(R.drawable.ic_status)
+    .setContentTitle(data.title)
+    .setContentText(data.summary)
+  // views come wrapped so SystemUI's template can nest them (Android 17 refuses a nested view with
+  // draw instructions): post them as they are, with no setStyle() alongside.
+  render.views?.let { builder.setCustomBigContentView(it) }
+    ?: builder.setStyle(NotificationCompat.BigTextStyle().bigText(data.summary))
+  NotificationManagerCompat.from(context).notify(id, builder.build())
+  if (render.hasMisses &amp;&amp; render.fetchMissed()) post(context, id, data)
+}
+</code></pre>
+<p>Keep the title and text on every notification: the collapsed view, the lock screen and a paired
+watch show those, not the body.</p>
+<h2 id="3-handle-taps">3. Handle taps<a class="headerlink" href="#3-handle-taps" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">class StatusTaps : LiveryNotificationReceiver() {
+  override suspend fun onTap(context: Context, notificationId: Int, tap: WidgetTap) {
+    if (tap.action == &quot;toggle&quot;) app(context).toggle(tap.args[&quot;entity&quot;])
+  }
+}
+</code></pre>
+<p>Declare it in the manifest with <code>android:exported="false"</code>. Opening the app is an activity, which
+a broadcast receiver may not start, so build that tap with <code>RcLauncherWidgets.actionActivity</code>.</p>
+<p>Add <code>LiveryNotifications.DEFAULT_CAPABILITIES</code> to the repository's <code>targets</code> so notification
+templates download with every refresh, before the first notification needs one.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">A <code>notification</code> template per design; its instantiated document inside <code>documentMaxBytes</code>.</li>
+<li class="task">A title and text on every notification, and a plain style when <code>views</code> is null.</li>
+<li class="task">No style set alongside the custom body.</li>
+<li class="task">A <code>LiveryNotificationReceiver</code> in the manifest; opening taps as activities.</li>
+<li class="task">The notification capabilities in the repository's <code>targets</code>.</li>
+</ul>
+<blockquote>
+<p>Not yet verified on a device in CI.</p>
+</blockquote>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/notifications.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hosting · Livery</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="index.html">Livery</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="use-cases/ads.html">Interactive ads</a></li>
+<li><a href="use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="use-cases/feeds.html">Feeds</a></li>
+<li><a href="use-cases/live-content.html">Live content</a></li>
+<li><a href="use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="use-cases/notifications.html">Notifications</a></li>
+<li><a href="use-cases/web.html">The web</a></li>
+<li><a href="component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="repository-mode.html">Repository mode</a></li>
+<li><a href="authoring.html">Authoring templates</a></li>
+<li><a class="current" href="hosting.html">Hosting</a></li>
+<li><a href="signing.html">Signing</a></li>
+<li><a href="images-and-fonts.html">Images and fonts</a></li>
+<li><a href="analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="ai-workflows.html">AI workflows</a></li>
+<li><a href="platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="hosting">Hosting<a class="headerlink" href="#hosting" title="Permanent link">#</a></h1>
+<p>A catalog channel is plain files, so any host works. The app needs one URL: the manifest's. Blob,
+asset and preview URLs are resolved from the manifest.</p>
+<table>
+<thead>
+<tr>
+<th>Host</th>
+<th>Source in the app</th>
+<th>Build with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub release</td>
+<td><code>GitHubReleaseSource(owner, repo)</code> (<code>latest</code>) or with <code>tag</code></td>
+<td><code>livery build … --github owner/repo --tag T</code></td>
+</tr>
+<tr>
+<td>Static host, GitHub Pages, S3, CDN</td>
+<td><code>StaticSource("https://host/catalog/main")</code></td>
+<td><code>livery build …</code> (static layout)</td>
+</tr>
+<tr>
+<td>Design server channel</td>
+<td><code>StaticSource("https://server/v1/catalogs/acme/channels/main")</code></td>
+<td>its upload API</td>
+</tr>
+<tr>
+<td>App assets (fallback)</td>
+<td><code>TemplateRepository.Bundled(manifest, read)</code></td>
+<td><code>livery build …</code>, copied into assets</td>
+</tr>
+</tbody>
+</table>
+<h2 id="github-releases">GitHub releases<a class="headerlink" href="#github-releases" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery build catalog build/release --github acme/app-templates --tag catalog-12 --key acme.key --key-id acme-1
+gh release create catalog-12 build/release/* --repo acme/app-templates
+</code></pre>
+<ul>
+<li>Assets are flat (<code>&lt;sha&gt;.rc</code>, <code>&lt;sha&gt;.png</code>); the manifest points <code>blobBase</code> at the release's
+  download URL.</li>
+<li><code>GitHubReleaseSource(owner, repo)</code> follows <code>releases/latest</code>, so keep catalog releases in their
+  own repository.</li>
+<li>No CORS headers: fine for apps, not for browsers.</li>
+</ul>
+<p><strong>From CI</strong>, on every merge to <code>main</code>: use Livery's reusable publish workflow, with its review
+workflow on pull requests (see <a href="repository-mode.html">Repository mode</a>):</p>
+<pre><code class="language-yaml">jobs:
+  publish:
+    uses: yschimke/livery/.github/workflows/catalog-publish.yml@v0.3.0
+    with: { source: catalog, livery-version: 0.3.0, key-id: acme-1 }
+    secrets: { signing-key: '${{ secrets.LIVERY_SIGNING_KEY }}' }
+    permissions: { contents: write }
+</code></pre>
+<p><code>--inspect</code> decodes every <code>.rc</code> and refuses one that reads or emits anything its sidecar doesn't
+declare, or reads a value as a different type than its contract declares. Use it whenever
+documents come from more than one tool, or from an agent.</p>
+<p><code>--a2ui &lt;catalogId&gt;</code> also writes <code>a2ui-catalog.json</code>: the catalog's contracts as
+<a href="https://a2ui.org">A2UI</a> components (one per contract major, at its newest minor), the same schema
+an app's <code>livery-a2ui-compose</code> advertises, for prompting an agent that answers in A2UI.</p>
+<h2 id="checking-a-change">Checking a change<a class="headerlink" href="#checking-a-change" title="Permanent link">#</a></h2>
+<p><code>livery check</code> compares a catalog source tree with an earlier version of itself: a git revision of
+its repository, or another tree. Run it on every pull request:</p>
+<pre><code class="language-sh">livery check catalog --against origin/main --inspect
+</code></pre>
+<p>It exits 1 when a contract changes in a way apps already installed would break (see
+<a href="concepts.html#versions-within-a-major">Concepts</a>), or when the tree doesn't build. It also lists,
+for review, every template added, removed or changed: what it now reads and emits, the contract
+minor it requires (apps on an older minor stop getting it), its size, and which values only the
+template's own default covers when data leaves them out. It fails while example data the base had
+is neither current nor kept (<code>livery keep-examples</code>; see
+<a href="repository-mode.html#older-preview-data">Repository mode</a>). A template that starts using a risky
+feature (a shader, haptics, sound, particles) is noted for review, since it plays only for apps
+that allow it; <code>--deny-new-features</code> fails the check instead, for a catalog that admits none.
+<code>--markdown</code> prints it for a pull
+request comment: a verdict first, then only what needs a decision, summed up per design; <code>--json</code> prints the same report for other tools; agents get
+it from the MCP server's <code>check_compatibility</code>. <code>livery review</code> prints the markdown with pictures:
+each changed design drawn with its contract's examples, before and after (see
+<a href="repository-mode.html#pictures-in-the-review">Repository mode</a>).</p>
+<p>The serial defaults to the build time in milliseconds, which only grows. If you pass <code>--serial</code>
+yourself, never let it go down for a channel: apps refuse a lower one as a rollback.</p>
+<h2 id="static-hosts-and-cdns">Static hosts and CDNs<a class="headerlink" href="#static-hosts-and-cdns" title="Permanent link">#</a></h2>
+<pre><code class="language-bash">livery build catalog public/catalog/main --key acme.key --key-id acme-1
+</code></pre>
+<p>Upload <code>public/catalog/main/</code> as is. Serve <code>manifest.json</code> and <code>manifest.sig.json</code> with
+revalidation (<code>Cache-Control: no-cache</code> and an <code>ETag</code>); everything else is immutable
+(<code>max-age=31536000, immutable</code>). Browsers need <code>Access-Control-Allow-Origin</code> on all of it.</p>
+<h2 id="channels">Channels<a class="headerlink" href="#channels" title="Permanent link">#</a></h2>
+<p>A channel is a whole catalog under its own URL: <code>…/main</code>, <code>…/staging</code>, <code>…/pr-123</code>. Point
+development builds or a hidden settings switch at a non-<code>main</code> channel to try a change before it
+ships. Apps cache each source separately, so switching back is clean. Set <code>"channel"</code> in
+<code>catalog.json</code>, or keep one source tree and publish it to several URLs.</p>
+<h2 id="bundled-fallback">Bundled fallback<a class="headerlink" href="#bundled-fallback" title="Permanent link">#</a></h2>
+<p>Ship an initial catalog inside the app, so a first launch with no network still draws. On
+Android, the Gradle plugin builds the catalog's source tree into the APK's assets on every build.
+It applies the same checks as <code>livery build --inspect</code>, and it is reproducible:</p>
+<pre><code class="language-kotlin">plugins { id(&quot;ee.schimke.composeai.livery.catalog&quot;) version &quot;&lt;version&gt;&quot; }
+
+livery {
+  source.set(layout.projectDirectory.dir(&quot;livery&quot;))   // catalog.json, contracts/, designs/
+  assetsPath.set(&quot;livery&quot;)                            // the default
+}
+</code></pre>
+<p>When the designs are Kotlin, <code>livery { capture { mainClass.set(…) } }</code> captures them at build time
+and the catalog built into the assets is that capture, so no <code>.rc</code> is committed (see
+<a href="authoring.html">Authoring</a>).</p>
+<pre><code class="language-kotlin">val repository = TemplateRepository(
+  source, KtorFetcher(), JavaCrypto, trust, blobs, kv, clock, targets,
+  bundled = AndroidBundled.fromAssets(context),       // null if the app ships none
+)
+</code></pre>
+<p>The bundled catalog is trusted as the APK is: it isn't signature-checked and never expires.
+Anything the repository downloads replaces it. A remote source is optional: an app can start with
+only the baked catalog and add hosting later. Elsewhere, write a <code>livery build</code> output into the
+app's resources and pass a <code>TemplateRepository.Bundled(manifest, read)</code>.</p>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/hosting.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>

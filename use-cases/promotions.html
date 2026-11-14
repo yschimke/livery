@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promotions and growth · Livery</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html">Livery</a>
+  <span class="tagline">Server-driven Remote Compose templates</span>
+  <a class="gh" href="https://github.com/yschimke/livery">GitHub</a>
+</header>
+<div class="layout">
+  <nav class="side"><p class="nav-section">Start</p><ul>
+<li><a href="../index.html">Livery</a></li>
+<li><a href="../getting-started.html">Getting started</a></li>
+<li><a href="../concepts.html">Concepts</a></li>
+</ul>
+<p class="nav-section">Use cases</p><ul>
+<li><a href="../use-cases/ads.html">Interactive ads</a></li>
+<li><a class="current" href="../use-cases/promotions.html">Promotions and growth</a></li>
+<li><a href="../use-cases/screens.html">Interstitials, dialogs and full screens</a></li>
+<li><a href="../use-cases/feeds.html">Feeds</a></li>
+<li><a href="../use-cases/live-content.html">Live content</a></li>
+<li><a href="../use-cases/launcher-widgets.html">Launcher widgets</a></li>
+<li><a href="../use-cases/wear-widgets.html">Wear widgets</a></li>
+<li><a href="../use-cases/notifications.html">Notifications</a></li>
+<li><a href="../use-cases/web.html">The web</a></li>
+<li><a href="../component-previews.html">Component previews</a></li>
+</ul>
+<p class="nav-section">Running it</p><ul>
+<li><a href="../repository-mode.html">Repository mode</a></li>
+<li><a href="../authoring.html">Authoring templates</a></li>
+<li><a href="../hosting.html">Hosting</a></li>
+<li><a href="../signing.html">Signing</a></li>
+<li><a href="../images-and-fonts.html">Images and fonts</a></li>
+<li><a href="../analytics-and-experiments.html">Analytics and experiments</a></li>
+<li><a href="../interaction-tracking.html">Interaction tracking</a></li>
+<li><a href="../ai-workflows.html">AI workflows</a></li>
+<li><a href="../platforms.html">Platforms</a></li>
+</ul>
+<p class="nav-section">Reference</p><ul>
+<li><a href="../protocol.html">Protocol</a></li>
+<li><a href="../benchmarks.html">Benchmarks</a></li>
+</ul></nav>
+  <main class="content">
+<h1 id="promotions-and-growth">Promotions and growth<a class="headerlink" href="#promotions-and-growth" title="Permanent link">#</a></h1>
+<p><strong>In one line:</strong> ship placement rules in the catalog (schedule, audience, rollout, frequency cap)
+and the app chooses the promotion on the device, offline, with no decision server.</p>
+<h2 id="how-it-fits">How it fits<a class="headerlink" href="#how-it-fits" title="Permanent link">#</a></h2>
+<p>Rules live in the signed manifest, so targeting data never leaves the device and a promotion works
+on a plane. A remote decider can still run first; local rules are the fallback.</p>
+<h2 id="1-a-rule">1. A rule<a class="headerlink" href="#1-a-rule" title="Permanent link">#</a></h2>
+<p><code>placements/spring-trial.json</code> in the catalog source:</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;spring-trial&quot;, &quot;placement&quot;: &quot;home.top&quot;, &quot;priority&quot;: 10,
+  &quot;template&quot;: { &quot;designId&quot;: &quot;banner-classic&quot; },
+  &quot;data&quot;: { &quot;headline&quot;: &quot;Spring sale: 50% off&quot;, &quot;cta&quot;: &quot;Upgrade&quot; },
+  &quot;startEpochMs&quot;: 1790000000000, &quot;endEpochMs&quot;: 1800000000000,
+  &quot;conditions&quot;: { &quot;platforms&quot;: [&quot;android&quot;, &quot;ios&quot;], &quot;excludeSegments&quot;: [&quot;subscriber&quot;] },
+  &quot;rollout&quot;: { &quot;experiment&quot;: &quot;spring-2027&quot;, &quot;arm&quot;: &quot;banner&quot;, &quot;toBasisPoints&quot;: 5000 },
+  &quot;frequency&quot;: { &quot;maxImpressions&quot;: 3, &quot;perSeconds&quot;: 86400 }
+}
+</code></pre>
+<p><code>livery build</code> checks <code>data</code> against the design's contract, so a too-long call to action fails the
+build, not the app.</p>
+<ul>
+<li><strong>Rollout</strong> is sticky: FNV-1a of <code>experiment:bucketingId</code> modulo 10000, the same on every platform.</li>
+<li><strong>Priority</strong> picks between eligible rules; ties go to the lower id.</li>
+</ul>
+<h2 id="2-decide-and-draw">2. Decide and draw<a class="headerlink" href="#2-decide-and-draw" title="Permanent link">#</a></h2>
+<pre><code class="language-kotlin">val decider = FirstDecider(listOf(myRemoteDecider, LocalRulesDecider({ repository.current() }, frequencyStore)))
+val context = DecisionContext(nowEpochMs = clock(), platform = &quot;android&quot;, locale = &quot;en-GB&quot;,
+  appVersion = BuildConfig.VERSION_CODE.toLong(), bucketingId = installId, segments = userSegments)
+
+// The key is everything the decision reads from the app: new segments (a new subscriber)
+// re-decide. A refreshed catalog re-decides on its own. Add a time bucket if rules have schedules
+// that should flip while the screen stays open.
+LiverySlot(key = &quot;home.top&quot; to userSegments, host = host) {
+  decider.decide(&quot;home.top&quot;, context)?.let { planner.forDecision(bannerQuery, it) } ?: PlanResult.Fallback(&quot;none&quot;)
+}
+</code></pre>
+<p>Persist the <code>FrequencyStore</code> (the in-memory one resets per run) and record impressions with
+<code>LocalRulesDecider.recordImpression</code>.</p>
+<h2 id="3-ship-a-change">3. Ship a change<a class="headerlink" href="#3-ship-a-change" title="Permanent link">#</a></h2>
+<p>Edit the rule, rebuild the catalog with a higher <code>serial</code>, publish. Apps pick it up at their next
+refresh (<code>ttlSeconds</code>, default an hour); nothing waits for an app release.</p>
+<h2 id="deployment-checklist">Deployment checklist<a class="headerlink" href="#deployment-checklist" title="Permanent link">#</a></h2>
+<ul>
+<li class="task">Rules in <code>placements/</code>, built and signed with the catalog.</li>
+<li class="task">A stable, resettable <code>bucketingId</code> (an install id, not a user id).</li>
+<li class="task">A persisted <code>FrequencyStore</code>.</li>
+<li class="task">Segments computed on the device only.</li>
+<li class="task">A staging channel to try a rule before <code>main</code> (<a href="../hosting.html#channels">Hosting</a>).</li>
+</ul>
+    <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/use-cases/promotions.md">Edit this page</a></p>
+  </main>
+</div>
+</body>
+</html>
