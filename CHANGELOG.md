@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.13.0](https://github.com/yschimke/livery/compare/v0.12.0...v0.13.0) (2026-11-14)
+
+
+### Features
+
+* **client:** trace sections for Livery's phases, and where its cold start goes ([#84](https://github.com/yschimke/livery/issues/84)) ([6d204fc](https://github.com/yschimke/livery/commit/6d204fc3c631fc2459b5486bbdfc7ac0c1813c04))
+* **compose:** a first-frame budget and placeholders, so a first frame is never blank ([#81](https://github.com/yschimke/livery/issues/81)) ([f578aa3](https://github.com/yschimke/livery/commit/f578aa3e07dc48c0b7afa8bba16339e7a582430c))
+
+
+### Bug Fixes
+
+* **deps:** rc-players 3.5.0 ([#87](https://github.com/yschimke/livery/issues/87)) ([89f9973](https://github.com/yschimke/livery/commit/89f99733bf72943ee2213d1f323eaecac7b37297))
+
+
+### Performance Improvements
+
+* **client:** keep a template's bytes in memory so a slot does not replan to a different answer ([#86](https://github.com/yschimke/livery/issues/86)) ([d568d1a](https://github.com/yschimke/livery/commit/d568d1a557548bf3044574a800ac6412db3ef28d))
+
 ## [0.12.0](https://github.com/yschimke/livery/compare/v0.11.0...v0.12.0) (2026-11-14)
 
 
