@@ -134,6 +134,20 @@ installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
 </code></pre>
 <p>The slot itself is <code>LiverySlot(key = data, host = host, slotId = "home.top") { … }</code>. On desktop, iOS
 and the web, <code>startup.await()</code> before showing the first screen.</p>
+<p><strong>Without a splash screen, the first frame waits a little.</strong> Until a screen's first frame, a slot or
+template that is not ready waits for its work, which runs off the main thread, for up to
+<code>LiveryHost.firstFrameBudgetMillis</code> (150 ms by default, shared by the screen): a slightly slower first
+frame with the cards in it rather than a blank one that fills in. A <code>startup</code> holding the splash screen
+covers that frame instead, and nothing waits after it, so a scroll never does. The browser cannot wait.
+Set the budget to 0 to draw at once.</p>
+<p><strong>Placeholders for what is not ready.</strong> A card that cannot draw yet once the screen is up (unplanned
+content arriving in a feed) draws the host's placeholder, held to the height the template last drew at,
+so the list does not move when it arrives:</p>
+<pre><code class="language-kotlin">val host = LiveryHost(repository, actions, events, clock,
+  placeholder = { Box(Modifier.fillMaxWidth().height(96.dp).background(Color(0x11000000))) })
+</code></pre>
+<p>It is told the slot, contract and design when they are known (<code>LiveryPlaceholder</code>). By default nothing
+is drawn there; a <code>LiverySlot</code>'s own <code>fallback</code> replaces it for that slot.</p>
 <p><strong>Emoji load after the first screen (Android).</strong> Compose's text brings in <code>androidx.emoji2</code>, whose
 initializer runs at process start, on the main thread, before the first frame. Livery's manifest turns
 it off, and Livery loads emoji itself, off the main thread, two frames after the app's first template

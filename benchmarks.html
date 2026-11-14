@@ -233,9 +233,9 @@ count: ten recompositions for ten changes in the twin, twenty for the player alo
 comes from the Remote Compose player (or from how the host hands it new values), not from <code>LiveryTemplate</code>.
 Why the player recomposes twice is not yet known. Per-frame cost is comparable, and the twin's tail is lower.</p>
 <h3 id="cold-start">Cold start<a class="headerlink" href="#cold-start" title="Permanent link">#</a></h3>
-<p>Process start to the first frame with the document in it. The host holds its first frame until the document can
-draw (see the notes below), so <em>initial display</em> is that frame on every lane, and <em>full display</em> is the frame
-after <code>reportFullyDrawn()</code>.</p>
+<p>Process start to the first frame with the document in it. In this run the host held its first frame until the
+document could draw (see the notes below), so <em>initial display</em> is that frame on every lane, and <em>full display</em> is
+the frame after <code>reportFullyDrawn()</code>.</p>
 <table>
 <thead>
 <tr>
@@ -277,22 +277,29 @@ after <code>reportFullyDrawn()</code>.</p>
 </tr>
 </tbody>
 </table>
+<p>The host no longer holds that frame itself. Its Livery lanes are a plain <code>LiverySlot</code>, as an app writes one, and
+Livery's first-frame budget (<code>LiveryHost.firstFrameBudgetMillis</code>, 150 ms) holds the first frame for the slot's
+answer instead. <em>Planned</em>: these numbers again with that host, with the next device run.</p>
 <p>The Compose UI twin reaches a drawn document about 26 ms before Livery (194 against 220 ms), and the Remote Compose
 lanes sit between 219 and 236 ms, within 20 ms of each other, which with one run per lane is not a ranking. The Livery
 lanes also plan ten data variants before their first draw (nine more than one plan needs), which is in these numbers.</p>
 <h3 id="notes-on-the-host">Notes on the host<a class="headerlink" href="#notes-on-the-host" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>No emoji initializer.</strong> AndroidX Compose depends on <code>emoji2</code>, whose startup initializer loads the emoji
-  font about half a second after the first frame and makes Compose text re-measure. Nothing here draws emoji,
-  and it landed in the middle of what is measured: an earlier run showed every lane, the twin included, at
-  about 690 ms to full display for that reason alone. The host removes the initializer; real apps keep it,
-  and its cost is not Livery's.</li>
-<li><strong>The first frame is held until the document can draw.</strong> The activity vetoes drawing (an <code>OnPreDrawListener</code>)
-  until the document is composed, as an app keeps its splash screen up until its first screen is ready. Before
-  this, the Remote Compose lanes drew an empty frame while they planned, so their <em>initial display</em> was an
-  earlier, empty frame (about 150 ms against a full display of about 230 ms) and understated their time.</li>
-<li><strong>Reported fully drawn after the document draws.</strong> The activity asks for one more frame after
-  <code>reportFullyDrawn()</code>, since <code>StartupTimingMetric</code> ends at the next frame drawn.</li>
+  font about half a second after the first frame and makes Compose text re-measure. In an earlier run that
+  put every lane, the twin included, at about 690 ms to full display for that reason alone. Livery's own
+  manifest now removes the initializer from any app that uses it, so no lane here has it. Livery loads
+  emoji itself two frames after its first template draws (<code>LiveryEmoji</code>), as it does in an app. That
+  happens during a Livery lane's run, and never in the Compose UI twin's or the player alone's.</li>
+<li><strong>The first frame was held, in the run above, by the host.</strong> The activity vetoed drawing (an
+  <code>OnPreDrawListener</code>) until the document was composed, as an app keeps its splash screen up. Before that, the
+  Remote Compose lanes drew an empty frame while they planned, so their <em>initial display</em> was an earlier, empty
+  frame (about 150 ms against a full display of about 230 ms). The host now leaves this to Livery's first-frame
+  budget, as an app would, and draws its Livery lanes with nothing of its own around them.</li>
+<li><strong>Reported fully drawn after the document draws.</strong> The Compose UI and player lanes report after the
+  frame that composed the document. The Livery lanes report on Livery's <code>Impression</code> event, which already
+  comes after the template's first frame, so they don't wait a frame more. Every lane then asks for one
+  more frame after <code>reportFullyDrawn()</code>, since <code>StartupTimingMetric</code> ends at the next frame drawn.</li>
 </ul>
 <h2 id="what-the-traces-show">What the traces show<a class="headerlink" href="#what-the-traces-show" title="Permanent link">#</a></h2>
 <p>The numbers above say how long; Perfetto traces of the same runs say where it went. Each benchmark iteration
@@ -401,7 +408,7 @@ in <code>.claude/skills/</code> describes how to read these traces.)</p>
 <ul>
 <li><strong>The first 125 ms are the same.</strong> Process start, app initialisation and creating the activity run the same code in
   both lanes: <code>bindApplication</code> ends at 100 ms against 97 ms, and the activity is resumed at 128 ms against 125 ms.</li>
-<li><strong>Both lanes now hold their first frame; Livery's content arrives later.</strong> The twin's first frame starts at 139 ms
+<li><strong>Both lanes held their first frame (the host's hold, in this run); Livery's content arrives later.</strong> The twin's first frame starts at 139 ms
   and its content is on the GPU 18 ms later. Livery's first frame callback starts at 131 ms, measures and lays out,
   and is held with nothing drawn (the Perfetto view below shows these traversals), and its content reaches the GPU at
   192 ms, 61 ms later. In that stretch the main thread shows no slice longer than a millisecond: the host plans its ten
