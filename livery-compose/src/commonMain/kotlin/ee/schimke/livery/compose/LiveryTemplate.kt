@@ -212,7 +212,11 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   val prepared = preparedEarly ?: if (readiedForFirstFrame) host.resources.preparedNow(plan.template, display) else null
   MarkFirstFrameDrawn(host.resources)
   if (host.resources.cannotPlay(plan.template)) {
-    // Not a document this player can play: no card, rather than an app that fails with it.
+    // Not a document this player can play: no card, rather than an app that fails with it. In a
+    // slot, the slot draws the app's fallback instead.
+    val cannotPlay = LocalLiveryCannotPlay.current
+    val designId = plan.template.entry.designId
+    SideEffect { cannotPlay?.invoke("$designId cannot be played") }
     Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
     return
   }

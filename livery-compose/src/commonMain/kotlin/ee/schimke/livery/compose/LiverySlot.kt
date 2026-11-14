@@ -92,7 +92,17 @@ fun LiverySlot(
   MarkFirstFrameDrawn(host.resources)
   val result = state.value
   // The slot's id reaches what it draws: the placeholder, its template's.
-  androidx.compose.runtime.CompositionLocalProvider(LocalLiverySlotId provides slotId) {
+  // A template that finds it cannot play as it composes (a host that prepares in composition) says
+  // so here, and the slot draws the app's fallback: for this answer, and for this key when it is
+  // shown again at this revision.
+  val cannotPlay = remember(state, revision) {
+    { reason: String ->
+      val fallback = PlanResult.Fallback(reason)
+      slotId?.let { host.resources.keepPlan(it, key, revision, fallback) }
+      state.value = fallback
+    }
+  }
+  androidx.compose.runtime.CompositionLocalProvider(LocalLiverySlotId provides slotId, LocalLiveryCannotPlay provides cannotPlay) {
     when (val r = result) {
       null -> fallback(null)
       is PlanResult.Fallback -> fallback(r.reason)

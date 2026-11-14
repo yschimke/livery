@@ -23,3 +23,10 @@ data class LiveryPlaceholder(
 
 /** The [LiverySlot] a template draws in, for its placeholder. */
 internal val LocalLiverySlotId = staticCompositionLocalOf<String?> { null }
+
+/**
+ * Told by a template that finds, as it composes, that the player cannot play it: the [LiverySlot]
+ * it draws in, so the slot draws the app's fallback rather than nothing. A host that prepares in
+ * composition learns this only there.
+ */
+internal val LocalLiveryCannotPlay = staticCompositionLocalOf<((String) -> Unit)?> { null }
