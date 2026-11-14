@@ -97,6 +97,23 @@ class LiveryResources(
    * rewrite is prepared ([LiveryTemplate]).
    */
   var display: RcDisplay? = platformDisplay()
+
+  /** The host's player: one that parses documents itself has its own preparation ([prepareOwn]), not the cache above. */
+  @kotlin.concurrent.Volatile internal var player: LiveryPlayer = LiveryPlayer.Cmp
+
+  /** [template] prepared by the host's player, if it prepares for itself; a template it cannot play is remembered ([cannotPlay]). */
+  internal suspend fun prepareOwn(template: LoadedTemplate, display: RcDisplay?) {
+    if (player.usesPreparedDocument) return
+    LiveryTrace.async({ "livery:prepare:${template.entry.designId}" }) {
+      try {
+        player.prepare(template, display)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (_: Exception) {
+        unplayable.put(template.entry.sha256, Unit)
+      }
+    }
+  }
   private val typefaces = BoundedCache<String, RcTypefaceLoader>(maxTemplates)
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
@@ -263,7 +280,7 @@ class LiveryResources(
   ) {
     LiveryTrace.async({ "livery:ready:${template.entry.designId}" }) {
       coroutineScope {
-        launch { prepareOrNull(template, display, context) }
+        if (player.usesPreparedDocument) launch { prepareOrNull(template, display, context) } else launch { prepareOwn(template, display) }
         launch { runCatching { typefaces(template) } }
       }
     }

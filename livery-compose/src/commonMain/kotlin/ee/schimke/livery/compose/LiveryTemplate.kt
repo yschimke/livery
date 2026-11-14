@@ -25,7 +25,6 @@ import ee.schimke.composeai.rcplayer.compose.LocalRcDeferLayoutAnimations
 import ee.schimke.composeai.rcplayer.compose.ExperimentalRcPlayerApi
 import ee.schimke.composeai.rcplayer.compose.LocalRcFlattenLayout
 import ee.schimke.composeai.rcplayer.compose.LocalRcPreparation
-import ee.schimke.composeai.rcplayer.compose.RcComposePlayer
 import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
 import ee.schimke.composeai.rcplayer.compose.RcPlayerTheme
@@ -117,7 +116,13 @@ class LiveryHost(
    * skeleton's). By default nothing is drawn there.
    */
   val placeholder: @Composable (LiveryPlaceholder) -> Unit = {},
-)
+  /** Plays each template's document: rc-players' Compose player unless an app passes another ([LiveryPlayer]). */
+  val player: LiveryPlayer = LiveryPlayer.Cmp,
+) {
+  init {
+    resources.player = player
+  }
+}
 
 /** Long enough to plan and prepare a screen of cards from disk, short of a noticeable delay. */
 const val DEFAULT_FIRST_FRAME_BUDGET_MILLIS: Long = 150
@@ -165,14 +170,23 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
     // Prepared for this display, or else as published if that is what was prepared ahead (a startup
     // before the display was known): the same pixels, on this frame, rather than none until the
     // rewrite is ready. The rewrite is still prepared, for the cards after this one.
+    val ownPlayer = !host.player.usesPreparedDocument
     val preparedState = remember(bytes, host, display) {
-      val cached = host.resources.preparedNow(plan.template, display)
+      val cached = if (ownPlayer) null else host.resources.preparedNow(plan.template, display)
         ?: host.resources.preparedNow(plan.template, display = null)
-      if (cached == null && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
+      if (cached == null && !ownPlayer && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
       mutableStateOf(cached)
     }
-    val background = host.preparation as? RcPreparation.Background
-    val inComposition = background == null
+    // A player that reads the bytes itself: ready when it says so, prepared off the main thread.
+    val ownReady = remember(bytes, host, display) { mutableStateOf(ownPlayer && host.player.isPrepared(plan.template)) }
+    if (ownPlayer && !ownReady.value) {
+      LaunchedEffect(bytes, host, display) {
+        host.resources.prepareOwn(plan.template, display)
+        ownReady.value = host.player.isPrepared(plan.template)
+      }
+    }
+    val background = if (ownPlayer) null else host.preparation as? RcPreparation.Background
+    val inComposition = background == null && !ownPlayer
     if (preparedState.value == null && background != null) {
       // On the host's preparation context, as the player itself would prepare it.
       LaunchedEffect(bytes, host, display) {
@@ -197,13 +211,14 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
     // waits for it here, within the host's first-frame budget, and draws on that frame from memory.
     if (windowHasDrawn()) host.resources.firstFrameDrawn = true
     val readiedForFirstFrame = remember(bytes, host, display) {
-      val ready = preparedState.value != null && typefaceState.value != null
+      val ready = (ownReady.value || preparedState.value != null) && typefaceState.value != null
       if (ready || host.resources.cannotPlay(plan.template)) false
       else host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) {
         // On the host's preparation context, as the card's own preparation below would run.
         kotlinx.coroutines.coroutineScope {
           // A host that prepares in composition prepares the document there; only fonts load ahead.
           if (background != null) launch { prepareOrNull(plan.template, display, background.context) }
+          if (ownPlayer) launch { prepareOwn(plan.template, display) }
           launch { runCatching { typefaces(plan.template) } }
         }
       }
@@ -231,7 +246,8 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
       Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
       return
     }
-    if (loader == null || prepared == null) {
+    val drawable = if (ownPlayer) ownReady.value || (readiedForFirstFrame && host.player.isPrepared(plan.template)) else prepared != null
+    if (loader == null || !drawable) {
       // Nothing to draw yet (a template's first card nobody prepared): the host's placeholder, held to
       // the height the template last drew at for this width, so the list does not move when the card
       // arrives; without one, the placeholder's own height.
@@ -263,14 +279,18 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
         LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
         LocalRcFlattenLayout provides host.flattenLayout,
       ) {
-        RcComposePlayer(
-          prepared = prepared,
-          imageLoader = imageLoader,
-          modifier = Modifier,
-          theme = host.theme,
-          namedValues = values,
-          onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
-          typefaces = loader,
+        host.player.Play(
+          PlayerRequest(
+            template = plan.template,
+            prepared = prepared,
+            values = values,
+            bindings = { current.bindings },
+            imageLoader = imageLoader,
+            typefaces = loader,
+            theme = host.theme,
+            onAction = { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } },
+            modifier = Modifier,
+          ),
         )
       }
     }
