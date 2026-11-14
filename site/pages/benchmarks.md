@@ -270,7 +270,7 @@ track; ones that can resume on another thread (planning, resolving, preparing, f
 | `livery:ready:<design>` | a card's document and fonts ready (`readyToDraw`) |
 | `livery:fonts:<design>`, `livery:font-load:<sha>` | catalog fonts read and loaded |
 | `livery:image-resolve:<kind>`, `livery:image-decode` | an image's bytes and their decode |
-| `livery:compose:<design>` | one card's composition |
+| `livery:compose:<design>` | a card's own composition: its first, and each time its prepared document or fonts arrive; not later recompositions inside the player's own scopes |
 
 `livery-baselineprofile/traces/compare.py` totals them per phase for the cold-start window.
 

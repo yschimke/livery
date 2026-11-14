@@ -136,167 +136,170 @@ const val DEFAULT_FIRST_FRAME_BUDGET_MILLIS: Long = 150
 @OptIn(ExperimentalRcPlayerApi::class)
 @Composable
 fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier, extra: Bindings = Bindings.EMPTY) {
-  // The composition of one card, named by its design: Compose's own slices say a recomposition happened,
-  // this says whose it was.
-  LiveryTrace.section({ "livery:compose:${plan.template.entry.designId}" }) { PlayTemplate(plan, host, modifier, extra) }
+  PlayTemplate(plan, host, modifier, extra)
 }
 
 @OptIn(ExperimentalRcPlayerApi::class)
 @Composable
 private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier, extra: Bindings) {
-  // Platform work that waits for the app's first template to draw (Android: emoji, see LiveryEmoji).
-  AfterFirstTemplateFrame()
-  val bytes = plan.template.bytes
-  val current by rememberUpdatedState(plan)
-  // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.
-  val pushed = (plan.bindings + extra).toPlayerValues()
-  val values = remember(bytes) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
-  SideEffect {
-    values.keys.toList().filter { it !in pushed }.forEach(values::remove)
-    values.putAll(pushed)
-  }
-  // Shared by every card of this template: decoding, linking, the layout tree and the state seed are
-  // done once per template, not per card, and (by default) off the main thread. Each card's player
-  // state is still its own.
-  val display = rememberLiveryDisplay()
-  SideEffect { host.resources.display = display }
-  // Prepared for this display, or else as published if that is what was prepared ahead (a startup
-  // before the display was known): the same pixels, on this frame, rather than none until the
-  // rewrite is ready. The rewrite is still prepared, for the cards after this one.
-  val preparedState = remember(bytes, host, display) {
-    val cached = host.resources.preparedNow(plan.template, display)
-      ?: host.resources.preparedNow(plan.template, display = null)
-    if (cached == null && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
-    mutableStateOf(cached)
-  }
-  val background = host.preparation as? RcPreparation.Background
-  val inComposition = background == null
-  if (preparedState.value == null && background != null) {
-    // On the host's preparation context, as the player itself would prepare it.
-    LaunchedEffect(bytes, host, display) {
-      preparedState.value = host.resources.prepareOrNull(plan.template, display, background.context)
+  // The composition of one card, named by its design: Compose's own slices say a recomposition happened, this says
+  // whose it was. It is inside this composable, not around the call: a document or fonts arriving write state this
+  // function reads, and Compose then re-enters it directly, without going through LiveryTemplate.
+  LiveryTrace.section({ "livery:compose:${plan.template.entry.designId}" }) {
+    // Platform work that waits for the app's first template to draw (Android: emoji, see LiveryEmoji).
+    AfterFirstTemplateFrame()
+    val bytes = plan.template.bytes
+    val current by rememberUpdatedState(plan)
+    // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.
+    val pushed = (plan.bindings + extra).toPlayerValues()
+    val values = remember(bytes) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
+    SideEffect {
+      values.keys.toList().filter { it !in pushed }.forEach(values::remove)
+      values.putAll(pushed)
     }
-  }
-  // [RcPreparation.InComposition]: the host chose to prepare here, on this frame.
-  val preparedEarly = preparedState.value
-    ?: if (inComposition) remember(bytes, host, display) { host.resources.preparedOrNull(plan.template, display) } else null
-  // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
-  val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
-  val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
-  // In memory already (an earlier card, a preload): drawn on this composition's frame. Otherwise read
-  // once, and kept for every later card.
-  val typefaceState = remember(bytes, host) { mutableStateOf(host.resources.typefacesNow(plan.template)) }
-  LaunchedEffect(typefaceState) {
-    if (typefaceState.value == null) {
-      typefaceState.value = runCatching { host.resources.typefaces(plan.template) }.getOrDefault(host.fallbackTypefaces)
+    // Shared by every card of this template: decoding, linking, the layout tree and the state seed are
+    // done once per template, not per card, and (by default) off the main thread. Each card's player
+    // state is still its own.
+    val display = rememberLiveryDisplay()
+    SideEffect { host.resources.display = display }
+    // Prepared for this display, or else as published if that is what was prepared ahead (a startup
+    // before the display was known): the same pixels, on this frame, rather than none until the
+    // rewrite is ready. The rewrite is still prepared, for the cards after this one.
+    val preparedState = remember(bytes, host, display) {
+      val cached = host.resources.preparedNow(plan.template, display)
+        ?: host.resources.preparedNow(plan.template, display = null)
+      if (cached == null && !host.resources.cannotPlay(plan.template)) host.resources.recordMiss()
+      mutableStateOf(cached)
     }
-  }
-  // Before the screen's first frame, a card that is not ready yet (nobody prepared its template)
-  // waits for it here, within the host's first-frame budget, and draws on that frame from memory.
-  if (windowHasDrawn()) host.resources.firstFrameDrawn = true
-  val readiedForFirstFrame = remember(bytes, host, display) {
-    val ready = preparedState.value != null && typefaceState.value != null
-    if (ready || host.resources.cannotPlay(plan.template)) false
-    else host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) {
-      // On the host's preparation context, as the card's own preparation below would run.
-      kotlinx.coroutines.coroutineScope {
-        // A host that prepares in composition prepares the document there; only fonts load ahead.
-        if (background != null) launch { prepareOrNull(plan.template, display, background.context) }
-        launch { runCatching { typefaces(plan.template) } }
+    val background = host.preparation as? RcPreparation.Background
+    val inComposition = background == null
+    if (preparedState.value == null && background != null) {
+      // On the host's preparation context, as the player itself would prepare it.
+      LaunchedEffect(bytes, host, display) {
+        preparedState.value = host.resources.prepareOrNull(plan.template, display, background.context)
       }
     }
-      ?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } != null
-  }
-  val typefaces = typefaceState.value
-    ?: if (readiedForFirstFrame) host.resources.typefacesNow(plan.template) else null
-  val scope = rememberCoroutineScope()
-  val tracker = remember(bytes, plan.decisionId, plan.feedItem?.id) { VisibilityTracker() }
-  // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
-  // Leave must name the old item, not the plan that replaced it.
-  SideEffect { tracker.plan = plan }
-
-  // A template's fonts load before it draws, so text never reflows from a fallback face; and it
-  // draws only once it is prepared, which is never in composition under a background strategy.
-  val loader = typefaces
-  val prepared = preparedEarly ?: if (readiedForFirstFrame) host.resources.preparedNow(plan.template, display) else null
-  MarkFirstFrameDrawn(host.resources)
-  if (host.resources.cannotPlay(plan.template)) {
-    // Not a document this player can play: no card, rather than an app that fails with it. In a
-    // slot, the slot draws the app's fallback instead.
-    val cannotPlay = LocalLiveryCannotPlay.current
-    val designId = plan.template.entry.designId
-    SideEffect { cannotPlay?.invoke("$designId cannot be played") }
-    Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
-    return
-  }
-  if (loader == null || prepared == null) {
-    // Nothing to draw yet (a template's first card nobody prepared): the host's placeholder, held to
-    // the height the template last drew at for this width, so the list does not move when the card
-    // arrives; without one, the placeholder's own height.
-    val slotId = LocalLiverySlotId.current
-    Layout(
-      content = {
-        host.placeholder(
-          LiveryPlaceholder(slotId, plan.contract, plan.template.entry.designId),
-        )
-      },
-      modifier = modifier,
-    ) { measurables, constraints ->
-      val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.minWidth
-      val last = host.resources.lastHeight(plan.template, width)
-      val child =
-        if (last != null) androidx.compose.ui.unit.Constraints.fixed(width, constraints.constrainHeight(last))
-        else constraints.copy(minWidth = width, maxWidth = width)
-      val placeables = measurables.map { it.measure(child) }
-      val height = last ?: (placeables.maxOfOrNull { it.height } ?: 0)
-      layout(width, constraints.constrainHeight(height)) { placeables.forEach { it.place(0, 0) } }
+    // [RcPreparation.InComposition]: the host chose to prepare here, on this frame.
+    val preparedEarly = preparedState.value
+      ?: if (inComposition) remember(bytes, host, display) { host.resources.preparedOrNull(plan.template, display) } else null
+    // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
+    val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
+    val imageLoader = remember(bytes, host, imageValues) { host.resources.imageLoader { current.bindings } }
+    // In memory already (an earlier card, a preload): drawn on this composition's frame. Otherwise read
+    // once, and kept for every later card.
+    val typefaceState = remember(bytes, host) { mutableStateOf(host.resources.typefacesNow(plan.template)) }
+    LaunchedEffect(typefaceState) {
+      if (typefaceState.value == null) {
+        typefaceState.value = runCatching { host.resources.typefaces(plan.template) }.getOrDefault(host.fallbackTypefaces)
+      }
     }
-    return
-  }
-  Box(modifier.then(host.slotModifier(plan)).onVisibilityChanged(minFractionVisible = VIEWABLE_FRACTION) { visible ->
-    tracker.visible(visible, host.clock.nowEpochMs())
-  }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
-    CompositionLocalProvider(
-      LocalRcPreparation provides host.preparation,
-      LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
-      LocalRcFlattenLayout provides host.flattenLayout,
-    ) {
-      RcComposePlayer(
-        prepared = prepared,
-        imageLoader = imageLoader,
-        modifier = Modifier,
-        theme = host.theme,
-        namedValues = values,
-        onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
-        typefaces = loader,
-      )
-    }
-  }
-  LaunchedEffect(tracker) {
-    withFrameNanos { }
-    tracker.impressed = true
-    host.events.emit(event(TemplateEvent.Type.Impression, plan, host))
-  }
-  // Viewable needs one unbroken second at or above the threshold: each time the template drops
-  // below it the timer is cancelled, and it starts again from zero when it comes back.
-  LaunchedEffect(tracker) {
-    snapshotFlow { tracker.isVisible }
-      .distinctUntilChanged()
-      .collectLatest { visible ->
-        if (visible && !tracker.viewed) {
-          delay(VIEWABLE_MILLIS)
-          tracker.viewed = true
-          host.events.emit(event(TemplateEvent.Type.Viewable, plan, host))
+    // Before the screen's first frame, a card that is not ready yet (nobody prepared its template)
+    // waits for it here, within the host's first-frame budget, and draws on that frame from memory.
+    if (windowHasDrawn()) host.resources.firstFrameDrawn = true
+    val readiedForFirstFrame = remember(bytes, host, display) {
+      val ready = preparedState.value != null && typefaceState.value != null
+      if (ready || host.resources.cannotPlay(plan.template)) false
+      else host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) {
+        // On the host's preparation context, as the card's own preparation below would run.
+        kotlinx.coroutines.coroutineScope {
+          // A host that prepares in composition prepares the document there; only fonts load ahead.
+          if (background != null) launch { prepareOrNull(plan.template, display, background.context) }
+          launch { runCatching { typefaces(plan.template) } }
         }
       }
-  }
-  // Leave: once per item, with how long it was in view, when it goes (scrolled away, the slot shows
-  // another decision or item, the screen closes).
-  DisposableEffect(tracker) {
-    onDispose {
-      val now = host.clock.nowEpochMs()
-      val left = tracker.plan
-      if (tracker.impressed && left != null) host.events.emit(event(TemplateEvent.Type.Leave, left, host).copy(durationMs = tracker.inViewMs(now)))
+        ?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } != null
+    }
+    val typefaces = typefaceState.value
+      ?: if (readiedForFirstFrame) host.resources.typefacesNow(plan.template) else null
+    val scope = rememberCoroutineScope()
+    val tracker = remember(bytes, plan.decisionId, plan.feedItem?.id) { VisibilityTracker() }
+    // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
+    // Leave must name the old item, not the plan that replaced it.
+    SideEffect { tracker.plan = plan }
+
+    // A template's fonts load before it draws, so text never reflows from a fallback face; and it
+    // draws only once it is prepared, which is never in composition under a background strategy.
+    val loader = typefaces
+    val prepared = preparedEarly ?: if (readiedForFirstFrame) host.resources.preparedNow(plan.template, display) else null
+    MarkFirstFrameDrawn(host.resources)
+    if (host.resources.cannotPlay(plan.template)) {
+      // Not a document this player can play: no card, rather than an app that fails with it. In a
+      // slot, the slot draws the app's fallback instead.
+      val cannotPlay = LocalLiveryCannotPlay.current
+      val designId = plan.template.entry.designId
+      SideEffect { cannotPlay?.invoke("$designId cannot be played") }
+      Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
+      return
+    }
+    if (loader == null || prepared == null) {
+      // Nothing to draw yet (a template's first card nobody prepared): the host's placeholder, held to
+      // the height the template last drew at for this width, so the list does not move when the card
+      // arrives; without one, the placeholder's own height.
+      val slotId = LocalLiverySlotId.current
+      Layout(
+        content = {
+          host.placeholder(
+            LiveryPlaceholder(slotId, plan.contract, plan.template.entry.designId),
+          )
+        },
+        modifier = modifier,
+      ) { measurables, constraints ->
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.minWidth
+        val last = host.resources.lastHeight(plan.template, width)
+        val child =
+          if (last != null) androidx.compose.ui.unit.Constraints.fixed(width, constraints.constrainHeight(last))
+          else constraints.copy(minWidth = width, maxWidth = width)
+        val placeables = measurables.map { it.measure(child) }
+        val height = last ?: (placeables.maxOfOrNull { it.height } ?: 0)
+        layout(width, constraints.constrainHeight(height)) { placeables.forEach { it.place(0, 0) } }
+      }
+      return
+    }
+    Box(modifier.then(host.slotModifier(plan)).onVisibilityChanged(minFractionVisible = VIEWABLE_FRACTION) { visible ->
+      tracker.visible(visible, host.clock.nowEpochMs())
+    }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
+      CompositionLocalProvider(
+        LocalRcPreparation provides host.preparation,
+        LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
+        LocalRcFlattenLayout provides host.flattenLayout,
+      ) {
+        RcComposePlayer(
+          prepared = prepared,
+          imageLoader = imageLoader,
+          modifier = Modifier,
+          theme = host.theme,
+          namedValues = values,
+          onEvent = { e: RcPlayerEvent -> e.toTemplateAction(current.contract)?.let { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } } },
+          typefaces = loader,
+        )
+      }
+    }
+    LaunchedEffect(tracker) {
+      withFrameNanos { }
+      tracker.impressed = true
+      host.events.emit(event(TemplateEvent.Type.Impression, plan, host))
+    }
+    // Viewable needs one unbroken second at or above the threshold: each time the template drops
+    // below it the timer is cancelled, and it starts again from zero when it comes back.
+    LaunchedEffect(tracker) {
+      snapshotFlow { tracker.isVisible }
+        .distinctUntilChanged()
+        .collectLatest { visible ->
+          if (visible && !tracker.viewed) {
+            delay(VIEWABLE_MILLIS)
+            tracker.viewed = true
+            host.events.emit(event(TemplateEvent.Type.Viewable, plan, host))
+          }
+        }
+    }
+    // Leave: once per item, with how long it was in view, when it goes (scrolled away, the slot shows
+    // another decision or item, the screen closes).
+    DisposableEffect(tracker) {
+      onDispose {
+        val now = host.clock.nowEpochMs()
+        val left = tracker.plan
+        if (tracker.impressed && left != null) host.events.emit(event(TemplateEvent.Type.Leave, left, host).copy(durationMs = tracker.inViewMs(now)))
+      }
     }
   }
 }
