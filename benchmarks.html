@@ -172,6 +172,28 @@ Livery without flat layout between them (the first run's medians were 3.9, 4.1, 
 table's order). Turning the deferral off moves Livery to the player-alone figure, the direction it is meant to
 move. With one device and five iterations per run, this does not show that Livery is faster or slower than
 Compose UI.</p>
+<p><strong>Compose's prefetch options.</strong> Two more pairs of lanes fling Livery and the Compose UI twin with one of
+Compose's own prefetch options on, so each is measured for both (neither is Livery's to set: the cache window
+belongs to the app's list, the flag to Compose):</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cache window (<code>LazyLayoutCacheWindow</code>, one viewport ahead, half behind)</td>
+<td>Cards ahead of the viewport are composed and measured in prefetch, between frames, before they scroll in; cards behind stay composed for a scroll back. The default is one item ahead</td>
+</tr>
+<tr>
+<td>Pausable composition in prefetch (<code>ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled</code>)</td>
+<td>Prefetch can compose an upcoming card across several frames' idle time instead of in one go. Compose turned it off by default in 1.10.6 for stability; this lane measures it, it doesn't recommend it</td>
+</tr>
+</tbody>
+</table>
+<p><em>Planned</em>: their numbers, with the next device run.</p>
 <h3 id="full-screen-document-changing-data">Full-screen document: changing data<a class="headerlink" href="#full-screen-document-changing-data" title="Permanent link">#</a></h3>
 <p>One template (<code>poll-card</code>) in a padded, top-aligned, full-width frame; the sample template takes its
 own height, so this is a card on a full screen. Tapping the document shows the next of ten data variants,
