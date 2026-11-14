@@ -44,9 +44,17 @@ def find_processor():
 
 
 def query(tp, trace, sql):
-    out = subprocess.run([tp, "-q", "/dev/stdin", str(trace)], input=sql, capture_output=True, text=True).stdout
-    lines = [l for l in out.splitlines() if l and not l.startswith(("[", "Loading", "column "))]
-    return list(csv.DictReader(io.StringIO("\n".join(lines))))
+    """Runs one query on one trace. A trace that cannot be read, a query that fails, or an answer with no
+    rows stops the run with the trace named: a silent empty result would shrink the sample a median is
+    taken over, or leave a table half empty."""
+    done = subprocess.run([tp, "-q", "/dev/stdin", str(trace)], input=sql, capture_output=True, text=True)
+    if done.returncode != 0:
+        sys.exit(f"trace_processor_shell failed (exit {done.returncode}) on {trace}:\n{done.stderr.strip() or done.stdout.strip()}")
+    lines = [l for l in done.stdout.splitlines() if l and not l.startswith(("[", "Loading", "column "))]
+    rows = list(csv.DictReader(io.StringIO("\n".join(lines))))
+    if not rows:
+        sys.exit(f"the query returned no rows on {trace}: is {PACKAGE} in the trace?\n{done.stderr.strip()}")
+    return rows
 
 
 # The app's process and its two threads that matter: the main thread (tid == pid) and RenderThread.
@@ -65,12 +73,16 @@ def ms(expr):
 
 STARTUP_SQL = PRELUDE + f"""
 ,fd as (select min(ts) ts from slice where name like 'reportFullyDrawn() for {{%'),
-content as (select ts, dur from r where name like 'DrawFrames%' and dur > 10000000 order by ts limit 1),
+-- The frame that draws the content is the last RenderThread frame to start before reportFullyDrawn: the host
+-- reports from the frame callback after the frame in which the document first composed, then requests one
+-- more frame. No duration threshold: that would depend on how fast the device is. If the host moves that
+-- call, this rule moves with it.
+content as (select ts, dur from r where name like 'DrawFrames%' and ts < (select ts from fd) order by ts desc limit 1),
 full as (select ts + dur as e from r where name like 'DrawFrames%' and ts >= (select ts from fd) order by ts limit 1)
 select 'bindApplication ends' k, {ms("(select max(ts + dur) from m where name = 'bindApplication')")} v
 union all select 'activity resumed', {ms("(select max(ts + dur) from m where name like 'performResume:%')")}
 union all select 'first frame starts', {ms("(select min(ts) from m where name like 'Choreographer#doFrame%' and depth = 0 and ts > (select ts from m where name like 'performResume:%' limit 1))")}
-union all select 'document drawn on screen (first RenderThread frame with content) starts', {ms("(select ts from content)")}
+union all select 'document drawn on screen (RenderThread frame with content) starts', {ms("(select ts from content)")}
 union all select 'reportFullyDrawn', {ms("(select ts from fd)")}
 union all select 'full display (end of the first frame drawn after it)', {ms("(select e from full)")}
 union all select 'frames drawn before that', (select count(*) from r where name like 'DrawFrames%' and ts < (select e from full))
@@ -117,8 +129,12 @@ def traces(directory, prefix):
 
 def medians(tp, files, sql):
     runs = [{r["k"]: float(r["v"]) for r in query(tp, f, sql) if r["v"] not in ("", None)} for f in files]
-    keys = list(runs[0]) if runs else []
-    return {k: statistics.median(run[k] for run in runs if k in run) for k in keys}, len(runs)
+    keys = list(runs[0])
+    for f, run in zip(files, runs):
+        missing = [k for k in keys if k not in run]
+        if missing:
+            sys.exit(f"{f} has no value for {missing}: the trace lacks a slice the query needs")
+    return {k: statistics.median(run[k] for run in runs) for k in keys}, len(runs)
 
 
 def table(title, a_name, b_name, a, b, unit=""):
@@ -141,7 +157,7 @@ def startup_svg(path, rows):
     """A timeline per lane: launch to full display, in the four stretches every lane has."""
     stretches = [("process and app start", "bindApplication ends", "#9aa5b1"),
                  ("activity create and resume", "first frame starts", "#6c8ebf"),
-                 ("first frame to the content reaching the GPU", "document drawn on screen (first RenderThread frame with content) starts", "#e0a030"),
+                 ("first frame to the content reaching the GPU", "document drawn on screen (RenderThread frame with content) starts", "#e0a030"),
                  ("GPU draw, until full display", "full display (end of the first frame drawn after it)", "#5aa469")]
     top, row_h, left, width = 64, 78, 120, 760
     end = max(v["full display (end of the first frame drawn after it)"] for _, v in rows) * 1.06
@@ -217,8 +233,7 @@ def main():
             continue
         a_files, b_files = traces(args.directory, LANES[args.a][idx]), traces(args.directory, LANES[args.b][idx])
         if not a_files or not b_files:
-            print(f"no {which} traces for {args.a} / {args.b} under {args.directory}", file=sys.stderr)
-            continue
+            sys.exit(f"no {which} traces for {args.a} / {args.b} under {args.directory}")
         a, na = medians(tp, a_files, sql)
         b, nb = medians(tp, b_files, sql)
         print(f"### {title} (median of {na} and {nb} iterations)\n")

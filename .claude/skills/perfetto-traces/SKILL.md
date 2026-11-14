@@ -54,6 +54,10 @@ floods the output: check the arguments first.
   nothing after it, so the metric waits for whatever next invalidates the window. That was the emoji2 font
   initializer (~650 ms), until the host removed it and requested a frame after reporting. If a startup number
   looks like a fixed ~half second in every lane, check what drew the frame it ended on.
+- **The frame that draws the document** is the last `RenderThread` `DrawFrames` that starts before
+  `reportFullyDrawn()`: the host reports from the frame callback after the frame in which the document first
+  composed. Do not pick it by duration (a fast device draws it in under 10 ms) and do not take "the first
+  frame": Livery's first frame is empty. If `DocumentActivity` moves its `reportFullyDrawn()` call, the rule moves.
 - **A frame** is a `Choreographer#doFrame` slice on the main thread (depth 0); its draw is a `DrawFrames`
   slice on `RenderThread`. A frame that holds a `draw-VRI[…]` slice actually drew.
 - **A lazy list composes and measures upcoming items between frames** (prefetch), outside any `doFrame`.

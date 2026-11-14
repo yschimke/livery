@@ -127,7 +127,7 @@ output. (The `perfetto-traces` agent skill in `.claude/skills/` describes how to
 | bindApplication ends | 103.7 | 94.9 | -8.8 |
 | activity resumed | 130.3 | 122.2 | -8.1 |
 | first frame starts | 136.8 | 133.9 | -2.9 |
-| document drawn on screen (first RenderThread frame with content) starts | 150.7 | 195.8 | +45.1 |
+| document drawn on screen (RenderThread frame with content) starts | 150.7 | 195.8 | +45.1 |
 | reportFullyDrawn | 186.7 | 200.4 | +13.7 |
 | full display (end of the first frame drawn after it) | 196.9 | 232.6 | +35.7 |
 | frames drawn before that | 2 | 3 | +1 |
