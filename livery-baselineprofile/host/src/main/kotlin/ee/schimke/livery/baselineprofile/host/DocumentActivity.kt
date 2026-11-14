@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -116,14 +117,16 @@ class DocumentActivity : ComponentActivity() {
       val data = remember(variant) { pollData(variant) }
       // The player alone has no slot: it plans the same data, then plays the document.
       var rcPlan by remember { mutableStateOf<PlanResult.Ready?>(null) }
+      // Set once the player has composed a prepared document: a plan alone may still be preparing.
+      var rcComposed by remember { mutableStateOf(false) }
       if (lane == RC) {
         LaunchedEffect(variant) { rcPlan = planner.forAppData(query, json(data)) as? PlanResult.Ready }
       }
-      // Drawn: the twin from its first frame; the player once it has a plan; a Livery lane on
+      // Drawn: the twin from its first frame; the player once it composed its document; a Livery lane on
       // Livery's own Impression event, after the template's first frame.
       val contentDrawn = when (lane) {
         COMPOSE -> true
-        RC -> rcPlan != null
+        RC -> rcComposed
         else -> impression.value
       }
       var drawn by remember { mutableStateOf(false) }
@@ -160,6 +163,7 @@ class DocumentActivity : ComponentActivity() {
             val values = remember { mutableStateMapOf<String, RcNamedValue>() }
             values.putAll(p.bindings.toPlayerValues())
             RcComposePlayer(prepared, modifier, namedValues = values)
+            SideEffect { rcComposed = true }
           }
           else -> LiverySlot(key = variant, host = host, modifier = modifier, slotId = SLOT) {
             planner.forAppData(query, json(data))
