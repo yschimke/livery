@@ -1,5 +1,7 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcShaderData
@@ -29,26 +31,26 @@ import kotlinx.serialization.json.Json
 class DocumentAdmissionTest {
   private val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" })
   private val contract = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File(samples, "contracts/status-tile.json").readText())
-  private val tile = File(samples, "designs/tile-default/in-app.rc").readBytes()
+  private val tile = File(samples, "designs/tile-default/in-app.rc").readBytes().toByteString()
 
   private val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-  private val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())
+  private val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray().toByteString())
 
-  private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+  private fun sha(bytes: ByteString) = MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()).joinToString("") { "%02x".format(it) }
 
-  private fun sign(bytes: ByteArray, ref: String = contract.ref, keyId: String = "app") = ManifestSignature(
+  private fun sign(bytes: ByteString, ref: String = contract.ref, keyId: String = "app") = ManifestSignature(
     keyId = keyId,
-    signature = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(pair.private); update(TemplateSignatures.message(ref, sha(bytes))); sign() }),
+    signature = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(pair.private); update(TemplateSignatures.message(ref, sha(bytes)).toByteArray()); sign() }),
   )
 
   /** [tile] with a runtime shader defined in it: a GPU program, unused or not. */
-  private val withShader: ByteArray = RcDocumentCodec.decode(tile, RcWireLimits()).let { d ->
-    RcDocumentCodec.encode(d.copy(operations = listOf(RcTextData(9001, "half4 main(float2 p) { return half4(1); }"), RcShaderData(9002, 9001, emptyMap(), emptyMap(), emptyMap())) + d.operations))
+  private val withShader: ByteString = RcDocumentCodec.decode(tile.toByteArray(), RcWireLimits()).let { d ->
+    RcDocumentCodec.encode(d.copy(operations = listOf(RcTextData(9001, "half4 main(float2 p) { return half4(1); }"), RcShaderData(9002, 9001, emptyMap(), emptyMap(), emptyMap())) + d.operations)).toByteString()
   }
 
   /** [tile] with image bytes in it, which the client's image rules never see. */
-  private val withPixels: ByteArray = RcDocumentCodec.decode(tile, RcWireLimits()).let { d ->
-    RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9003, 1, 1, RcBitmapData.TYPE_RAW8888, RcBitmapData.ENCODING_INLINE, byteArrayOf(0, 0, 0, 0))) + d.operations))
+  private val withPixels: ByteString = RcDocumentCodec.decode(tile.toByteArray(), RcWireLimits()).let { d ->
+    RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9003, 1, 1, RcBitmapData.TYPE_RAW8888, RcBitmapData.ENCODING_INLINE, byteArrayOf(0, 0, 0, 0))) + d.operations)).toByteString()
   }
 
   private fun admission(signedFeatures: Set<RiskyFeature> = emptySet(), agent: AgentBytesPolicy? = null, keys: List<TrustedKey> = listOf(key)) =
@@ -102,7 +104,7 @@ class DocumentAdmissionTest {
 
   @Test fun theDocumentIsHeldToItsContract() = runBlocking {
     val policy = AgentBytesPolicy(setOf("live/", "promo/"))
-    assertEquals("not a Remote Compose document", refused(admission(agent = policy).admit(byteArrayOf(1, 2, 3), contract, null)))
+    assertEquals("not a Remote Compose document", refused(admission(agent = policy).admit(byteArrayOf(1, 2, 3).toByteString(), contract, null)))
     val banner = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File(samples, "contracts/promo-banner.json").readText())
     val reason = refused(admission(agent = policy).admit(tile, banner, null))
     assertEquals(true, reason.startsWith("reads [") && reason.endsWith("which promo/banner@1 doesn't declare"), reason)

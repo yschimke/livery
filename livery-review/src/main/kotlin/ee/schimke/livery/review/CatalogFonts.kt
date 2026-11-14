@@ -22,7 +22,7 @@ internal object CatalogFonts {
     val families = fonts.groupBy { it.font!!.family }.mapValues { (_, faces) ->
       FontFamily(faces.mapNotNull { a ->
         val bytes = asset(catalog, a.sha256) ?: return@mapNotNull null
-        Font(a.sha256, bytes, FontWeight(a.font!!.weight), if (a.font!!.italic) FontStyle.Italic else FontStyle.Normal)
+        Font(a.sha256, bytes.toByteArray(), FontWeight(a.font!!.weight), if (a.font!!.italic) FontStyle.Italic else FontStyle.Normal)
       })
     }
     return LiveryTypefaceLoader(families)

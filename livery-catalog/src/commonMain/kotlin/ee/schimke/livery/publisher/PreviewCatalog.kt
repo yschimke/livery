@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString
 import okio.Path.Companion.toPath
 import okio.fakefilesystem.FakeFileSystem
 import ee.schimke.livery.instantiate.TemplateInspector
@@ -27,7 +28,7 @@ object PreviewCatalog {
    */
   fun build(
     contract: Contract,
-    document: ByteArray,
+    document: ByteString,
     target: Target = Target(surface = "in-app", rcApiLevel = 7),
     title: String? = null,
     source: Map<String, String> = emptyMap(),

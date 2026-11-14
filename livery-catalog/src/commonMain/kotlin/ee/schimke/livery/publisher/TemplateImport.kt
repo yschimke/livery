@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString
 import okio.FileSystem
 import okio.Path
 import ee.schimke.livery.instantiate.TemplateInspector
@@ -24,10 +25,10 @@ object TemplateImport {
 
   data class Imported(val rc: Path, val sidecar: Path, val spec: TemplateSpec, val contract: String)
 
-  fun into(fileSystem: FileSystem, src: Path, designId: String, name: String, document: ByteArray, target: Target, source: Map<String, String> = emptyMap()): Imported =
+  fun into(fileSystem: FileSystem, src: Path, designId: String, name: String, document: ByteString, target: Target, source: Map<String, String> = emptyMap()): Imported =
     into(Node(fileSystem, src), designId, name, document, target, source)
 
-  internal fun into(src: Node, designId: String, name: String, document: ByteArray, target: Target, source: Map<String, String> = emptyMap()): Imported {
+  internal fun into(src: Node, designId: String, name: String, document: ByteString, target: Target, source: Map<String, String> = emptyMap()): Imported {
     if (!NAME.matches(designId) || !NAME.matches(name)) throw CatalogProblems(listOf("design and template names are ${NAME.pattern}: '$designId/$name'"))
     if (name in RESERVED) throw CatalogProblems(listOf("'$name' is reserved in a design's folder (${RESERVED.sorted()}): pick another template name"))
     val dir = src.resolve("designs").resolve(designId)
@@ -70,7 +71,7 @@ object TemplateImport {
       .filter { it.ref == ref }.maxByOrNull { it.minor }
       ?: throw CatalogProblems(listOf("no contract $ref in $src/contracts"))
 
-  private fun restore(f: Node, bytes: ByteArray?) { if (bytes == null) f.delete() else f.writeBytes(bytes) }
+  private fun restore(f: Node, bytes: ByteString?) { if (bytes == null) f.delete() else f.writeBytes(bytes) }
 
   private val JSON = Json { ignoreUnknownKeys = false }
   private val PRETTY = Json { prettyPrint = true; encodeDefaults = false }

@@ -2,6 +2,7 @@
 
 package ee.schimke.livery.web.core
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.client.defaultHttpClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -78,7 +79,7 @@ private fun <T> inSession(id: Int, block: suspend () -> T): Promise<JsAny?> = se
 @JsExport
 fun previewCreate(config: String): Int {
   val c = json.decodeFromString(WebConfig.serializer(), config)
-  val keys = c.keys.map { TrustedKey(it.keyId, Base64.decode(it.publicKey), it.contracts) }
+  val keys = c.keys.map { TrustedKey(it.keyId, Base64.decode(it.publicKey).toByteString(), it.contracts) }
   require(keys.isNotEmpty() || c.unsigned) { "a catalog needs a trusted key, or unsigned: true for development" }
   val clock = Clock { kotlin.time.Clock.System.now().toEpochMilliseconds() }
   val events = mutableListOf<TemplateEvent>()
@@ -122,7 +123,7 @@ fun previewRender(session: Int, contract: String, data: String, space: String, d
   val r = session(session).web.render(contract, json.parseToJsonElement(data).jsonObject, LiveryWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId, s.colorScheme), designId, sha256)
   when (r) {
     is LiveryWeb.Rendered.Ready -> buildJsonObject {
-      put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
+      put("ok", true); put("render", r.id); put("document", r.document.base64()); put("documentKey", r.documentKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
       r.heightDp?.let { put("heightDp", it) }
     }

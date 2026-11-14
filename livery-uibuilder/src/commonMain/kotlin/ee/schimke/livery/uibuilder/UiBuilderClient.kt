@@ -1,5 +1,7 @@
 package ee.schimke.livery.uibuilder
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
@@ -17,7 +19,7 @@ class UiBuilderClient(
   private val token: String,
   private val http: HttpClient = defaultClient(),
 ) {
-  data class Exported(val bytes: ByteArray, val revision: Long?, val url: String)
+  data class Exported(val bytes: ByteString, val revision: Long?, val url: String)
 
   suspend fun export(designId: String, revision: Long? = null): Exported {
     require(DESIGN_ID.matches(designId)) { "bad UI Builder design id '$designId'" }
@@ -33,7 +35,7 @@ class UiBuilderClient(
     }
     check(body.size <= MAX_BYTES) { "UI Builder's export of $designId is over $MAX_BYTES bytes" }
     val drawn = response.headers["X-UI-Builder-Revision"]?.toLongOrNull() ?: revision
-    return Exported(body, drawn, base)
+    return Exported(body.toByteString(), drawn, base)
   }
 
   companion object {

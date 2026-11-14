@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.encodeUtf8
 import okio.FileSystem
 import okio.Path
 import ee.schimke.livery.protocol.Contract
@@ -68,7 +69,7 @@ object KeptExamples {
 
   /** A short, stable hash of an example's data, whatever its key order. */
   fun hash(data: JsonObject): String =
-    sha256Hex(canonical(data).toString().encodeToByteArray()).take(8)
+    sha256Hex(canonical(data).toString().encodeUtf8()).take(8)
 
   private fun canonical(e: JsonElement): JsonElement = when (e) {
     is JsonObject -> JsonObject(e.entries.sortedBy { it.key }.associate { (k, v) -> k to canonical(v) })

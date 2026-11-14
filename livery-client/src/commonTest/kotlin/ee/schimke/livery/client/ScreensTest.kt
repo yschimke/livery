@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Decision
@@ -196,7 +198,7 @@ class ScreensTest {
     // A downloaded catalog lists the screen's template, but its blob isn't on the device, and the
     // network never answers for it.
     val m = manifest(listOf(launch.copy(template = TemplateRef(designId = "missing-look")))).let { it.copy(templates = it.templates.filter { t -> t.target.container != null }) }
-    val manifestBytes = kotlinx.serialization.json.Json.encodeToString(Manifest.serializer(), m).encodeToByteArray()
+    val manifestBytes = kotlinx.serialization.json.Json.encodeToString(Manifest.serializer(), m).encodeUtf8()
     val started = CompletableDeferred<Unit>()
     val r = TemplateRepository(
       StaticSource("https://cdn.example/c"),

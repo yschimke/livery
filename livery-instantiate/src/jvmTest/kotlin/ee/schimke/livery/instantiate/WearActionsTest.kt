@@ -1,5 +1,6 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.composeai.rcplayer.edit.RcDisplay
 import ee.schimke.composeai.rcplayer.protocol.RcDocument
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
@@ -19,8 +20,8 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 class WearActionsTest {
-  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes()
-  private val document = RcDocumentCodec.decode(tile, RcWireLimits())
+  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes().toByteString()
+  private val document = RcDocumentCodec.decode(tile.toByteArray(), RcWireLimits())
 
   private fun names(d: RcDocument): List<String> {
     val texts = d.operations.filterIsInstance<RcTextData>().associate { it.id to it.text }
@@ -75,7 +76,7 @@ class WearActionsTest {
     val frame = RcWearHost.Pixel.frame(RcWearContainerType.LARGE)
     val out = TemplateInstantiator { _, _, _ -> null }.instantiateForWear(tile, Bindings.EMPTY, frame, RcDisplay(2f, 1f))
     val ok = assertIs<InstantiateResult.Ok>(out)
-    val d = RcDocumentCodec.decode(ok.bytes, RcWireLimits())
+    val d = RcDocumentCodec.decode(ok.bytes.toByteArray(), RcWireLimits())
     // The tile's own named tap is a constant-argument tap, so it is carried.
     val tileName = RcHostActionRewrites.actionNames(document).single()
     assertEquals(listOf(tileName), ok.taps.map { it.action })

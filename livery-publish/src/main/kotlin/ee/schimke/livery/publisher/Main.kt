@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.client.JavaCrypto
 import ee.schimke.livery.client.ManifestVerifier
 import ee.schimke.livery.client.TrustPolicy
@@ -76,8 +77,8 @@ fun main(args: Array<String>) {
         val builder = if ("--inspect" in a) CatalogBuilder(inspect = CatalogBuilder.INSPECT) else CatalogBuilder()
         val result = builder.build(src, layout, opt("--serial")?.toLong())
         out.mkdirs()
-        result.files.forEach { (path, bytes) -> File(out, path).apply { parentFile.mkdirs() }.writeBytes(bytes) }
-        File(out, Manifest.FILE).writeBytes(result.manifestBytes)
+        result.files.forEach { (path, bytes) -> File(out, path).writeByteString(bytes) }
+        File(out, Manifest.FILE).writeByteString(result.manifestBytes)
         opt("--key")?.let { keyFile ->
           val sig = Signing.sign(result.manifestBytes, File(keyFile).readText(), opt("--key-id") ?: error("--key needs --key-id"))
           File(out, Manifest.SIGNATURE_FILE).writeText(Json.encodeToString(ManifestSignature.serializer(), sig))
@@ -108,21 +109,21 @@ fun main(args: Array<String>) {
       }
       "verify" -> {
         val out = File(a.getOrNull(1) ?: usage())
-        val pub = Base64.getDecoder().decode(File(opt("--pub") ?: usage()).readText().trim())
+        val pub = Base64.getDecoder().decode(File(opt("--pub") ?: usage()).readText().trim()).toByteString()
         val sig = Json.decodeFromString(ManifestSignature.serializer(), File(out, Manifest.SIGNATURE_FILE).readText())
-        val bytes = File(out, Manifest.FILE).readBytes()
+        val bytes = File(out, Manifest.FILE).readByteString()
         val v = runBlocking { ManifestVerifier(JavaCrypto, TrustPolicy.Signed(listOf(TrustedKey(opt("--key-id") ?: usage(), pub))))
-          .verify(bytes, sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.decodeToString()) } }
+          .verify(bytes, sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.utf8()) } }
         when (v) {
           is Verification.Accepted -> println("ok: ${v.manifest.catalog}/${v.manifest.channel} serial ${v.manifest.serial}")
           is Verification.Rejected -> { System.err.println("rejected: ${v.reason}"); exitProcess(1) }
         }
       }
       "sign-template" -> {
-        val doc = File(a.getOrNull(1) ?: usage()).readBytes()
+        val doc = File(a.getOrNull(1) ?: usage()).readByteString()
         val sig = Signing.signTemplate(doc, opt("--contract") ?: usage(), File(opt("--key") ?: usage()).readText(), opt("--key-id") ?: usage())
         println(Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), kotlinx.serialization.json.buildJsonObject {
-          put("inline", kotlinx.serialization.json.JsonPrimitive(Base64.getEncoder().encodeToString(doc)))
+          put("inline", kotlinx.serialization.json.JsonPrimitive(doc.base64()))
           put("signature", Json.encodeToJsonElement(ManifestSignature.serializer(), sig))
         }))
       }
@@ -135,8 +136,8 @@ fun main(args: Array<String>) {
           .map { json.decodeFromString(ee.schimke.livery.protocol.Contract.serializer(), it.readText()) }
           .filter { it.ref == ref }.maxByOrNull { it.minor } ?: error("no contract $ref in ${opt("--src")}/contracts")
         val target = opt("--target")?.let { json.decodeFromString(ee.schimke.livery.protocol.Target.serializer(), it) }
-        val result = if (target != null) PreviewCatalog.build(contract, doc.readBytes(), target, opt("--title"))
-          else PreviewCatalog.build(contract, doc.readBytes(), title = opt("--title"))
+        val result = if (target != null) PreviewCatalog.build(contract, doc.readByteString(), target, opt("--title"))
+          else PreviewCatalog.build(contract, doc.readByteString(), title = opt("--title"))
         val dir = PreviewCatalog.write(result, out)
         println("${result.channel}: unsigned preview of ${doc.name} for $ref -> $dir")
       }
@@ -147,7 +148,7 @@ fun main(args: Array<String>) {
         val target = Json.decodeFromString(ee.schimke.livery.protocol.Target.serializer(), opt("--target") ?: usage(extensions))
         val source = a.withIndex().filter { it.value == "--source" }.mapNotNull { a.getOrNull(it.index + 1) }
           .associate { it.substringBefore('=') to it.substringAfter('=', "") }
-        val i = TemplateImport.into(src, design, name, doc.readBytes(), target, source)
+        val i = TemplateImport.into(src, design, name, doc.readByteString(), target, source)
         println("${i.rc} for ${i.contract}: reads ${i.spec.reads}, emits ${i.spec.emits}")
       }
       else -> {

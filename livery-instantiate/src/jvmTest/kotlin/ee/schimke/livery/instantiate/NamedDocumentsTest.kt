@@ -1,5 +1,7 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.livery.client.*
 import ee.schimke.livery.protocol.*
 import java.io.File
@@ -11,17 +13,17 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
 class NamedDocumentsTest {
-  private val bytes = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/tile-default/in-app.rc").readBytes()
+  private val bytes = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/tile-default/in-app.rc").readBytes().toByteString()
   private val contract = Json { ignoreUnknownKeys = true }.decodeFromString(Contract.serializer(), File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "contracts/status-tile.json").readText())
   private val caps = PlayerCapabilities(Surfaces.IN_APP, 7, setOf("androidx"))
   private val query = TemplateQuery(contract.ref, caps)
   private val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-  private val key = TrustedKey("test", pair.public.encoded.takeLast(32).toByteArray())
+  private val key = TrustedKey("test", pair.public.encoded.takeLast(32).toByteArray().toByteString())
   private val repository = TemplateRepository(StaticSource("https://catalog.example/"), Fetcher { _, _ -> error("no catalog network") }, JavaCrypto,
     TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), Clock { 0 }, listOf(caps))
 
   private suspend fun signature() = ManifestSignature(keyId = "test", signature = Base64.encode(Signature.getInstance("Ed25519").run {
-    initSign(pair.private); update(TemplateSignatures.message(contract.ref, JavaCrypto.sha256Hex(bytes))); sign()
+    initSign(pair.private); update(TemplateSignatures.message(contract.ref, JavaCrypto.sha256Hex(bytes)).toByteArray()); sign()
   }))
 
   @Test fun signedFetchChecksBothHostsLimitsAndHash() = runBlocking {
@@ -56,6 +58,6 @@ class NamedDocumentsTest {
     val plan = RenderPlan(loaded, contract, Bindings.EMPTY)
     assertEquals(TemplateInstantiator.authoredHeightDp(bytes), plan.templateHeightDp())
     assertEquals(123, plan.copy(template = loaded.copy(entry = entry.copy(target = entry.target.copy(size = SizeRange(minHeightDp = 123))))).templateHeightDp())
-    assertNull(plan.copy(template = loaded.copy(bytes = byteArrayOf())).templateHeightDp())
+    assertNull(plan.copy(template = loaded.copy(bytes = ByteString.EMPTY)).templateHeightDp())
   }
 }

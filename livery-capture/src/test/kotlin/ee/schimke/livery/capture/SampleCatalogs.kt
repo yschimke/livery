@@ -22,6 +22,6 @@ internal object SampleCatalogs {
    */
   fun writeLauncher(catalog: String, design: String, template: CapturedTemplate) {
     val out = System.getProperty("livery.capture.out") ?: return
-    File(out, "launcher-parity").apply { mkdirs() }.resolve("$catalog-$design.rc").writeBytes(template.bytes)
+    File(out, "launcher-parity").apply { mkdirs() }.resolve("$catalog-$design.rc").writeBytes(template.bytes.toByteArray())
   }
 }

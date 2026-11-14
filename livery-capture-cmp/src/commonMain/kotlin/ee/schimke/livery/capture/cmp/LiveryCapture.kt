@@ -1,5 +1,6 @@
 package ee.schimke.livery.capture.cmp
 
+import okio.ByteString.Companion.toByteString
 import androidx.compose.runtime.Composable
 import ee.schimke.composeai.rccreation.common.Profile
 import ee.schimke.composeai.rccreation.compose.capture.RemoteCreationDisplayInfo
@@ -56,6 +57,6 @@ object LiveryCapture {
     profile.problems(bytes).takeIf { it.isNotEmpty() }?.let { problems ->
       throw IllegalStateException("the capture wouldn't play as ${target.profiles.joinToString("+")} on ${target.surface}: ${problems.joinToString("; ")}")
     }
-    return CapturedTemplate.of(bytes, target, source)
+    return CapturedTemplate.of(bytes.toByteString(), target, source)
   }
 }

@@ -1,5 +1,6 @@
 package ee.schimke.livery.verify
 
+import okio.ByteString.Companion.toByteString
 import android.app.Activity
 import android.graphics.Bitmap
 import ee.schimke.livery.client.BindResult
@@ -60,12 +61,12 @@ object WidgetPlay {
         val (w, h) = (prop("width").toInt() * density).toInt() to (prop("height").toInt() * density).toInt()
         val catalog = System.getProperty("livery.play.catalog")?.let(::File)
         val images = catalog?.let { WidgetCatalogCheck.images(it) { _, _, _ -> null } } ?: { _, _, _ -> null }
-        when (val r = TemplateInstantiator(images).instantiate(File(prop("template")).readBytes(), bindings, w, h, numericActions = true)) {
+        when (val r = TemplateInstantiator(images).instantiate(File(prop("template")).readBytes().toByteString(), bindings, w, h, numericActions = true)) {
           is InstantiateResult.Failed -> PlatformWidgetPlayer.Outcome.Failed("couldn't be written for a widget: ${r.reason}")
           is InstantiateResult.Ok -> {
             val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
             // `--as-is`: without the recovery publishing applies (PlatformWidgetPlayer.play).
-            PlatformWidgetPlayer.play(activity, r.bytes, w, h, recover = System.getProperty("livery.play.recover") != "false")
+            PlatformWidgetPlayer.play(activity, r.bytes.toByteArray(), w, h, recover = System.getProperty("livery.play.recover") != "false")
           }
         }
       }

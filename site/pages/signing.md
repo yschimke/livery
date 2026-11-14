@@ -16,7 +16,7 @@ livery keygen acme          # acme.key (secret), acme.pub (embed in apps)
 - `acme.pub` is the raw 32-byte Ed25519 public key in Base64. Apps embed it with a key id.
 
 ```kotlin
-TrustPolicy.Signed(listOf(TrustedKey("acme-1", Base64.decode(ACME_PUB))))
+TrustPolicy.Signed(listOf(TrustedKey("acme-1", ACME_PUB.decodeBase64()!!)))  // okio: the key is a ByteString
 ```
 
 ```swift

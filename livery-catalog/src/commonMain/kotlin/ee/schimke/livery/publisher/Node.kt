@@ -1,5 +1,7 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import okio.ByteString.Companion.toByteString
 import okio.FileMetadata
 import okio.FileSystem
@@ -22,19 +24,19 @@ internal class Node(val fs: FileSystem, val path: Path) {
   /** The entries of this directory, or null when it isn't one. */
   fun listFiles(): List<Node>? = fs.listOrNull(path)?.map { Node(fs, it) }
 
-  fun readBytes(): ByteArray = fs.read(path) { readByteArray() }
+  fun readBytes(): ByteString = fs.read(path) { readByteString() }
 
   fun readText(): String = fs.read(path) { readUtf8() }
 
   fun length(): Long = fs.targetMetadataOrNull(path)?.size ?: readBytes().size.toLong()
 
   /** Writes [bytes] here, creating parent directories. */
-  fun writeBytes(bytes: ByteArray) {
+  fun writeBytes(bytes: ByteString) {
     path.parent?.let { fs.createDirectories(it) }
     fs.write(path) { write(bytes) }
   }
 
-  fun writeText(text: String) = writeBytes(text.encodeToByteArray())
+  fun writeText(text: String) = writeBytes(text.encodeUtf8())
 
   fun delete() = fs.delete(path, mustExist = false)
 
@@ -42,7 +44,7 @@ internal class Node(val fs: FileSystem, val path: Path) {
 }
 
 /** SHA-256 as lowercase hex: Okio's, on every platform. */
-internal fun sha256Hex(bytes: ByteArray): String = bytes.toByteString().sha256().hex()
+internal fun sha256Hex(bytes: ByteString): String = bytes.sha256().hex()
 
 /**
  * What [path] is, following a symbolic link to its target as java.io.File does (Okio's own

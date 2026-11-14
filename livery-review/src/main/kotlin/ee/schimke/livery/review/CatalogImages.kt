@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import okio.ByteString
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
@@ -29,10 +30,10 @@ internal class CatalogImages(
     } else url
     val sha = ref.removePrefix("asset:").takeIf { it != ref } ?: return fallback.load(bitmap)
     val bytes = asset(catalog, sha) ?: return null
-    return runCatching { Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
+    return runCatching { Image.makeFromEncoded(bytes.toByteArray()).toComposeImageBitmap() }.getOrNull()
   }
 }
 
 /** An asset's bytes in a built catalog, by its hash (files are named `<sha256>.<ext>`). */
-internal fun asset(catalog: CatalogBuilder.Output, sha256: String): ByteArray? =
+internal fun asset(catalog: CatalogBuilder.Output, sha256: String): ByteString? =
   catalog.files.entries.firstOrNull { (path, _) -> path.startsWith("assets/") && path.substringAfterLast('/').substringBefore('.') == sha256 }?.value

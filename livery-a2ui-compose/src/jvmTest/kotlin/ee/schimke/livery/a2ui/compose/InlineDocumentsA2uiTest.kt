@@ -1,5 +1,7 @@
 package ee.schimke.livery.a2ui.compose
 
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import androidx.a2ui.model.protocol.A2uiClientErrorMessage
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.a2ui.A2uiSurface
@@ -31,24 +33,24 @@ import kotlin.test.assertTrue
 /** The document itself in the A2UI message: `template: {inline, signature}` (PROTOCOL.md §3.4–3.5). */
 object InlineFixtures {
   private val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-  val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray())
+  val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray().toByteString())
 
   /** The sample's real promo banner document. */
-  val banner: ByteArray = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/banner-classic/in-app.rc").readBytes()
+  val banner: ByteString = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/banner-classic/in-app.rc").readBytes().toByteString()
 
   /** The banner with a runtime shader defined in it. */
-  val bannerWithShader: ByteArray = RcDocumentCodec.decode(banner, RcWireLimits()).let { d ->
-    RcDocumentCodec.encode(d.copy(operations = listOf(RcTextData(9001, "half4 main(float2 p) { return half4(1); }"), RcShaderData(9002, 9001, emptyMap(), emptyMap(), emptyMap())) + d.operations))
+  val bannerWithShader: ByteString = RcDocumentCodec.decode(banner.toByteArray(), RcWireLimits()).let { d ->
+    RcDocumentCodec.encode(d.copy(operations = listOf(RcTextData(9001, "half4 main(float2 p) { return half4(1); }"), RcShaderData(9002, 9001, emptyMap(), emptyMap(), emptyMap())) + d.operations)).toByteString()
   }
 
   /** The banner with image bytes in it. */
-  val bannerWithPixels: ByteArray = RcDocumentCodec.decode(banner, RcWireLimits()).let { d ->
-    RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9003, 1, 1, RcBitmapData.TYPE_RAW8888, RcBitmapData.ENCODING_INLINE, byteArrayOf(0, 0, 0, 0))) + d.operations))
+  val bannerWithPixels: ByteString = RcDocumentCodec.decode(banner.toByteArray(), RcWireLimits()).let { d ->
+    RcDocumentCodec.encode(d.copy(operations = listOf(RcBitmapData(9003, 1, 1, RcBitmapData.TYPE_RAW8888, RcBitmapData.ENCODING_INLINE, byteArrayOf(0, 0, 0, 0))) + d.operations)).toByteString()
   }
 
-  fun signature(bytes: ByteArray, contract: String = "promo/banner@1"): String {
-    val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-    val sig = Signature.getInstance("Ed25519").run { initSign(pair.private); update(TemplateSignatures.message(contract, sha)); sign() }
+  fun signature(bytes: ByteString, contract: String = "promo/banner@1"): String {
+    val sha = bytes.sha256().hex()
+    val sig = Signature.getInstance("Ed25519").run { initSign(pair.private); update(TemplateSignatures.message(contract, sha).toByteArray()); sign() }
     return """{"keyId":"app","signature":"${Base64.getEncoder().encodeToString(sig)}"}"""
   }
 }
@@ -63,8 +65,8 @@ abstract class InlineSurfaceTest(documents: DocumentAdmission?, decider: ee.schi
     ]}}
     """.trimIndent()
 
-  protected fun inline(bytes: ByteArray, signature: String? = null) =
-    """{"inline":"${Base64.getEncoder().encodeToString(bytes)}"${signature?.let { ""","signature":$it""" } ?: ""}}"""
+  protected fun inline(bytes: ByteString, signature: String? = null) =
+    """{"inline":"${bytes.base64()}"${signature?.let { ""","signature":$it""" } ?: ""}}"""
 
   /** Plays it, and returns the design id its impression names. */
   protected fun ComposeUiTest.plays(template: String): String? {
@@ -177,7 +179,7 @@ class InlineDocumentsSignedOnlyA2uiTest : InlineSurfaceTest(DocumentAdmission(Ja
 @OptIn(ExperimentalTestApi::class)
 class NamedDocumentsA2uiTest : InlineSurfaceTest(null) {
   @Test fun exactBundledDocumentPlays() = runComposeUiTest {
-    val sha = MessageDigest.getInstance("SHA-256").digest(InlineFixtures.banner).joinToString("") { "%02x".format(it) }
+    val sha = InlineFixtures.banner.sha256().hex()
     assertEquals("banner-classic", plays("""{"sha256":"$sha"}"""))
   }
 

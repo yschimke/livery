@@ -1,5 +1,6 @@
 package ee.schimke.livery.mcp
 
+import okio.ByteString
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.check
@@ -16,7 +17,7 @@ import okio.Path.Companion.toOkioPath
  * and reads the catalog's git history and earlier revisions with the `git` command.
  */
 object JvmMcpHost : McpHost {
-  override suspend fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray = withContext(Dispatchers.IO) { try {
+  override suspend fun render(template: ByteString, bindings: Bindings, spec: PreviewSpec): ByteString = withContext(Dispatchers.IO) { try {
     TemplateRenderer.png(template, bindings, RenderSpec(spec.widthDp, spec.heightDp, spec.density, spec.dark))
   } catch (e: Throwable) {
     // Skia: on a headless host its native library can fail to load (on Linux it links libGL,

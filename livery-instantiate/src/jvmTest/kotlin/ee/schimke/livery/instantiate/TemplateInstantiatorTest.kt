@@ -1,5 +1,7 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.protocol.NamedValue
 import kotlin.test.Test
@@ -11,7 +13,7 @@ import kotlinx.coroutines.runBlocking
 
 /** Over a real values-free document (a tile reading `light.kitchen.state` and `.is_on`). */
 class TemplateInstantiatorTest {
-  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes()
+  private val tile = javaClass.getResource("/demo-tile.rc")!!.readBytes().toByteString()
   private val noImages = TemplateInstantiator { _, _, _ -> null }
 
   @Test fun theTemplateReadsItsNamedValues() {
@@ -22,7 +24,7 @@ class TemplateInstantiatorTest {
     val values = Bindings(mapOf("light.kitchen.state" to NamedValue.Str("Brightly on"), "light.kitchen.is_on" to NamedValue.I(1)))
     val out = assertIs<InstantiateResult.Ok>(noImages.instantiate(tile, values, 100, 100)).bytes
     assertEquals(emptySet(), TemplateInstantiator.reads(out), "nothing left for a host to push")
-    assertTrue(String(out, Charsets.ISO_8859_1).contains("Brightly on"))
+    assertTrue(out.string(Charsets.ISO_8859_1).contains("Brightly on"))
   }
 
   @Test fun unboundValuesStayNamed() = runBlocking {
@@ -36,7 +38,7 @@ class TemplateInstantiatorTest {
   }
 
   @Test fun bytesThatAreNotADocumentFailCleanly() = runBlocking {
-    assertIs<InstantiateResult.Failed>(noImages.instantiate("not a document".encodeToByteArray(), Bindings.EMPTY, 1, 1))
+    assertIs<InstantiateResult.Failed>(noImages.instantiate("not a document".encodeUtf8(), Bindings.EMPTY, 1, 1))
     Unit
   }
 

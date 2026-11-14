@@ -1,5 +1,7 @@
 package ee.schimke.livery.web
 
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.client.BlobStore
 import ee.schimke.livery.client.KeyValueStore
 import ee.schimke.livery.client.JsUint8Array
@@ -12,8 +14,8 @@ import kotlinx.serialization.json.Json
 /** IndexedDB only: repository eviction and image-cache policy still own the stored entries. */
 internal class BrowserStores private constructor(private val db: JsAny, private val namespace: String) {
   val blobs: BlobStore = object : BlobStore {
-    override suspend fun get(sha256: String): ByteArray? = read(db, key("blob", sha256)).await()?.let { toBytes(it.unsafeCast<JsUint8Array>()) }
-    override suspend fun put(sha256: String, bytes: ByteArray) { write(db, key("blob", sha256), toJs(bytes)).await() }
+    override suspend fun get(sha256: String): ByteString? = read(db, key("blob", sha256)).await()?.let { toBytes(it.unsafeCast<JsUint8Array>()).toByteString() }
+    override suspend fun put(sha256: String, bytes: ByteString) { write(db, key("blob", sha256), toJs(bytes.toByteArray())).await() }
     override suspend fun delete(sha256: String) { remove(db, key("blob", sha256)).await() }
     override suspend fun keys(): Set<String> = Json.decodeFromString<List<String>>(keys(db, key("blob", "")).await().toString()).toSet()
   }

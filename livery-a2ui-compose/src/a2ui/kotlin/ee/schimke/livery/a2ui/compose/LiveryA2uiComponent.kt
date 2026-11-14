@@ -1,5 +1,7 @@
 package ee.schimke.livery.a2ui.compose
 
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import androidx.a2ui.compose.runtime.A2uiComponentProperties
 import androidx.a2ui.compose.runtime.A2uiComponentScope
 import androidx.a2ui.compose.runtime.A2uiProperty
@@ -192,7 +194,7 @@ class LiveryA2uiComponent(
       )
       if (template is A2uiTemplate.Inline || template is A2uiTemplate.Invalid) {
         val inline = when (template) {
-          is A2uiTemplate.Inline -> InlineDocument(template.base64, kotlin.io.encoding.Base64.decode(template.base64), template.signature, null)
+          is A2uiTemplate.Inline -> InlineDocument(template.base64, kotlin.io.encoding.Base64.decode(template.base64).toByteString(), template.signature, null)
           is A2uiTemplate.Invalid -> InlineDocument(null, null, null, template.reason)
         }
         InlineContent(scope, inline, dataset, liveryHost, Modifier, constraints.hasBoundedHeight)
@@ -252,7 +254,7 @@ class LiveryA2uiComponent(
     if (bounded) Modifier else plan.templateHeightDp()?.let { Modifier.height(it.dp) } ?: Modifier
 
   /** A document the agent sent with the message (PROTOCOL.md §3.4), as given: its bytes, its signature. */
-  private class InlineDocument(val text: String?, val bytes: ByteArray?, val signature: ManifestSignature?, val problem: String?) {
+  private class InlineDocument(val text: String?, val bytes: ByteString?, val signature: ManifestSignature?, val problem: String?) {
     /** The document as sent, compared whole: a different document is always admitted afresh. */
     val key: Any = listOf(text, signature, problem)
   }

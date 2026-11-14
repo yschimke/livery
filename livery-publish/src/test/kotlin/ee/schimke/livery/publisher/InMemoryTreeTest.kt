@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.toByteString
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,7 +17,7 @@ class InMemoryTreeTest {
     sample.walkTopDown().filter { it.isFile }.forEach { f ->
       val p = root / f.relativeTo(sample).invariantSeparatorsPath
       fs.createDirectories(p.parent!!)
-      fs.write(p) { write(f.readBytes()) }
+      fs.write(p) { write(f.readBytes().toByteString()) }
     }
   }
 
@@ -24,9 +25,9 @@ class InMemoryTreeTest {
     val fs = FakeFileSystem()
     val disk = CatalogBuilder(now = { 0 }).build(sample, Layout.Static, serial = 1)
     val memory = CatalogBuilder(now = { 0 }).build(fs, copy(fs, "/tree"), Layout.Static, serial = 1)
-    assertEquals(disk.manifestBytes.decodeToString(), memory.manifestBytes.decodeToString())
+    assertEquals(disk.manifestBytes.utf8(), memory.manifestBytes.utf8())
     assertEquals(disk.files.keys, memory.files.keys)
-    assertTrue(disk.files.all { (k, v) -> v.contentEquals(memory.files.getValue(k)) })
+    assertTrue(disk.files.all { (k, v) -> v == memory.files.getValue(k) })
   }
 
   /** Linked designs and assets are read as their targets, as java.io.File did before Okio. */
@@ -41,7 +42,7 @@ class InMemoryTreeTest {
     try {
       val direct = CatalogBuilder(now = { 0 }).build(sample, Layout.Static, serial = 1)
       val viaLinks = CatalogBuilder(now = { 0 }).build(linked, Layout.Static, serial = 1)
-      assertEquals(direct.manifestBytes.decodeToString(), viaLinks.manifestBytes.decodeToString())
+      assertEquals(direct.manifestBytes.utf8(), viaLinks.manifestBytes.utf8())
     } finally {
       // Never File.deleteRecursively here: it follows the links and deletes the sample itself.
       // Files.walk doesn't follow links, so only the links and their folders go.

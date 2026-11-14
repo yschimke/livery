@@ -1,5 +1,7 @@
 package ee.schimke.livery.capture
 
+import okio.Path.Companion.toOkioPath
+import okio.FileSystem
 import java.io.File
 
 /**
@@ -19,7 +21,7 @@ class DesignFolder(val dir: File) {
     dir.mkdirs()
     stale(templates).forEach { File(dir, it).delete() }
     for ((name, t) in templates) {
-      File(dir, "$name.rc").writeBytes(t.bytes)
+      FileSystem.SYSTEM.write(File(dir, "$name.rc").toOkioPath()) { write(t.bytes) }
       File(dir, "$name.json").writeText(t.sidecar())
     }
   }
@@ -32,7 +34,7 @@ class DesignFolder(val dir: File) {
       val json = File(dir, "$name.json")
       when {
         !rc.isFile -> add("$name.rc is missing")
-        !rc.readBytes().contentEquals(t.bytes) -> add("$name.rc differs from the capture")
+        FileSystem.SYSTEM.read(rc.toOkioPath()) { readByteString() } != t.bytes -> add("$name.rc differs from the capture")
       }
       when {
         !json.isFile -> add("$name.json is missing")

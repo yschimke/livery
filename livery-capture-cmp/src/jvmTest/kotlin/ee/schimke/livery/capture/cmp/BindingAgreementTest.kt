@@ -1,5 +1,7 @@
 package ee.schimke.livery.capture.cmp
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcOpcodes
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
@@ -61,9 +63,9 @@ class BindingAgreementTest {
       val contract = CatalogContracts.contract(File(SampleCatalogs.source, s.catalog), s.contractRef)
       val cmp = runBlocking { s.cmp(false) }
       val folder = File(androidx, "${s.catalog}/designs/${s.design}")
-      val androidxBytes = File(folder, "in-app.rc").readBytes()
+      val androidxBytes = File(folder, "in-app.rc").readBytes().toByteString()
       report.appendLine("${s.catalog}/${s.design} (${s.contractRef})")
-      report.appendLine("  bytes: androidx ${androidxBytes.size}, cmp ${cmp.bytes.size}, identical ${androidxBytes.contentEquals(cmp.bytes)}")
+      report.appendLine("  bytes: androidx ${androidxBytes.size}, cmp ${cmp.bytes.size}, identical ${androidxBytes == cmp.bytes}")
 
       report.appendLine("  operations (opcode x count) only or more often in one: androidx ${surplus(androidxBytes, cmp.bytes)}, cmp ${surplus(cmp.bytes, androidxBytes)}")
 
@@ -109,10 +111,10 @@ class BindingAgreementTest {
    */
   @Test fun theBindingsAgreeUnderTheLauncherProfile() {
     for (s in samples) {
-      val androidxBytes = File(androidx, "launcher-parity/${s.catalog}-${s.design}.rc").readBytes()
+      val androidxBytes = File(androidx, "launcher-parity/${s.catalog}-${s.design}.rc").readBytes().toByteString()
       val cmpBytes = runBlocking { s.cmp(true) }.bytes
-      val a = RcDocumentCodec.decode(androidxBytes, RcWireLimits())
-      val c = RcDocumentCodec.decode(cmpBytes, RcWireLimits())
+      val a = RcDocumentCodec.decode(androidxBytes.toByteArray(), RcWireLimits())
+      val c = RcDocumentCodec.decode(cmpBytes.toByteArray(), RcWireLimits())
       report.appendLine("${s.catalog}/${s.design} as a launcher widget")
       report.appendLine("  bytes: androidx ${androidxBytes.size}, cmp ${cmpBytes.size}")
       report.appendLine("  operations (opcode x count) only or more often in one: androidx ${surplus(androidxBytes, cmpBytes)}, cmp ${surplus(cmpBytes, androidxBytes)}")
@@ -130,14 +132,14 @@ class BindingAgreementTest {
     override fun toString() = "$differing of $pixels pixels differ, largest channel delta $maxChannelDelta ($inked pixels are not background)"
   }
 
-  private fun compare(s: Sample, example: String, density: Float, androidxPng: ByteArray, cmpPng: ByteArray): Diff {
+  private fun compare(s: Sample, example: String, density: Float, androidxPng: ByteString, cmpPng: ByteString): Diff {
     System.getProperty("livery.render.out")?.let { dir ->
       val out = File(dir, "binding-agreement").apply { mkdirs() }
-      File(out, "${s.design}-$example-${density}x-androidx.png").writeBytes(androidxPng)
-      File(out, "${s.design}-$example-${density}x-cmp.png").writeBytes(cmpPng)
+      File(out, "${s.design}-$example-${density}x-androidx.png").writeBytes(androidxPng.toByteArray())
+      File(out, "${s.design}-$example-${density}x-cmp.png").writeBytes(cmpPng.toByteArray())
     }
-    val a: BufferedImage = ImageIO.read(androidxPng.inputStream())
-    val c: BufferedImage = ImageIO.read(cmpPng.inputStream())
+    val a: BufferedImage = ImageIO.read(androidxPng.toByteArray().inputStream())
+    val c: BufferedImage = ImageIO.read(cmpPng.toByteArray().inputStream())
     assertEquals(a.width to a.height, c.width to c.height, "${s.design}: render size")
     var differing = 0
     var max = 0
@@ -156,8 +158,8 @@ class BindingAgreementTest {
   }
 
   /** The operations [a] holds more of than [b], as `opcode x how many more`: how the two writers differ, for the report. */
-  private fun surplus(a: ByteArray, b: ByteArray): String {
-    fun counts(bytes: ByteArray) = RcDocumentCodec.decode(bytes, RcWireLimits()).operations.groupingBy { it.opcode }.eachCount()
+  private fun surplus(a: ByteString, b: ByteString): String {
+    fun counts(bytes: ByteString) = RcDocumentCodec.decode(bytes.toByteArray(), RcWireLimits()).operations.groupingBy { it.opcode }.eachCount()
     val (ca, cb) = counts(a) to counts(b)
     return ca.mapNotNull { (op, n) -> (n - (cb[op] ?: 0)).takeIf { it > 0 }?.let { "$op x$it" } }.ifEmpty { listOf("none") }.joinToString(", ")
   }

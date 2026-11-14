@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import okio.ByteString.Companion.toByteString
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
@@ -43,7 +44,7 @@ class KtorFetcher(
             200 -> {
               val declared = res.headers[HttpHeaders.ContentLength]?.toLongOrNull()
               if (declared != null && declared > maxBytes) return@execute FetchResult.Failed(200, "$declared bytes, more than $maxBytes")
-              val body = res.bodyAsChannel().readRemaining(if (maxBytes == Long.MAX_VALUE) Long.MAX_VALUE else maxBytes + 1).readByteArray()
+              val body = res.bodyAsChannel().readRemaining(if (maxBytes == Long.MAX_VALUE) Long.MAX_VALUE else maxBytes + 1).readByteArray().toByteString()
               if (body.size > maxBytes) FetchResult.Failed(200, "more than $maxBytes bytes")
               else FetchResult.Ok(body, res.headers[HttpHeaders.ETag])
             }

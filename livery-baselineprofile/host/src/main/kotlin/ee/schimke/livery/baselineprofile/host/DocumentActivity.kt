@@ -159,7 +159,8 @@ class DocumentActivity : ComponentActivity() {
         when (lane) {
           COMPOSE -> PollTwin(data, modifier)
           RC -> rcPlan?.plan?.let { p ->
-            val prepared = rememberRcPreparedDocument(p.template.bytes, host.preparation) ?: return@let
+            val array = remember(p.template.bytes) { p.template.bytes.toByteArray() }
+            val prepared = rememberRcPreparedDocument(array, host.preparation) ?: return@let
             val values = remember { mutableStateMapOf<String, RcNamedValue>() }
             values.putAll(p.bindings.toPlayerValues())
             RcComposePlayer(prepared, modifier, namedValues = values)

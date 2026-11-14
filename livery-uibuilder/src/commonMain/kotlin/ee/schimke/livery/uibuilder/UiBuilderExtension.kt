@@ -87,7 +87,7 @@ class UiBuilderExtension(private val client: UiBuilderClient) : McpExtension {
         add(buildJsonObject {
           put("type", "text")
           put("text", buildJsonObject {
-            put("rc_base64", Base64.Default.encode(e.bytes)); put("bytes", e.bytes.size)
+            put("rc_base64", e.bytes.base64()); put("bytes", e.bytes.size)
             putJsonObject("source") {
               put("tool", "ui-builder"); put("design", design); e.revision?.let { put("revision", it.toString()) }; put("url", e.url)
             }

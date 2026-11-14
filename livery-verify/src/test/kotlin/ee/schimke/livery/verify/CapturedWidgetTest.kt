@@ -123,7 +123,7 @@ class CapturedWidgetTest {
     val bindings = assertIs<BindResult.Ok>(ContractBinder.bind(contract, contract.examples.getValue(example))).bindings
     val (w, h) = (200 * density).toInt() to (100 * density).toInt()
     val document = assertIs<InstantiateResult.Ok>(TemplateInstantiator { _, _, _ -> null }.instantiate(template.bytes, bindings, w, h, numericActions = true)).bytes
-    val outcome = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, document, w, h), "$example plays")
+    val outcome = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, document.toByteArray(), w, h), "$example plays")
     IntArray(w * h).also { outcome.image.getPixels(it, 0, w, 0, 0, w, h) }
   }
 
@@ -136,7 +136,7 @@ class CapturedWidgetTest {
     // And as it is, with none of rc-widget-launcher's recovery before the player.
     assertEquals(emptyList(), WidgetCatalogCheck.launcherWidgets(activity, catalogOf(tile), density = 2f, recover = false))
     // Text is the TextLayout Android 16 reads, never the CoreText (239) it fails a document on.
-    val operations = RcDocumentCodec.decode(tile.bytes, RcWireLimits()).operations.map { it.opcode }
+    val operations = RcDocumentCodec.decode(tile.bytes.toByteArray(), RcWireLimits()).operations.map { it.opcode }
     assertTrue(RcOpcodes.CORE_TEXT !in operations && RcOpcodes.LAYOUT_TEXT in operations, operations.toString())
   }
 
@@ -161,8 +161,8 @@ class CapturedWidgetTest {
    * some, as BindingAgreementTest's report shows for the in-app captures, so counts are not compared.)
    */
   @Test fun theLauncherCapturesHaveTheSameHeaderAndOperations() {
-    val androidx = RcDocumentCodec.decode(androidxTile().bytes, RcWireLimits())
-    val cmp = RcDocumentCodec.decode(cmpTile().bytes, RcWireLimits())
+    val androidx = RcDocumentCodec.decode(androidxTile().bytes.toByteArray(), RcWireLimits())
+    val cmp = RcDocumentCodec.decode(cmpTile().bytes.toByteArray(), RcWireLimits())
     assertEquals(androidx.header, cmp.header, "the header")
     // alpha23's `clickable` also writes an empty AccessibilitySemantics (250), which androidx-main's, and so
     // rc-players', writes only for a role (rc-players' MIGRATING_CREATION.md, and its AndroidxPlayerParityTest).
@@ -190,7 +190,7 @@ class CapturedWidgetTest {
     val bindings = assertIs<BindResult.Ok>(ContractBinder.bind(contract, contract.examples.getValue("on"))).bindings
     val document = assertIs<InstantiateResult.Ok>(TemplateInstantiator { _, _, _ -> null }.instantiate(template.bytes, bindings, 400, 200, numericActions = true)).bytes
     for (recover in listOf(true, false)) {
-      val outcome = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, document, 400, 200, recover = recover), "recover=$recover plays")
+      val outcome = assertIs<PlatformWidgetPlayer.Outcome.Played>(PlatformWidgetPlayer.play(activity, document.toByteArray(), 400, 200, recover = recover), "recover=$recover plays")
       val pixels = IntArray(400 * 200).also { outcome.image.getPixels(it, 0, 400, 0, 0, 400, 200) }
       val red = pixels.count { it == 0xFFFF0000.toInt() }
       val green = pixels.count { it == 0xFF00FF00.toInt() }

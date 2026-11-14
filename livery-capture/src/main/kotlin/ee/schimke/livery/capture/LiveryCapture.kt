@@ -2,6 +2,7 @@
 
 package ee.schimke.livery.capture
 
+import okio.ByteString.Companion.toByteString
 import android.content.Context
 import androidx.compose.remote.creation.compose.capture.RemoteCreationDisplayInfo
 import androidx.compose.remote.creation.compose.capture.RemoteDensity
@@ -46,6 +47,6 @@ object LiveryCapture {
     } else {
       captureSingleRemoteDocument(context = context, creationDisplayInfo = display, remoteDensity = RemoteDensity.Host, content = content).bytes
     }
-    return CapturedTemplate.of(bytes, target, source)
+    return CapturedTemplate.of(bytes.toByteString(), target, source)
   }
 }

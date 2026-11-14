@@ -208,7 +208,7 @@ abstract class LiveryLauncherWidgetProvider : AppWidgetProvider() {
     val taps = ok.actions.mapValues { (actionId, action) -> tapIntent(context, id, actionId, action) }
     // No Impression: publishing isn't drawing, and a launcher doesn't say when (or whether) the
     // widget is on screen (PROTOCOL.md §8).
-    return Attempt.Drawn(RcLauncherWidgets.remoteViews(ok.bytes, taps))
+    return Attempt.Drawn(RcLauncherWidgets.remoteViews(ok.bytes.toByteArray(), taps))
   }
 
   /** Downloads an update's renders skipped, by widget, run after every widget is published. */

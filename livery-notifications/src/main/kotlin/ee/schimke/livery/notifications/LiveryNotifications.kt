@@ -180,7 +180,7 @@ class LiveryNotifications(
         // No Impression: posting isn't showing, and SystemUI doesn't say when the body is
         // expanded (PROTOCOL.md §8).
         // Wrapped so SystemUI's template can nest it on Android 17 (see the class docs).
-        Attempt(RcLauncherWidgets.notificationRemoteViews(result.bytes, taps), null, ready, appOwned)
+        Attempt(RcLauncherWidgets.notificationRemoteViews(result.bytes.toByteArray(), taps), null, ready, appOwned)
       }
     }
   }

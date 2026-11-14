@@ -1,5 +1,7 @@
 package ee.schimke.livery.mcp
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,12 +30,12 @@ class GitHistory(private val root: File) : CatalogHistory {
    * [file]'s bytes at [revision], or null when it didn't exist then. A commit [log] listed from
    * before a rename is read under the name the file had then.
    */
-  override suspend fun show(file: Path, revision: String): ByteArray? = withContext(Dispatchers.IO) { showBlocking(file, revision) }
+  override suspend fun show(file: Path, revision: String): ByteString? = withContext(Dispatchers.IO) { showBlocking(file, revision) }
 
-  private fun showBlocking(file: Path, revision: String): ByteArray? {
+  private fun showBlocking(file: Path, revision: String): ByteString? {
     require(REVISION.matches(revision)) { "bad revision '$revision'" }
     val commit = git("rev-parse", "--verify", "--quiet", "$revision^{commit}")?.trim() ?: return null
-    return gitBytes("show", "$commit:${pathAt(file, commit) ?: rel(file)}")
+    return gitBytes("show", "$commit:${pathAt(file, commit) ?: rel(file)}")?.toByteString()
   }
 
   /**

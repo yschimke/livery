@@ -1,5 +1,6 @@
 package ee.schimke.livery.compose
 
+import okio.ByteString
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -132,7 +133,7 @@ internal expect fun platformDisplay(): RcDisplay?
 internal expect fun AfterFirstTemplateFrame()
 
 /** Decodes PNG, WebP or JPEG bytes. */
-internal expect fun decodeImage(bytes: ByteArray): ImageBitmap
+internal expect fun decodeImage(bytes: ByteString): ImageBitmap
 
 /** A font from verified bytes, identified by their hash. */
-internal expect fun fontFrom(sha256: String, bytes: ByteArray, weight: FontWeight, style: FontStyle): Font
+internal expect fun fontFrom(sha256: String, bytes: ByteString, weight: FontWeight, style: FontStyle): Font

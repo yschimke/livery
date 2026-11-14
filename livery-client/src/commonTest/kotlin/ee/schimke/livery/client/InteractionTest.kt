@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.InputSpec
@@ -23,7 +25,7 @@ class InteractionTest {
     ),
   )
   private val plan = RenderPlan(
-    LoadedTemplate(TemplateEntry("ab".repeat(32), 1, "card", "demo/card@1", Target("in-app", 7)), null, byteArrayOf(), LoadedTemplate.Origin.Fresh, contract),
+    LoadedTemplate(TemplateEntry("ab".repeat(32), 1, "card", "demo/card@1", Target("in-app", 7)), null, ByteString.EMPTY, LoadedTemplate.Origin.Fresh, contract),
     contract, Bindings.EMPTY, experiments = mapOf("look" to "b"),
   )
 

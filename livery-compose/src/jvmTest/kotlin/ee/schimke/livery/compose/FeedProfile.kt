@@ -1,5 +1,6 @@
 package ee.schimke.livery.compose
 
+import okio.ByteString.Companion.toByteString
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,7 +151,7 @@ object FeedProfileMain {
             when (lane) {
               "livery", "livery-flat" -> LiverySlot(key = i, host = host, modifier = modifier, slotId = SLOT) { PlanResult.Ready(card.plan) }
               "rc", "rc-defer" -> {
-                val prepared = rememberRcPreparedDocument(card.plan.template.bytes, host.preparation)
+                val prepared = rememberRcPreparedDocument(remember(card.plan.template.bytes) { card.plan.template.bytes.toByteArray() }, host.preparation)
                 if (prepared != null) {
                   val values = remember(card) { mutableStateMapOf<String, ee.schimke.composeai.rcplayer.runtime.RcNamedValue>().apply { putAll(card.plan.bindings.toPlayerValues()) } }
                   androidx.compose.runtime.CompositionLocalProvider(ee.schimke.composeai.rcplayer.compose.LocalRcDeferLayoutAnimations provides (lane == "rc-defer")) {
@@ -191,7 +192,7 @@ object FeedProfileMain {
       return LoadedTemplate(
         entry = TemplateEntry(design, 0, design, contract.ref, Target(Surfaces.IN_APP, 7)),
         design = null,
-        bytes = File(samples, "designs/$design/in-app.rc").readBytes(),
+        bytes = File(samples, "designs/$design/in-app.rc").readBytes().toByteString(),
         origin = LoadedTemplate.Origin.Bundled,
         contract = contract,
       ) to contract

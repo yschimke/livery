@@ -1,5 +1,6 @@
 package ee.schimke.livery.mcp
 
+import okio.ByteString
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.targetMetadataOrNull
@@ -14,7 +15,7 @@ import okio.Path.Companion.toPath
  */
 interface McpHost {
   /** [template] with [bindings] as a PNG; null, or [HostUnavailable] with a reason, when this host can't render. */
-  suspend fun render(template: ByteArray, bindings: Bindings, spec: PreviewSpec): ByteArray? = null
+  suspend fun render(template: ByteString, bindings: Bindings, spec: PreviewSpec): ByteString? = null
 
   /** [tree]'s version history, or null when it has none (not a git checkout, or no git here). */
   fun history(tree: SourceTree): CatalogHistory? = null
@@ -54,5 +55,5 @@ interface CatalogHistory {
   suspend fun log(file: Path, limit: Int = 20): List<Change>
 
   /** [file]'s bytes at [revision], or null when it didn't exist then. */
-  suspend fun show(file: Path, revision: String): ByteArray?
+  suspend fun show(file: Path, revision: String): ByteString?
 }

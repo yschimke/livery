@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString
 import java.io.File
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
@@ -74,7 +75,7 @@ fun KeptExamples.missing(src: File, base: File): List<KeptExamples.Missing> = mi
 /** Writes [missing]'s data into [src]'s kept examples; returns the files written. */
 fun KeptExamples.keep(src: File, base: File): List<File> = keep(SYSTEM, src.toOkioPath(), base.toOkioPath()).map { it.toFile() }
 
-fun TemplateImport.into(src: File, designId: String, name: String, document: ByteArray, target: ee.schimke.livery.protocol.Target, source: Map<String, String> = emptyMap()): TemplateImport.Imported =
+fun TemplateImport.into(src: File, designId: String, name: String, document: ByteString, target: ee.schimke.livery.protocol.Target, source: Map<String, String> = emptyMap()): TemplateImport.Imported =
   into(SYSTEM, src.toOkioPath(), designId, name, document, target, source)
 
 fun TemplateImport.contract(src: File, ref: String): ee.schimke.livery.protocol.Contract = contract(SYSTEM, src.toOkioPath(), ref)
@@ -83,7 +84,7 @@ fun TemplateImport.contract(src: File, ref: String): ee.schimke.livery.protocol.
 @Suppress("UnusedReceiverParameter")
 fun PreviewCatalog.write(result: PreviewCatalog.Result, out: File): File {
   val dir = File(out, result.channel).apply { deleteRecursively(); mkdirs() }
-  result.output.files.forEach { (path, b) -> File(dir, path).apply { parentFile.mkdirs() }.writeBytes(b) }
-  File(dir, ee.schimke.livery.protocol.Manifest.FILE).writeBytes(result.output.manifestBytes)
+  result.output.files.forEach { (path, b) -> File(dir, path).writeByteString(b) }
+  File(dir, ee.schimke.livery.protocol.Manifest.FILE).writeByteString(result.output.manifestBytes)
   return dir
 }

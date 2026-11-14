@@ -1,5 +1,7 @@
 package ee.schimke.livery.web
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.livery.web.core.LiveryWeb
 import ee.schimke.livery.a2ui.A2uiTemplate
 import ee.schimke.livery.a2ui.A2uiDecision
@@ -96,7 +98,7 @@ class LiveryA2uiWeb(
      */
     data class Ready(
       val id: Int,
-      val document: ByteArray,
+      val document: ByteString,
       val documentKey: String,
       val values: Map<String, JsonElement>,
       val designId: String,
@@ -302,7 +304,7 @@ class LiveryA2uiWeb(
   private suspend fun inline(contract: Contract, template: JsonElement, dataset: JsonObject, decisionId: String?): Any {
     val t = template as? JsonObject ?: return "template must be {\"inline\": <base64>, \"signature\"?} or {\"sha256\", \"url\"?, \"signature\"?}"
     val text = t.str("inline") ?: return "template needs inline: the document as base64"
-    val bytes = runCatching { Base64.decode(text) }.getOrNull() ?: return "inline is not base64"
+    val bytes = runCatching { Base64.decode(text).toByteString() }.getOrNull() ?: return "inline is not base64"
     val signature = when (val s = signatureOf(t)) {
       is String -> return s
       else -> s as ManifestSignature?
@@ -322,7 +324,7 @@ class LiveryA2uiWeb(
   }
 
   /** [bytes] through [DocumentAdmission], then bound: the agent's own document, as it was sent. */
-  private suspend fun admitted(contract: Contract, bytes: ByteArray, signature: ManifestSignature?, dataset: JsonObject, decisionId: String?, expected: String? = null): Any {
+  private suspend fun admitted(contract: Contract, bytes: ByteString, signature: ManifestSignature?, dataset: JsonObject, decisionId: String?, expected: String? = null): Any {
     val admission = documents?.admit(bytes, contract, signature) ?: return "the page accepts no documents sent with a message"
     val admitted = when (admission) {
       is Admission.Refused -> return admission.reason

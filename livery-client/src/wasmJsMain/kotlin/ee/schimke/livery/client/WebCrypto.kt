@@ -2,6 +2,7 @@ package ee.schimke.livery.client
 
 import kotlin.js.Promise
 import kotlinx.coroutines.await
+import okio.ByteString
 
 /**
  * The browser's WebCrypto: SHA-256 (`crypto.subtle.digest`) and Ed25519 verification
@@ -9,14 +10,14 @@ import kotlinx.coroutines.await
  * refuses verifies as false, as [JavaCrypto] does.
  */
 object WebCrypto : Crypto {
-  override suspend fun sha256Hex(bytes: ByteArray): String {
-    val digest = toBytes(asUint8(digest(toJs(bytes)).await()))
+  override suspend fun sha256Hex(bytes: ByteString): String {
+    val digest = toBytes(asUint8(digest(toJs(bytes.toByteArray())).await()))
     return digest.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
   }
 
-  override suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean = runCatching {
-    val key = importEd25519(toJs(publicKey)).await<JsAny>()
-    verify(key, toJs(signature), toJs(message)).await<JsBoolean>().toBoolean()
+  override suspend fun verifyEd25519(publicKey: ByteString, message: ByteString, signature: ByteString): Boolean = runCatching {
+    val key = importEd25519(toJs(publicKey.toByteArray())).await<JsAny>()
+    verify(key, toJs(signature.toByteArray()), toJs(message.toByteArray())).await<JsBoolean>().toBoolean()
   }.getOrDefault(false)
 }
 

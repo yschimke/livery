@@ -11,18 +11,21 @@ import ee.schimke.livery.protocol.Surfaces
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.ValueType
+import okio.Buffer
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 
 /** Hashing for tests without a platform: content-addressed by a fake but stable digest. */
 object FakeCrypto : Crypto {
-  override suspend fun sha256Hex(bytes: ByteArray): String = sha(bytes)
+  override suspend fun sha256Hex(bytes: ByteString): String = sha(bytes)
 
-  fun sha(bytes: ByteArray): String {
+  fun sha(bytes: ByteString): String {
     var h = 1469598103934665603L
-    for (b in bytes) { h = h xor (b.toLong() and 0xFF); h *= 1099511628211L }
+    for (i in 0 until bytes.size) { h = h xor (bytes[i].toLong() and 0xFF); h *= 1099511628211L }
     return h.toULong().toString(16).padStart(16, '0').repeat(4)
   }
-  override suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray) =
-    signature.contentEquals(publicKey + message.size.toString().encodeToByteArray())
+  override suspend fun verifyEd25519(publicKey: ByteString, message: ByteString, signature: ByteString) =
+    signature == Buffer().write(publicKey).write(message.size.toString().encodeUtf8()).readByteString()
 }
 
 object Fx {
@@ -39,7 +42,7 @@ object Fx {
     ),
   )
 
-  fun blob(name: String) = "rc:$name".encodeToByteArray()
+  fun blob(name: String) = "rc:$name".encodeUtf8()
 
   fun entry(design: String, name: String, target: Target, revoked: Boolean = false): TemplateEntry {
     val b = blob(name)

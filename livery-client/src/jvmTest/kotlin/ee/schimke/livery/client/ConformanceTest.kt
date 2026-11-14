@@ -1,5 +1,8 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Arm
 import ee.schimke.livery.protocol.Conditions
@@ -67,10 +70,10 @@ class ConformanceTest {
   @Test fun exactBundledDocuments() = runBlocking {
     val m = Fx.manifest()
     val names = listOf("default-v7", "default-v8", "default-v9", "default-launcher", "default-wear-small", "retro-v7", "retro-launcher")
-    val blobs = names.associate { FakeCrypto.sha(Fx.blob(it)) to Fx.blob(it).decodeToString() }
+    val blobs = names.associate { FakeCrypto.sha(Fx.blob(it)) to Fx.blob(it).utf8() }
     val repository = TemplateRepository(StaticSource("https://catalog.invalid/"), Fetcher { _, _ -> error("no network") }, FakeCrypto,
       TrustPolicy.AllowUnsigned, MemoryBlobStore(), MemoryKeyValueStore(), Clock { 1_000 }, listOf(Fx.inApp),
-      TemplateRepository.Bundled(m) { blobs[it]?.encodeToByteArray() })
+      TemplateRepository.Bundled(m) { blobs[it]?.encodeUtf8() })
     val q = TemplateQuery(Fx.tile.ref, Fx.inApp)
     val cases = listOf(
       "installed exact" to ee.schimke.livery.protocol.TemplateRef(sha256 = m.templates[0].sha256),
@@ -430,15 +433,15 @@ class ConformanceTest {
       Base64.getEncoder().encodeToString(kp.private.encoded) to Base64.getEncoder().encodeToString(kp.public.encoded.takeLast(32).toByteArray())
     }
     val priv = KeyFactory.getInstance("Ed25519").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKey)))
-    val pub = Base64.getDecoder().decode(publicKey)
-    fun sign(bytes: ByteArray) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(bytes); sign() })
+    val pub = Base64.getDecoder().decode(publicKey).toByteString()
+    fun sign(bytes: ByteString) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(bytes.toByteArray()); sign() })
 
-    val manifest = """{"catalog":"conformance","serial":7,"generatedAtEpochMs":0,"expiresAtEpochMs":1,"designs":[{"id":"d","contract":"ads/banner@1","title":"D"}]}""".encodeToByteArray()
+    val manifest = """{"catalog":"conformance","serial":7,"generatedAtEpochMs":0,"expiresAtEpochMs":1,"designs":[{"id":"d","contract":"ads/banner@1","title":"D"}]}""".encodeUtf8()
     val good = sign(manifest)
-    val tampered = manifest.decodeToString().replace("\"serial\":7", "\"serial\":8").encodeToByteArray()
+    val tampered = manifest.utf8().replace("\"serial\":7", "\"serial\":8").encodeUtf8()
     val keys = listOf(TrustedKey("k1", pub))
     val scoped = listOf(TrustedKey("k1", pub, setOf("promo/")))
-    data class Case(val name: String, val bytes: ByteArray, val sig: ManifestSignature?, val trust: List<TrustedKey>)
+    data class Case(val name: String, val bytes: ByteString, val sig: ManifestSignature?, val trust: List<TrustedKey>)
     val cases = listOf(
       Case("valid", manifest, ManifestSignature(keyId = "k1", signature = good), keys),
       Case("tampered body", tampered, ManifestSignature(keyId = "k1", signature = good), keys),
@@ -448,14 +451,14 @@ class ConformanceTest {
       Case("unsigned", manifest, null, keys),
       Case("key outside its contract scope", manifest, ManifestSignature(keyId = "k1", signature = good), scoped),
     ).map { c ->
-      val v = ManifestVerifier(JavaCrypto, TrustPolicy.Signed(c.trust)).verify(c.bytes, c.sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.decodeToString()) }
+      val v = ManifestVerifier(JavaCrypto, TrustPolicy.Signed(c.trust)).verify(c.bytes, c.sig) { Json { ignoreUnknownKeys = true }.decodeFromString(Manifest.serializer(), it.utf8()) }
       buildJsonObject {
         put("name", c.name)
-        put("manifestBase64", Base64.getEncoder().encodeToString(c.bytes))
+        put("manifestBase64", Base64.getEncoder().encodeToString(c.bytes.toByteArray()))
         c.sig?.let { put("signature", json.encodeToJsonElement(ManifestSignature.serializer(), it)) }
         put("trust", kotlinx.serialization.json.JsonArray(c.trust.map { k ->
           buildJsonObject {
-            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey))
+            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey.toByteArray()))
             if (k.contractPrefixes.isNotEmpty()) put("contractPrefixes", kotlinx.serialization.json.JsonArray(k.contractPrefixes.map { kotlinx.serialization.json.JsonPrimitive(it) }))
           }
         }))
@@ -478,8 +481,8 @@ class ConformanceTest {
     val keys = Json.parseToJsonElement(File(dir, "signing.json").readText()).jsonObject
     fun str(key: String) = (keys[key] as kotlinx.serialization.json.JsonPrimitive).content
     val priv = KeyFactory.getInstance("Ed25519").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(str("testPrivateKeyPkcs8"))))
-    val pub = Base64.getDecoder().decode(str("testPublicKey"))
-    fun sign(contract: String, sha: String) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(TemplateSignatures.message(contract, sha)); sign() })
+    val pub = Base64.getDecoder().decode(str("testPublicKey")).toByteString()
+    fun sign(contract: String, sha: String) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(priv); update(TemplateSignatures.message(contract, sha).toByteArray()); sign() })
     val sha = "ab".repeat(32)
     val other = "cd".repeat(32)
     val good = sign("promo/banner@1", sha)
@@ -503,7 +506,7 @@ class ConformanceTest {
         put("signature", json.encodeToJsonElement(ManifestSignature.serializer(), c.sig))
         put("trust", kotlinx.serialization.json.JsonArray(c.trust.map { k ->
           buildJsonObject {
-            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey))
+            put("keyId", k.keyId); put("publicKey", Base64.getEncoder().encodeToString(k.publicKey.toByteArray()))
             if (k.contractPrefixes.isNotEmpty()) put("contractPrefixes", kotlinx.serialization.json.JsonArray(k.contractPrefixes.map { kotlinx.serialization.json.JsonPrimitive(it) }))
           }
         }))

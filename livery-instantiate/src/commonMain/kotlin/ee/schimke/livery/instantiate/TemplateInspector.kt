@@ -1,5 +1,6 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.edit.bitmapUrls
 import ee.schimke.composeai.rcplayer.edit.namedVariables
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
@@ -40,8 +41,8 @@ object TemplateInspector {
   val HOST_NAMES: Set<String> = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR + ScreenValues.NAMES
 
   /** The document's facts, or null when the bytes aren't a Remote Compose document. */
-  fun facts(template: ByteArray): TemplateFacts? = runCatching {
-    val d = RcDocumentCodec.decode(template, RcWireLimits())
+  fun facts(template: ByteString): TemplateFacts? = runCatching {
+    val d = RcDocumentCodec.decode(template.toByteArray(), RcWireLimits())
     // A data-bound image (`livery:value/<input>`) is a read too: the player never sees it as a named
     // value, but the slot's binding for that input is what it draws.
     val images = d.bitmapUrls.filter { it.startsWith(TemplateInstantiator.VALUE_PREFIX) }.map { it.removePrefix(TemplateInstantiator.VALUE_PREFIX) }
@@ -56,7 +57,7 @@ object TemplateInspector {
    * Problems with [template] against its sidecar's [reads] and [emits]; empty when it is consistent.
    * Names a host writes itself (a Wear container's `wear.container.*`) need no declaration.
    */
-  fun problems(template: ByteArray, reads: Collection<String>, emits: Collection<String>): List<String> {
+  fun problems(template: ByteString, reads: Collection<String>, emits: Collection<String>): List<String> {
     val f = facts(template) ?: return listOf("not a Remote Compose document")
     return buildList {
       val undeclared = f.declaredReads - reads.toSet()
@@ -70,7 +71,7 @@ object TemplateInspector {
    * Values [template] reads as a different type than [contract] declares: a document's named value
    * carries a typed default, and a value of the wrong type would never be written into it.
    */
-  fun typeProblems(template: ByteArray, contract: Contract): List<String> {
+  fun typeProblems(template: ByteString, contract: Contract): List<String> {
     val f = facts(template) ?: return listOf("not a Remote Compose document")
     return f.types.entries.sortedBy { it.key }.flatMap { (name, used) -> used.sorted().map { name to it } }.mapNotNull { (name, rcType) ->
       // A list's count is always bound as an int (PROTOCOL.md §4.1).
