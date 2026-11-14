@@ -2,23 +2,23 @@
 <rect width="100%" height="100%" rx="8" fill="#fafafa" stroke="#ddd"/>
 <text x="16" y="26" font-size="15" font-weight="600" fill="#222">Fling: milliseconds per frame (median of the iterations)</text>
 <text x="240" y="74" text-anchor="end" fill="#222">main thread busy, whole window</text>
-<rect x="250" y="56" width="464.3" height="15" fill="#6c8ebf" opacity="0.55"><title>Compose UI: 3.21 ms</title></rect>
-<text x="720.3" y="68" fill="#333" font-size="11">3.21 · Compose UI</text>
-<rect x="250" y="74" width="450.1" height="15" fill="#6c8ebf" opacity="1"><title>Livery: 3.12 ms</title></rect>
-<text x="706.1" y="86" fill="#333" font-size="11">3.12 · Livery</text>
+<rect x="250" y="56" width="410.5" height="15" fill="#6c8ebf" opacity="0.55"><title>Compose UI: 2.91 ms</title></rect>
+<text x="666.5" y="68" fill="#333" font-size="11">2.91 · Compose UI</text>
+<rect x="250" y="74" width="464.3" height="15" fill="#6c8ebf" opacity="1"><title>Livery: 3.29 ms</title></rect>
+<text x="720.3" y="86" fill="#333" font-size="11">3.29 · Livery</text>
 <text x="240" y="136" text-anchor="end" fill="#222">of which in the frame (doFrame)</text>
-<rect x="250" y="118" width="291.9" height="15" fill="#e0a030" opacity="0.55"><title>Compose UI: 2.02 ms</title></rect>
-<text x="547.9" y="130" fill="#333" font-size="11">2.02 · Compose UI</text>
-<rect x="250" y="136" width="291.9" height="15" fill="#e0a030" opacity="1"><title>Livery: 2.02 ms</title></rect>
-<text x="547.9" y="148" fill="#333" font-size="11">2.02 · Livery</text>
+<rect x="250" y="118" width="261.2" height="15" fill="#e0a030" opacity="0.55"><title>Compose UI: 1.85 ms</title></rect>
+<text x="517.2" y="130" fill="#333" font-size="11">1.85 · Compose UI</text>
+<rect x="250" y="136" width="295.0" height="15" fill="#e0a030" opacity="1"><title>Livery: 2.09 ms</title></rect>
+<text x="551.0" y="148" fill="#333" font-size="11">2.09 · Livery</text>
 <text x="240" y="198" text-anchor="end" fill="#222">of which outside it (prefetch, input)</text>
-<rect x="250" y="180" width="167.5" height="15" fill="#5aa469" opacity="0.55"><title>Compose UI: 1.16 ms</title></rect>
-<text x="423.5" y="192" fill="#333" font-size="11">1.16 · Compose UI</text>
-<rect x="250" y="198" width="158.8" height="15" fill="#5aa469" opacity="1"><title>Livery: 1.10 ms</title></rect>
-<text x="414.8" y="210" fill="#333" font-size="11">1.10 · Livery</text>
+<rect x="250" y="180" width="149.1" height="15" fill="#5aa469" opacity="0.55"><title>Compose UI: 1.06 ms</title></rect>
+<text x="405.1" y="192" fill="#333" font-size="11">1.06 · Compose UI</text>
+<rect x="250" y="198" width="169.5" height="15" fill="#5aa469" opacity="1"><title>Livery: 1.20 ms</title></rect>
+<text x="425.5" y="210" fill="#333" font-size="11">1.20 · Livery</text>
 <text x="240" y="260" text-anchor="end" fill="#222">RenderThread draw</text>
-<rect x="250" y="242" width="355.0" height="15" fill="#b56cbf" opacity="0.55"><title>Compose UI: 2.46 ms</title></rect>
-<text x="611.0" y="254" fill="#333" font-size="11">2.46 · Compose UI</text>
-<rect x="250" y="260" width="281.8" height="15" fill="#b56cbf" opacity="1"><title>Livery: 1.95 ms</title></rect>
-<text x="537.8" y="272" fill="#333" font-size="11">1.95 · Livery</text>
+<rect x="250" y="242" width="325.7" height="15" fill="#b56cbf" opacity="0.55"><title>Compose UI: 2.31 ms</title></rect>
+<text x="581.7" y="254" fill="#333" font-size="11">2.31 · Compose UI</text>
+<rect x="250" y="260" width="301.1" height="15" fill="#b56cbf" opacity="1"><title>Livery: 2.13 ms</title></rect>
+<text x="557.1" y="272" fill="#333" font-size="11">2.13 · Livery</text>
 </svg>

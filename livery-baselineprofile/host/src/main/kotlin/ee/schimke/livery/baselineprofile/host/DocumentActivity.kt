@@ -101,6 +101,23 @@ class DocumentActivity : ComponentActivity() {
     val planner = SlotPlanner(repository, {}, clock)
     val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
 
+    // No frame is drawn until the document can be, as an app keeps its splash screen up until its
+    // first screen is ready (LiveryResources.startup, core-splashscreen's setKeepOnScreenCondition,
+    // which works the same way): the system's starting window stays up, composition carries on, and
+    // the first frame drawn has the document in it. So "initial display" is the first frame with the
+    // document on every lane, not an empty frame the Remote Compose lanes drew while they planned.
+    var contentComposed = false
+    val decor = window.decorView
+    decor.viewTreeObserver.addOnPreDrawListener(
+      object : android.view.ViewTreeObserver.OnPreDrawListener {
+        override fun onPreDraw(): Boolean {
+          if (!contentComposed) return false
+          decor.viewTreeObserver.removeOnPreDrawListener(this)
+          return true
+        }
+      },
+    )
+
     setContent {
       val display = rememberLiveryDisplay()
       var version by remember { mutableIntStateOf(0) }
@@ -130,6 +147,9 @@ class DocumentActivity : ComponentActivity() {
       var drawn by remember { mutableStateOf(false) }
       LaunchedEffect(available) {
         if (available) {
+          // The document is composed: let the first frame draw (see the pre-draw hold above).
+          contentComposed = true
+          decor.invalidate()
           // After the first frame that has the document in it: the start-up benchmark's end point.
           withFrameNanos { }
           drawn = true

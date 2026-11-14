@@ -20,8 +20,10 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   template takes its own height, so it is a card on a full screen, not a design that fills the
   height) and `thePollTwinMatchesInTheFullScreenFrame` holds the twin to the template there. A
   design that really fills the screen needs its own twin.
-- Start-up is measured to a first frame with the document in it: the activity calls
-  `reportFullyDrawn()` after that frame, so read `timeToFullDisplayMs`, not the initial display time.
+- Start-up is measured to a first frame with the document in it: the activity holds its first frame
+  until the document can draw (as an app keeps its splash screen up), so `timeToInitialDisplayMs` is
+  that frame on every lane, and calls `reportFullyDrawn()` after it, so `timeToFullDisplayMs` is the
+  frame after.
 
 ## Status
 
@@ -108,8 +110,13 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
 - **Twin parity is checked at density 2.0 only.** On the Pixel 9 (2.625) the twin's card is a little
   taller than the template's (about 1–2 dp). Add a parity case at 2.625 (and 3.0) before treating the
   lanes as the same pixels; if the twin is the one that is off, fix the twin.
-- **The Remote Compose lanes recompose twice per data change** (20 recompositions for 10 changes, the
-  twin 10). Consistent with `LiveryTemplate` pushing the values from a `SideEffect`; unconfirmed.
+- **The Remote Compose lanes recompose twice per data change**: 10 recompositions for 10 changes in the
+  twin, 20 in the player alone, 21 in Livery, the same in all five iterations. The player alone has none
+  of `LiveryTemplate` in its path, so the second pass is in the player (or in how the host hands it new
+  values), not in Livery's `SideEffect`, which this note used to suspect. Find out why in rc-players:
+  trace what invalidates the second pass.
+- **The first run and the second differ by a few tenths of a millisecond in the fling, and the order of
+  Livery and the twin's main-thread time flipped.** Read differences under about 0.5 ms as noise.
 - **Start-up needs a frame after `reportFullyDrawn()`** and the emoji2 initializer out of the host (see
   the manifest), or the metric measures the next unrelated frame (~690 ms in every lane).
 - **The document host plans ten variants before its first draw**, in the Livery and player lanes only:

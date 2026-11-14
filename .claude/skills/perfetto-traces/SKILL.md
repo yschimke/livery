@@ -29,6 +29,22 @@ It takes the median over the iterations of two lanes (`composeUi`, `livery`, `rc
 `startup-timeline.svg` and `fling-per-frame.svg`. Its SQL is in the script; extend that, do not paste
 one-off queries into the page.
 
+## Screenshots of the Perfetto UI
+
+```sh
+python3 livery-baselineprofile/traces/screenshots.py <dir with the traces> <output dir> \
+  --chrome <chromium> --node-modules <dir with playwright-core>
+```
+
+Writes `perfetto-{startup,fling}-{compose-ui,livery}.png`: the pinned launch, frame, main-thread and render-thread
+tracks, zoomed. It downloads the official UI once (every file checked against its SHA-256 manifest), serves it and
+the trace from `127.0.0.1`, and drives it with Playwright, so nothing is uploaded and the traces are never copied
+out. A pair shares one time span, one pixel size and the same "ms" flags, because the UI's ruler shows each trace's
+own clock: when two lanes are shown side by side they must be on one scale. The hosted `ui.perfetto.dev` cannot be
+used from the in-app browser (it blocks the fetch of a localhost trace); the self-hosted copy can. Settable from
+script: `app.trace.timeline.setVisibleWindow(HighPrecisionTimeSpan.fromTime(start, end))`, `node.pin()` on the
+`app.trace.workspaces.currentWorkspace.tracks` tree, `app.trace.notes.addNote({timestamp, text, color})`.
+
 ## trace_processor_shell
 
 Macrobenchmark downloads one to `~/.local/share/perfetto/prebuilts/trace_processor_shell-<hash>`. Otherwise
