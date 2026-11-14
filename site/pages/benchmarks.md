@@ -22,12 +22,13 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 one after another rather than interleaved: differences of a few tenths of a millisecond are inside the
 noise, and are shown so you can see that, not as a ranking.
 
-The two screens, as the benchmark host draws them on the phone: the Compose UI twin on the left, the
-Livery template on the right.
+The two screens, whole, as the benchmark host draws them on the phone: the Compose UI twin on the left, the
+Livery template on the right. The sample template takes its own height, so the card sits at the top of
+a full screen; a design that fills the screen needs its own twin.
 
 <div style="display:flex;gap:1rem;flex-wrap:wrap">
-<figure style="margin:0"><img src="assets/benchmarks/document-compose-ui.png" alt="The poll card drawn in Compose UI on the Pixel 9" width="270" height="160"><figcaption>Compose UI twin</figcaption></figure>
-<figure style="margin:0"><img src="assets/benchmarks/document-livery.png" alt="The same poll card drawn by Livery on the Pixel 9" width="270" height="160"><figcaption>Livery</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/document-compose-ui.png" alt="The poll card drawn in Compose UI on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/document-livery.png" alt="The same poll card drawn by Livery on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
 </div>
 
 They are not pixel-identical on the phone. The twin's card is a little taller (about 1–2 dp, the rows
