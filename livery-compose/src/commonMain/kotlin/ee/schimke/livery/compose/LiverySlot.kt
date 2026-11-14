@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import ee.schimke.livery.client.DesignSummary
+import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.TemplateRepository
 
@@ -60,7 +61,12 @@ fun LiverySlot(
   suspend fun planned(): PlanResult = plan().let { planned ->
     if (planned !is PlanResult.Ready) return@let planned
     val template = planned.plan.template
-    host.resources.readyToDraw(template, display)
+    // Readied as the host prepares: in the background on its context, or (a host that prepares in
+    // composition) only its fonts, the document left for the card's own first composition.
+    when (val preparation = host.preparation) {
+      is RcPreparation.Background -> host.resources.readyToDraw(template, display, preparation.context)
+      else -> runCatching { host.resources.typefaces(template) }
+    }
     // A template whose bytes the player cannot play draws the app's fallback, never nothing.
     if (host.resources.cannotPlay(template)) PlanResult.Fallback("${template.entry.designId} cannot be played") else planned
   }
@@ -68,6 +74,8 @@ fun LiverySlot(
   // rather than its fallback for a frame; it still replans, and a new answer replaces it. One with
   // none, before the screen's first frame, plans off the main thread and waits for it here, within
   // the host's first-frame budget, so the first frame has its card rather than its fallback.
+  // A window that has drawn already (other content first, then this slot) is past its first frame.
+  if (windowHasDrawn()) host.resources.firstFrameDrawn = true
   val first = remember(key, host, slotId) {
     val last = slotId?.let { host.resources.lastPlan(it, key, revision) }
     val early = if (last == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null

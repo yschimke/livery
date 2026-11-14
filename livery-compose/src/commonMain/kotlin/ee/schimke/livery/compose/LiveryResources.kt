@@ -247,9 +247,13 @@ class LiveryResources(
    * its fonts (not the images a card shows, which arrive with the card). A card of it then draws
    * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
    */
-  suspend fun readyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display) {
+  suspend fun readyToDraw(
+    template: LoadedTemplate,
+    display: RcDisplay? = this.display,
+    context: CoroutineContext = Dispatchers.Default,
+  ) {
     coroutineScope {
-      launch { prepareOrNull(template, display) }
+      launch { prepareOrNull(template, display, context) }
       launch { runCatching { typefaces(template) } }
     }
   }

@@ -184,13 +184,15 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   }
   // Before the screen's first frame, a card that is not ready yet (nobody prepared its template)
   // waits for it here, within the host's first-frame budget, and draws on that frame from memory.
+  if (windowHasDrawn()) host.resources.firstFrameDrawn = true
   val readiedForFirstFrame = remember(bytes, host, display) {
     val ready = preparedState.value != null && typefaceState.value != null
     if (ready || host.resources.cannotPlay(plan.template)) false
     else host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) {
       // On the host's preparation context, as the card's own preparation below would run.
       kotlinx.coroutines.coroutineScope {
-        launch { prepareOrNull(plan.template, display, background?.context ?: kotlinx.coroutines.Dispatchers.Default) }
+        // A host that prepares in composition prepares the document there; only fonts load ahead.
+        if (background != null) launch { prepareOrNull(plan.template, display, background.context) }
         launch { runCatching { typefaces(plan.template) } }
       }
     }

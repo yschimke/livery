@@ -11,6 +11,14 @@ import kotlinx.coroutines.Deferred
  */
 internal expect fun <T> awaitBlocking(deferred: Deferred<T>, millis: Long): T?
 
+/**
+ * Whether the window this composes in has already drawn a frame: a screen showing other content
+ * first, then a card. Where a platform cannot tell, false, and [LiveryResources.firstFrameDrawn] (a
+ * card's first frame) decides alone.
+ */
+@Composable
+internal expect fun windowHasDrawn(): Boolean
+
 /** Marks [resources]' first frame drawn, after it is: from then on nothing waits for one. */
 @Composable
 internal fun MarkFirstFrameDrawn(resources: LiveryResources) {
