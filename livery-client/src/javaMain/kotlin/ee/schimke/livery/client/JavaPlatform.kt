@@ -51,7 +51,7 @@ class LocalFetcher(
   override suspend fun get(url: String, etag: String?): FetchResult = withContext(Dispatchers.IO) {
     when {
       url.startsWith("file:") -> File(URI(url)).toOkioPath().let { path ->
-        if (fileSystem.metadataOrNull(path)?.isRegularFile == true) FetchResult.Ok(fileSystem.read(path) { readByteString() }, null) else FetchResult.Failed(404, "missing $path")
+        if (fileSystem.isFile(path)) FetchResult.Ok(fileSystem.read(path) { readByteString() }, null) else FetchResult.Failed(404, "missing $path")
       }
       url.startsWith("asset://") ->
         runCatching { assets?.invoke(url.removePrefix("asset://")) }.getOrNull()?.let { FetchResult.Ok(it, null) }
@@ -71,7 +71,7 @@ class FileBlobStore(private val fileSystem: FileSystem, private val dir: Path) :
     return dir / "$sha.rc"
   }
   override suspend fun get(sha256: String): ByteString? = withContext(Dispatchers.IO) {
-    f(sha256).takeIf { fileSystem.metadataOrNull(it)?.isRegularFile == true }?.let { fileSystem.read(it) { readByteString() } }
+    f(sha256).takeIf { fileSystem.isFile(it) }?.let { fileSystem.read(it) { readByteString() } }
   }
   override suspend fun put(sha256: String, bytes: ByteString) = withContext(Dispatchers.IO) { atomicWrite(fileSystem, f(sha256), bytes) }
   override suspend fun delete(sha256: String) { withContext(Dispatchers.IO) { fileSystem.delete(f(sha256), mustExist = false) } }
@@ -87,7 +87,7 @@ class FileKeyValueStore(private val fileSystem: FileSystem, private val dir: Pat
   /** A collision-free file name: the SHA-256 of the whole key (keys hold URLs and arbitrary ids). */
   private fun f(key: String): Path = dir / key.encodeUtf8().sha256().hex()
   override suspend fun get(key: String): String? = withContext(Dispatchers.IO) {
-    f(key).takeIf { fileSystem.metadataOrNull(it)?.isRegularFile == true }?.let { fileSystem.read(it) { readUtf8() } }
+    f(key).takeIf { fileSystem.isFile(it) }?.let { fileSystem.read(it) { readUtf8() } }
   }
   override suspend fun put(key: String, value: String) = withContext(Dispatchers.IO) { atomicWrite(fileSystem, f(key), value.encodeUtf8()) }
   override suspend fun remove(key: String) { withContext(Dispatchers.IO) { fileSystem.delete(f(key), mustExist = false) } }
@@ -112,3 +112,7 @@ internal fun atomicWrite(fileSystem: FileSystem, target: Path, bytes: ByteString
     fileSystem.delete(tmp, mustExist = false)
   }
 }
+
+/** A regular file, following symbolic links as `File.isFile` does (okio's metadata describes the link itself). */
+private fun FileSystem.isFile(path: Path): Boolean =
+  try { metadataOrNull(canonicalize(path))?.isRegularFile == true } catch (_: java.io.IOException) { false }
