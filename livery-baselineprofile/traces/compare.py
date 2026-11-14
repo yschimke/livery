@@ -129,7 +129,7 @@ union all select 'whole window, per frame ms: Recomposer:recompose', round((sele
 union all select 'whole window, per frame count: Compose:recompose passes', round((select count(*) from win where name = 'Compose:recompose') * 1.0 / (select n from w), 2)
 union all select 'whole window, per frame count: text layouts (TextLayout:initLayout)', round((select count(*) from win where name = 'TextLayout:initLayout') * 1.0 / (select n from w), 2)
 union all select 'whole window, per frame ms: text layout', round((select coalesce(sum(dur), 0) from win where name = 'TextLayout:initLayout') / 1e6 / (select n from w), 3)
-union all select 'whole window, per frame ms: livery:compose (a card\'s composition, Livery only)', round((select coalesce(sum(dur), 0) from win where name like 'livery:compose:%') / 1e6 / (select n from w), 3)
+union all select 'whole window, per frame ms: livery:compose (one card composition, Livery only)', round((select coalesce(sum(dur), 0) from win where name like 'livery:compose:%') / 1e6 / (select n from w), 3)
 """
 
 
