@@ -1,0 +1,163 @@
+{
+  "device": "Pixel 9, Android API 37, charging at 72%",
+  "date": "2026-11-14",
+  "commit": "7234e7d",
+  "rc-players": "3.3.0",
+  "method": "Macrobenchmark, benchmarkRelease with the shipped baseline profiles (CompilationMode.Partial), 5 iterations per test, lanes run one after another (not interleaved)",
+  "results": {
+    "DocumentBenchmark.composeUiChange": {
+      "frameCount": 10.0,
+      "frameDurationCpuMs": {
+        "P50": 4.7,
+        "P90": 5.9,
+        "P99": 9.5
+      },
+      "frameOverrunMs": {
+        "P50": -9.7,
+        "P90": -8.2,
+        "P99": -3.2
+      }
+    },
+    "DocumentBenchmark.composeUiStartup": {
+      "timeToFullDisplayMs": 689.6,
+      "timeToInitialDisplayMs": 186.1
+    },
+    "DocumentBenchmark.liveryChange": {
+      "frameCount": 30.0,
+      "frameDurationCpuMs": {
+        "P50": 3.8,
+        "P90": 7.0,
+        "P99": 9.5
+      },
+      "frameOverrunMs": {
+        "P50": -10.6,
+        "P90": -7.4,
+        "P99": -5.3
+      }
+    },
+    "DocumentBenchmark.liveryInCompositionStartup": {
+      "timeToFullDisplayMs": 679.6,
+      "timeToInitialDisplayMs": 146.6
+    },
+    "DocumentBenchmark.liveryNoDeferChange": {
+      "frameCount": 29.0,
+      "frameDurationCpuMs": {
+        "P50": 3.5,
+        "P90": 6.7,
+        "P99": 9.1
+      },
+      "frameOverrunMs": {
+        "P50": -11.0,
+        "P90": -7.7,
+        "P99": -5.6
+      }
+    },
+    "DocumentBenchmark.liveryNoDeferStartup": {
+      "timeToFullDisplayMs": 694.5,
+      "timeToInitialDisplayMs": 152.3
+    },
+    "DocumentBenchmark.liveryNoFlatChange": {
+      "frameCount": 30.0,
+      "frameDurationCpuMs": {
+        "P50": 3.4,
+        "P90": 7.4,
+        "P99": 10.7
+      },
+      "frameOverrunMs": {
+        "P50": -11.1,
+        "P90": -7.3,
+        "P99": -4.2
+      }
+    },
+    "DocumentBenchmark.liveryNoFlatStartup": {
+      "timeToFullDisplayMs": 697.2,
+      "timeToInitialDisplayMs": 150.3
+    },
+    "DocumentBenchmark.liveryStartup": {
+      "timeToFullDisplayMs": 695.3,
+      "timeToInitialDisplayMs": 150.8
+    },
+    "DocumentBenchmark.rcPlayerChange": {
+      "frameCount": 21.0,
+      "frameDurationCpuMs": {
+        "P50": 3.7,
+        "P90": 8.1,
+        "P99": 9.2
+      },
+      "frameOverrunMs": {
+        "P50": -10.7,
+        "P90": -6.6,
+        "P99": -5.4
+      }
+    },
+    "DocumentBenchmark.rcPlayerStartup": {
+      "timeToFullDisplayMs": 692.3,
+      "timeToInitialDisplayMs": 148.1
+    },
+    "FeedScrollBenchmark.composeUi": {
+      "frameCount": 655.0,
+      "frameDurationCpuMs": {
+        "P50": 3.8,
+        "P90": 5.9,
+        "P99": 8.0
+      },
+      "frameOverrunMs": {
+        "P50": -10.2,
+        "P90": -8.4,
+        "P99": -6.3
+      }
+    },
+    "FeedScrollBenchmark.livery": {
+      "frameCount": 663.0,
+      "frameDurationCpuMs": {
+        "P50": 3.4,
+        "P90": 6.0,
+        "P99": 9.2
+      },
+      "frameOverrunMs": {
+        "P50": -10.5,
+        "P90": -8.0,
+        "P99": -4.8
+      }
+    },
+    "FeedScrollBenchmark.liveryNoDefer": {
+      "frameCount": 677.0,
+      "frameDurationCpuMs": {
+        "P50": 4.1,
+        "P90": 6.3,
+        "P99": 8.4
+      },
+      "frameOverrunMs": {
+        "P50": -9.9,
+        "P90": -7.6,
+        "P99": -5.5
+      }
+    },
+    "FeedScrollBenchmark.liveryNoFlat": {
+      "frameCount": 674.0,
+      "frameDurationCpuMs": {
+        "P50": 4.0,
+        "P90": 6.3,
+        "P99": 9.3
+      },
+      "frameOverrunMs": {
+        "P50": -10.0,
+        "P90": -7.8,
+        "P99": -4.8
+      }
+    },
+    "FeedScrollBenchmark.rcPlayer": {
+      "frameCount": 669.0,
+      "frameDurationCpuMs": {
+        "P50": 4.1,
+        "P90": 6.5,
+        "P99": 8.9
+      },
+      "frameOverrunMs": {
+        "P50": -9.8,
+        "P90": -7.6,
+        "P99": -5.3
+      }
+    }
+  }
+}

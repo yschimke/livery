@@ -25,7 +25,7 @@ NAV = [
                    "use-cases/launcher-widgets", "use-cases/wear-widgets",
                    "use-cases/notifications", "use-cases/web", "component-previews"]),
     ("Running it", ["repository-mode", "authoring", "hosting", "signing", "images-and-fonts", "analytics-and-experiments", "interaction-tracking", "ai-workflows", "platforms"]),
-    ("Reference", ["protocol"]),
+    ("Reference", ["protocol", "benchmarks"]),
 ]
 
 
