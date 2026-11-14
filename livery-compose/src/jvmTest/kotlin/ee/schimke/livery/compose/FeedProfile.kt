@@ -132,12 +132,13 @@ object FeedProfileMain {
       val host = LiveryHost(
         repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock,
         resources = LiveryResources(repository, maxPlans = ITEMS),
+        flattenLayout = lane == "livery-flat",
       )
       host.resources.display = display
       runBlocking {
         when (lane) {
-          "livery" -> cards.forEachIndexed { i, c -> host.resources.prepareSlot(SLOT, i) { PlanResult.Ready(c.plan) } }
-          "rc" -> listOf(banner, poll).forEach { host.resources.readyToDraw(it.first, display) }
+          "livery", "livery-flat" -> cards.forEachIndexed { i, c -> host.resources.prepareSlot(SLOT, i) { PlanResult.Ready(c.plan) } }
+          "rc", "rc-defer" -> listOf(banner, poll).forEach { host.resources.readyToDraw(it.first, display) }
         }
       }
       val list = LazyListState()
@@ -147,12 +148,14 @@ object FeedProfileMain {
             val card = cards[i]
             val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             when (lane) {
-              "livery" -> LiverySlot(key = i, host = host, modifier = modifier, slotId = SLOT) { PlanResult.Ready(card.plan) }
-              "rc" -> {
+              "livery", "livery-flat" -> LiverySlot(key = i, host = host, modifier = modifier, slotId = SLOT) { PlanResult.Ready(card.plan) }
+              "rc", "rc-defer" -> {
                 val prepared = rememberRcPreparedDocument(card.plan.template.bytes, host.preparation)
                 if (prepared != null) {
                   val values = remember(card) { mutableStateMapOf<String, ee.schimke.composeai.rcplayer.runtime.RcNamedValue>().apply { putAll(card.plan.bindings.toPlayerValues()) } }
-                  RcComposePlayer(prepared, modifier, namedValues = values)
+                  androidx.compose.runtime.CompositionLocalProvider(ee.schimke.composeai.rcplayer.compose.LocalRcDeferLayoutAnimations provides (lane == "rc-defer")) {
+                    RcComposePlayer(prepared, modifier, namedValues = values)
+                  }
                 }
               }
               else -> card.twin(modifier)
