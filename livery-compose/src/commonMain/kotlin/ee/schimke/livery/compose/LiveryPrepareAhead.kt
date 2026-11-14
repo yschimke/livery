@@ -9,7 +9,9 @@ import ee.schimke.livery.client.PlanResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -63,6 +65,9 @@ fun LiveryPrepareAhead(
     val inFlight = HashSet<Any?>()
     // The collector and the workers on [context] both touch the set.
     val lock = Mutex()
+    // Bumped when a request is dropped because its item moved: the window is asked again, since the item's new index
+    // was skipped while the old request held its key.
+    val moved = MutableStateFlow(0)
     // The keys and the repository's revision are part of what is observed: an item that loads (a paging placeholder
     // becoming an item) without the window or the count moving, and a catalog refresh or install (which makes every kept
     // answer unusable), both get the window requested again.
@@ -71,7 +76,7 @@ fun LiveryPrepareAhead(
       // A key callback over a list that has just shrunk can throw: that item is not there, so it has no key.
       range.map { it to runCatching { currentKey.value(it) }.getOrNull() }
     }
-    combine(window, host.repository.revision) { items, revision -> items to revision }.collect { (items, revision) ->
+    combine(window, host.repository.revision, moved) { items, revision, _ -> items to revision }.collect { (items, revision) ->
       for ((index, itemKey) in items) {
         // No key: the item is not loaded yet; asked again when its key appears.
         if (itemKey == null) continue
@@ -80,6 +85,7 @@ fun LiveryPrepareAhead(
         if (!lock.withLock { inFlight.add(itemKey) }) continue
         // Off the main thread: the app's planning and the preparation run on [context], one request per item.
         launch(context) {
+          var itemMoved = false
           try {
             // A catalog change while it plans (the revision moved on, and this key was in flight so the new window skipped
             // it) plans it again, a few times at most.
@@ -87,7 +93,7 @@ fun LiveryPrepareAhead(
             repeat(MAX_REPLANS) {
               val result = currentPlan.value(index)
               val sameItem = runCatching { currentKey.value(index) == itemKey }.getOrDefault(false)
-              if (!sameItem) return@launch
+              if (!sameItem) { itemMoved = true; return@launch }
               val now = host.repository.revision.value
               if (result != null && now == at) {
                 host.resources.prepareSlot(slotId, itemKey) { result }
@@ -102,6 +108,8 @@ fun LiveryPrepareAhead(
             // An item that went away while it was planned (an index past the end of a list that shrank), or a plan that failed: nothing to keep.
           } finally {
             withContext(NonCancellable) { lock.withLock { inFlight.remove(itemKey) } }
+            // After the key is free, so the window asked again can take it.
+            if (itemMoved) moved.update { it + 1 }
           }
         }
       }
