@@ -12,6 +12,7 @@ import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.client.LiveryTrace
 import ee.schimke.livery.client.LoadedTemplate
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.protocol.AssetKind
@@ -47,8 +48,10 @@ class LiveryImageLoader(
     }
     val key = key(ref, bitmap)
     if (ref.shareable()) memory(key)?.let { return it }
-    val bytes = resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) ?: return null
-    return runCatching { decodeImage(bytes) }.getOrNull()?.also { if (ref.shareable()) keep(key, it) }
+    // The kind of reference (asset, https, app), never the reference itself: a URL can carry an id.
+    val kind = ref.substringBefore(':')
+    val bytes = LiveryTrace.async({ "livery:image-resolve:$kind" }) { resolver.resolve(ref, bitmap.width.coerceAtLeast(1), bitmap.height.coerceAtLeast(1)) } ?: return null
+    return runCatching { LiveryTrace.section({ "livery:image-decode" }) { decodeImage(bytes) } }.getOrNull()?.also { if (ref.shareable()) keep(key, it) }
   }
 
   private sealed interface Ref {

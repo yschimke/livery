@@ -37,6 +37,7 @@ import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.client.LiveryTrace
 import ee.schimke.livery.client.RenderPlan
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.slotTag
@@ -115,6 +116,14 @@ class LiveryHost(
 @OptIn(ExperimentalRcPlayerApi::class)
 @Composable
 fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier, extra: Bindings = Bindings.EMPTY) {
+  // The composition of one card, named by its design: Compose's own slices say a recomposition happened,
+  // this says whose it was.
+  LiveryTrace.section({ "livery:compose:${plan.template.entry.designId}" }) { PlayTemplate(plan, host, modifier, extra) }
+}
+
+@OptIn(ExperimentalRcPlayerApi::class)
+@Composable
+private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier, extra: Bindings) {
   // Platform work that waits for the app's first template to draw (Android: emoji, see LiveryEmoji).
   AfterFirstTemplateFrame()
   val bytes = plan.template.bytes

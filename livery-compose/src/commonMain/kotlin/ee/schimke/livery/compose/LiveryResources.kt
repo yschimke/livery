@@ -19,6 +19,7 @@ import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocument
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ImageResolver
+import ee.schimke.livery.client.LiveryTrace
 import ee.schimke.livery.client.LoadedTemplate
 import ee.schimke.livery.client.PlanResult
 import ee.schimke.livery.client.RenderPlan
@@ -176,7 +177,10 @@ class LiveryResources(
     template: LoadedTemplate,
     display: RcDisplay? = this.display,
     context: CoroutineContext = Dispatchers.Default,
-  ): RcPreparedDocument = documents.prepare(template.bytes, display, context)
+  ): RcPreparedDocument =
+    // The document is decoded, linked and rewritten for the display by rc-players on [context]: the whole of
+    // it is this section, whichever thread it runs on (the player's own spans, when bridged, nest inside it).
+    LiveryTrace.async({ "livery:prepare:${template.entry.designId}" }) { documents.prepare(template.bytes, display, context) }
 
   /**
    * [prepare], or null for a template that cannot be played, which is remembered ([cannotPlay])
@@ -202,9 +206,11 @@ class LiveryResources(
    * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
    */
   suspend fun readyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display) {
-    coroutineScope {
-      launch { prepareOrNull(template, display) }
-      launch { runCatching { typefaces(template) } }
+    LiveryTrace.async({ "livery:ready:${template.entry.designId}" }) {
+      coroutineScope {
+        launch { prepareOrNull(template, display) }
+        launch { runCatching { typefaces(template) } }
+      }
     }
   }
 
@@ -238,6 +244,10 @@ class LiveryResources(
   /** [template]'s typefaces, reading the faces not yet in memory from the repository. */
   suspend fun typefaces(template: LoadedTemplate): RcTypefaceLoader {
     typefacesNow(template)?.let { return it }
+    return LiveryTrace.async({ "livery:fonts:${template.entry.designId}" }) { readTypefaces(template) }
+  }
+
+  private suspend fun readTypefaces(template: LoadedTemplate): RcTypefaceLoader {
     val faces = template.fontAssets()
     // The faces this call holds, whatever the bounded shared cache evicts meanwhile (a template
     // with more faces than it keeps, or a concurrent preload): the cache is only for reuse.
@@ -245,7 +255,9 @@ class LiveryResources(
     for (face in faces) {
       fonts[face.id]?.let { loaded[face.id] = it; continue }
       val bytes = repository.asset(face.sha256) ?: continue
-      val font = runCatching { withContext(Dispatchers.Default) { fontFrom(face.sha256, bytes, face.weight, face.style) } }.getOrNull() ?: continue
+      val font = runCatching {
+        withContext(Dispatchers.Default) { LiveryTrace.section({ "livery:font-load:${face.sha256.take(8)}" }) { fontFrom(face.sha256, bytes, face.weight, face.style) } }
+      }.getOrNull() ?: continue
       fonts.put(face.id, font)
       loaded[face.id] = font
     }
@@ -314,7 +326,10 @@ class LiveryResources(
      * value outside its `USER:` inputs frozen, and the constants that leaves folded, so every card
      * evaluates fewer expressions.
      */
-    val ForDisplay: RcPreprocessor = RcPreprocessor { document, display -> document.forDisplay(display.density, display.fontScale) }
+    val ForDisplay: RcPreprocessor = RcPreprocessor { document, display ->
+      // On the preparation thread. Livery's `prepare` section minus this one is rc-players' decode and link.
+      LiveryTrace.section({ "livery:for-display" }) { document.forDisplay(display.density, display.fontScale) }
+    }
   }
 
   /**

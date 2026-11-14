@@ -93,6 +93,15 @@ union all select 'main thread: text layout', round((select coalesce(sum(dur),0) 
 union all select 'RenderThread: frame that draws the content', round((select dur from content) / 1e6, 1)
 union all select 'RenderThread: GPU pipeline compiles', round((select coalesce(sum(dur),0) from r where name like 'CreateGraphicsPipeline-Compile%' and ts < (select e from full)) / 1e6, 1)
 union all select 'RenderThread: GPU pipeline compile count', (select count(*) from r where name like 'CreateGraphicsPipeline-Compile%' and ts < (select e from full))
+-- Livery's own sections (LiveryTrace), on any thread or async track, by phase: `livery:<phase>[:<design>]`. A
+-- phase's total is the sum of its sections; they overlap (an async prepare spans its worker's slices), so
+-- read them one phase at a time and do not add them up.
+union all select 'section ' || phase || ', ms', round(sum(dur) / 1e6, 1) from (
+  select case when instr(substr(name, 8), ':') > 0 then substr(name, 1, 7 + instr(substr(name, 8), ':') - 1) else name end phase, dur
+  from slice where name like 'livery:%' and ts >= (select t from t0) and ts < (select e from full)) group by phase
+union all select 'section ' || phase || ', count', count(*) from (
+  select case when instr(substr(name, 8), ':') > 0 then substr(name, 1, 7 + instr(substr(name, 8), ':') - 1) else name end phase
+  from slice where name like 'livery:%' and ts >= (select t from t0) and ts < (select e from full)) group by phase
 """
 
 # The fling: frames are the main thread's Choreographer#doFrame slices that drew (they hold a draw-VRI).
@@ -120,6 +129,7 @@ union all select 'whole window, per frame ms: Recomposer:recompose', round((sele
 union all select 'whole window, per frame count: Compose:recompose passes', round((select count(*) from win where name = 'Compose:recompose') * 1.0 / (select n from w), 2)
 union all select 'whole window, per frame count: text layouts (TextLayout:initLayout)', round((select count(*) from win where name = 'TextLayout:initLayout') * 1.0 / (select n from w), 2)
 union all select 'whole window, per frame ms: text layout', round((select coalesce(sum(dur), 0) from win where name = 'TextLayout:initLayout') / 1e6 / (select n from w), 3)
+union all select 'whole window, per frame ms: livery:compose (a card\'s composition, Livery only)', round((select coalesce(sum(dur), 0) from win where name like 'livery:compose:%') / 1e6 / (select n from w), 3)
 """
 
 
@@ -130,21 +140,27 @@ def traces(directory, prefix):
 def medians(tp, files, sql):
     runs = [{r["k"]: float(r["v"]) for r in query(tp, f, sql) if r["v"] not in ("", None)} for f in files]
     keys = list(runs[0])
+    # Livery's sections come and go with what an iteration did (a font read, a cache hit): absent means zero,
+    # and a phase that only some iterations have still shows up. Everything else must be in every trace.
+    extra = [k for run in runs for k in run if k.startswith("section ") and k not in keys]
+    keys += list(dict.fromkeys(extra))
     for f, run in zip(files, runs):
-        missing = [k for k in keys if k not in run]
+        missing = [k for k in keys if k not in run and not k.startswith("section ")]
         if missing:
             sys.exit(f"{f} has no value for {missing}: the trace lacks a slice the query needs")
-    return {k: statistics.median(run[k] for run in runs) for k in keys}, len(runs)
+    return {k: statistics.median(run.get(k, 0.0) for run in runs) for k in keys}, len(runs)
 
 
 def table(title, a_name, b_name, a, b, unit=""):
     print(f"| {title} | {LABEL[a_name]} | {LABEL[b_name]} | Difference |")
     print("| --- | ---: | ---: | ---: |")
-    for k in a:
-        if k not in b:
+    for k in list(a) + [k for k in b if k not in a]:
+        fmt = (lambda x: f"{x:.0f}") if k in ("frames", "frames drawn before that", "RenderThread: GPU pipeline compile count") or k.endswith(", count") else (lambda x: f"{x:.3f}".rstrip("0").rstrip("."))
+        if k not in a or k not in b:
+            # Only one lane has it (Livery's own sections: the Compose UI twin has none).
+            print(f"| {k} | {fmt(a[k]) if k in a else '–'} | {fmt(b[k]) if k in b else '–'} | |")
             continue
         d = b[k] - a[k]
-        fmt = (lambda x: f"{x:.0f}") if k in ("frames", "frames drawn before that", "RenderThread: GPU pipeline compile count") else (lambda x: f"{x:.3f}".rstrip("0").rstrip("."))
         print(f"| {k} | {fmt(a[k])} | {fmt(b[k])} | {'+' if d > 0 else ''}{fmt(d)} |")
     print()
 

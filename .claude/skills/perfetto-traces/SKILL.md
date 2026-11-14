@@ -84,10 +84,16 @@ floods the output: check the arguments first.
   and the sync with the render thread).
 - **First GPU use compiles pipelines**: `CreateGraphicsPipeline-CompileAfterCacheMiss` on `RenderThread`,
   tens of milliseconds on a cold start, in every lane. It is the driver, not the template.
-- **Background work is invisible unless something traces it.** Coroutines and thread pools show no slices,
-  so a gap on the main thread with no slice is idle or untraced background work. Livery's planned
-  `livery:plan` / `livery:prepare` / `livery:fonts` sections (docs/benchmarks/PLAN.md) are what would
-  attribute it; until they exist, say "untraced", not "idle".
+- **Livery marks its own phases** (`livery:plan`, `resolve`, `asset-read`, `bind`, `prepare`, `for-display`, `ready`,
+  `fonts`, `image-*`, `compose`, `manifest-decode`; the Benchmarks page lists them). Synchronous ones are on their
+  thread's track; planning, resolving, preparing, fonts and image fetches are **async** (a track under the process, not a
+  thread). Query them by name across all tracks: `from slice where name like 'livery:%'`.
+- **Everything else on a worker is still invisible**: coroutines and thread pools show no slices, so a gap on the main
+  thread with no slice is idle or untraced background work. rc-players' player has no trace spans of its own (3.3.0), so
+  inside `livery:prepare` only `livery:for-display` is visible; the rest of `prepare` is decode and link. Use the
+  scheduler data (`thread_state`, state `Running`, per thread) to see which thread was on the CPU, and say "untraced",
+  not "idle", where nothing marks it. `livery:asset-read` on a `DefaultDispatch` thread and ten identical reads in a
+  row are what ten plans look like.
 - **Count recompositions**: `Compose:recompose` slices per tap or per frame show a lane doing extra passes
   (the data-change finding: 2 per change in the Remote Compose lanes, 1 in the twin).
 - **One iteration is noise.** Every figure the script prints is a median over the iterations; two lanes' "process

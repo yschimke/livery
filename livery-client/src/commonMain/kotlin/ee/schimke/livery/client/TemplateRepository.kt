@@ -271,7 +271,10 @@ class TemplateRepository(
    * slot that asks most specific first (PROTOCOL.md §5.4). The downloaded catalog answers every
    * query before the bundled one is asked, as for a single query.
    */
-  suspend fun resolveFirst(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? {
+  suspend fun resolveFirst(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? =
+    LiveryTrace.async({ "livery:resolve:${queries.firstOrNull()?.let { it.designId ?: it.contract }}" }) { resolveFirstUntraced(queries) }
+
+  private suspend fun resolveFirstUntraced(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? {
     val installed = installedIds()
     // Never draw a skin nobody installed, from the downloaded catalog or the bundled one; a design
     // the query names explicitly is still allowed.

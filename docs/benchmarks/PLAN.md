@@ -65,21 +65,20 @@ it beside the Macrobenchmark JSON, so `benchmark-summary.py` can put it in the s
 
 ### Tracing background work
 
-Preparation, planning and fonts run off the main thread, so frame metrics never see them. Wrap each in
-a named `android.os.Trace` section (`androidx.tracing.trace`, cheap when no trace is recording) and read
-them with `TraceSectionMetric`, which reports count and duration per section:
+*Built.* Preparation, planning and fonts run off the main thread, so frame metrics never see them. `LiveryTrace`
+(`livery-client`) writes `livery:<phase>[:<design>]` sections to the system trace on Android, synchronous ones on their
+thread and async ones for phases that resume elsewhere. They are listed on the Benchmarks page and read by
+`livery-baselineprofile/traces/compare.py`, which totals them per phase in the cold-start window. A first look at where
+Livery's cold start goes (median of 5, Pixel 9): ten plans 3.5 ms, document preparation 15.6 ms of which the
+`for-display` rewrite 9.1 ms, the card's composition 2.6 ms.
 
-| Section | Wraps | Answers |
-| --- | --- | --- |
-| `livery:plan` | `SlotPlanner` / `TemplateSelector` for a slot | How long a card waits for its plan |
-| `livery:prepare` | `prepareOrNull` on the background context | Decode, link and `forDisplay` per template; how fast a catalog warms |
-| `livery:fonts` | `resources.typefaces` | Time to a fallback-free first frame |
-| `livery:images` | image resolution | Network-backed images |
-| `livery:compose-card` | one card's composition | Per-card cost in a feed |
+Limits to remember:
 
-Counts matter as much as durations: `livery:prepare` fired 200 times in a 2-template feed is the bug.
-rc-players' own `rcTrace` categories (3.3.0) mark the player phases and need no work here. The same
-sections show in a Perfetto trace of any run, which is how to see whether preparation overlaps a fling.
+- rc-players 3.3.0's published player has **no trace spans** (no `RcTrace` references in its compose and runtime
+  artifacts), and on Android its tracer is a stub until an app installs a driver. Inside `prepare` only Livery's own
+  `for-display` is visible; the rest is decode and link, as a remainder. Spans in rc-players would split it.
+- Macrobenchmark's `TraceSectionMetric` reads thread tracks, so it does not see the async sections. `compare.py` does.
+- A section marks a phase, not a count of work: read counts too (ten plans, one prepare in the start-up window).
 
 ### Split by template
 
