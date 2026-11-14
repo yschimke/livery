@@ -1,5 +1,7 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.edit.RcDisplay
 import ee.schimke.composeai.rcplayer.edit.RcHardcodedValue
 import ee.schimke.composeai.rcplayer.edit.bitmapUrls
@@ -23,7 +25,7 @@ sealed interface InstantiateResult {
    * @property taps for [TemplateInstantiator.instantiateForWear], the tap each `PendingIntent` index
    *   stands for ([WearActions]); empty otherwise.
    */
-  data class Ok(val bytes: ByteArray, val actions: Map<Int, String> = emptyMap(), val taps: List<WidgetTap> = emptyList()) : InstantiateResult
+  data class Ok(val bytes: ByteString, val actions: Map<Int, String> = emptyMap(), val taps: List<WidgetTap> = emptyList()) : InstantiateResult
   /** The template can't be written for this host; draw the native fallback and report why. */
   data class Failed(val reason: String) : InstantiateResult
 }
@@ -47,7 +49,7 @@ sealed interface InstantiateResult {
  * images under its resource rules, and the budget.
  */
 class TemplateInstantiator(
-  private val images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray?,
+  private val images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteString?,
 ) {
   constructor(resolver: ImageResolver) : this({ ref, w, h -> resolver.resolve(ref, w, h) })
 
@@ -59,7 +61,7 @@ class TemplateInstantiator(
    *   launcher widget ([LauncherActions]); the result's `actions` maps their ids back.
    */
   suspend fun instantiate(
-    template: ByteArray,
+    template: ByteString,
     bindings: Bindings,
     imageWidthPx: Int,
     imageHeightPx: Int,
@@ -69,7 +71,7 @@ class TemplateInstantiator(
     val baked = bake(template, bindings, imageWidthPx, imageHeightPx)
     // A launcher's RemoteViews player sends numeric host actions only.
     val rewritten = if (numericActions) LauncherActions.rewrite(baked) else LauncherActions.Rewritten(baked, emptyMap())
-    budgeted(RcDocumentCodec.encode(rewritten.document), maxBytes) { bytes -> InstantiateResult.Ok(bytes, rewritten.actions) }
+    budgeted(RcDocumentCodec.encode(rewritten.document).toByteString(), maxBytes) { bytes -> InstantiateResult.Ok(bytes, rewritten.actions) }
   }
 
   /**
@@ -83,7 +85,7 @@ class TemplateInstantiator(
    * @param containerArgb the container's fill (a state tint); null keeps the template's own.
    */
   suspend fun instantiateForWear(
-    template: ByteArray,
+    template: ByteString,
     bindings: Bindings,
     frame: RcWearFrame,
     display: RcDisplay,
@@ -97,7 +99,7 @@ class TemplateInstantiator(
     val adapted = RcWearTemplates.instantiate(baked, frame, display, containerArgb = containerArgb, header = header)
     if (!adapted.isPlayable) return@attempt InstantiateResult.Failed("not playable as a Wear widget: ${adapted.violations.take(3)}")
     val rewritten = WearActions.rewrite(adapted.document)
-    budgeted(RcDocumentCodec.encode(rewritten.document), maxBytes) { bytes -> InstantiateResult.Ok(bytes, taps = rewritten.taps) }
+    budgeted(RcDocumentCodec.encode(rewritten.document).toByteString(), maxBytes) { bytes -> InstantiateResult.Ok(bytes, taps = rewritten.taps) }
   }
 
   private inline fun attempt(block: () -> InstantiateResult): InstantiateResult = try {
@@ -110,17 +112,17 @@ class TemplateInstantiator(
     InstantiateResult.Failed("not instantiable: ${e.message ?: e::class.simpleName}")
   }
 
-  private inline fun budgeted(bytes: ByteArray, maxBytes: Long, ok: (ByteArray) -> InstantiateResult): InstantiateResult =
+  private inline fun budgeted(bytes: ByteString, maxBytes: Long, ok: (ByteString) -> InstantiateResult): InstantiateResult =
     if (bytes.size > maxBytes) InstantiateResult.Failed("${bytes.size} bytes, budget $maxBytes") else ok(bytes)
 
-  private suspend fun bake(template: ByteArray, bindings: Bindings, imageWidthPx: Int, imageHeightPx: Int): RcDocument {
-    val document = RcDocumentCodec.decode(template, RcWireLimits())
+  private suspend fun bake(template: ByteString, bindings: Bindings, imageWidthPx: Int, imageHeightPx: Int): RcDocument {
+    val document = RcDocumentCodec.decode(template.toByteArray(), RcWireLimits())
     val fetched = LinkedHashMap<String, ByteArray>()
     val missing = ArrayList<String>()
     for (url in document.bitmapUrls.distinct()) {
       val ref = imageRef(url, bindings) ?: throw ImageMissing("image $url has no value")
       // Every image is asked for, even after a miss, so a cache-only source learns all it lacks.
-      images(ref, imageWidthPx, imageHeightPx)?.let { fetched[url] = it } ?: missing.add(ref)
+      images(ref, imageWidthPx, imageHeightPx)?.let { fetched[url] = it.toByteArray() } ?: missing.add(ref)
     }
     if (missing.isNotEmpty()) throw ImageMissing("image ${missing.joinToString()} unavailable")
     // rc-widget-core's bake: embeds the images, writes the values in, collapses the state layouts
@@ -134,22 +136,22 @@ class TemplateInstantiator(
     const val VALUE_PREFIX: String = "livery:value/"
 
     /** The bitmap URLs a template draws (`livery:value/<input>`, `asset:`, `https://`, `app:`). */
-    fun bitmapUrls(template: ByteArray): List<String> = RcDocumentCodec.decode(template, RcWireLimits()).bitmapUrls.distinct()
+    fun bitmapUrls(template: ByteString): List<String> = RcDocumentCodec.decode(template.toByteArray(), RcWireLimits()).bitmapUrls.distinct()
 
     /**
      * The height a template was authored at, in dp (its header's height over the density it was
      * generated at), or null when its header doesn't say: what a host with no height to give it
      * draws it at.
      */
-    fun authoredHeightDp(template: ByteArray): Int? {
-      val header = RcDocumentCodec.decode(template, RcWireLimits()).header
+    fun authoredHeightDp(template: ByteString): Int? {
+      val header = RcDocumentCodec.decode(template.toByteArray(), RcWireLimits()).header
       if (!header.modern || header.height <= 0) return null
       return (header.height / header.density.takeIf { it > 0f }.let { it ?: 1f }).toInt().takeIf { it > 0 }
     }
 
     /** The named values a template reads (without the `USER:` domain), e.g. to check a contract. */
-    fun reads(template: ByteArray): Set<String> =
-      RcDocumentCodec.decode(template, RcWireLimits()).namedVariables.map { it.name.removePrefix("USER:") }.toSet()
+    fun reads(template: ByteString): Set<String> =
+      RcDocumentCodec.decode(template.toByteArray(), RcWireLimits()).namedVariables.map { it.name.removePrefix("USER:") }.toSet()
 
     internal fun imageRef(url: String, bindings: Bindings): String? = when {
       url.startsWith(VALUE_PREFIX) -> (bindings.values[url.removePrefix(VALUE_PREFIX)] as? NamedValue.Image)?.ref

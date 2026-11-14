@@ -42,8 +42,8 @@ abstract class BuildLiveryCatalog : DefaultTask() {
     }
     val root = outputDir.get().asFile.apply { deleteRecursively() }
     val dir = File(root, path).apply { mkdirs() }
-    out.files.forEach { (p, bytes) -> File(dir, p).apply { parentFile.mkdirs() }.writeBytes(bytes) }
-    File(dir, Manifest.FILE).writeBytes(out.manifestBytes)
+    out.files.forEach { (p, bytes) -> File(dir, p).apply { parentFile.mkdirs() }.writeBytes(bytes.toByteArray()) }
+    File(dir, Manifest.FILE).writeBytes(out.manifestBytes.toByteArray())
     logger.lifecycle("Livery: ${out.manifest.catalog}/${out.manifest.channel}, ${out.manifest.templates.size} templates -> assets/$path")
   }
 

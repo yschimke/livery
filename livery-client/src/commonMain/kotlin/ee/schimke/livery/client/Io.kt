@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
+
 /** HTTP (or file, or asset) GET with conditional revalidation. Platforms bring their own. */
 fun interface Fetcher {
   suspend fun get(url: String, etag: String?): FetchResult
@@ -19,7 +21,7 @@ interface RedirectingFetcher : Fetcher {
 }
 
 sealed interface FetchResult {
-  data class Ok(val bytes: ByteArray, val etag: String?, val retryAfterSeconds: Long? = null) : FetchResult
+  data class Ok(val bytes: ByteString, val etag: String?, val retryAfterSeconds: Long? = null) : FetchResult
   data object NotModified : FetchResult
   data class Failed(val status: Int?, val message: String, val retryAfterSeconds: Long? = null) : FetchResult
 }
@@ -30,16 +32,17 @@ sealed interface FetchResult {
  * ships them.
  */
 interface Crypto {
-  suspend fun sha256Hex(bytes: ByteArray): String
+  /** The SHA-256 of [bytes] as lowercase hex. Okio's, on every target; an implementation only overrides it for a test. */
+  suspend fun sha256Hex(bytes: ByteString): String = bytes.sha256().hex()
 
   /** Verify an Ed25519 [signature] over [message] with the raw 32-byte [publicKey]. */
-  suspend fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean
+  suspend fun verifyEd25519(publicKey: ByteString, message: ByteString, signature: ByteString): Boolean
 }
 
 /** Content-addressed bytes: blobs and previews. Keys are sha256 hex. */
 interface BlobStore {
-  suspend fun get(sha256: String): ByteArray?
-  suspend fun put(sha256: String, bytes: ByteArray)
+  suspend fun get(sha256: String): ByteString?
+  suspend fun put(sha256: String, bytes: ByteString)
   suspend fun delete(sha256: String)
   suspend fun keys(): Set<String>
 }
@@ -52,9 +55,9 @@ interface KeyValueStore {
 }
 
 class MemoryBlobStore : BlobStore {
-  private val map = LinkedHashMap<String, ByteArray>()
+  private val map = LinkedHashMap<String, ByteString>()
   override suspend fun get(sha256: String) = map[sha256]
-  override suspend fun put(sha256: String, bytes: ByteArray) { map[sha256] = bytes }
+  override suspend fun put(sha256: String, bytes: ByteString) { map[sha256] = bytes }
   override suspend fun delete(sha256: String) { map.remove(sha256) }
   override suspend fun keys(): Set<String> = map.keys.toSet()
 }

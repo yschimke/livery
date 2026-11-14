@@ -40,6 +40,8 @@ kotlin {
       api(project(":livery-protocol"))
       api(libs.kotlinx.coroutines.core)
       api(libs.ktor.client.core)
+      // ByteString is in Livery's API: a template's bytes are one immutable value with value equality.
+      api(libs.okio)
     }
     wasmJsMain.dependencies { implementation(libs.ktor.client.js) }
     commonTest.dependencies {

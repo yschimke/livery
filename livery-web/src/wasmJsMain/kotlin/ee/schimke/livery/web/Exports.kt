@@ -2,6 +2,8 @@
 
 package ee.schimke.livery.web
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString.Companion.encodeUtf8
 import ee.schimke.livery.client.defaultHttpClient
 import ee.schimke.livery.client.KtorDecider
 import io.ktor.client.HttpClient
@@ -117,7 +119,7 @@ private fun browserRefreshLock(name: String, block: () -> Promise<JsAny?>): Prom
 @JsExport
 fun liveryOpen(config: String): Promise<JsAny?> = async {
   val c = json.decodeFromString(WebConfig.serializer(), config)
-  val keys = c.keys.map { TrustedKey(it.keyId, Base64.decode(it.publicKey), it.contracts) }
+  val keys = c.keys.map { TrustedKey(it.keyId, Base64.decode(it.publicKey).toByteString(), it.contracts) }
   require(keys.isNotEmpty() || c.unsigned) { "a catalog needs a trusted key, or unsigned: true for development" }
   val clock = Clock { kotlin.time.Clock.System.now().toEpochMilliseconds() }
   val events = mutableListOf<TemplateEvent>()
@@ -125,7 +127,7 @@ fun liveryOpen(config: String): Promise<JsAny?> = async {
   val http = defaultHttpClient()
   val fetcher = KtorFetcher(http)
   // Trust configuration is part of the namespace: an unsigned cache can never become a signed one.
-  val cacheNamespace = WebCrypto.sha256Hex(json.encodeToString(WebConfig.serializer(), c).encodeToByteArray())
+  val cacheNamespace = WebCrypto.sha256Hex(json.encodeToString(WebConfig.serializer(), c).encodeUtf8())
   val stores = if (c.persistentCache) BrowserStores.open(cacheNamespace) else null
   val repository = TemplateRepository(
     StaticSource(c.catalog), fetcher, WebCrypto, if (keys.isEmpty()) TrustPolicy.AllowUnsigned else TrustPolicy.Signed(keys),
@@ -215,7 +217,7 @@ fun liveryRender(session: Int, name: String, props: String, space: String): Prom
   val r = session(session).web.render(name, json.parseToJsonElement(props).jsonObject, LiveryA2uiWeb.Space(s.widthDp, s.heightDp, s.density, theme, s.decisionId, s.colorScheme))
   when (r) {
     is LiveryA2uiWeb.Rendered.Ready -> buildJsonObject {
-      put("ok", true); put("render", r.id); put("document", Base64.encode(r.document)); put("documentKey", r.documentKey)
+      put("ok", true); put("render", r.id); put("document", r.document.base64()); put("documentKey", r.documentKey)
       put("presentationKey", r.presentationKey)
       put("values", JsonObject(r.values)); put("design", r.designId); put("sha256", r.sha256)
       put("pending", r.pending)

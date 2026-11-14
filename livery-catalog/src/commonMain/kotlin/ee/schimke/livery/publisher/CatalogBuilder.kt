@@ -1,5 +1,7 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString.Companion.encodeUtf8
+import okio.ByteString
 import okio.FileSystem
 import okio.Path
 import ee.schimke.livery.instantiate.TemplateInspector
@@ -161,12 +163,12 @@ class CatalogBuilder(
    * Optional deep check of a document (op profile, size, the named values it reads and their types
    * against its [Contract], when the design's contract exists); returns problems.
    */
-  private val inspect: (bytes: ByteArray, spec: TemplateSpec, contract: Contract?) -> List<String> = { _, _, _ -> emptyList() },
+  private val inspect: (bytes: ByteString, spec: TemplateSpec, contract: Contract?) -> List<String> = { _, _, _ -> emptyList() },
 ) {
   data class Output(
     val manifest: Manifest,
-    val manifestBytes: ByteArray,
-    val files: Map<String, ByteArray>,
+    val manifestBytes: ByteString,
+    val files: Map<String, ByteString>,
     /** The manifest experiments that are the tree's seasons. */
     val seasons: Set<String> = emptySet(),
   )
@@ -182,14 +184,14 @@ class CatalogBuilder(
     val placements = jsonFiles(src.resolve("placements")).map { json.decodeFromString(PlacementRule.serializer(), it.readText()) }
     val seasons = jsonFiles(src.resolve("seasons")).map { json.decodeFromString(Season.serializer(), it.readText()) }
     val authored = jsonFiles(src.resolve("experiments")).map { json.decodeFromString(Experiment.serializer(), it.readText()) }
-    val files = linkedMapOf<String, ByteArray>()
+    val files = linkedMapOf<String, ByteString>()
     val (blobDir, previewDir) = when (layout) {
       Layout.Static -> "blobs/" to "previews/"
       is Layout.GitHubRelease -> "" to ""
     }
     val assetDir = if (layout is Layout.GitHubRelease) "" else "assets/"
     val assets = linkedMapOf<String, AssetEntry>()
-    fun addAsset(bytes: ByteArray, entry: (sha: String) -> AssetEntry): AssetEntry {
+    fun addAsset(bytes: ByteString, entry: (sha: String) -> AssetEntry): AssetEntry {
       val a = entry(sha256Hex(bytes))
       files[assetDir + a.fileName] = bytes
       return assets.getOrPut(a.sha256) { a }
@@ -386,7 +388,7 @@ class CatalogBuilder(
       assets = assets.values.toList(),
       imageProxy = config.imageProxy,
     )
-    val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray()
+    val bytes = json.encodeToString(Manifest.serializer(), manifest).encodeUtf8()
     return Output(manifest, bytes, files, seasons.map { it.id }.toSet())
   }
 
@@ -403,7 +405,7 @@ class CatalogBuilder(
     fun declares(c: Contract, read: String): Boolean = read in c.inputs || readsListValue(c, read) || read.startsWith("theme.") || read in ScreenValues.NAMES
 
     /** The inspect hook `livery build --inspect` and agent drafts use: [TemplateInspector]. */
-    val INSPECT: (ByteArray, TemplateSpec, Contract?) -> List<String> = { bytes, spec, contract ->
+    val INSPECT: (ByteString, TemplateSpec, Contract?) -> List<String> = { bytes, spec, contract ->
       // Both checks decode the document; one that doesn't decode is one problem, not two.
       (TemplateInspector.problems(bytes, spec.reads, spec.emits) + contract?.let { TemplateInspector.typeProblems(bytes, it) }.orEmpty()).distinct()
     }
@@ -421,13 +423,13 @@ class CatalogBuilder(
   private fun jsonFiles(dir: Node) = dir.listFiles().orEmpty().filter { it.extension == "json" }.sortedBy { it.name }
 
   /** PNG IHDR or WebP VP8/VP8L/VP8X dimensions, without an image library. */
-  private fun imageSize(b: ByteArray): Pair<Int, Int>? {
+  private fun imageSize(b: ByteString): Pair<Int, Int>? {
     fun be(i: Int) = ((b[i].toInt() and 0xFF) shl 24) or ((b[i + 1].toInt() and 0xFF) shl 16) or ((b[i + 2].toInt() and 0xFF) shl 8) or (b[i + 3].toInt() and 0xFF)
     fun le16(i: Int) = (b[i].toInt() and 0xFF) or ((b[i + 1].toInt() and 0xFF) shl 8)
     fun le24(i: Int) = le16(i) or ((b[i + 2].toInt() and 0xFF) shl 16)
     return when {
       b.size > 24 && b[1] == 'P'.code.toByte() && b[2] == 'N'.code.toByte() -> be(16) to be(20)
-      b.size > 30 && b.decodeToString(8, 12) == "WEBP" -> when (b.decodeToString(12, 16)) {
+      b.size > 30 && b.substring(8, 12).utf8() == "WEBP" -> when (b.substring(12, 16).utf8()) {
         "VP8 " -> (le16(26) and 0x3FFF) to (le16(28) and 0x3FFF)
         "VP8L" -> { val v = be(21).let { (it ushr 24) or ((it ushr 8) and 0xFF00) or ((it shl 8) and 0xFF0000) or (it shl 24) }; ((v and 0x3FFF) + 1) to (((v shr 14) and 0x3FFF) + 1) }
         "VP8X" -> (le24(24) + 1) to (le24(27) + 1)

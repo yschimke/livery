@@ -1,5 +1,7 @@
 package ee.schimke.livery.verify
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString
 import ee.schimke.livery.publisher.load
 import android.app.Activity
 import ee.schimke.livery.client.BindResult
@@ -41,7 +43,7 @@ object WidgetCatalogCheck {
      * Images that aren't the catalog's own (`https://`, `app:`), as the app's resolver would give
      * them: by default none, so a template that needs one fails as it would without it.
      */
-    images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray? = { _, _, _ -> null },
+    images: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteString? = { _, _, _ -> null },
     /** False plays each document as it is, without rc-players' recovery ([PlatformWidgetPlayer.play]). */
     recover: Boolean = true,
   ): List<Failure> {
@@ -64,7 +66,7 @@ object WidgetCatalogCheck {
           ?.let { JSON.decodeFromJsonElement(Target.serializer(), it) } ?: continue
         if (target.surface != Surfaces.LAUNCHER_WIDGET) continue
         val name = sidecar.nameWithoutExtension
-        val rc = File(designDir, "$name.rc").takeIf { it.isFile }?.readBytes()
+        val rc = File(designDir, "$name.rc").takeIf { it.isFile }?.readBytes()?.toByteString()
           ?: run { failures += Failure(id, name, "-", "no $name.rc"); continue }
         if (contract == null) { failures += Failure(id, name, "-", "no contract ${design["contract"]}"); continue }
         val (wDp, hDp) = sizeFor(target)
@@ -80,7 +82,7 @@ object WidgetCatalogCheck {
             is InstantiateResult.Ok -> r.bytes
             is InstantiateResult.Failed -> { failures += Failure(id, name, example, "couldn't be written for a widget: ${r.reason}"); continue }
           }
-          when (val o = PlatformWidgetPlayer.play(activity, doc, w, h, recover)) {
+          when (val o = PlatformWidgetPlayer.play(activity, doc.toByteArray(), w, h, recover)) {
             is PlatformWidgetPlayer.Outcome.Played -> Unit
             is PlatformWidgetPlayer.Outcome.Failed -> failures += Failure(id, name, example, o.reason)
           }
@@ -101,16 +103,15 @@ object WidgetCatalogCheck {
   /** The catalog's own images, `asset:<sha256>`, from each design's assets folder; others from [other]. */
   internal fun images(
     catalog: File,
-    other: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteArray?,
-  ): suspend (String, Int, Int) -> ByteArray? {
+    other: suspend (ref: String, widthPx: Int, heightPx: Int) -> ByteString?,
+  ): suspend (String, Int, Int) -> ByteString? {
     val assets = File(catalog, "designs").listFiles().orEmpty()
       .flatMap { File(it, "assets").listFiles().orEmpty().filter { f -> f.isFile } }
-      .associateBy { sha256(it.readBytes()) }
-    return { ref, w, h -> ref.removePrefix("asset:").takeIf { it != ref }?.let { assets[it]?.readBytes() } ?: other(ref, w, h) }
+      .associateBy { sha256(it.readBytes().toByteString()) }
+    return { ref, w, h -> ref.removePrefix("asset:").takeIf { it != ref }?.let { assets[it]?.readBytes()?.toByteString() } ?: other(ref, w, h) }
   }
 
-  private fun sha256(bytes: ByteArray): String =
-    java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+  private fun sha256(bytes: ByteString): String = bytes.sha256().hex()
 
   private const val DEFAULT_W = 250
   private const val DEFAULT_H = 180

@@ -1,5 +1,6 @@
 package ee.schimke.livery.mcp
 
+import okio.ByteString
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.publisher.TemplateSpec
@@ -44,7 +45,7 @@ class SourceTree(val fileSystem: FileSystem, val root: Path) {
 
   fun read(path: Path): String = fileSystem.read(path) { readUtf8() }
 
-  fun readBytes(path: Path): ByteArray = fileSystem.read(path) { readByteArray() }
+  fun readBytes(path: Path): ByteString = fileSystem.read(path) { readByteString() }
 
   private fun list(dir: Path): List<Path> = fileSystem.listOrNull(dir).orEmpty()
 

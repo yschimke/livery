@@ -198,7 +198,7 @@ abstract class LiveryWearWidget : GlanceWearWidget() {
       }
       // No Impression: handing the host a document isn't drawing it, and the host doesn't say
       // when the widget is on screen (PROTOCOL.md §8).
-      return WearWidgetRawContent(ok.bytes, extras, empty.widgetTitle)
+      return WearWidgetRawContent(ok.bytes.toByteArray(), extras, empty.widgetTitle)
     }
 
     private fun event(type: TemplateEvent.Type, detail: String?) = TemplateEvent(

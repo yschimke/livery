@@ -1,5 +1,6 @@
 package ee.schimke.livery.render
 
+import okio.ByteString.Companion.toByteString
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
@@ -196,9 +197,9 @@ object CatalogPreviews {
         // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
         val file = listOf(c.design, c.template, c.example, c.mode).joinToString("/") { segment(it) } + ".png"
         val spec = RenderSpec(c.widthDp, c.heightDp, density, c.dark, background = c.background)
-        runCatching { TemplateRenderer.png(out.resolve(c.document).readBytes(), Bindings(c.values), spec, PlaceholderImages, typefaces) }
+        runCatching { TemplateRenderer.png(out.resolve(c.document).readBytes().toByteString(), Bindings(c.values), spec, PlaceholderImages, typefaces) }
           .onSuccess { png ->
-            out.resolve(file).apply { parentFile.mkdirs() }.writeBytes(png)
+            out.resolve(file).apply { parentFile.mkdirs() }.writeBytes(png.toByteArray())
             previews += CatalogPreview(c.design, c.template, c.target.surface, c.example, c.mode, file, c.widthDp, c.heightDp)
           }
           .onFailure { problems += PreviewProblem(c.design, c.template, c.example, "${c.mode}: ${it.message}") }

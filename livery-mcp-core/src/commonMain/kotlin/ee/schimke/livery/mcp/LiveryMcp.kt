@@ -2,6 +2,9 @@
 
 package ee.schimke.livery.mcp
 
+import okio.ByteString.Companion.toByteString
+import okio.ByteString.Companion.encodeUtf8
+import okio.ByteString
 import ee.schimke.livery.a2ui.LiveryA2ui
 import ee.schimke.livery.a2ui.LiveryA2uiMessages
 import ee.schimke.livery.client.BindResult
@@ -232,7 +235,7 @@ class LiveryMcp(
     val png = host.render(bytes, bindings, spec) ?: throw ToolError("this host can't render previews")
     return buildJsonObject {
       putJsonArray("content") {
-        add(buildJsonObject { put("type", "image"); put("data", Base64.Default.encode(png)); put("mimeType", "image/png") })
+        add(buildJsonObject { put("type", "image"); put("data", png.base64()); put("mimeType", "image/png") })
         add(buildJsonObject {
           put("type", "text")
           put("text", "${spec.widthDp}x${spec.heightDp} dp at ${spec.density}x, ${if (spec.dark) "dark" else "light"}, with ${bindings.values.keys.sorted()}")
@@ -264,10 +267,10 @@ class LiveryMcp(
       newDesign?.let {
         val d = json.decodeFromJsonElement(Design.serializer(), it)
         if (d.id != designId) throw ToolError("design_json id '${d.id}' must be '$designId'")
-        put(designFile, json.encodeToString(Design.serializer(), d).encodeToByteArray())
+        put(designFile, json.encodeToString(Design.serializer(), d).encodeUtf8())
       }
       put(dir / "$name.rc", bytes)
-      put(dir / "$name.json", json.encodeToString(TemplateSpec.serializer(), spec).encodeToByteArray())
+      put(dir / "$name.json", json.encodeToString(TemplateSpec.serializer(), spec).encodeUtf8())
     }
     // The draft itself is read, not trusted: what it reads and emits must be what its sidecar says.
     TemplateInspector.problems(bytes, spec.reads, spec.emits).takeIf { it.isNotEmpty() }?.let { problems ->
@@ -309,7 +312,7 @@ class LiveryMcp(
     if (channel == config.channel) throw ToolError("'$channel' is the catalog's own channel: production catalogs are built and signed by CI, not an agent")
     val built = CatalogBuilder().build(fs, tree.root, Layout.Static)
     val manifest = built.manifest.copy(channel = channel)
-    val dir = writeCatalog(out / channel, built.files, json.encodeToString(Manifest.serializer(), manifest).encodeToByteArray())
+    val dir = writeCatalog(out / channel, built.files, json.encodeToString(Manifest.serializer(), manifest).encodeUtf8())
     return buildJsonObject {
       put("ok", true); put("path", dir.toString()); put("channel", channel); put("serial", manifest.serial)
       put("signed", false)
@@ -390,13 +393,13 @@ class LiveryMcp(
 
   private class ToolError(message: String) : Exception(message)
 
-  private fun write(path: Path, bytes: ByteArray) {
+  private fun write(path: Path, bytes: ByteString) {
     path.parent?.let(fs::createDirectories)
     fs.write(path) { write(bytes) }
   }
 
   /** A static catalog at [dir], replacing what was there: its files, then its manifest. */
-  private fun writeCatalog(dir: Path, files: Map<String, ByteArray>, manifest: ByteArray): Path {
+  private fun writeCatalog(dir: Path, files: Map<String, ByteString>, manifest: ByteString): Path {
     fs.deleteRecursively(dir, mustExist = false)
     fs.createDirectories(dir)
     files.forEach { (path, b) -> write(dir / path, b) }
@@ -418,8 +421,8 @@ class LiveryMcp(
   private fun JsonObject.obj(key: String) = this[key] as? JsonObject ?: throw ToolError("argument '$key' must be a JSON object")
   private fun JsonObject.intOrNull(key: String) = (this[key] as? JsonPrimitive)?.intOrNull
   private fun JsonObject.boolOrNull(key: String) = (this[key] as? JsonPrimitive)?.booleanOrNull
-  private fun JsonObject.bytes(key: String): ByteArray =
-    runCatching { Base64.Default.decode(str(key)) }.getOrElse { throw ToolError("'$key' is not base64") }
+  private fun JsonObject.bytes(key: String): ByteString =
+    runCatching { Base64.Default.decode(str(key)).toByteString() }.getOrElse { throw ToolError("'$key' is not base64") }
       .also { if (it.size > MAX_TEMPLATE_BYTES) throw ToolError("${it.size} bytes: a template over $MAX_TEMPLATE_BYTES bytes is refused") }
 
   private fun NamedValue.describe(): JsonElement = when (this) {

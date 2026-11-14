@@ -101,6 +101,11 @@ class LiveryResources(
   private val fonts = BoundedCache<String, Font>(maxFonts)
   private val decoded = BoundedCache<String, ImageBitmap>(maxImages)
   private val plans = BoundedCache<SlotKey, Pair<Long, PlanResult>>(maxPlans)
+  // The player takes an array: one copy of each template's bytes, made once, rather than one per lookup.
+  private val playerCopies = BoundedCache<String, ByteArray>(maxTemplates)
+
+  private fun playerBytes(template: LoadedTemplate): ByteArray =
+    playerCopies[template.entry.sha256] ?: template.bytes.toByteArray().also { playerCopies.put(template.entry.sha256, it) }
   private val heights = BoundedCache<String, Int>(maxTemplates * 4)
   private val unplayable = BoundedCache<String, Unit>(maxTemplates)
   private val missCount = AtomicInt(0)
@@ -158,7 +163,7 @@ class LiveryResources(
    * calling thread (it never waits on I/O), and kept. Composition uses [preparedNow] instead.
    */
   fun prepared(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument =
-    documents.prepareNow(template.bytes, display)
+    documents.prepareNow(playerBytes(template), display)
 
   /** [prepared], or null for a template that cannot be played, which is remembered ([cannotPlay]). */
   fun preparedOrNull(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
@@ -171,7 +176,7 @@ class LiveryResources(
 
   /** [template]'s prepared document for [display] if it is in memory; never prepares. */
   fun preparedNow(template: LoadedTemplate, display: RcDisplay? = this.display): RcPreparedDocument? =
-    documents.peek(template.bytes, display)
+    documents.peek(playerBytes(template), display)
 
   /**
    * [template]'s prepared document for [display], rewritten for it and prepared on [context]
@@ -184,7 +189,7 @@ class LiveryResources(
   ): RcPreparedDocument =
     // The document is decoded, linked and rewritten for the display by rc-players on [context]: the whole of
     // it is this section, whichever thread it runs on (the player's own spans, when bridged, nest inside it).
-    LiveryTrace.async({ "livery:prepare:${template.entry.designId}" }) { documents.prepare(template.bytes, display, context) }
+    LiveryTrace.async({ "livery:prepare:${template.entry.designId}" }) { documents.prepare(playerBytes(template), display, context) }
 
   /**
    * [prepare], or null for a template that cannot be played, which is remembered ([cannotPlay])

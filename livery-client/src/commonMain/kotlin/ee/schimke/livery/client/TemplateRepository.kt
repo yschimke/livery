@@ -1,5 +1,6 @@
 package ee.schimke.livery.client
 
+import okio.ByteString
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
@@ -29,7 +30,7 @@ import kotlinx.serialization.json.Json
 data class LoadedTemplate(
   val entry: TemplateEntry,
   val design: Design?,
-  val bytes: ByteArray,
+  val bytes: ByteString,
   val origin: Origin,
   /** The contract from the same catalog the template came from (the bundled one, offline). */
   val contract: Contract?,
@@ -37,15 +38,6 @@ data class LoadedTemplate(
   val assets: List<AssetEntry> = emptyList(),
 ) {
   enum class Origin { Fresh, Stale, Bundled }
-
-  // The same template from the same catalog is equal whichever array holds its bytes: they are named by
-  // `entry.sha256`. Without this two loads were never equal (a data class compares an array by identity), so a
-  // slot that planned again to the answer it already had still replaced it, and its card composed twice.
-  override fun equals(other: Any?): Boolean =
-    other is LoadedTemplate && entry == other.entry && origin == other.origin && design == other.design &&
-      contract == other.contract && assets == other.assets && bytes.size == other.bytes.size
-
-  override fun hashCode(): Int = 31 * entry.hashCode() + origin.hashCode()
 }
 
 /** A design as a picker shows it: before, during and after install. */
@@ -92,7 +84,7 @@ class TemplateRepository(
   private val documents = DocumentMemo(memoizedDocuments)
 
   /** [load]'s bytes for [sha256], read once and then kept: a template's bytes never change under its hash. */
-  private suspend fun documentBytes(sha256: String, load: suspend () -> ByteArray?): ByteArray? =
+  private suspend fun documentBytes(sha256: String, load: suspend () -> ByteString?): ByteString? =
     documents[sha256] ?: load()?.let { documents.put(sha256, it) }
 
   /** Default location of a message's signed document when it supplies no URL. */
@@ -106,7 +98,7 @@ class TemplateRepository(
   ).toSet()
 
   /** The app's own copy of a catalog, produced by the same publisher at build time. */
-  class Bundled(val manifest: Manifest, val read: suspend (sha256: String) -> ByteArray?)
+  class Bundled(val manifest: Manifest, val read: suspend (sha256: String) -> ByteString?)
 
   private val verifier = ManifestVerifier(crypto, trust)
   /** Guards [current] and its disk copy only; never held across network calls. */
@@ -221,10 +213,10 @@ class TemplateRepository(
       }
       is FetchResult.Ok -> {
         val sig = when (val s = fetcher.get(source.signatureUrl, null)) {
-          is FetchResult.Ok -> runCatching { json.decodeFromString(ManifestSignature.serializer(), s.bytes.decodeToString()) }.getOrNull()
+          is FetchResult.Ok -> runCatching { json.decodeFromString(ManifestSignature.serializer(), s.bytes.utf8()) }.getOrNull()
           else -> null
         }
-        when (val v = verifier.verify(r.bytes, sig) { json.decodeFromString(Manifest.serializer(), it.decodeToString()) }) {
+        when (val v = verifier.verify(r.bytes, sig) { json.decodeFromString(Manifest.serializer(), it.utf8()) }) {
           is Verification.Rejected -> fail(v.reason)
           is Verification.Accepted -> {
             val next = v.manifest
@@ -236,7 +228,7 @@ class TemplateRepository(
                 // Keep the old ETag and playable manifest until the replacement is ready.
                 val bundledBefore = bundledManifest()
                 // Persist all accepted withdrawals, even those matching only bundled content.
-                kv.put(k("withdrawals"), r.bytes.decodeToString())
+                kv.put(k("withdrawals"), r.bytes.utf8())
                 val previous = cached ?: bundled?.manifest
                 val withdrawn = previous?.let { withRevocations(it, next) }
                 if (withdrawn != null && withdrawn != previous) {
@@ -257,7 +249,7 @@ class TemplateRepository(
                     return@withLock fail("template downloads incomplete; keeping the previous catalog")
                   }
                   stateLock.withLock {
-                    kv.put(k("manifest"), r.bytes.decodeToString())
+                    kv.put(k("manifest"), r.bytes.utf8())
                     current = next
                   }
                   putMeta(Meta(etag = r.etag, acceptedSerial = next.serial, fetchedAtEpochMs = now))
@@ -389,7 +381,7 @@ class TemplateRepository(
   private fun originOf(m: Manifest) =
     if (clock.nowEpochMs() < m.expiresAtEpochMs) LoadedTemplate.Origin.Fresh else LoadedTemplate.Origin.Stale
 
-  private fun loaded(m: Manifest, e: TemplateEntry, bytes: ByteArray, origin: LoadedTemplate.Origin) =
+  private fun loaded(m: Manifest, e: TemplateEntry, bytes: ByteString, origin: LoadedTemplate.Origin) =
     LoadedTemplate(e, m.design(e.designId), bytes, origin, m.contract(e.contract), m.assetsFor(e))
 
   // --- install / list / preview ---------------------------------------------------------------
@@ -465,7 +457,7 @@ class TemplateRepository(
    * An asset's bytes from the cache (or the bundled catalog), e.g. for a player's font or image
    * loader. Only assets of templates this repository handed out are on disk.
    */
-  suspend fun asset(sha256: String): ByteArray? = blobs.get(sha256) ?: bundled?.read?.invoke(sha256)
+  suspend fun asset(sha256: String): ByteString? = blobs.get(sha256) ?: bundled?.read?.invoke(sha256)
 
   private suspend fun owned(): Set<String> =
     kv.get(k("owned"))?.let { runCatching { json.decodeFromString(SetSerializer, it) }.getOrNull() } ?: emptySet()
@@ -501,7 +493,7 @@ class TemplateRepository(
    * (each verified by size and hash). Null if anything can't be had: a template is never handed
    * out without its fonts and images.
    */
-  private suspend fun obtain(m: Manifest, e: TemplateEntry): ByteArray? {
+  private suspend fun obtain(m: Manifest, e: TemplateEntry): ByteString? {
     // A render on a deadline: download nothing, and tell the host what to fetch afterwards.
     currentCoroutineContext()[CacheOnly]?.let { cacheOnly ->
       val complete = blobs.get(e.sha256)?.takeIf { e.assets.all { blobs.get(it) != null } }
@@ -516,7 +508,7 @@ class TemplateRepository(
     return blobs.get(e.sha256) ?: fetchVerified(resolveUrl(source.manifestUrl, m.blobBase + e.sha256 + ".rc"), e.sha256, e.bytes)
   }
 
-  private suspend fun fetchVerified(url: String, sha256: String, size: Long): ByteArray? {
+  private suspend fun fetchVerified(url: String, sha256: String, size: Long): ByteString? {
     val r = fetcher.get(url, null) as? FetchResult.Ok ?: return null
     if (r.bytes.size.toLong() != size || crypto.sha256Hex(r.bytes) != sha256) return null
     blobs.put(sha256, r.bytes)

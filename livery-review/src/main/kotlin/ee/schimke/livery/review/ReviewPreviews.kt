@@ -1,5 +1,7 @@
 package ee.schimke.livery.review
 
+import okio.ByteString.Companion.encodeUtf8
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.compose.RcImageLoader
 import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.livery.client.BindResult
@@ -32,7 +34,7 @@ class ReviewPreviews(
   private val density: Float = 2f,
   private val maxExamples: Int = 4,
   private val maxKept: Int = 4,
-  private val render: (ByteArray, Bindings, RenderSpec, RcImageLoader, RcTypefaceLoader) -> ByteArray =
+  private val render: (ByteString, Bindings, RenderSpec, RcImageLoader, RcTypefaceLoader) -> ByteString =
     { rc, b, spec, images, fonts -> TemplateRenderer.png(rc, b, spec, images, fonts) },
 ) {
   fun render(c: CompatibilityCheck.Comparison): List<DesignPreview> {
@@ -88,12 +90,12 @@ class ReviewPreviews(
           is BindResult.Ok -> r.bindings
           is BindResult.Invalid -> throw NotBound("example '$name' doesn't bind to ${c.ref}: ${r.problems.map { it.name }}")
         }
-        fun draw(pair: Pair<TemplateEntry, CatalogBuilder.Output>?, c: Contract?, side: String): ByteArray? {
+        fun draw(pair: Pair<TemplateEntry, CatalogBuilder.Output>?, c: Contract?, side: String): ByteString? {
           val (t, output) = pair ?: return null
           val bound = bindings(c) ?: return null
           val rc = output.files["blobs/${t.sha256}.rc"] ?: return null
           return render(rc, bound, spec, CatalogImages(output, bound), CatalogFonts.forTemplate(output, t))
-            .also { File(out, file(design, name, side)).writeBytes(it) }
+            .also { File(out, file(design, name, side)).writeBytes(it.toByteArray()) }
         }
         val after = draw(a, afterContract, "after")
         // The same template, contract and assets on both sides draw the same: render it once.
@@ -104,7 +106,7 @@ class ReviewPreviews(
           example = name,
           before = before?.let { url(design, name, if (same) "after" else "before") },
           after = after?.let { url(design, name, "after") },
-          unchanged = before != null && after != null && before.contentEquals(after),
+          unchanged = before != null && after != null && before == after,
         )
       }
       DesignPreview(design, describe(chosen), w, h, shots)
@@ -139,8 +141,8 @@ class ReviewPreviews(
     }
   }
 
-  private fun ByteArray?.contentEqualsOrNull(other: ByteArray?): Boolean =
-    if (this == null || other == null) this == other else contentEquals(other)
+  private fun ByteString?.contentEqualsOrNull(other: ByteString?): Boolean =
+    this == other
 
   private fun contract(output: CatalogBuilder.Output, t: TemplateEntry): Contract? =
     output.manifest.contracts.filter { it.ref == t.contract }.maxByOrNull { it.minor }
@@ -151,8 +153,7 @@ class ReviewPreviews(
    * together, so a short hash of the exact pair follows them.
    */
   private fun file(design: String, example: String, side: String): String {
-    val id = java.security.MessageDigest.getInstance("SHA-256").digest("$design\u0000$example".toByteArray())
-      .take(4).joinToString("") { "%02x".format(it) }
+    val id = "$design\u0000$example".encodeUtf8().sha256().hex().take(8)
     return "${safe(design)}.${safe(example)}.$id.$side.png"
   }
 

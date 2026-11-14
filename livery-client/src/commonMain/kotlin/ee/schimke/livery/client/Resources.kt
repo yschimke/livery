@@ -1,5 +1,7 @@
 package ee.schimke.livery.client
 
+import okio.ByteString.Companion.encodeUtf8
+import okio.ByteString
 import ee.schimke.livery.protocol.AssetEntry
 import ee.schimke.livery.protocol.AssetKind
 import ee.schimke.livery.protocol.FontFace
@@ -22,11 +24,11 @@ class ImageResolver(
   private val fetcher: RedirectingFetcher,
   private val crypto: Crypto,
   private val directHosts: Set<String> = emptySet(),
-  private val app: (suspend (key: String, widthPx: Int, heightPx: Int) -> ByteArray?)? = null,
+  private val app: (suspend (key: String, widthPx: Int, heightPx: Int) -> ByteString?)? = null,
   private val cache: BlobStore = MemoryBlobStore(),
   private val maxBytes: Int = 4 * 1024 * 1024,
 ) {
-  suspend fun resolve(value: String, widthPx: Int, heightPx: Int): ByteArray? =
+  suspend fun resolve(value: String, widthPx: Int, heightPx: Int): ByteString? =
     when (val ref = ImageRef.parse(value)) {
       null -> null
       is ImageRef.Asset -> repository.asset(ref.sha256)
@@ -39,7 +41,7 @@ class ImageResolver(
    * For hosts that render on a deadline (widgets): on a miss, draw the fallback, [resolve] the
    * image in the background, and render again.
    */
-  suspend fun cached(value: String, widthPx: Int, heightPx: Int): ByteArray? =
+  suspend fun cached(value: String, widthPx: Int, heightPx: Int): ByteString? =
     when (val ref = ImageRef.parse(value)) {
       null -> null
       is ImageRef.Asset -> repository.asset(ref.sha256)
@@ -47,10 +49,10 @@ class ImageResolver(
       is ImageRef.Remote -> remote(ref.url, widthPx, heightPx, network = false)
     }
 
-  private suspend fun remote(url: String, widthPx: Int, heightPx: Int, network: Boolean = true): ByteArray? {
+  private suspend fun remote(url: String, widthPx: Int, heightPx: Int, network: Boolean = true): ByteString? {
     val proxy = repository.manifest()?.imageProxy
     val target = remoteUrl(proxy, directHosts, url, widthPx, heightPx) ?: return null
-    val key = crypto.sha256Hex(target.encodeToByteArray())
+    val key = crypto.sha256Hex(target.encodeUtf8())
     cache.get(key)?.let { return it }
     if (!network) return null
     val r = fetcher.get(target, null, maxBytes.toLong()) { to -> redirectAllowed(proxy, directHosts, target, to) } as? FetchResult.Ok ?: return null

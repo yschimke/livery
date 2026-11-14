@@ -1,5 +1,6 @@
 package ee.schimke.livery.web.core
 
+import okio.ByteString
 import ee.schimke.livery.client.ActionArguments
 import ee.schimke.livery.client.ActionGate
 import ee.schimke.livery.client.ActionRouter
@@ -47,7 +48,7 @@ class LiveryWeb(
 ) {
   data class Space(val widthDp: Int? = null, val heightDp: Int? = null, val density: Float = 2f, val themeArgb: Map<String, Long> = emptyMap(), val decisionId: String? = null, val theme: String? = null)
   sealed interface Rendered {
-    data class Ready(val id: Int, val document: ByteArray, val documentKey: String, val values: Map<String, JsonElement>, val designId: String, val sha256: String, val heightDp: Int? = null) : Rendered
+    data class Ready(val id: Int, val document: ByteString, val documentKey: String, val values: Map<String, JsonElement>, val designId: String, val sha256: String, val heightDp: Int? = null) : Rendered
     data class Fallback(val reason: String) : Rendered
     data class Waiting(val reason: String) : Rendered
   }
@@ -186,7 +187,7 @@ class LiveryWeb(
     return heightBySha.getOrPut(entry.sha256) { plan.templateHeightDp() }
   }
 
-  private fun drawsImages(sha256: String, template: ByteArray): Boolean =
+  private fun drawsImages(sha256: String, template: ByteString): Boolean =
     imagesBySha.getOrPut(sha256) { runCatching { TemplateInstantiator.bitmapUrls(template).isNotEmpty() }.getOrDefault(true) }
 
   /** A named value as the web player sets it: booleans as 1 or 0, colours as `#AARRGGBB`. */

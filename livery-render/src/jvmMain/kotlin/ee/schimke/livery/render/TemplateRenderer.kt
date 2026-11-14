@@ -1,5 +1,7 @@
 package ee.schimke.livery.render
 
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.ImageComposeScene
@@ -43,16 +45,16 @@ data class RenderSpec(
  */
 object TemplateRenderer {
   fun png(
-    template: ByteArray,
+    template: ByteString,
     bindings: Bindings,
     spec: RenderSpec,
     images: RcImageLoader = RcImageLoader.Default,
     typefaces: RcTypefaceLoader = RcTypefaceLoader.Default,
-  ): ByteArray {
+  ): ByteString {
     val values = mutableStateMapOf<String, ee.schimke.composeai.rcplayer.runtime.RcNamedValue>().apply { putAll(bindings.toPlayerValues()) }
     val scene = ImageComposeScene(spec.widthPx, spec.heightPx, Density(spec.density)) {
       RcComposePlayer(
-        bytes = template,
+        bytes = template.toByteArray(),
         imageLoader = images,
         modifier = Modifier.fillMaxSize().let { m -> spec.background?.let { m.background(Color(it.toInt())) } ?: m },
         theme = if (spec.dark) RcPlayerTheme.Dark else RcPlayerTheme.Light,
@@ -65,7 +67,7 @@ object TemplateRenderer {
       // The first frame lays out and decodes; the second draws anything that arrived in it.
       scene.render(0)
       val image = scene.render(FRAME_NANOS)
-      return image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error("PNG encoding failed")
+      return (image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error("PNG encoding failed")).toByteString()
     } finally {
       scene.close()
     }

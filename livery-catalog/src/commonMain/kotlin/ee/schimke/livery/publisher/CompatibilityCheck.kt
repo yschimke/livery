@@ -1,5 +1,6 @@
 package ee.schimke.livery.publisher
 
+import okio.ByteString
 import okio.FileSystem
 import okio.Path
 import ee.schimke.livery.client.ContractChange
@@ -308,7 +309,7 @@ object CompatibilityCheck {
   }
 
   /** Who guarantees each value [t] reads (see [TemplateReport.values]). */
-  private fun valueGuarantees(c: Contract, t: TemplateEntry, bytes: ByteArray?): Map<String, String> {
+  private fun valueGuarantees(c: Contract, t: TemplateEntry, bytes: ByteString?): Map<String, String> {
     val reads = (t.reads + (bytes?.let { TemplateInspector.facts(it)?.declaredReads }.orEmpty())).distinct().sorted()
     return reads.associateWith { name ->
       val spec = ContractEvolution.specOf(c, name)

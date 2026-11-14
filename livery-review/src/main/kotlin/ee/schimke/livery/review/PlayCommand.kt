@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.publisher.build
 import ee.schimke.livery.publisher.load
 import ee.schimke.livery.client.BindResult
@@ -86,19 +87,19 @@ class PlayCommand : LiveryCommand {
       is BindResult.Ok -> b.bindings
       is BindResult.Invalid -> return "failed: the data doesn't bind to ${contract.ref}: ${b.problems.map { "${it.name}: ${it.message}" }}"
     }
-    val bytes = template.readBytes()
+    val bytes = template.readBytes().toByteString()
     // With --catalog, the catalog's images and the template's fonts, as the app loads them from a
     // downloaded catalog; without, the player's defaults (placeholders, system fonts).
     val built = catalog?.let {
       runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
         .getOrElse { e -> return "error: --catalog $it doesn't build: ${(e as? CatalogProblems)?.problems ?: e.message}" }
     }
-    val sha = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    val sha = bytes.sha256().hex()
     val entry = built?.manifest?.templates?.firstOrNull { it.sha256 == sha }
     return try {
       val images = built?.let { CatalogImages(it, bindings) } ?: ee.schimke.composeai.rcplayer.compose.RcImageLoader.Default
       val fonts = if (built != null && entry != null) CatalogFonts.forTemplate(built, entry) else ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader.Default
-      out.writeBytes(TemplateRenderer.png(bytes, bindings, spec, images, fonts))
+      out.writeBytes(TemplateRenderer.png(bytes, bindings, spec, images, fonts).toByteArray())
       "played: $out"
     } catch (e: Throwable) {
       "failed: ${generateSequence(e) { it.cause }.take(3).joinToString(", caused by ") { "${it.javaClass.simpleName}: ${it.message}" }}"
@@ -176,7 +177,7 @@ class PlayCommand : LiveryCommand {
       val part = File(dir, "${file.name}.part")
       URI(url).toURL().openStream().use { input -> part.outputStream().use { input.copyTo(it) } }
       val expected = URI("$url.sha1").toURL().readText().trim().substringBefore(' ')
-      val actual = java.security.MessageDigest.getInstance("SHA-1").digest(part.readBytes()).joinToString("") { "%02x".format(it) }
+      val actual = part.readBytes().toByteString().sha1().hex()
       check(expected.equals(actual, ignoreCase = true)) { "$url: SHA-1 $actual, expected $expected" }
       check(part.renameTo(file))
       file

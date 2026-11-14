@@ -1,5 +1,6 @@
 package ee.schimke.livery.instantiate
 
+import okio.ByteString
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapFontData
 import ee.schimke.composeai.rcplayer.protocol.RcDocument
@@ -83,7 +84,7 @@ data class AgentBytesPolicy(
 
 sealed interface Admission {
   /** May play, exactly these [bytes]; [signedBy] is the key id, or null when unsigned. */
-  class Admitted(val bytes: ByteArray, val sha256: String, val signedBy: String?, val features: Set<RiskyFeature>) : Admission
+  class Admitted(val bytes: ByteString, val sha256: String, val signedBy: String?, val features: Set<RiskyFeature>) : Admission
   data class Refused(val reason: String) : Admission
 }
 
@@ -106,9 +107,9 @@ class DocumentAdmission(
   val maxSignedBytes: Int = 256 * 1024,
 ) {
   /** [bytes]' sha256, as [admit] computes it: to check a fetched document is the one that was named. */
-  suspend fun sha256(bytes: ByteArray): String = crypto.sha256Hex(bytes)
+  suspend fun sha256(bytes: ByteString): String = crypto.sha256Hex(bytes)
 
-  suspend fun admit(bytes: ByteArray, contract: Contract, signature: ManifestSignature?): Admission {
+  suspend fun admit(bytes: ByteString, contract: Contract, signature: ManifestSignature?): Admission {
     val ref = contract.ref
     val limit = if (signature != null) maxSignedBytes else agentBytes?.maxBytes ?: 0
     if (signature == null && agentBytes == null) return Admission.Refused("unsigned documents are not allowed")

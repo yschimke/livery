@@ -5,6 +5,8 @@ import ee.schimke.livery.protocol.Manifest
 import java.io.FileNotFoundException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okio.buffer
+import okio.source
 
 /**
  * The catalog an app was built with, from its assets: what the `ee.schimke.composeai.livery.catalog` Gradle
@@ -34,7 +36,7 @@ object AndroidBundled {
     }
     return TemplateRepository.Bundled(manifest) { sha256 ->
       val file = files[sha256] ?: return@Bundled null
-      withContext(Dispatchers.IO) { LiveryTrace.section({ "livery:asset-read:${sha256.take(8)}" }) { runCatching { assets.open(file).use { it.readBytes() } }.getOrNull() } }
+      withContext(Dispatchers.IO) { LiveryTrace.section({ "livery:asset-read:${sha256.take(8)}" }) { runCatching { assets.open(file).source().buffer().use { it.readByteString() } }.getOrNull() } }
     }
   }
 }
