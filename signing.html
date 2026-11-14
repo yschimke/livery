@@ -56,7 +56,7 @@ revocation or roll a catalog back.</p>
 <li><code>acme.key</code> is PKCS#8 in Base64. Keep it in CI secrets; never commit it.</li>
 <li><code>acme.pub</code> is the raw 32-byte Ed25519 public key in Base64. Apps embed it with a key id.</li>
 </ul>
-<pre><code class="language-kotlin">TrustPolicy.Signed(listOf(TrustedKey(&quot;acme-1&quot;, Base64.decode(ACME_PUB))))
+<pre><code class="language-kotlin">TrustPolicy.Signed(listOf(TrustedKey(&quot;acme-1&quot;, ACME_PUB.decodeBase64()!!)))  // okio: the key is a ByteString
 </code></pre>
 <pre><code class="language-swift">.signed([TrustedKey(keyId: &quot;acme-1&quot;, publicKey: Data(base64Encoded: acmePub)!)])
 </code></pre>
