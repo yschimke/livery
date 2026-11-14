@@ -118,8 +118,10 @@ val startup = host.resources.startup(lifecycleScope) {
 installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
 ```
 
-The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. On desktop, iOS
-and the web, `startup.await()` before showing the first screen.
+The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. The block runs on
+a background thread (`Dispatchers.Default`, or the `context` you pass) from the moment `startup` is called,
+so it overlaps the activity's creation rather than waiting for the main thread to come free after it. On
+desktop, iOS and the web, `startup.await()` before showing the first screen.
 
 **Without a splash screen, the first frame waits a little.** Until a screen's first frame, a slot or
 template that is not ready waits for its work, which runs off the main thread, for up to

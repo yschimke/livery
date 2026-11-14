@@ -109,7 +109,15 @@ class TemplateRepository(
   ).toSet()
 
   /** The app's own copy of a catalog, produced by the same publisher at build time. */
-  class Bundled(val manifest: Manifest, val read: suspend (sha256: String) -> ByteString?)
+  class Bundled(manifest: () -> Manifest, val read: suspend (sha256: String) -> ByteString?) {
+    constructor(manifest: Manifest, read: suspend (sha256: String) -> ByteString?) : this({ manifest }, read)
+
+    /**
+     * The catalog, decoded the first time the repository needs it rather than when this is built: an app builds
+     * its repository on the main thread at start, and the first template is usually resolved off it.
+     */
+    val manifest: Manifest by lazy(manifest)
+  }
 
   private val verifier = ManifestVerifier(crypto, trust)
   /** Guards [current] and its disk copy only; never held across network calls. */

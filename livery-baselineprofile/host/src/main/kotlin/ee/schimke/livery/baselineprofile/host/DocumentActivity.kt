@@ -1,9 +1,13 @@
 package ee.schimke.livery.baselineprofile.host
 
+import android.os.Build
 import android.os.Bundle
+import android.os.Trace
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,6 +52,7 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.compose.LiveryHost
 import ee.schimke.livery.compose.LiveryResources
+import ee.schimke.livery.compose.startup
 import ee.schimke.livery.compose.toPlayerValues
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
@@ -64,55 +69,67 @@ import kotlinx.serialization.json.JsonPrimitive
  * document (tag `document`) pushes new data, as a host does when a value updates; it has to repaint
  * and relayout.
  *
- * Lanes, each with everything the document needs in memory before its first frame unless it is the
- * lane that measures the opposite:
- * - `livery`: [LiveryTemplate] on a host with the shipped defaults, prepared at startup;
- * - `livery-incomposition`: the same, with [RcPreparation.InComposition] (the document is prepared
+ * Every lane installs the splash screen (the activity's starting theme), so all of them run the same
+ * activity code. The Livery lanes draw a [LiverySlot], as an app writes one, and those that start
+ * up do it as getting-started tells an app to: [startup] in `onCreate`, with the splash screen kept
+ * up until it is ready.
+ *
+ * Lanes:
+ * - `livery`: a host with the shipped defaults, its first screen prepared by [startup];
+ * - `livery-nostartup`: the same without [startup]: the slot plans when it first composes, and the
+ *   first frame waits for it within [LiveryHost.firstFrameBudgetMillis];
+ * - `livery-incomposition`: [RcPreparation.InComposition] and no [startup] (the document is prepared
  *   on the main thread in the first composition; nothing was prepared ahead);
- * - `livery-nodefer`: the defaults but `deferLayoutAnimations = false` (the lookahead pass runs on
+ * - `livery-nodefer`: `livery` but `deferLayoutAnimations = false` (the lookahead pass runs on
  *   every frame; flat layout needs the deferral, so it is off too);
- * - `livery-noflat`: the defaults but `flattenLayout = false` (every component its own composable);
+ * - `livery-noflat`: `livery` but `flattenLayout = false` (every component its own composable);
  * - `rc`: the prepared document played by [RcComposePlayer] with nothing of Livery around it;
- * - `compose`: the Compose UI twin, which TwinRenderParityTest holds to the template's pixels.
+ * - `compose`: the Compose UI twin, which TwinRenderParityTest holds to the template's pixels. It
+ *   builds nothing of Livery: no repository, so no catalog read either.
  */
 class DocumentActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    val splash = installSplashScreen()
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     val lane = intent.getStringExtra(LANE) ?: LIVERY
-    val clock = Clock { System.currentTimeMillis() }
-    val repository = TemplateRepository(
-      StaticSource("https://catalog.invalid/manifest.json"),
-      Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
-      JavaCrypto,
-      TrustPolicy.AllowUnsigned,
-      MemoryBlobStore(),
-      MemoryKeyValueStore(),
-      clock,
-      listOf(Capabilities),
-      bundled = AndroidBundled.fromAssets(this),
-    )
-    val resources = LiveryResources(repository, maxPlans = 4)
-    val actions = ActionRouter(emptyMap(), { false }, {}, clock)
-    // Livery's own signal that a template's first frame was drawn, as an app's analytics sees it.
-    val impression = mutableStateOf(false)
-    val events = EventSink { if (it.type == TemplateEvent.Type.Impression) impression.value = true }
-    val host = when (lane) {
-      LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, events, clock, resources = resources, preparation = RcPreparation.InComposition)
-      LIVERY_NO_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = false)
-      LIVERY_NO_FLAT -> LiveryHost(repository, actions, events, clock, resources = resources, flattenLayout = false)
-      else -> LiveryHost(repository, actions, events, clock, resources = resources)
+    // The twin builds nothing of Livery: the comparison charges Livery's catalog and preparation to
+    // the Livery lanes alone.
+    val livery = if (lane == COMPOSE) null else Livery(lane)
+    if (livery != null && lane in STARTUP_LANES) {
+      // As getting-started has it: the first screen prepared by Livery's startup (on a worker,
+      // overlapping the activity's creation), and the splash screen kept up until it is ready.
+      val startup = livery.host.resources.startup(lifecycleScope) {
+        prepareSlot(SLOT, 0) { livery.planner.forAppData(livery.query, json(pollData(0))) }
+      }
+      // How long the splash screen held the first frame for it, from when the activity first asked
+      // to draw: `host:first-frame-held`, which DocumentBenchmark reads. Near 0 when the startup's
+      // work was done by the time the activity was created.
+      var holding = false
+      var held = false
+      splash.setKeepOnScreenCondition {
+        val waiting = !startup.isReady
+        if (!held && Build.VERSION.SDK_INT >= 29) {
+          if (!holding) {
+            holding = true
+            Trace.beginAsyncSection(FIRST_FRAME_HELD, 0)
+          }
+          if (!waiting) {
+            held = true
+            Trace.endAsyncSection(FIRST_FRAME_HELD, 0)
+          }
+        }
+        waiting
+      }
     }
-    val planner = SlotPlanner(repository, {}, clock)
-    val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
 
     setContent {
       var version by remember { mutableIntStateOf(0) }
       // The data cycles through VARIANTS values, as a host's data updates. The Livery lanes draw it
       // in a LiverySlot, as an app does: each change is planned there, and the slot keeps each
       // variant's answer (its slotId), so after the first round a change draws an answer it has.
-      // The first frame waits for the first answer within the host's first-frame budget, as any
-      // app's does; nothing here holds frames or plans ahead on Livery's behalf.
+      // The first answer is prepared by Livery's startup (the splash screen waits for it), or, in the
+      // lanes without one, the first frame waits for it within the host's first-frame budget.
       val variant = version % VARIANTS
       val data = remember(variant) { pollData(variant) }
       // The player alone has no slot: it plans the same data, then plays the document.
@@ -120,14 +137,14 @@ class DocumentActivity : ComponentActivity() {
       // Set once the player has composed a prepared document: a plan alone may still be preparing.
       var rcComposed by remember { mutableStateOf(false) }
       if (lane == RC) {
-        LaunchedEffect(variant) { rcPlan = planner.forAppData(query, json(data)) as? PlanResult.Ready }
+        LaunchedEffect(variant) { rcPlan = livery!!.planner.forAppData(livery.query, json(data)) as? PlanResult.Ready }
       }
       // Drawn: the twin from its first frame; the player once it composed its document; a Livery lane on
       // Livery's own Impression event, after the template's first frame.
       val contentDrawn = when (lane) {
         COMPOSE -> true
         RC -> rcComposed
-        else -> impression.value
+        else -> livery!!.impression.value
       }
       var drawn by remember { mutableStateOf(false) }
       LaunchedEffect(contentDrawn) {
@@ -160,18 +177,48 @@ class DocumentActivity : ComponentActivity() {
           COMPOSE -> PollTwin(data, modifier)
           RC -> rcPlan?.plan?.let { p ->
             val array = remember(p.template.bytes) { p.template.bytes.toByteArray() }
-            val prepared = rememberRcPreparedDocument(array, host.preparation) ?: return@let
+            val prepared = rememberRcPreparedDocument(array, livery!!.host.preparation) ?: return@let
             val values = remember { mutableStateMapOf<String, RcNamedValue>() }
             values.putAll(p.bindings.toPlayerValues())
             RcComposePlayer(prepared, modifier, namedValues = values)
             SideEffect { rcComposed = true }
           }
-          else -> LiverySlot(key = variant, host = host, modifier = modifier, slotId = SLOT) {
-            planner.forAppData(query, json(data))
+          else -> LiverySlot(key = variant, host = livery!!.host, modifier = modifier, slotId = SLOT) {
+            livery.planner.forAppData(livery.query, json(data))
           }
         }
       }
     }
+  }
+
+  /** Livery for a lane that uses it: the bundled sample catalog, offline, and a host configured as [lane] says. */
+  private inner class Livery(lane: String) {
+    private val clock = Clock { System.currentTimeMillis() }
+    private val repository = TemplateRepository(
+      StaticSource("https://catalog.invalid/manifest.json"),
+      Fetcher { _, _ -> FetchResult.Failed(503, "offline") },
+      JavaCrypto,
+      TrustPolicy.AllowUnsigned,
+      MemoryBlobStore(),
+      MemoryKeyValueStore(),
+      clock,
+      listOf(Capabilities),
+      bundled = AndroidBundled.fromAssets(this@DocumentActivity),
+    )
+    private val resources = LiveryResources(repository, maxPlans = 4)
+    private val actions = ActionRouter(emptyMap(), { false }, {}, clock)
+
+    /** Livery's own signal that a template's first frame was drawn, as an app's analytics sees it. */
+    val impression = mutableStateOf(false)
+    private val events = EventSink { if (it.type == TemplateEvent.Type.Impression) impression.value = true }
+    val host = when (lane) {
+      LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, events, clock, resources = resources, preparation = RcPreparation.InComposition)
+      LIVERY_NO_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = false)
+      LIVERY_NO_FLAT -> LiveryHost(repository, actions, events, clock, resources = resources, flattenLayout = false)
+      else -> LiveryHost(repository, actions, events, clock, resources = resources)
+    }
+    val planner = SlotPlanner(repository, {}, clock)
+    val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
   }
 
   private fun pollData(version: Int) = PollData(
@@ -207,12 +254,17 @@ class DocumentActivity : ComponentActivity() {
     const val LANE = "lane"
     private const val VARIANTS = 10
     const val LIVERY = "livery"
+    const val LIVERY_NO_STARTUP = "livery-nostartup"
     const val LIVERY_IN_COMPOSITION = "livery-incomposition"
     const val LIVERY_NO_DEFER = "livery-nodefer"
     const val LIVERY_NO_FLAT = "livery-noflat"
     const val RC = "rc"
     const val COMPOSE = "compose"
     private const val SLOT = "document"
+    /** The splash screen holding the first frame for the startup, in the trace. */
+    const val FIRST_FRAME_HELD = "host:first-frame-held"
+    /** The lanes that prepare their first screen with Livery's startup; the others plan as they compose. */
+    private val STARTUP_LANES = setOf(LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT)
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
 }

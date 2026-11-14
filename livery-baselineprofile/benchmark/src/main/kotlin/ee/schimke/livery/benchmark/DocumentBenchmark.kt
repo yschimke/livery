@@ -2,6 +2,8 @@ package ee.schimke.livery.benchmark
 
 import android.content.Intent
 import androidx.benchmark.macro.CompilationMode
+import androidx.benchmark.macro.ExperimentalMetricApi
+import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.benchmark.macro.Metric
@@ -17,12 +19,15 @@ import org.junit.runner.RunWith
 
 /**
  * One template filling the screen (`DocumentActivity`, the sample catalog's `poll-card`), in each
- * lane the host offers: Livery with its defaults, with one optimisation off (preparation in
- * composition, deferral, flat layout), the player alone, and the Compose UI twin.
+ * lane the host offers: Livery with its defaults, with one optimisation off (Livery's startup,
+ * preparation in composition, deferral, flat layout), the player alone, and the Compose UI twin.
  *
- * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
- *   Livery lanes are a plain `LiverySlot`, so `timeToInitialDisplayMs` is the first frame Livery draws,
- *   within its first-frame budget; the activity reports fully drawn on Livery's `Impression` event).
+ * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`).
+ *   The Livery lanes are a plain `LiverySlot`. `livery` prepares its first screen with Livery's
+ *   startup and keeps the splash screen up until then, as getting-started has it; `livery-nostartup`
+ *   plans as the slot composes, its first frame waiting within the first-frame budget. Either way
+ *   `timeToInitialDisplayMs` is the first frame Livery draws, and the activity reports fully drawn on
+ *   Livery's `Impression` event.
  * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *
@@ -33,10 +38,11 @@ import org.junit.runner.RunWith
 class DocumentBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
-  @Test fun liveryStartup() = startup("livery")
+  @Test fun liveryStartup() = startup("livery", withStartup = true)
+  @Test fun liveryNoStartupStartup() = startup("livery-nostartup")
   @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
-  @Test fun liveryNoDeferStartup() = startup("livery-nodefer")
-  @Test fun liveryNoFlatStartup() = startup("livery-noflat")
+  @Test fun liveryNoDeferStartup() = startup("livery-nodefer", withStartup = true)
+  @Test fun liveryNoFlatStartup() = startup("livery-noflat", withStartup = true)
   @Test fun rcPlayerStartup() = startup("rc")
   @Test fun composeUiStartup() = startup("compose")
 
@@ -46,7 +52,23 @@ class DocumentBenchmark {
   @Test fun rcPlayerChange() = change("rc")
   @Test fun composeUiChange() = change("compose")
 
-  private fun startup(lane: String) = measure(lane, listOf(StartupTimingMetric()), StartupMode.COLD) {}
+  /**
+   * The lanes with Livery's startup also report how long it took (`livery:startup`) and how long the
+   * splash screen held the first frame for it (`host:first-frame-held`): near 0 when its work fits in
+   * the activity's creation, and the time the first frame waited for it when it does not.
+   */
+  @OptIn(ExperimentalMetricApi::class)
+  private fun startup(lane: String, withStartup: Boolean = false) = measure(
+    lane,
+    listOf(StartupTimingMetric()) +
+      if (withStartup) {
+        listOf(
+          TraceSectionMetric("livery:startup", TraceSectionMetric.Mode.First),
+          TraceSectionMetric("host:first-frame-held", TraceSectionMetric.Mode.First),
+        )
+      } else emptyList(),
+    StartupMode.COLD,
+  ) {}
 
   private fun change(lane: String) = measure(lane, listOf(FrameTimingMetric()), StartupMode.WARM) {
     repeat(TAPS) {

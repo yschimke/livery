@@ -18,6 +18,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -70,4 +71,25 @@ class LiveryStartupTest {
     withTimeout(5_000) { startup.await() }
     scope.cancel()
   }
+
+  /**
+   * An app starts this from its activity's own scope, on the main thread, in `onCreate`: preparing there would
+   * run until the first suspension on the main thread, and resume only once the activity has been created and
+   * the main thread is free, after the first frame was wanted. It runs on a worker from the start.
+   */
+  @Test fun preparesOffTheScopesThread() = runBlocking {
+    val main = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "fake-main") }
+    val mainScope = CoroutineScope(SupervisorJob() + main.asCoroutineDispatcher())
+    try {
+      var preparedOn: String? = null
+      val startup = resources.startup(mainScope, timeoutMillis = 60_000) { preparedOn = Thread.currentThread().name }
+      withTimeout(5_000) { startup.await() }
+      assertNotNull(preparedOn)
+      assertFalse(preparedOn!!.startsWith("fake-main"), "prepared on the scope's own thread")
+    } finally {
+      mainScope.cancel()
+      main.shutdown()
+    }
+  }
+
 }

@@ -11,7 +11,8 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 | --- | --- |
 | Compose UI | The hand-written twin of the design |
 | Player alone | The prepared document played by `RcComposePlayer`, nothing of Livery around it |
-| Livery | `LiverySlot` / `LiveryTemplate` with the defaults: background preparation, deferred layout animations, flat layout |
+| Livery | `LiverySlot` / `LiveryTemplate` with the defaults: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's `startup`, with the splash screen up until it is ready, as getting-started has it |
+| Livery, no startup | The same with no `startup`: the slot plans as it first composes, and its first frame waits within the first-frame budget (start-up only) |
 | Livery, no deferral | `deferLayoutAnimations = false` (flat layout needs the deferral, so it is off too) |
 | Livery, no flat layout | `flattenLayout = false` |
 
@@ -101,9 +102,12 @@ the frame after `reportFullyDrawn()`.
 | Livery, no flat layout | 234 ms | 236 ms |
 | Livery, preparing in composition | 217 ms | 219 ms |
 
-The host no longer holds that frame itself. Its Livery lanes are a plain `LiverySlot`, as an app writes one, and
-Livery's first-frame budget (`LiveryHost.firstFrameBudgetMillis`, 150 ms) holds the first frame for the slot's
-answer instead. *Planned*: these numbers again with that host, with the next device run.
+The host no longer holds that frame itself. Its Livery lanes are a plain `LiverySlot`, as an app writes one. The
+`livery` lanes prepare their first screen with Livery's `startup` in `onCreate` and keep the splash screen up until it
+is ready, as getting-started tells an app to; `livery-nostartup` has no `startup`, and Livery's first-frame budget
+(`LiveryHost.firstFrameBudgetMillis`, 150 ms) holds its first frame for the slot's answer instead. The Compose UI
+twin builds nothing of Livery, where in this run it also read the bundled catalog. *Planned*: these numbers again
+with that host, with the next device run.
 
 The Compose UI twin reaches a drawn document about 26 ms before Livery (194 against 220 ms), and the Remote Compose
 lanes sit between 219 and 236 ms, within 20 ms of each other, which with one run per lane is not a ranking. The Livery
@@ -120,8 +124,13 @@ lanes also plan ten data variants before their first draw (nine more than one pl
 - **The first frame was held, in the run above, by the host.** The activity vetoed drawing (an
   `OnPreDrawListener`) until the document was composed, as an app keeps its splash screen up. Before that, the
   Remote Compose lanes drew an empty frame while they planned, so their *initial display* was an earlier, empty
-  frame (about 150 ms against a full display of about 230 ms). The host now leaves this to Livery's first-frame
-  budget, as an app would, and draws its Livery lanes with nothing of its own around them.
+  frame (about 150 ms against a full display of about 230 ms). The host now leaves this to Livery, as an app
+  would: its startup and the splash screen, or, in `livery-nostartup`, the first-frame budget.
+- **Every lane installs the splash screen.** The activity's starting theme is core-splashscreen's in every lane,
+  so they all run the same activity code; only the Livery lanes with `startup` keep it up.
+- **The twin builds nothing of Livery.** In the runs above the host built Livery's repository in every lane, and
+  read the bundled catalog's manifest on the main thread (3.8 ms) in the twin's lane too. Livery now reads it when
+  a template is first resolved, and the twin's lane builds no repository.
 - **Reported fully drawn after the document draws.** The Compose UI and player lanes report after the
   frame that composed the document. The Livery lanes report on Livery's `Impression` event, which already
   comes after the template's first frame, so they don't wait a frame more. Every lane then asks for one
@@ -261,9 +270,10 @@ track; ones that can resume on another thread (planning, resolving, preparing, f
 
 | Section | Wraps |
 | --- | --- |
+| `livery:startup` | an app's `startup`, preparing its first screen (from the call to ready) |
 | `livery:plan:<design>` | `SlotPlanner` choosing a template and binding data for a slot, decision or feed item |
 | `livery:resolve:<design>` | the repository choosing the template and reading its bytes |
-| `livery:asset-read:<sha>`, `livery:manifest-decode` | the bundled catalog's blobs and manifest (Android) |
+| `livery:asset-read:<sha>`, `livery:manifest-decode` | the bundled catalog's blobs and manifest (Android; the manifest is decoded where it is first needed) |
 | `livery:bind:<contract>` | `ContractBinder.bind`, data against the contract |
 | `livery:prepare:<design>` | the player's document preparation: decode, link, rewrite |
 | `livery:for-display` | the rewrite for the display, inside `prepare` |

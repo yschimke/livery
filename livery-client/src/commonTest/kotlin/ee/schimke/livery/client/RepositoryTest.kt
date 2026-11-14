@@ -353,6 +353,21 @@ class RepositoryTest {
     assertEquals(LoadedTemplate.Origin.Bundled, r.resolve(q)?.origin)
   }
 
+  /**
+   * A bundled catalog's manifest is decoded when a template is first resolved, not when the repository is built:
+   * an app builds it on the main thread at start, and resolves on whichever thread prepares the first screen.
+   */
+  @Test fun theBundledManifestIsDecodedWhenFirstUsedAndOnce() = runTest {
+    var decoded = 0
+    val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled({ decoded++; Fx.manifest() }) { sha ->
+      listOf("default-v8").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+    })
+    assertEquals(0, decoded, "built, nothing decoded")
+    assertEquals(LoadedTemplate.Origin.Bundled, r.resolve(q)?.origin)
+    r.resolve(q)
+    assertEquals(1, decoded, "decoded once, on first use")
+  }
+
   @Test fun resolvingATemplateAgainReadsNothingAndGivesTheSameTemplate() = runTest {
     var reads = 0
     val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled(Fx.manifest()) { sha ->
