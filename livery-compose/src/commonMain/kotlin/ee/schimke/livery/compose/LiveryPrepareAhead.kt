@@ -6,7 +6,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import ee.schimke.livery.client.PlanResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Keeps the cards just ahead of a lazy list's scroll position planned and prepared, so each draws
@@ -19,11 +21,12 @@ import kotlinx.coroutines.launch
  * not yet requested, it runs [plan] (the call the item's [LiverySlot] makes: `SlotPlanner.forAppData`,
  * `forFeedItem` ...) and keeps the answer for the slot under [slotId] and [key] with
  * [LiveryResources.prepareSlot], which also readies the template's document and fonts off the main
- * thread. Return null from [plan] for an item that is not loaded yet (a paging placeholder): it is
- * asked again when the window next moves or [count] changes.
+ * thread. Return null from [plan], or a null [key], for an item that is not loaded yet (a paging placeholder): it is
+ * asked again when the window moves, [count] changes or its key appears.
  *
  * The slot for item `i` must use the same [slotId] and key `key(i)`. Planning and preparing run off
- * the main thread, one request per item; a window of 6 to 10 is enough to stay ahead of a fast fling,
+ * the main thread (on [context], by default [Dispatchers.Default]: [plan] runs there, so it must not read composition
+ * state without a snapshot read, which `peek` is), one request per item; a window of 6 to 10 is enough to stay ahead of a fast fling,
  * and [LiveryResources]' `maxPlans` should hold the window plus what the list keeps composed.
  *
  * [firstVisible] and [lastVisible] are read in a snapshot, so they can read list state directly; the
@@ -40,24 +43,36 @@ fun LiveryPrepareAhead(
   ahead: Int = DEFAULT_PREPARE_AHEAD,
   behind: Int = 0,
   key: (index: Int) -> Any? = { it },
+  context: CoroutineContext = Dispatchers.Default,
   plan: suspend (index: Int) -> PlanResult?,
 ) {
   val currentPlan = rememberUpdatedState(plan)
   val currentKey = rememberUpdatedState(key)
-  LaunchedEffect(host, slotId, ahead, behind) {
-    val requested = HashSet<Any?>()
-    snapshotFlow { prepareWindow(firstVisible(), lastVisible(), count(), ahead, behind) }
-      .collect { window ->
-        for (index in window) {
-          // No key: the item is not loaded yet (a paging placeholder); asked again when the window next moves.
-          val itemKey = currentKey.value(index) ?: continue
-          if (!requested.add(itemKey)) continue
-          launch {
+  LaunchedEffect(host, slotId, ahead, behind, context) {
+    val inFlight = HashSet<Any?>()
+    // The keys are part of what is observed, so an item that loads (a paging placeholder becoming an item) without the
+    // window or the count moving still gets requested.
+    snapshotFlow {
+      val window = prepareWindow(firstVisible(), lastVisible(), count(), ahead, behind)
+      window.map { it to currentKey.value(it) }
+    }.collect { window ->
+      for ((index, itemKey) in window) {
+        // No key: the item is not loaded yet; asked again when its key appears.
+        if (itemKey == null || itemKey in inFlight) continue
+        // Already planned at this revision and still in memory (bounded: an evicted answer is asked for again).
+        if (host.resources.lastPlan(slotId, itemKey, host.repository.revision.value) != null) continue
+        inFlight.add(itemKey)
+        // Off the main thread: the app's planning and the preparation run on [context], one request per item.
+        launch(context) {
+          try {
             val result = currentPlan.value(index)
-            if (result == null) requested.remove(itemKey) else host.resources.prepareSlot(slotId, itemKey) { result }
+            if (result != null) host.resources.prepareSlot(slotId, itemKey) { result }
+          } finally {
+            inFlight.remove(itemKey)
           }
         }
       }
+    }
   }
 }
 
@@ -71,6 +86,7 @@ fun LiveryPrepareAhead(
   ahead: Int = DEFAULT_PREPARE_AHEAD,
   behind: Int = 0,
   key: (index: Int) -> Any? = { it },
+  context: CoroutineContext = Dispatchers.Default,
   plan: suspend (index: Int) -> PlanResult?,
 ) = LiveryPrepareAhead(
   host = host,
@@ -81,6 +97,7 @@ fun LiveryPrepareAhead(
   ahead = ahead,
   behind = behind,
   key = key,
+  context = context,
   plan = plan,
 )
 
