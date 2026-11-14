@@ -7,9 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,9 +55,9 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * One template filling the screen, for the document benchmarks (`:livery-benchmark`'s
- * `DocumentBenchmark`): the sample catalog's `poll-card`, drawn the way `lane` says. A "Change" row
- * above it (tag `change`) pushes new data, as a host does when a value updates; the document (tag
- * `document`) has to repaint and relayout.
+ * `DocumentBenchmark`): the sample catalog's `poll-card`, drawn the way `lane` says. Tapping the
+ * document (tag `document`) pushes new data, as a host does when a value updates; it has to repaint
+ * and relayout.
  *
  * Lanes, each with everything the document needs in memory before its first frame unless it is the
  * lane that measures the opposite:
@@ -72,6 +70,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class DocumentActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    hideSystemBars()
     val lane = intent.getStringExtra(LANE) ?: LIVERY
     val clock = Clock { System.currentTimeMillis() }
     val repository = TemplateRepository(
@@ -110,11 +109,7 @@ class DocumentActivity : ComponentActivity() {
         ready = true
       }
       Column(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "document-screen" }) {
-        BasicText(
-          "Change #$version",
-          Modifier.fillMaxWidth().clickable { version++ }.padding(16.dp).semantics { testTag = "change" },
-        )
-        Box(Modifier.weight(1f).fillMaxWidth().semantics { testTag = "document" }) {
+        Box(Modifier.fillMaxSize().clickable { version++ }.semantics { testTag = "document" }) {
           if (!ready) return@Box
           val modifier = Modifier.fillMaxSize().padding(16.dp)
           when (lane) {

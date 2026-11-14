@@ -21,7 +21,7 @@ import org.junit.runner.RunWith
  * and the Compose UI twin.
  *
  * - `*Startup`: cold process start to the first frame of the document (`StartupTimingMetric`).
- * - `*Change`: tapping the host's "Change" row pushes new data; `FrameTimingMetric` over those taps.
+ * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *
  * On an emulator these are only rough: graphics are software-rendered, so lanes are not told apart in
@@ -44,7 +44,7 @@ class DocumentBenchmark {
 
   private fun change(lane: String) = measure(lane, listOf(FrameTimingMetric()), StartupMode.WARM) {
     repeat(TAPS) {
-      device.findObject(By.res("change")).click()
+      device.findObject(By.res("document")).click()
       device.waitForIdle()
     }
   }

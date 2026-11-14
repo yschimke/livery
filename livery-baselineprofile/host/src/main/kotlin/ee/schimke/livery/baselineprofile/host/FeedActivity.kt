@@ -73,6 +73,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class FeedActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    hideSystemBars()
     val mode = intent.getStringExtra(MODE) ?: LIVERY
     val cards = List(ITEMS) { i -> if (i % 2 == 0) Card.Banner(i) else Card.Poll(i) }
     val clock = Clock { System.currentTimeMillis() }

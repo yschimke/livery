@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <!-- Lets the generator's Macrobenchmark read the app's profile without root. -->
-  <application android:label="Livery profile host">
+  <application
+    android:label="Livery profile host"
+    android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
     <profileable android:shell="true" />
     <activity
       android:name=".CatalogActivity"

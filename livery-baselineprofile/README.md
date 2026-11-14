@@ -83,6 +83,6 @@ On an emulator, add
 
 `DocumentActivity` draws the sample catalog's `poll-card` filling the screen, chosen by the `lane`
 extra: `livery`, `livery-incomposition` (prepared on the main thread in the first composition),
-`rc` or `compose` (the twin). A "Change" row pushes new data. `DocumentBenchmark` records cold
+`rc` or `compose` (the twin). Tapping it pushes new data. `DocumentBenchmark` records cold
 start to first frame and frame timing across ten changes for each lane. What is built and what is
 planned is in [`docs/benchmarks/PLAN.md`](../docs/benchmarks/PLAN.md).
