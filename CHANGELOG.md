@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0](https://github.com/yschimke/livery/compare/v0.11.0...v0.12.0) (2026-11-14)
+
+
+### Features
+
+* **benchmark:** full-screen document lanes and a benchmark plan ([#72](https://github.com/yschimke/livery/issues/72)) ([ad65179](https://github.com/yschimke/livery/commit/ad6517940db755fd373afcea7e933932220295dc))
+* **compose:** defer layout animations and flatten plain components by default (rc-players 3.3.0) ([#71](https://github.com/yschimke/livery/issues/71)) ([3f8aaa0](https://github.com/yschimke/livery/commit/3f8aaa0584fd23cb325e9c6ab0e2543d703095c6))
+* **compose:** prepare templates off the main thread through the player's background strategy ([#70](https://github.com/yschimke/livery/issues/70)) ([b33866f](https://github.com/yschimke/livery/commit/b33866f66615ec4448f65b367cb8c8380c67bfd5))
+* make the pull request comment a ten-second read ([#67](https://github.com/yschimke/livery/issues/67)) ([8da7a63](https://github.com/yschimke/livery/commit/8da7a63bbbcb807c2d81b29d96de6db81202c091))
+* **site:** publish the docs to livery.coo.ee, redirect GitHub Pages there ([#75](https://github.com/yschimke/livery/issues/75)) ([d579bc2](https://github.com/yschimke/livery/commit/d579bc2dda54f836710fa3d4f56b96d62ba794ed))
+
+
+### Bug Fixes
+
+* **release:** publish the release once Maven and the CLIs are out, without waiting on npm ([#69](https://github.com/yschimke/livery/issues/69)) ([70df6a2](https://github.com/yschimke/livery/commit/70df6a2b43f1e3ddb04dd8217ce60402ca54e23d))
+
 ## [0.11.0](https://github.com/yschimke/livery/compare/v0.10.0...v0.11.0) (2026-11-13)
 
 
