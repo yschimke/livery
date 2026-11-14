@@ -24,7 +24,7 @@ Livery is the plumbing between "a `.rc` document exists" and "it is on screen wi
 The same model serves interactive ads, growth features, feeds and live dynamic content such as
 Home Assistant cards.
 
-**Documentation: <https://yschimke.github.io/livery/>**, with a guide per use case from the
+**Documentation: <https://livery.coo.ee/>**, with a guide per use case from the
 one-line idea to a deployment checklist. The protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md);
 the design rationale [docs/DESIGN.md](docs/DESIGN.md).
 
