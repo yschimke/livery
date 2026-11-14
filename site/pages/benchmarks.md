@@ -59,6 +59,17 @@ table's order). Turning the deferral off moves Livery to the player-alone figure
 move. With one device and five iterations per run, this does not show that Livery is faster or slower than
 Compose UI.
 
+**Compose's prefetch options.** Two more pairs of lanes fling Livery and the Compose UI twin with one of
+Compose's own prefetch options on, so each is measured for both (neither is Livery's to set: the cache window
+belongs to the app's list, the flag to Compose):
+
+| Option | What it does |
+| --- | --- |
+| Cache window (`LazyLayoutCacheWindow`, one viewport ahead, half behind) | Cards ahead of the viewport are composed and measured in prefetch, between frames, before they scroll in; cards behind stay composed for a scroll back. The default is one item ahead |
+| Pausable composition in prefetch (`ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled`) | Prefetch can compose an upcoming card across several frames' idle time instead of in one go. Compose turned it off by default in 1.10.6 for stability; this lane measures it, it doesn't recommend it |
+
+*Planned*: their numbers, with the next device run.
+
 ### Full-screen document: changing data
 
 One template (`poll-card`) in a padded, top-aligned, full-width frame; the sample template takes its
