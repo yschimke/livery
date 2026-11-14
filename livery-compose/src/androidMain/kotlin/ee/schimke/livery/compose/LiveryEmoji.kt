@@ -3,7 +3,10 @@ package ee.schimke.livery.compose
 import android.content.Context
 import androidx.emoji2.text.DefaultEmojiCompatConfig
 import androidx.emoji2.text.EmojiCompat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +31,9 @@ object LiveryEmoji {
   /** Whether a template has asked for emoji yet, in this process. */
   @Volatile internal var requested: Boolean = false
 
+  /** Where a template's request loads emoji: the process's, not the template's composition. */
+  internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
   /**
    * Sets EmojiCompat up with the device's downloadable emoji font, and loads it, off the main
    * thread. Returns whether EmojiCompat is configured afterwards: false on a device without an
@@ -51,11 +57,13 @@ internal actual fun AfterFirstTemplateFrame() {
   if (LiveryEmoji.requested) return
   val context = LocalContext.current.applicationContext
   LaunchedEffect(Unit) {
+    // The first frame, and the one after it: the first screen draws before emoji load. A template
+    // that leaves before then is cancelled here, with nothing marked, so the next one tries again.
+    withFrameNanos {}
+    withFrameNanos {}
     if (LiveryEmoji.requested) return@LaunchedEffect
     LiveryEmoji.requested = true
-    // The first frame, and the one after it: the first screen draws before emoji load.
-    withFrameNanos {}
-    withFrameNanos {}
-    LiveryEmoji.load(context)
+    // Loaded in the process's own scope: the template that asked may leave before it finishes.
+    LiveryEmoji.scope.launch { LiveryEmoji.load(context) }
   }
 }
