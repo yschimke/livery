@@ -119,6 +119,15 @@ class LiveryTypefaceLoader(
 /** The device's display before anything has composed, where the platform knows it. */
 internal expect fun platformDisplay(): RcDisplay?
 
+/**
+ * Starts, once per process, platform work an app's first screen should not wait for, after the
+ * first template has drawn: on Android, loading emoji (LiveryEmoji). Composed by every
+ * [LiveryTemplate], so an app gets it without calling anything; after the first, a template only
+ * reads a flag.
+ */
+@androidx.compose.runtime.Composable
+internal expect fun AfterFirstTemplateFrame()
+
 /** Decodes PNG, WebP or JPEG bytes. */
 internal expect fun decodeImage(bytes: ByteArray): ImageBitmap
 

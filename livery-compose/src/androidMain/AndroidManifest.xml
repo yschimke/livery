@@ -8,10 +8,10 @@
       emoji font's provider through the package manager and schedules the font's load. An app that
       plays Livery templates pays for that on every cold start, whether or not it shows an emoji.
 
-      So Livery takes it out of the merged manifest, and the app loads emoji when it chooses, off
-      the main thread: `LiveryEmoji.load(context)`, typically once the first screen is ready
-      (`LiveryStartup`). Until then text draws with the platform's own emoji. An app that wants the
-      initializer back declares this same <meta-data> in its own manifest with tools:node="replace".
+      So Livery takes it out of the merged manifest and loads emoji itself, off the main thread,
+      two frames after the app's first template draws (LiveryEmoji). Until then text draws with the
+      platform's own emoji. An app that wants the initializer back declares this same <meta-data>
+      in its own manifest with tools:node="replace".
     -->
     <provider
       android:name="androidx.startup.InitializationProvider"
