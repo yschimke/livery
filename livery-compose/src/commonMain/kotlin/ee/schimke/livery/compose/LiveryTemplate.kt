@@ -21,6 +21,9 @@ import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.CompositionLocalProvider
+import ee.schimke.composeai.rcplayer.compose.LocalRcDeferLayoutAnimations
+import ee.schimke.composeai.rcplayer.compose.ExperimentalRcPlayerApi
+import ee.schimke.composeai.rcplayer.compose.LocalRcFlattenLayout
 import ee.schimke.composeai.rcplayer.compose.LocalRcPreparation
 import ee.schimke.composeai.rcplayer.compose.RcComposePlayer
 import ee.schimke.composeai.rcplayer.compose.RcPreparation
@@ -76,6 +79,26 @@ class LiveryHost(
    * prepares it in that card's composition instead, on the main thread.
    */
   val preparation: RcPreparation = RcPreparation.Background(resources.documents),
+  /**
+   * Whether a template that can only change through its data skips the lookahead pass behind
+   * AndroidX's bounds animations until its data first changes (rc-players'
+   * `LocalRcDeferLayoutAnimations`). That pass runs over every card on every frame a list scrolls;
+   * a card's first data change still animates, one frame later. A template that animates, reads the
+   * clock, scrolls, takes input or writes its own state keeps the pass regardless. False plays
+   * every template exactly as AndroidX does, resizes included.
+   */
+  val deferLayoutAnimations: Boolean = true,
+  /**
+   * Whether a template's plain boxes, rows, columns and texts are laid out and drawn by their
+   * container in one node (rc-players' experimental `LocalRcFlattenLayout`), rather than one
+   * composable each: fewer layout nodes and less composition per card in a feed. Every tap target,
+   * data-driven badge and custom component stays a component of its own, and the texts stay in the
+   * semantics tree, and anything the flat layout cannot draw exactly as the components would (a
+   * row aligned by baseline, a clip around a composed child, auto-sized text) stays on the
+   * per-component path. Applies only to templates whose layout animations are deferred
+   * ([deferLayoutAnimations]). Pass `false` to give every component its own composable.
+   */
+  val flattenLayout: Boolean = true,
 )
 
 /**
@@ -89,6 +112,7 @@ class LiveryHost(
  * (Compose's `onVisibilityChanged`), and [TemplateEvent.Type.Leave] with the time it was at least
  * half on screen when it leaves composition or the slot shows another item.
  */
+@OptIn(ExperimentalRcPlayerApi::class)
 @Composable
 fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier, extra: Bindings = Bindings.EMPTY) {
   val bytes = plan.template.bytes
@@ -166,6 +190,8 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
     CompositionLocalProvider(
       LocalRcPreparation provides host.preparation,
+      LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
+      LocalRcFlattenLayout provides host.flattenLayout,
     ) {
       RcComposePlayer(
         prepared = prepared,
