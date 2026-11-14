@@ -16,7 +16,7 @@ The rc-players AARs ship a profile of their own corpus, and an app's build merge
 | --- | --- |
 | `:livery-baselineprofile-host` | An app that bundles the sample catalog (built by `livery build`) and shows every design, with every example of its contract, as `LiverySlot`s in one scrolling list. The list repeats each design several times, like a feed. |
 | `:livery-baselineprofile` | A `com.android.test` module whose `CatalogBaselineProfileGenerator` flings that list end to end. |
-| `:livery-benchmark` | A `com.android.test` module whose `FeedScrollBenchmark` flings the host's `FeedActivity` with Macrobenchmark's `FrameTimingMetric`. The feed is the same 200 sample cards (`banner-classic` and `poll-card`), drawn either as Livery templates or as their Compose UI twins. |
+| `:livery-benchmark` | A `com.android.test` module whose `FeedScrollBenchmark` flings the host's `FeedActivity`, and whose `DocumentBenchmark` measures start-up and data changes of one full-screen template (`DocumentActivity`), with Macrobenchmark metrics. The feed is the same 200 sample cards (`banner-classic` and `poll-card`), drawn either as Livery templates or as their Compose UI twins. |
 
 One collection feeds all three libraries. Each library applies `androidx.baselineprofile` with a
 `filter` on its own packages. Normal builds only package the checked-in file
@@ -78,3 +78,11 @@ Locally, on a device:
 
 On an emulator, add
 `-Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR`.
+
+## Full-screen document
+
+`DocumentActivity` draws the sample catalog's `poll-card` filling the screen, chosen by the `lane`
+extra: `livery`, `livery-incomposition` (prepared on the main thread in the first composition),
+`rc` or `compose` (the twin). Tapping it pushes new data. `DocumentBenchmark` records cold
+start to first frame and frame timing across ten changes for each lane. What is built and what is
+planned is in [`docs/benchmarks/PLAN.md`](../docs/benchmarks/PLAN.md).

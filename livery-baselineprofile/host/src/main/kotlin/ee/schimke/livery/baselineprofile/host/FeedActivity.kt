@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +61,9 @@ import kotlinx.serialization.json.JsonPrimitive
  * The feed `:livery-benchmark` flings: [ITEMS] cards, alternating the sample catalog's
  * `banner-classic` and `poll-card`, each with its own data, drawn one of three ways (`mode`):
  * - `livery`: a [LiverySlot] per card, as an app's feed is built: planned, bound to the contract,
- *   tracked for impressions and viewability, playing the template;
+ *   tracked for impressions and viewability, playing the template; `livery-nodefer` and
+ *   `livery-noflat` are the same with `deferLayoutAnimations = false` / `flattenLayout = false`,
+ *   so each optimisation's share stays measured;
  * - `rc`: the same prepared documents played directly by [RcComposePlayer] with the same values,
  *   with nothing of Livery around them: the player alone;
  * - `compose`: the twins (livery-baselineprofile/twins), the same designs written in Compose UI,
@@ -95,6 +98,8 @@ class FeedActivity : ComponentActivity() {
       {},
       clock,
       resources = LiveryResources(repository, maxPlans = ITEMS),
+      deferLayoutAnimations = mode != LIVERY_NO_DEFER,
+      flattenLayout = mode != LIVERY_NO_FLAT,
     )
     val planner = SlotPlanner(repository, {}, clock)
     setContent {
@@ -104,7 +109,7 @@ class FeedActivity : ComponentActivity() {
       val values = remember { mutableStateMapOf<Int, Map<String, RcNamedValue>>() }
       LaunchedEffect(display) {
         when (mode) {
-          LIVERY -> coroutineScope {
+          LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT -> coroutineScope {
             host.resources.display = display
             cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { planner.forAppData(card.query, card.json) } } }
           }
@@ -121,14 +126,14 @@ class FeedActivity : ComponentActivity() {
       }
       if (!ready) return@setContent
       LazyColumn(
-        Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "feed" },
+        Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId = true; testTag = "feed" },
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         items(cards.size, key = { it }, contentType = { cards[it]::class }) { index ->
           val card = cards[index]
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
+            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
@@ -201,6 +206,8 @@ class FeedActivity : ComponentActivity() {
   companion object {
     const val MODE = "mode"
     const val LIVERY = "livery"
+    const val LIVERY_NO_DEFER = "livery-nodefer"
+    const val LIVERY_NO_FLAT = "livery-noflat"
     const val RC = "rc"
     const val COMPOSE = "compose"
     const val ITEMS = 200

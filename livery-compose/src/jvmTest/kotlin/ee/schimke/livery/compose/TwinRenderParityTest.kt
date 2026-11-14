@@ -1,6 +1,9 @@
 package ee.schimke.livery.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
@@ -72,34 +75,50 @@ class TwinRenderParityTest {
     compare("banner-classic", "promo-banner", json) { BannerTwin(data) }
   }
 
-  @Test fun thePollTwinDrawsThePollTemplate() {
-    val data = PollData(
-      "Which language do you write your UI in?",
-      "129 votes · you voted",
-      listOf(PollOption("Kotlin", 0.53f, "53%", "✓"), PollOption("Swift", 0.26f, "26%"), PollOption("TypeScript", 0.21f, "21%")),
-    )
-    val json = JsonObject(
-      mapOf(
-        "question" to JsonPrimitive(data.question),
-        "summary" to JsonPrimitive(data.summary),
-        "options" to JsonArray(
-          data.options.map {
-            JsonObject(
-              buildMap {
-                put("label", JsonPrimitive(it.label))
-                put("share", JsonPrimitive(it.share))
-                put("result", JsonPrimitive(it.result))
-                if (it.mark.isNotEmpty()) put("mark", JsonPrimitive(it.mark))
-              },
-            )
-          },
-        ),
+  private val pollData = PollData(
+    "Which language do you write your UI in?",
+    "129 votes · you voted",
+    listOf(PollOption("Kotlin", 0.53f, "53%", "✓"), PollOption("Swift", 0.26f, "26%"), PollOption("TypeScript", 0.21f, "21%")),
+  )
+  private val pollJson = JsonObject(
+    mapOf(
+      "question" to JsonPrimitive(pollData.question),
+      "summary" to JsonPrimitive(pollData.summary),
+      "options" to JsonArray(
+        pollData.options.map {
+          JsonObject(
+            buildMap {
+              put("label", JsonPrimitive(it.label))
+              put("share", JsonPrimitive(it.share))
+              put("result", JsonPrimitive(it.result))
+              if (it.mark.isNotEmpty()) put("mark", JsonPrimitive(it.mark))
+            },
+          )
+        },
       ),
-    )
-    compare("poll-card", "poll", json) { PollTwin(data) }
+    ),
+  )
+
+  @Test fun thePollTwinDrawsThePollTemplate() = compare("poll-card", "poll", pollJson) { PollTwin(pollData) }
+
+  /** The benchmark's full-screen document: the same frame around each lane, which must still match. */
+  @Test fun thePollTwinMatchesInTheFullScreenFrame() =
+    compare("poll-card-full-screen", "poll", pollJson, design = "poll-card", height = FULL_HEIGHT, frame = { content -> Box(Modifier.fillMaxSize().padding(16.dp)) { content(Modifier.fillMaxWidth()) } }, liveryContent = { plan, modifier -> LiveryTemplate(plan, host, modifier) }, twinContent = { modifier -> PollTwin(pollData, modifier) })
+
+  private fun compare(name: String, contractFile: String, data: JsonObject, twin: @Composable () -> Unit) {
+    compare(name, contractFile, data, name, HEIGHT, { it(Modifier) }, { plan, modifier -> LiveryTemplate(plan, host, modifier) }, { twin() })
   }
 
-  private fun compare(design: String, contractFile: String, data: JsonObject, twin: @Composable () -> Unit) {
+  private fun compare(
+    name: String,
+    contractFile: String,
+    data: JsonObject,
+    design: String,
+    height: Int,
+    frame: @Composable (@Composable (Modifier) -> Unit) -> Unit,
+    liveryContent: @Composable (RenderPlan, Modifier) -> Unit,
+    twinContent: @Composable (Modifier) -> Unit,
+  ) {
     val contract = TemplateRepository.DefaultJson.decodeFromString(Contract.serializer(), File(samples, "contracts/$contractFile.json").readText())
     val template = LoadedTemplate(
       entry = TemplateEntry(design, 0, design, contract.ref, Target(Surfaces.IN_APP, 7)),
@@ -110,18 +129,19 @@ class TwinRenderParityTest {
     )
     val bindings = (ContractBinder.bind(contract, data) as? BindResult.Ok)?.bindings ?: error("$design: ${ContractBinder.bind(contract, data)}")
     runBlocking { host.resources.readyToDraw(template, RcDisplay(DENSITY)) }
-    val livery = render { LiveryTemplate(RenderPlan(template, contract, bindings), host) }
-    val compose = render(twin)
-    File(out, "$design-livery.png").writeBytes(livery.encodeToData(EncodedImageFormat.PNG)!!.bytes)
-    File(out, "$design-compose.png").writeBytes(compose.encodeToData(EncodedImageFormat.PNG)!!.bytes)
-    val differ = differingPixels(livery, compose)
-    val share = differ.toDouble() / (WIDTH * HEIGHT)
-    println("$design: ${"%.2f".format(share * 100)}% of pixels differ ($differ)")
-    assertTrue(share < MAX_DIFFERING, "$design: ${"%.2f".format(share * 100)}% of pixels differ from its twin; see ${out.absolutePath}")
+    val plan = RenderPlan(template, contract, bindings)
+    val livery = render(height) { frame { liveryContent(plan, it) } }
+    val compose = render(height) { frame(twinContent) }
+    File(out, "$name-livery.png").writeBytes(livery.encodeToData(EncodedImageFormat.PNG)!!.bytes)
+    File(out, "$name-compose.png").writeBytes(compose.encodeToData(EncodedImageFormat.PNG)!!.bytes)
+    val differ = differingPixels(livery, compose, height)
+    val share = differ.toDouble() / (WIDTH * height)
+    println("$name: ${"%.2f".format(share * 100)}% of pixels differ ($differ)")
+    assertTrue(share < MAX_DIFFERING, "$name: ${"%.2f".format(share * 100)}% of pixels differ from its twin; see ${out.absolutePath}")
   }
 
-  private fun render(content: @Composable () -> Unit): Image {
-    val scene = ImageComposeScene(WIDTH, HEIGHT, Density(DENSITY)) { Box(Modifier.width((WIDTH / DENSITY).dp)) { content() } }
+  private fun render(height: Int, content: @Composable () -> Unit): Image {
+    val scene = ImageComposeScene(WIDTH, height, Density(DENSITY)) { Box(Modifier.width((WIDTH / DENSITY).dp)) { content() } }
     return try {
       scene.render(0L)
       scene.render(FRAME_NANOS)
@@ -131,11 +151,11 @@ class TwinRenderParityTest {
   }
 
   /** Pixels that differ by more than antialiasing does, in any channel. */
-  private fun differingPixels(a: Image, b: Image): Int {
-    val pa = Bitmap().apply { allocN32Pixels(WIDTH, HEIGHT) }.also { a.readPixels(it) }
-    val pb = Bitmap().apply { allocN32Pixels(WIDTH, HEIGHT) }.also { b.readPixels(it) }
+  private fun differingPixels(a: Image, b: Image, height: Int): Int {
+    val pa = Bitmap().apply { allocN32Pixels(WIDTH, height) }.also { a.readPixels(it) }
+    val pb = Bitmap().apply { allocN32Pixels(WIDTH, height) }.also { b.readPixels(it) }
     var count = 0
-    for (y in 0 until HEIGHT) for (x in 0 until WIDTH) {
+    for (y in 0 until height) for (x in 0 until WIDTH) {
       val ca = pa.getColor(x, y)
       val cb = pb.getColor(x, y)
       if ((0 until 32 step 8).any { abs(((ca ushr it) and 0xff) - ((cb ushr it) and 0xff)) > CHANNEL_TOLERANCE }) count++
@@ -146,6 +166,7 @@ class TwinRenderParityTest {
   private companion object {
     const val WIDTH = 720
     const val HEIGHT = 640
+    const val FULL_HEIGHT = 1600
     const val DENSITY = 2f
     const val FRAME_NANOS = 16_666_667L
     const val CHANNEL_TOLERANCE = 48
