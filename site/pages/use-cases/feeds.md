@@ -99,11 +99,12 @@ While a list scrolls, the work that remains is per card on screen. Two host sett
   animates as before. That pass otherwise runs over every card on every frame a list scrolls. A
   template that animates, reads the clock, scrolls, takes input or writes its own state keeps the
   pass from its first frame. Pass `false` to play every template exactly as AndroidX does.
-- `LiveryHost.flattenLayout` (experimental, off by default): a template's plain boxes, rows, columns
-  and texts are laid out and drawn by their container in one node, rather than one composable each.
-  Tap targets, data-driven badges and custom components stay components of their own, and the texts
-  stay in the semantics tree. It renders the same pixels; it applies only while layout animations
-  are deferred.
+- `LiveryHost.flattenLayout` (on by default): a template's plain boxes, rows, columns and texts are
+  laid out and drawn by their container in one node, rather than one composable each. Tap targets,
+  data-driven badges and custom components stay components of their own, the texts stay in the
+  semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
+  the per-component path. It renders the same pixels, and applies only while layout animations are
+  deferred. Pass `false` to give every component its own composable.
 
 Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
 laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.

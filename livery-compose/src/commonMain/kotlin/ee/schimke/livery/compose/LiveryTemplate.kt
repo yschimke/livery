@@ -93,10 +93,12 @@ class LiveryHost(
    * container in one node (rc-players' experimental `LocalRcFlattenLayout`), rather than one
    * composable each: fewer layout nodes and less composition per card in a feed. Every tap target,
    * data-driven badge and custom component stays a component of its own, and the texts stay in the
-   * semantics tree. Applies only to templates whose layout animations are deferred
-   * ([deferLayoutAnimations]). Experimental, so off by default.
+   * semantics tree, and anything the flat layout cannot draw exactly as the components would (a
+   * row aligned by baseline, a clip around a composed child, auto-sized text) stays on the
+   * per-component path. Applies only to templates whose layout animations are deferred
+   * ([deferLayoutAnimations]). Pass `false` to give every component its own composable.
    */
-  val flattenLayout: Boolean = false,
+  val flattenLayout: Boolean = true,
 )
 
 /**
