@@ -16,3 +16,6 @@ internal actual fun fontFrom(sha256: String, bytes: ByteArray, weight: FontWeigh
 
 /** No display is known before a window composes; the first slot's composition records it. */
 internal actual fun platformDisplay(): RcDisplay? = null
+
+/** Nothing to defer on desktop, iOS or the web. */
+@androidx.compose.runtime.Composable internal actual fun AfterFirstTemplateFrame() = Unit

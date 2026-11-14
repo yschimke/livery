@@ -115,6 +115,8 @@ class LiveryHost(
 @OptIn(ExperimentalRcPlayerApi::class)
 @Composable
 fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modifier, extra: Bindings = Bindings.EMPTY) {
+  // Platform work that waits for the app's first template to draw (Android: emoji, see LiveryEmoji).
+  AfterFirstTemplateFrame()
   val bytes = plan.template.bytes
   val current by rememberUpdatedState(plan)
   // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.

@@ -121,6 +121,22 @@ installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
 The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. On desktop, iOS
 and the web, `startup.await()` before showing the first screen.
 
+**Emoji load after the first screen (Android).** Compose's text brings in `androidx.emoji2`, whose
+initializer runs at process start, on the main thread, before the first frame. Livery's manifest turns
+it off, and Livery loads emoji itself, off the main thread, two frames after the app's first template
+draws: there is nothing to call. Text drawn before then uses the platform's own emoji. An app that wants
+emoji sooner, or on a screen with no template, calls `LiveryEmoji.load(applicationContext)`.
+
+To keep the platform's initializer instead, declare it in your app's manifest:
+
+```xml
+<provider android:name="androidx.startup.InitializationProvider"
+  android:authorities="${applicationId}.androidx-startup" android:exported="false" tools:node="merge">
+  <meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer"
+    android:value="androidx.startup" tools:node="replace" />
+</provider>
+```
+
 **Swift (iOS, macOS)**:
 
 ```swift

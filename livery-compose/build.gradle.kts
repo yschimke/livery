@@ -42,6 +42,9 @@ kotlin {
       implementation(libs.cmp.runtime)
       implementation(libs.cmp.foundation)
     }
+    // EmojiCompat, which Compose's text pulls in and starts at process start; Livery leaves that
+    // to the app (LiveryEmoji, and the manifest beside this file).
+    androidMain.dependencies { implementation(libs.androidx.emoji2) }
     commonTest.dependencies { implementation(kotlin("test")) }
     // First-frame tests: Compose UI tests on the desktop JVM, playing the sample catalog's documents.
     jvmTest.dependencies {
