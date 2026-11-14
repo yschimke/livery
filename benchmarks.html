@@ -85,6 +85,17 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 <code>benchmarkRelease</code> build with the shipped baseline profiles, 5 iterations per test. One device, lanes run
 one after another rather than interleaved: differences of a few tenths of a millisecond are inside the
 noise, and are shown so you can see that, not as a ranking.</p>
+<p>The feed the fling benchmark scrolls, whole, as the benchmark host draws it on the phone: 200 cards,
+alternating a promo banner and a poll, the Compose UI twin on the left and Livery on the right.</p>
+<div style="display:flex;gap:1rem;flex-wrap:wrap">
+<figure style="margin:0"><img src="assets/benchmarks/feed-compose-ui.png" alt="The feed drawn in Compose UI on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/feed-livery.png" alt="The same feed drawn by Livery on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
+</div>
+
+<p>They are not pixel-identical on the phone. The twin's card is a little taller (about 1–2 dp, the rows
+sitting slightly lower), although <code>TwinRenderParityTest</code> finds no differing pixel at density 2.0 on the JVM.
+This phone is at 2.625. Until the test also runs at that density, treat the lanes as the same design, not
+the same pixels.</p>
 <h3 id="feed-fling">Feed fling<a class="headerlink" href="#feed-fling" title="Permanent link">#</a></h3>
 <p>6 flings down 200 sample cards (<code>banner-classic</code> and <code>poll-card</code>), <code>FrameTimingMetric</code>. A frame's CPU
 time, and its overrun against the 16.7 ms budget (negative is time to spare).</p>
@@ -103,59 +114,67 @@ time, and its overrun against the 16.7 ms budget (negative is time to spare).</p
 <tbody>
 <tr>
 <td>Compose UI</td>
-<td style="text-align: right;">655</td>
-<td style="text-align: right;">3.8 ms</td>
-<td style="text-align: right;">5.9 ms</td>
-<td style="text-align: right;">8.0 ms</td>
-<td style="text-align: right;">−6.3 ms</td>
+<td style="text-align: right;">652</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">6.2 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.8 ms</td>
 <td style="text-align: right;">1.00×</td>
 </tr>
 <tr>
 <td>Player alone</td>
-<td style="text-align: right;">669</td>
+<td style="text-align: right;">673</td>
 <td style="text-align: right;">4.1 ms</td>
-<td style="text-align: right;">6.5 ms</td>
-<td style="text-align: right;">8.9 ms</td>
-<td style="text-align: right;">−5.3 ms</td>
-<td style="text-align: right;">1.08×</td>
+<td style="text-align: right;">6.6 ms</td>
+<td style="text-align: right;">9.2 ms</td>
+<td style="text-align: right;">−5.1 ms</td>
+<td style="text-align: right;">1.05×</td>
 </tr>
 <tr>
 <td>Livery</td>
 <td style="text-align: right;">663</td>
 <td style="text-align: right;">3.4 ms</td>
-<td style="text-align: right;">6.0 ms</td>
-<td style="text-align: right;">9.2 ms</td>
-<td style="text-align: right;">−4.8 ms</td>
-<td style="text-align: right;">0.89×</td>
+<td style="text-align: right;">5.8 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.8 ms</td>
+<td style="text-align: right;">0.87×</td>
 </tr>
 <tr>
 <td>Livery, no deferral</td>
-<td style="text-align: right;">677</td>
-<td style="text-align: right;">4.1 ms</td>
-<td style="text-align: right;">6.3 ms</td>
-<td style="text-align: right;">8.4 ms</td>
-<td style="text-align: right;">−5.5 ms</td>
-<td style="text-align: right;">1.08×</td>
+<td style="text-align: right;">666</td>
+<td style="text-align: right;">4.3 ms</td>
+<td style="text-align: right;">6.8 ms</td>
+<td style="text-align: right;">9.2 ms</td>
+<td style="text-align: right;">−4.7 ms</td>
+<td style="text-align: right;">1.10×</td>
 </tr>
 <tr>
 <td>Livery, no flat layout</td>
-<td style="text-align: right;">674</td>
-<td style="text-align: right;">4.0 ms</td>
-<td style="text-align: right;">6.3 ms</td>
-<td style="text-align: right;">9.3 ms</td>
-<td style="text-align: right;">−4.8 ms</td>
-<td style="text-align: right;">1.05×</td>
+<td style="text-align: right;">633</td>
+<td style="text-align: right;">3.8 ms</td>
+<td style="text-align: right;">6.1 ms</td>
+<td style="text-align: right;">8.7 ms</td>
+<td style="text-align: right;">−5.5 ms</td>
+<td style="text-align: right;">0.97×</td>
 </tr>
 </tbody>
 </table>
-<p>What this says: on a current phone no lane misses a frame (every overrun is negative), and the lanes
-are within about a millisecond of each other. Livery's median is the lowest here, but its 99th
-percentile (9.2 ms) is above the Compose UI twin's (8.0 ms). With the optimisations off, Livery's
-median moves to the player-alone figure, the direction the deferral and flat layout are meant to move
-it. With one run per lane, this does not show that Livery is faster or slower than Compose UI.</p>
-<h3 id="full-screen-document">Full-screen document<a class="headerlink" href="#full-screen-document" title="Permanent link">#</a></h3>
+<p>What this says: on a current phone no lane misses a frame (every overrun is negative), and the lanes sit
+within about a millisecond of each other. Livery with its defaults is level with the Compose UI twin, and
+turning the deferral off moves it back to the player-alone figure, the direction it is meant to move.
+With one run per lane, this does not show that Livery is faster than Compose UI.</p>
+<h3 id="full-screen-document-changing-data">Full-screen document: changing data<a class="headerlink" href="#full-screen-document-changing-data" title="Permanent link">#</a></h3>
+<p>The single-document screen, as drawn on the phone (Compose UI twin, then Livery). The sample template takes
+its own height, so the card sits at the top of a full screen; a design that fills the screen needs its own twin.</p>
+<div style="display:flex;gap:1rem;flex-wrap:wrap">
+<figure style="margin:0"><img src="assets/benchmarks/document-compose-ui.png" alt="The poll card drawn in Compose UI on the Pixel 9" width="180" height="404" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/document-livery.png" alt="The same poll card drawn by Livery on the Pixel 9" width="180" height="404" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
+</div>
+
 <p>One template (<code>poll-card</code>) in a padded, top-aligned, full-width frame; the sample template takes its
-own height, so this is a card on a full screen. Tapping the document pushes new data, ten times.</p>
+own height, so this is a card on a full screen. Tapping the document shows the next of ten data variants,
+ten times. Every variant is bound to the contract before the screen shows, so the tap itself costs each
+lane one swap of state; the cost of binding data is a separate measurement, still <em>Planned</em>.</p>
 <table>
 <thead>
 <tr>
@@ -170,45 +189,48 @@ own height, so this is a card on a full screen. Tapping the document pushes new 
 <tr>
 <td>Compose UI</td>
 <td style="text-align: right;">10</td>
-<td style="text-align: right;">4.7 ms</td>
-<td style="text-align: right;">5.9 ms</td>
-<td style="text-align: right;">9.5 ms</td>
+<td style="text-align: right;">4.2 ms</td>
+<td style="text-align: right;">5.3 ms</td>
+<td style="text-align: right;">5.7 ms</td>
 </tr>
 <tr>
 <td>Player alone</td>
-<td style="text-align: right;">21</td>
-<td style="text-align: right;">3.7 ms</td>
-<td style="text-align: right;">8.1 ms</td>
-<td style="text-align: right;">9.2 ms</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">7.7 ms</td>
+<td style="text-align: right;">14.0 ms</td>
 </tr>
 <tr>
 <td>Livery</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: right;">3.8 ms</td>
-<td style="text-align: right;">7.0 ms</td>
-<td style="text-align: right;">9.5 ms</td>
+<td style="text-align: right;">23</td>
+<td style="text-align: right;">4.8 ms</td>
+<td style="text-align: right;">7.7 ms</td>
+<td style="text-align: right;">11.7 ms</td>
 </tr>
 <tr>
 <td>Livery, no deferral</td>
-<td style="text-align: right;">29</td>
-<td style="text-align: right;">3.5 ms</td>
-<td style="text-align: right;">6.7 ms</td>
-<td style="text-align: right;">9.1 ms</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">5.0 ms</td>
+<td style="text-align: right;">6.9 ms</td>
+<td style="text-align: right;">9.2 ms</td>
 </tr>
 <tr>
 <td>Livery, no flat layout</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: right;">3.4 ms</td>
-<td style="text-align: right;">7.4 ms</td>
-<td style="text-align: right;">10.7 ms</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">5.1 ms</td>
+<td style="text-align: right;">7.5 ms</td>
+<td style="text-align: right;">10.2 ms</td>
 </tr>
 </tbody>
 </table>
-<p>The Remote Compose lanes draw two to three frames per change where the twin draws one, most likely
-because the document animates the change and the twin switches at once (not yet confirmed). Per-frame
-cost is comparable; the number of frames differs.</p>
+<p>The Remote Compose lanes draw about two frames per change where the twin draws one. The traces show two
+recompositions per change in the Livery lane against one in the twin's. That is consistent with the data
+being pushed into the player from a side effect, then the player drawing it; it is a real cost of that
+path, and the cause is not yet confirmed. The Compose UI twin has the lowest and tightest frame times
+here.</p>
 <h3 id="cold-start">Cold start<a class="headerlink" href="#cold-start" title="Permanent link">#</a></h3>
-<p>Process start to the first frame with the document in it (<code>timeToFullDisplayMs</code>).</p>
+<p>Process start to the first frame with the document in it (<code>timeToFullDisplayMs</code>). <em>Initial display</em> is
+shown for completeness: for the Remote Compose lanes it is an earlier, empty frame, so it understates the time.</p>
 <table>
 <thead>
 <tr>
@@ -220,39 +242,49 @@ cost is comparable; the number of frames differs.</p>
 <tbody>
 <tr>
 <td>Compose UI</td>
-<td style="text-align: right;">690 ms</td>
-<td style="text-align: right;">186 ms</td>
+<td style="text-align: right;">196 ms</td>
+<td style="text-align: right;">184 ms</td>
 </tr>
 <tr>
 <td>Player alone</td>
-<td style="text-align: right;">692 ms</td>
+<td style="text-align: right;">234 ms</td>
 <td style="text-align: right;">148 ms</td>
 </tr>
 <tr>
 <td>Livery</td>
-<td style="text-align: right;">695 ms</td>
-<td style="text-align: right;">151 ms</td>
+<td style="text-align: right;">232 ms</td>
+<td style="text-align: right;">146 ms</td>
 </tr>
 <tr>
 <td>Livery, no deferral</td>
-<td style="text-align: right;">695 ms</td>
-<td style="text-align: right;">152 ms</td>
+<td style="text-align: right;">230 ms</td>
+<td style="text-align: right;">154 ms</td>
 </tr>
 <tr>
 <td>Livery, no flat layout</td>
-<td style="text-align: right;">697 ms</td>
-<td style="text-align: right;">150 ms</td>
+<td style="text-align: right;">245 ms</td>
+<td style="text-align: right;">149 ms</td>
 </tr>
 <tr>
 <td>Livery, preparing in composition</td>
-<td style="text-align: right;">680 ms</td>
-<td style="text-align: right;">147 ms</td>
+<td style="text-align: right;">222 ms</td>
+<td style="text-align: right;">145 ms</td>
 </tr>
 </tbody>
 </table>
-<p><strong>These do not separate the lanes.</strong> Every lane, the Compose UI twin included, takes about 690 ms to
-full display, so that time is dominated by something the lanes share, and we have not yet found what.
-Do not read a difference into them.</p>
+<p>The Compose UI twin reaches a drawn document about 35 ms before the Remote Compose lanes, which sit within
+15 ms of each other. The Livery lanes also plan ten data variants before their first draw (nine more than one
+plan needs), which is in these numbers.</p>
+<h3 id="notes-on-the-host">Notes on the host<a class="headerlink" href="#notes-on-the-host" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>No emoji initializer.</strong> AndroidX Compose depends on <code>emoji2</code>, whose startup initializer loads the emoji
+  font about half a second after the first frame and makes Compose text re-measure. Nothing here draws emoji,
+  and it landed in the middle of what is measured: an earlier run showed every lane, the twin included, at
+  about 690 ms to full display for that reason alone. The host removes the initializer; real apps keep it,
+  and its cost is not Livery's.</li>
+<li><strong>Reported fully drawn after the document draws.</strong> The activity asks for one more frame after
+  <code>reportFullyDrawn()</code>, since <code>StartupTimingMetric</code> ends at the next frame drawn.</li>
+</ul>
 <h2 id="what-is-not-measured-yet">What is not measured yet<a class="headerlink" href="#what-is-not-measured-yet" title="Permanent link">#</a></h2>
 <p><em>Planned</em>: a warm second visit; continuous animation and idle frames; resize and theme change; a
 per-template split and counts of documents prepared and reused; background preparation traces; memory;
