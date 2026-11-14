@@ -29,6 +29,9 @@ import ee.schimke.composeai.rcplayer.compose.RcPreparation
 import ee.schimke.composeai.rcplayer.compose.rememberRcPreparedDocument
 import ee.schimke.composeai.rcplayer.runtime.RcNamedValue
 import ee.schimke.livery.client.ActionRouter
+import ee.schimke.livery.protocol.TemplateEvent
+import ee.schimke.livery.compose.LiverySlot
+import ee.schimke.livery.client.EventSink
 import ee.schimke.livery.client.AndroidBundled
 import ee.schimke.livery.client.Clock
 import ee.schimke.livery.client.FetchResult
@@ -44,8 +47,6 @@ import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
 import ee.schimke.livery.compose.LiveryHost
 import ee.schimke.livery.compose.LiveryResources
-import ee.schimke.livery.compose.LiveryTemplate
-import ee.schimke.livery.compose.rememberLiveryDisplay
 import ee.schimke.livery.compose.toPlayerValues
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.Surfaces
@@ -92,71 +93,49 @@ class DocumentActivity : ComponentActivity() {
     )
     val resources = LiveryResources(repository, maxPlans = 4)
     val actions = ActionRouter(emptyMap(), { false }, {}, clock)
+    // Livery's own signal that a template's first frame was drawn, as an app's analytics sees it.
+    val impression = mutableStateOf(false)
+    val events = EventSink { if (it.type == TemplateEvent.Type.Impression) impression.value = true }
     val host = when (lane) {
-      LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, {}, clock, resources = resources, preparation = RcPreparation.InComposition)
-      LIVERY_NO_DEFER -> LiveryHost(repository, actions, {}, clock, resources = resources, deferLayoutAnimations = false)
-      LIVERY_NO_FLAT -> LiveryHost(repository, actions, {}, clock, resources = resources, flattenLayout = false)
-      else -> LiveryHost(repository, actions, {}, clock, resources = resources)
+      LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, events, clock, resources = resources, preparation = RcPreparation.InComposition)
+      LIVERY_NO_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = false)
+      LIVERY_NO_FLAT -> LiveryHost(repository, actions, events, clock, resources = resources, flattenLayout = false)
+      else -> LiveryHost(repository, actions, events, clock, resources = resources)
     }
     val planner = SlotPlanner(repository, {}, clock)
     val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
 
-    // No frame is drawn until the document can be, as an app keeps its splash screen up until its
-    // first screen is ready (LiveryResources.startup, core-splashscreen's setKeepOnScreenCondition,
-    // which works the same way): the system's starting window stays up, composition carries on, and
-    // the first frame drawn has the document in it. So "initial display" is the first frame with the
-    // document on every lane, not an empty frame the Remote Compose lanes drew while they planned.
-    var contentComposed = false
-    val decor = window.decorView
-    decor.viewTreeObserver.addOnPreDrawListener(
-      object : android.view.ViewTreeObserver.OnPreDrawListener {
-        override fun onPreDraw(): Boolean {
-          if (!contentComposed) return false
-          decor.viewTreeObserver.removeOnPreDrawListener(this)
-          return true
-        }
-      },
-    )
-
     setContent {
-      val display = rememberLiveryDisplay()
       var version by remember { mutableIntStateOf(0) }
-      // The data cycles through VARIANTS values. Every variant is planned (bound to the contract)
-      // before the screen shows, so a tap only swaps in a plan that is ready: one recomposition
-      // in every lane, as the twin has. Planning on the tap, in a LaunchedEffect, would add a
-      // recomposition per change to the Livery and player lanes that the twin has no equivalent of.
-      // The cost of binding data is a separate question (a microbenchmark, see docs/benchmarks/PLAN.md).
+      // The data cycles through VARIANTS values, as a host's data updates. The Livery lanes draw it
+      // in a LiverySlot, as an app does: each change is planned there, and the slot keeps each
+      // variant's answer (its slotId), so after the first round a change draws an answer it has.
+      // The first frame waits for the first answer within the host's first-frame budget, as any
+      // app's does; nothing here holds frames or plans ahead on Livery's behalf.
       val variant = version % VARIANTS
       val data = remember(variant) { pollData(variant) }
-      var planned by remember { mutableStateOf<List<PlanResult.Ready>?>(null) }
-      var ready by remember { mutableStateOf(lane == COMPOSE) }
-      LaunchedEffect(display) {
-        if (lane != COMPOSE) {
-          resources.display = display
-          val all = (0 until VARIANTS).mapNotNull { planner.forAppData(query, json(pollData(it))) as? PlanResult.Ready }
-          if (all.size == VARIANTS) {
-            if (lane != LIVERY_IN_COMPOSITION) resources.readyToDraw(all[0].plan.template, display)
-            planned = all
-          }
-        }
-        ready = true
+      // The player alone has no slot: it plans the same data, then plays the document.
+      var rcPlan by remember { mutableStateOf<PlanResult.Ready?>(null) }
+      if (lane == RC) {
+        LaunchedEffect(variant) { rcPlan = planner.forAppData(query, json(data)) as? PlanResult.Ready }
       }
-      val plan = planned?.get(variant)
-      // Content to draw: the twin as soon as the screen is up, the others once planned and prepared.
-      val available = ready && (lane == COMPOSE || plan != null)
+      // Drawn: the twin from its first frame; the player once it has a plan; a Livery lane on
+      // Livery's own Impression event, after the template's first frame.
+      val contentDrawn = when (lane) {
+        COMPOSE -> true
+        RC -> rcPlan != null
+        else -> impression.value
+      }
       var drawn by remember { mutableStateOf(false) }
-      LaunchedEffect(available) {
-        if (available) {
-          // The document is composed: let the first frame draw (see the pre-draw hold above).
-          contentComposed = true
-          decor.invalidate()
+      LaunchedEffect(contentDrawn) {
+        if (contentDrawn && !drawn) {
           // After the first frame that has the document in it: the start-up benchmark's end point.
           withFrameNanos { }
           drawn = true
           reportFullyDrawn()
           // StartupTimingMetric ends "full display" at the first frame drawn after this report. A
-          // screen that is already drawn and still would otherwise wait for whatever next invalidates
-          // it (here the emoji initializer, at ~650 ms), which is nothing to do with the document.
+          // screen that is already drawn and still would otherwise wait for whatever next
+          // invalidates it, which is nothing to do with the document.
           window.decorView.invalidate()
         }
       }
@@ -171,17 +150,18 @@ class DocumentActivity : ComponentActivity() {
           .clickable { version++ }
           .padding(16.dp),
       ) {
-        if (!available) return@Box
         val modifier = Modifier.fillMaxWidth()
         when (lane) {
           COMPOSE -> PollTwin(data, modifier)
-          RC -> plan?.plan?.let { p ->
+          RC -> rcPlan?.plan?.let { p ->
             val prepared = rememberRcPreparedDocument(p.template.bytes, host.preparation) ?: return@let
             val values = remember { mutableStateMapOf<String, RcNamedValue>() }
             values.putAll(p.bindings.toPlayerValues())
             RcComposePlayer(prepared, modifier, namedValues = values)
           }
-          else -> plan?.plan?.let { LiveryTemplate(it, host, modifier) }
+          else -> LiverySlot(key = variant, host = host, modifier = modifier, slotId = SLOT) {
+            planner.forAppData(query, json(data))
+          }
         }
       }
     }
@@ -225,6 +205,7 @@ class DocumentActivity : ComponentActivity() {
     const val LIVERY_NO_FLAT = "livery-noflat"
     const val RC = "rc"
     const val COMPOSE = "compose"
+    private const val SLOT = "document"
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
 }
