@@ -116,7 +116,7 @@ change and, per lane, a pixel check against the CMP render. Results go in `docs/
 
 ## Status of the implementation
 
-Built, not yet benchmarked (the device was in use elsewhere):
+Built and benchmarked ([benchmarks/PLAYERS.md](benchmarks/PLAYERS.md)):
 
 - `LiveryPlayer` (`livery-compose`): the seam. `LiveryHost(player = …)`, default `LiveryPlayer.Cmp`, so nothing changes
   for anyone who does not pass one. A player that parses documents itself (`usesPreparedDocument = false`) gets
@@ -127,13 +127,10 @@ Built, not yet benchmarked (the device was in use elsewhere):
   the document parses; each card then parses its own copy, since a parsed document carries its card's state.
 - Benchmark lanes `livery-view` and `livery-embedded` in the document and feed hosts and benchmarks. The
   "player alone" lanes (`view`, `embedded`) are not built.
-- Checked on a Pixel 9 (a screenshot, not a measurement): **the embedded player draws the `poll-card` correctly**
-  (after setting `RemoteComposePlayerFlags.isEmbeddedPlayerEnabled`, which AndroidX ships off, and raising the host's
-  minSdk to 29). **The View player draws nothing for it** in `1.0.0-alpha23`: the view is laid out at 360 x 280 px
-  rather than the card's width, and paints nothing, with or without values. Not yet explained; the leading guess is
-  that the document's API level or profile (`CoreDocument.canBeDisplayed`) is not one this player draws, which would
-  make it a capabilities question for `PlayerCapabilities` rather than a bug in the adapter. Its numbers mean nothing
-  until it draws the card.
+- **The embedded player draws the `poll-card` correctly** (after setting `RemoteComposePlayerFlags.isEmbeddedPlayerEnabled`,
+  which AndroidX ships off) and benchmarks level with the default player on startup and in the fling's median.
+  **The View player draws nothing for Livery's templates** in `1.0.0-alpha23`, through its own API, through AndroidX's
+  wrapper and with the document measured by hand; the investigation is in the results page. Its lane has no numbers.
 - Not adapted yet: data-bound images (`livery:value/...`) and Livery's catalog fonts, on either player.
 
 ## Open questions

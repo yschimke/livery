@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.viewinterop.AndroidView
 import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import ee.schimke.composeai.rcplayer.compose.RcPlayerTheme
@@ -26,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
  * [prepare] parses a template once off the main thread, to find out whether it can be played and to load
  * the player's classes; a parsed document carries a card's state and is not shared between cards.
  *
- * Not drawn through these yet: images bound to data (`livery:value/...`) and Livery's catalog fonts (the
+ * **The View player draws nothing for Livery's templates in `1.0.0-alpha23`** (docs/benchmarks/PLAYERS.md): it is here so
+ * that changes, and a fixed player, show up in the lanes. Not drawn through these yet: images bound to data (`livery:value/...`) and Livery's catalog fonts (the
  * platform's typefaces are used). See docs/PLAYERS.md.
  */
 @OptIn(ExperimentalRemotePlayerApi::class)
@@ -73,7 +75,7 @@ private class ViewPlayer : ParsingPlayerBase() {
           values.forEach { (name, v) -> push(name, v) }
         }
       },
-      modifier = request.modifier,
+      modifier = request.modifier.fillMaxWidth(),
       update = { player -> values.forEach { (name, v) -> player.push(name, v) } },
     )
   }
