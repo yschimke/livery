@@ -67,6 +67,9 @@ import kotlinx.serialization.json.JsonPrimitive
  * - `livery`: [LiveryTemplate] on a host with the shipped defaults, prepared at startup;
  * - `livery-incomposition`: the same, with [RcPreparation.InComposition] (the document is prepared
  *   on the main thread in the first composition; nothing was prepared ahead);
+ * - `livery-nodefer`: the defaults but `deferLayoutAnimations = false` (the lookahead pass runs on
+ *   every frame; flat layout needs the deferral, so it is off too);
+ * - `livery-noflat`: the defaults but `flattenLayout = false` (every component its own composable);
  * - `rc`: the prepared document played by [RcComposePlayer] with nothing of Livery around it;
  * - `compose`: the Compose UI twin, which TwinRenderParityTest holds to the template's pixels.
  */
@@ -88,10 +91,12 @@ class DocumentActivity : ComponentActivity() {
       bundled = AndroidBundled.fromAssets(this),
     )
     val resources = LiveryResources(repository, maxPlans = 4)
-    val host = if (lane == LIVERY_IN_COMPOSITION) {
-      LiveryHost(repository, ActionRouter(emptyMap(), { false }, {}, clock), {}, clock, resources = resources, preparation = RcPreparation.InComposition)
-    } else {
-      LiveryHost(repository, ActionRouter(emptyMap(), { false }, {}, clock), {}, clock, resources = resources)
+    val actions = ActionRouter(emptyMap(), { false }, {}, clock)
+    val host = when (lane) {
+      LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, {}, clock, resources = resources, preparation = RcPreparation.InComposition)
+      LIVERY_NO_DEFER -> LiveryHost(repository, actions, {}, clock, resources = resources, deferLayoutAnimations = false)
+      LIVERY_NO_FLAT -> LiveryHost(repository, actions, {}, clock, resources = resources, flattenLayout = false)
+      else -> LiveryHost(repository, actions, {}, clock, resources = resources)
     }
     val planner = SlotPlanner(repository, {}, clock)
     val query = TemplateQuery("social/poll@1", Capabilities, designId = "poll-card")
@@ -107,7 +112,7 @@ class DocumentActivity : ComponentActivity() {
         if (lane != COMPOSE) {
           resources.display = display
           (planner.forAppData(query, json(data)) as? PlanResult.Ready)?.let { plan = it }
-          if (lane == LIVERY || lane == RC) plan?.plan?.template?.let { resources.readyToDraw(it, display) }
+          if (lane != LIVERY_IN_COMPOSITION) plan?.plan?.template?.let { resources.readyToDraw(it, display) }
         }
         ready = true
       }
@@ -182,6 +187,8 @@ class DocumentActivity : ComponentActivity() {
     const val LANE = "lane"
     const val LIVERY = "livery"
     const val LIVERY_IN_COMPOSITION = "livery-incomposition"
+    const val LIVERY_NO_DEFER = "livery-nodefer"
+    const val LIVERY_NO_FLAT = "livery-noflat"
     const val RC = "rc"
     const val COMPOSE = "compose"
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))

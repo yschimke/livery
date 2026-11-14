@@ -11,10 +11,10 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   80 ms CPU a frame. Use it for *counts* (frames, invalidations, nodes, misses). Timings need a
   real device (`./gradlew :livery-benchmark:connectedBenchmarkReleaseAndroidTest`; keep results in
   `docs/benchmarks/`).
-- **rc-players 3.2.0 is pinned here; the optimisation switches come with 3.3.0.**
-  `deferLayoutAnimations` and `flattenLayout` do not exist in 3.2.0, so those lanes wait for the
-  bump (Renovate). Lanes available now: `preparation = InComposition` and the default.
-  A `preprocessor = null` lane needs a no-op `RcPreprocessor` handed to the cache.
+- **rc-players 3.3.0 is in** (#71): `LiveryHost.deferLayoutAnimations` and `flattenLayout` default to
+  true, so a lane per optimisation is a host argument: `livery-nodefer` (flat layout needs the
+  deferral, so it goes too), `livery-noflat` and, for documents, `livery-incomposition`. A
+  `preprocessor = null` lane still needs a no-op `RcPreprocessor` handed to the cache.
 - Every new scenario needs a Compose UI twin and a `TwinRenderParityTest` case. The document
   scenario puts every lane in the same frame (padded, top-aligned, as wide as the screen; the sample
   template takes its own height, so it is a card on a full screen, not a design that fills the
@@ -27,8 +27,8 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
 
 | Scenario | State |
 | --- | --- |
-| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | Exists: `livery`, `rc`, `compose` on device; plus `rc-defer`, `livery-flat` on the JVM |
-| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-incomposition, rc, compose) |
+| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; the JVM profile has its own lanes |
+| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
 | Document: data change | `DocumentBenchmark.*Change` (`FrameTimingMetric` over 10 taps); first change not yet separated |
 | Document: warm re-open, continuous animation, resize / theme | Planned |
 | Document: bundled vs downloaded, with / without baseline profile | Planned (`CompilationMode.None` vs `Partial`) |
@@ -105,8 +105,7 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
 
 ## Next steps, in order
 
-1. Bump rc-players to 3.3.0, then add the `defer-off` and `flat-off` lanes to `DocumentActivity`
-   and `FeedActivity` (chosen by the `lane` / `mode` extra, one APK).
+1. Lanes for the rest of the switches (`preprocessor = null`, preparation in composition for feeds).
 2. Add the `livery:<phase>:<designId>` trace sections and the counters above, a metrics line in both host activities, and `TraceSectionMetric` in the benchmarks.
 3. Counts as emulator gates, written to the job summary by `benchmark-summary.py`.
 4. A device run for timings, results committed here.

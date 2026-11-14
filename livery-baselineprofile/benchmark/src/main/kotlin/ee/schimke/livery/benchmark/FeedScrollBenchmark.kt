@@ -27,6 +27,12 @@ class FeedScrollBenchmark {
   /** Livery slots: planning, binding, events and the player, as an app's feed runs them. */
   @Test fun livery() = fling("livery")
 
+  /** Livery without the deferred lookahead pass (and so without flat layout): what the deferral saves. */
+  @Test fun liveryNoDefer() = fling("livery-nodefer")
+
+  /** Livery with deferral but one composable per component: what flat layout saves. */
+  @Test fun liveryNoFlat() = fling("livery-noflat")
+
   /** The same prepared documents and values, played by the player with nothing of Livery around it. */
   @Test fun rcPlayer() = fling("rc")
 

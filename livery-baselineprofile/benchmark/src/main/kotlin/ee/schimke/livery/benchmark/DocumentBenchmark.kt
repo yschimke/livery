@@ -17,8 +17,8 @@ import org.junit.runner.RunWith
 
 /**
  * One template filling the screen (`DocumentActivity`, the sample catalog's `poll-card`), in each
- * lane the host offers: Livery with its defaults, Livery preparing in composition, the player alone,
- * and the Compose UI twin.
+ * lane the host offers: Livery with its defaults, with one optimisation off (preparation in
+ * composition, deferral, flat layout), the player alone, and the Compose UI twin.
  *
  * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
  *   activity reports fully drawn after that frame, so `timeToFullDisplayMs` is the number; the initial
@@ -35,10 +35,14 @@ class DocumentBenchmark {
 
   @Test fun liveryStartup() = startup("livery")
   @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
+  @Test fun liveryNoDeferStartup() = startup("livery-nodefer")
+  @Test fun liveryNoFlatStartup() = startup("livery-noflat")
   @Test fun rcPlayerStartup() = startup("rc")
   @Test fun composeUiStartup() = startup("compose")
 
   @Test fun liveryChange() = change("livery")
+  @Test fun liveryNoDeferChange() = change("livery-nodefer")
+  @Test fun liveryNoFlatChange() = change("livery-noflat")
   @Test fun rcPlayerChange() = change("rc")
   @Test fun composeUiChange() = change("compose")
 
