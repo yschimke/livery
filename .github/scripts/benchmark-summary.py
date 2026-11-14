@@ -4,7 +4,10 @@
 Usage: benchmark-summary.py <directory holding *-benchmarkData.json>
 
 Prints a Markdown table of FrameTimingMetric's frame durations and overruns per test, and the
-Livery/Compose UI ratio of each. Run on an emulator, so a rough comparison only.
+Livery/Compose UI ratio of each; then, for the start-up tests, initial and full display, and for the
+lanes with Livery's startup how long it took (`livery:startup`) and how long the splash screen held
+the first frame for it (`host:first-frame-held`, near 0 when the startup's work fits in the activity's
+creation). Run on an emulator, so a rough comparison only.
 """
 import json
 import pathlib
@@ -17,6 +20,7 @@ if not files:
     sys.exit(0)
 
 rows = {}
+startups = {}
 device = None
 for f in files:
     data = json.loads(f.read_text())
@@ -25,6 +29,9 @@ for f in files:
     for b in data.get("benchmarks", []):
         sampled = b.get("sampledMetrics", {})
         metrics = b.get("metrics", {})
+        if "timeToInitialDisplayMs" in metrics:
+            startups[b["name"]] = {k: v.get("median") for k, v in metrics.items() if isinstance(v, dict)}
+            continue
         rows[b["name"]] = {
             "cpu": sampled.get("frameDurationCpuMs", {}),
             "overrun": sampled.get("frameOverrunMs", {}),
@@ -51,17 +58,46 @@ for name, row in rows.items():
         + " | ".join(ms(pick(row, m, p)) for m in ("cpu", "overrun") for p in ("P50", "P90", "P99"))
         + " |"
     )
-compose = rows.get("composeUi")
-if compose:
+# Each lane against Compose UI under the same prefetch options (FeedActivity's cache window and
+# pausable composition), and each option against the same lane without it.
+pairs = (
+    ("Livery slots", "livery", "composeUi"),
+    ("Remote Compose player alone", "rcPlayer", "composeUi"),
+    ("Livery slots, cache window", "liveryCacheWindow", "composeUiCacheWindow"),
+    ("Livery slots, pausable composition", "liveryPausable", "composeUiPausable"),
+    ("Cache window, against none: Livery", "liveryCacheWindow", "livery"),
+    ("Cache window, against none: Compose UI", "composeUiCacheWindow", "composeUi"),
+    ("Pausable composition, against off: Livery", "liveryPausable", "livery"),
+    ("Pausable composition, against off: Compose UI", "composeUiPausable", "composeUi"),
+)
+lines = []
+for label, a_name, b_name in pairs:
+    a_row, b_row = rows.get(a_name), rows.get(b_name)
+    if not a_row or not b_row:
+        continue
+    ratios = []
+    for p in ("P50", "P90", "P99"):
+        a, b = pick(a_row, "cpu", p), pick(b_row, "cpu", p)
+        ratios.append("–" if not a or not b else f"{a / b:.2f}×")
+    lines.append(f"| {label} | " + " | ".join(ratios) + " |")
+if lines:
     print()
-    print("| CPU frame duration against Compose UI | p50 | p90 | p99 |")
+    print("| CPU frame duration, one lane against another | p50 | p90 | p99 |")
     print("| --- | ---: | ---: | ---: |")
-    for name, label in (("livery", "Livery slots"), ("rcPlayer", "Remote Compose player alone")):
-        row = rows.get(name)
-        if not row:
-            continue
-        ratios = []
-        for p in ("P50", "P90", "P99"):
-            a, b = pick(row, "cpu", p), pick(compose, "cpu", p)
-            ratios.append("–" if not a or not b else f"{a / b:.2f}×")
-        print(f"| {label} | " + " | ".join(ratios) + " |")
+    print("\n".join(lines))
+
+if startups:
+    print()
+    print("### Cold start")
+    print()
+    print("Median of the runs. `livery:startup` is how long Livery's startup took to prepare the first screen; "
+          "`first frame held` is how long the splash screen held the first frame for it (near 0 when it was done "
+          "by the time the activity was created).")
+    print()
+    print("| Test | Initial display | Full display | livery:startup | First frame held |")
+    print("| --- | ---: | ---: | ---: | ---: |")
+    for name, m in sorted(startups.items()):
+        print(
+            f"| `{name}` | {ms(m.get('timeToInitialDisplayMs'))} | {ms(m.get('timeToFullDisplayMs'))} | "
+            f"{ms(m.get('livery:startupFirstMs'))} | {ms(m.get('host:first-frame-heldFirstMs'))} |"
+        )

@@ -65,7 +65,9 @@ fun LiveryResources.startup(
   firstFrameCovered = true
   val work = scope.launch(context) {
     try {
-      prepare()
+      // How long the first screen took to prepare, for a trace or a benchmark to set against the
+      // first frame: `livery:startup`.
+      ee.schimke.livery.client.LiveryTrace.async({ "livery:startup" }) { prepare() }
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) throw e
     } finally {

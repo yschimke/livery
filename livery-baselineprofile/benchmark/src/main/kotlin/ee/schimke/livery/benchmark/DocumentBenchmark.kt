@@ -2,6 +2,8 @@ package ee.schimke.livery.benchmark
 
 import android.content.Intent
 import androidx.benchmark.macro.CompilationMode
+import androidx.benchmark.macro.ExperimentalMetricApi
+import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.benchmark.macro.Metric
@@ -36,13 +38,13 @@ import org.junit.runner.RunWith
 class DocumentBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
-  @Test fun liveryStartup() = startup("livery")
+  @Test fun liveryStartup() = startup("livery", withStartup = true)
   @Test fun liveryNoStartupStartup() = startup("livery-nostartup")
   @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
-  @Test fun liveryNoDeferStartup() = startup("livery-nodefer")
-  @Test fun liveryNoFlatStartup() = startup("livery-noflat")
-  @Test fun liveryViewStartup() = startup("livery-view")
-  @Test fun liveryEmbeddedStartup() = startup("livery-embedded")
+  @Test fun liveryNoDeferStartup() = startup("livery-nodefer", withStartup = true)
+  @Test fun liveryNoFlatStartup() = startup("livery-noflat", withStartup = true)
+  @Test fun liveryViewStartup() = startup("livery-view", withStartup = true)
+  @Test fun liveryEmbeddedStartup() = startup("livery-embedded", withStartup = true)
   @Test fun rcPlayerStartup() = startup("rc")
   @Test fun composeUiStartup() = startup("compose")
 
@@ -54,7 +56,23 @@ class DocumentBenchmark {
   @Test fun rcPlayerChange() = change("rc")
   @Test fun composeUiChange() = change("compose")
 
-  private fun startup(lane: String) = measure(lane, listOf(StartupTimingMetric()), StartupMode.COLD) {}
+  /**
+   * The lanes with Livery's startup also report how long it took (`livery:startup`) and how long the
+   * splash screen held the first frame for it (`host:first-frame-held`): near 0 when its work fits in
+   * the activity's creation, and the time the first frame waited for it when it does not.
+   */
+  @OptIn(ExperimentalMetricApi::class)
+  private fun startup(lane: String, withStartup: Boolean = false) = measure(
+    lane,
+    listOf(StartupTimingMetric()) +
+      if (withStartup) {
+        listOf(
+          TraceSectionMetric("livery:startup", TraceSectionMetric.Mode.First),
+          TraceSectionMetric("host:first-frame-held", TraceSectionMetric.Mode.First),
+        )
+      } else emptyList(),
+    StartupMode.COLD,
+  ) {}
 
   private fun change(lane: String) = measure(lane, listOf(FrameTimingMetric()), StartupMode.WARM) {
     repeat(TAPS) {

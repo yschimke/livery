@@ -49,6 +49,12 @@ The generator runs once, and each task writes its library's filtered share. Add
 | `rc` | The same prepared, display-rewritten document, played by `RcComposePlayer` with the same values | The Remote Compose player alone |
 | `compose` | The same design written in Compose UI (`twins/`: `BannerTwin`, `PollTwin`) | The bar to clear |
 
+Any mode also takes Compose's own prefetch options, so each is measured for Livery and the twin alike:
+`cacheAhead` / `cacheBehind` (floats, fractions of the viewport) give the list a `LazyLayoutCacheWindow`,
+and `pausable` (boolean) sets `ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled`, restored to the
+library's default on every launch that doesn't set it. `FeedScrollBenchmark`'s `*CacheWindow` and `*Pausable`
+lanes use them.
+
 The comparison is like for like:
 
 - **The same render.** livery-compose's `TwinRenderParityTest` renders each template and its twin

@@ -33,7 +33,7 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
 
 | Scenario | State |
 | --- | --- |
-| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; the JVM profile has its own lanes |
+| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; Livery and Compose UI each with a cache window (one viewport ahead, half behind) and with pausable composition in prefetch; the JVM profile has its own lanes |
 | Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nostartup, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
 | Document: data change | `DocumentBenchmark.*Change` (`FrameTimingMetric` over 10 taps); first change not yet separated |
 | Document: warm re-open, continuous animation, resize / theme | Planned |
@@ -146,7 +146,11 @@ Done, to measure next:
   `lifecycleScope`, its first steps ran on the main thread inside `onCreate` and the rest waited for the main
   thread to come free after the activity was created. The activity's creation (about 97 to 125 ms) should now
   cover the worker's ~19 ms, before the first frame at about 131 ms. `livery-nostartup` keeps the old path, so
-  one run shows the difference.
+  one run shows the difference. Whether the work fits is reported, not inferred: the startup lanes add
+  `TraceSectionMetric`s for `livery:startup` (how long it took) and `host:first-frame-held` (how long the
+  splash screen held the first frame for it, from the activity's first attempt to draw: near 0 when it fits),
+  and `benchmark-summary.py` prints them beside initial and full display. The emulator's numbers are rough;
+  the answer that counts is a device's.
 - **The bundled manifest is decoded on first use** (`AndroidBundled`), on the thread that first resolves a
   template, instead of on the main thread when the repository is built. And the twin's lane builds no
   repository, where it used to pay for that decode too (3.8 ms), so its numbers were slightly worse than a

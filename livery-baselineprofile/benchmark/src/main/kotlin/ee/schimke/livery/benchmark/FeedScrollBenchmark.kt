@@ -16,7 +16,8 @@ import org.junit.runner.RunWith
 
 /**
  * The host's feed of sample cards (`FeedActivity`), flung top to bottom, drawn three ways: Livery
- * slots, the Remote Compose player alone, and the same designs written in Compose UI. Both are compiled with the shipped baseline
+ * slots, the Remote Compose player alone, and the same designs written in Compose UI; and Livery and
+ * Compose UI again with each of Compose's prefetch options (a cache window, pausable composition). Both are compiled with the shipped baseline
  * profiles, as an app installed from a store would be. FrameTimingMetric's frame durations and
  * overruns for the two tests are the comparison; on an emulator they are only a rough one.
  */
@@ -41,7 +42,26 @@ class FeedScrollBenchmark {
   /** The same designs written in Compose UI, drawing the same pixels (TwinRenderParityTest). */
   @Test fun composeUi() = fling("compose")
 
-  private fun fling(mode: String) =
+  /**
+   * Compose's own prefetch options, each for Livery and for the twin, so it is measured as a
+   * difference to each (FeedActivity): a cache window of one viewport ahead and half behind, and
+   * pausable composition in prefetch.
+   */
+  @Test fun liveryCacheWindow() = fling("livery", Options.CacheWindow)
+
+  @Test fun composeUiCacheWindow() = fling("compose", Options.CacheWindow)
+
+  @Test fun liveryPausable() = fling("livery", Options.Pausable)
+
+  @Test fun composeUiPausable() = fling("compose", Options.Pausable)
+
+  private enum class Options(val apply: Intent.() -> Unit) {
+    None({}),
+    CacheWindow({ putExtra("cacheAhead", 1f).putExtra("cacheBehind", 0.5f) }),
+    Pausable({ putExtra("pausable", true) }),
+  }
+
+  private fun fling(mode: String, options: Options = Options.None) =
     rule.measureRepeated(
       packageName = PACKAGE,
       metrics = listOf(FrameTimingMetric()),
@@ -50,7 +70,7 @@ class FeedScrollBenchmark {
       iterations = 5,
       setupBlock = {
         pressHome()
-        startFeed(mode)
+        startFeed(mode, options)
       },
     ) {
       val feed = device.findObject(By.res("feed"))
@@ -61,9 +81,9 @@ class FeedScrollBenchmark {
       }
     }
 
-  private fun MacrobenchmarkScope.startFeed(mode: String) {
+  private fun MacrobenchmarkScope.startFeed(mode: String, options: Options) {
     startActivityAndWait(
-      Intent().setClassName(PACKAGE, "$PACKAGE.FeedActivity").putExtra("mode", mode)
+      Intent().setClassName(PACKAGE, "$PACKAGE.FeedActivity").putExtra("mode", mode).apply(options.apply)
     )
     device.wait(Until.hasObject(By.res("feed")), 15_000)
   }

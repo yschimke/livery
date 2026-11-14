@@ -1,6 +1,8 @@
 package ee.schimke.livery.baselineprofile.host
 
+import android.os.Build
 import android.os.Bundle
+import android.os.Trace
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -101,7 +103,25 @@ class DocumentActivity : ComponentActivity() {
       val startup = livery.host.resources.startup(lifecycleScope) {
         prepareSlot(SLOT, 0) { livery.planner.forAppData(livery.query, json(pollData(0))) }
       }
-      splash.setKeepOnScreenCondition { !startup.isReady }
+      // How long the splash screen held the first frame for it, from when the activity first asked
+      // to draw: `host:first-frame-held`, which DocumentBenchmark reads. Near 0 when the startup's
+      // work was done by the time the activity was created.
+      var holding = false
+      var held = false
+      splash.setKeepOnScreenCondition {
+        val waiting = !startup.isReady
+        if (!held && Build.VERSION.SDK_INT >= 29) {
+          if (!holding) {
+            holding = true
+            Trace.beginAsyncSection(FIRST_FRAME_HELD, 0)
+          }
+          if (!waiting) {
+            held = true
+            Trace.endAsyncSection(FIRST_FRAME_HELD, 0)
+          }
+        }
+        waiting
+      }
     }
 
     setContent {
@@ -247,6 +267,8 @@ class DocumentActivity : ComponentActivity() {
     const val RC = "rc"
     const val COMPOSE = "compose"
     private const val SLOT = "document"
+    /** The splash screen holding the first frame for the startup, in the trace. */
+    const val FIRST_FRAME_HELD = "host:first-frame-held"
     /** The lanes that prepare their first screen with Livery's startup; the others plan as they compose. */
     private val STARTUP_LANES = setOf(LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED)
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))

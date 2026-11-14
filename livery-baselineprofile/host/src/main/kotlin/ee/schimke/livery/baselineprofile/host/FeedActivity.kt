@@ -3,7 +3,11 @@ package ee.schimke.livery.baselineprofile.host
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -74,11 +78,33 @@ import kotlinx.serialization.json.JsonPrimitive
  * Every mode has everything a card needs in memory before the list shows (Livery: each slot
  * prepared with `prepareSlot`, as a feed prepares a page; rc: the documents prepared for this
  * display), so in no mode does a card arrive empty and catch up a frame later.
+ *
+ * Two of Compose's own prefetch options, for any mode, so each is measured for Livery and for the
+ * twin alike. Neither is Livery's: the cache window is the app's list's, and the flag is Compose's.
+ * - [CACHE_AHEAD] / [CACHE_BEHIND] (floats, fractions of the viewport): the list's
+ *   [LazyLayoutCacheWindow]. Cards ahead of the viewport are composed and measured in prefetch,
+ *   between frames, before they scroll in; cards behind it stay composed for a scroll back. Absent,
+ *   the list's default (one item ahead).
+ * - [PAUSABLE] (boolean): `ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled`, which
+ *   lets prefetch compose an upcoming card across several frames' idle time instead of in one go.
+ *   Compose turned it off by default in 1.10.6 for stability; this measures it, it doesn't
+ *   recommend it.
  */
 class FeedActivity : ComponentActivity() {
+  @OptIn(ExperimentalFoundationApi::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     val mode = intent.getStringExtra(MODE) ?: LIVERY
+    // A process-wide flag: set on every launch, the library's own default when this one doesn't ask,
+    // since a warm benchmark run keeps the process (and the last lane's setting) alive.
+    ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled =
+      intent.getBooleanExtra(PAUSABLE, DefaultPausable)
+    val cacheWindow = intent.takeIf { it.hasExtra(CACHE_AHEAD) || it.hasExtra(CACHE_BEHIND) }?.let {
+      LazyLayoutCacheWindow(
+        aheadFraction = it.getFloatExtra(CACHE_AHEAD, 0f),
+        behindFraction = it.getFloatExtra(CACHE_BEHIND, 0f),
+      )
+    }
     val cards = List(ITEMS) { i -> if (i % 2 == 0) Card.Banner(i) else Card.Poll(i) }
     val clock = Clock { System.currentTimeMillis() }
     val repository = TemplateRepository(
@@ -132,8 +158,10 @@ class FeedActivity : ComponentActivity() {
         ready = true
       }
       if (!ready) return@setContent
+      val listState = if (cacheWindow != null) rememberLazyListState(cacheWindow) else rememberLazyListState()
       LazyColumn(
         Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId = true; testTag = "feed" },
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         items(cards.size, key = { it }, contentType = { cards[it]::class }) { index ->
@@ -220,6 +248,14 @@ class FeedActivity : ComponentActivity() {
     const val RC = "rc"
     const val COMPOSE = "compose"
     const val ITEMS = 200
+    /** Extras: the list's cache window ahead of and behind the viewport, as fractions of it. */
+    const val CACHE_AHEAD = "cacheAhead"
+    const val CACHE_BEHIND = "cacheBehind"
+    /** Extra: pausable composition in prefetch (see the class). */
+    const val PAUSABLE = "pausable"
+    /** The flag's value as the library ships it, read before any launch sets it. */
+    @OptIn(ExperimentalFoundationApi::class)
+    private val DefaultPausable = ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled
     private const val SLOT = "feed"
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
