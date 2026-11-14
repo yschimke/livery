@@ -21,8 +21,8 @@ import org.junit.runner.RunWith
  * composition, deferral, flat layout), the player alone, and the Compose UI twin.
  *
  * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
- *   activity holds its first frame until the document can draw, so `timeToInitialDisplayMs` is that
- *   frame on every lane; it reports fully drawn after it, so `timeToFullDisplayMs` is the frame after).
+ *   Livery lanes are a plain `LiverySlot`, so `timeToInitialDisplayMs` is the first frame Livery draws,
+ *   within its first-frame budget; the activity reports fully drawn on Livery's `Impression` event).
  * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *

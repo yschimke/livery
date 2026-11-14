@@ -1,6 +1,9 @@
 package ee.schimke.livery.compose
 
 import androidx.compose.foundation.layout.Column
+import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,12 +76,19 @@ class FirstFrameTest {
     override suspend fun get(url: String, etag: String?) = FetchResult.Failed(503, "offline")
     override suspend fun get(url: String, etag: String?, maxBytes: Long, allowRedirect: (String) -> Boolean) = FetchResult.Failed(503, "offline")
   }
-  private val host = LiveryHost(
+  private val host = host()
+
+  private fun host(
+    firstFrameBudgetMillis: Long = DEFAULT_FIRST_FRAME_BUDGET_MILLIS,
+    placeholder: @androidx.compose.runtime.Composable (LiveryPlaceholder) -> Unit = {},
+  ) = LiveryHost(
     repository = repository,
     actions = ActionRouter(emptyMap(), { false }, { }, clock),
     events = { },
     clock = clock,
     images = ImageResolver(repository, offline, JavaCrypto),
+    firstFrameBudgetMillis = firstFrameBudgetMillis,
+    placeholder = placeholder,
   )
   private val contract = Contract("promo/banner", 1)
 
@@ -120,6 +130,103 @@ class FirstFrameTest {
     second = true
     mainClock.advanceTimeByFrame()
     assertEquals(2, onAllNodesWithTag(tag).fetchSemanticsNodes().size, "the second card waited for fonts the first had loaded")
+  }
+
+  @Test fun aSlotPlannedWithinTheBudgetDrawsOnTheScreensFirstFrame() = runComposeUiTest {
+    // Nothing prepared ahead: the slot plans, prepares and loads fonts while its first frame waits.
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(1, host, Modifier.size(320.dp, 120.dp), fallback = { Box(Modifier.testTag(FALLBACK)) }) {
+        delay(30)
+        PlanResult.Ready(plan("one"))
+      }
+    }
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(plan("one").slotTag).fetchSemanticsNodes().size, "the first frame did not wait for the card")
+    assertEquals(0, onAllNodesWithTag(FALLBACK).fetchSemanticsNodes().size)
+  }
+
+  @Test fun aSlotThatMissesTheBudgetDrawsItsFallbackFirst() = runComposeUiTest {
+    val host = host(firstFrameBudgetMillis = 50)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(1, host, Modifier.size(320.dp, 120.dp), fallback = { Box(Modifier.testTag(FALLBACK)) }) {
+        delay(2_000)
+        PlanResult.Ready(plan("one"))
+      }
+    }
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(FALLBACK).fetchSemanticsNodes().size, "a slow plan held the first frame past its budget")
+  }
+
+  @Test fun afterTheFirstFrameASlotNeverWaits() = runComposeUiTest {
+    var second by mutableStateOf(false)
+    mainClock.autoAdvance = false
+    setContent {
+      Column {
+        LiverySlot(1, host, Modifier.size(320.dp, 120.dp)) { PlanResult.Ready(plan("one")) }
+        if (second) {
+          LiverySlot(2, host, Modifier.size(320.dp, 120.dp), fallback = { Box(Modifier.testTag(FALLBACK)) }) {
+            delay(30)
+            PlanResult.Ready(plan("two"))
+          }
+        }
+      }
+    }
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertTrue(host.resources.firstFrameDrawn)
+    // A card arriving in a scroll: its frame does not wait, it shows its fallback until planned.
+    second = true
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(FALLBACK).fetchSemanticsNodes().size, "a card after the first frame held its frame")
+  }
+
+  @Test fun aCardArrivingAfterTheFirstFrameShowsTheHostsPlaceholder() = runComposeUiTest {
+    val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder:${it.slotId}")) })
+    var second by mutableStateOf(false)
+    mainClock.autoAdvance = false
+    setContent {
+      Column {
+        LiverySlot(1, host, Modifier.size(320.dp, 120.dp)) { PlanResult.Ready(plan("one")) }
+        if (second) {
+          LiverySlot(2, host, Modifier.size(320.dp, 120.dp), slotId = "feed") {
+            delay(30)
+            PlanResult.Ready(plan("two"))
+          }
+        }
+      }
+    }
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    second = true
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag("placeholder:feed").fetchSemanticsNodes().size, "no placeholder while the card planned")
+  }
+
+  @Test fun aSplashScreenStartupMeansNothingWaits() = runComposeUiTest {
+    // The app holds its splash screen on a startup: the frame behind it need not wait as well.
+    runBlocking { host.resources.startup(this) {}.await() }
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(1, host, Modifier.size(320.dp, 120.dp), fallback = { Box(Modifier.testTag(FALLBACK)) }) {
+        delay(30)
+        PlanResult.Ready(plan("one"))
+      }
+    }
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(FALLBACK).fetchSemanticsNodes().size, "a frame behind a splash screen waited")
+  }
+
+  @Test fun aHostWithNoBudgetNeverWaits() = runComposeUiTest {
+    val host = host(firstFrameBudgetMillis = 0)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(1, host, Modifier.size(320.dp, 120.dp), fallback = { Box(Modifier.testTag(FALLBACK)) }) {
+        delay(30)
+        PlanResult.Ready(plan("one"))
+      }
+    }
+    mainClock.advanceTimeByFrame()
+    assertEquals(1, onAllNodesWithTag(FALLBACK).fetchSemanticsNodes().size, "a host with no budget waited")
   }
 
   @Test fun aPreloadedCardDrawsOnItsFirstFrame() = runComposeUiTest {
@@ -210,6 +317,7 @@ class FirstFrameTest {
   private fun png(): ByteArray = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB), "png", it) }.toByteArray()
 
   private companion object {
+    const val FALLBACK = "fallback"
     const val FONT = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
     const val OTHER_FONT = "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
     const val PICTURE = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"

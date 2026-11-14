@@ -37,7 +37,12 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   draws complete on its first frame (`LiveryResources`, `FirstFrameTest`): composition reads
   documents, fonts and images from memory without suspending, and only a template's first card that
   was not preloaded may wait. Never reuse one player state across cards.
-- **Rendering never waits on the network**, and a chosen design that can't play falls back to the
+- **A slower first frame beats a blank one.** Before a screen's first frame, a slot or template that
+  is not ready waits for its work on the main thread, within `LiveryHost.firstFrameBudgetMillis` (150
+  ms by default, shared, the work itself off the main thread); a `startup` holding the splash screen
+  covers that frame instead. After it nothing waits: what is not ready shows
+  `LiveryHost.placeholder`, held to the template's last height (`FirstFrameTest`).
+- **Rendering never waits on the network** past that budget, and a chosen design that can't play falls back to the
   automatic one, never to nothing. Automatic selection never picks an `OnRequest` design that
   isn't installed.
 - Git history attributes work only to the human committer: never an AI `Co-authored-by:` trailer

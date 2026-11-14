@@ -51,6 +51,9 @@ fun LiveryResources.startup(
   prepare: suspend LiveryResources.() -> Unit,
 ): LiveryStartup {
   val startup = LiveryStartup()
+  // The splash screen this startup holds covers the first frame: nothing need wait on the main
+  // thread for it too (LiveryHost.firstFrameBudgetMillis).
+  firstFrameCovered = true
   val work = scope.launch {
     try {
       prepare()

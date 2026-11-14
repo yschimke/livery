@@ -30,6 +30,10 @@ import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -197,13 +201,59 @@ class LiveryResources(
     }
 
   /**
+   * Whether a screen these resources serve has drawn its first frame. Until then a slot or template
+   * that is not ready may wait for its work, on the main thread, up to the host's
+   * [LiveryHost.firstFrameBudgetMillis] in all; from then on nothing waits ([LiveryTemplate]).
+   */
+  @kotlin.concurrent.Volatile internal var firstFrameDrawn: Boolean = false
+
+  /**
+   * Whether something else covers the first frame: a [startup] holding the splash screen, which
+   * keeps the starting window up while the work runs, so waiting on the main thread buys nothing.
+   */
+  @kotlin.concurrent.Volatile internal var firstFrameCovered: Boolean = false
+
+  /** When the first wait for a first frame started: the budget is shared from there. */
+  private var firstFrameWaitStart: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
+
+  /** Where work a first frame waits on runs: off the main thread, which only waits for it. */
+  internal val firstFrameScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+  /** How long a first frame may still wait, of [budgetMillis]: 0 once it has drawn. */
+  internal fun firstFrameWaitLeft(budgetMillis: Long): Long {
+    if (firstFrameDrawn || firstFrameCovered || budgetMillis <= 0) return 0
+    val start = firstFrameWaitStart ?: kotlin.time.TimeSource.Monotonic.markNow().also { firstFrameWaitStart = it }
+    return (budgetMillis - start.elapsedNow().inWholeMilliseconds).coerceAtLeast(0)
+  }
+
+  /**
+   * Starts [work] off the main thread and waits for it here, up to what is left of [budgetMillis]
+   * before the first frame: its value, or null when there is no time left or it did not finish.
+   * The work carries on either way, for whatever asks for it next.
+   */
+  internal fun <T> beforeFirstFrame(budgetMillis: Long, work: suspend LiveryResources.() -> T): Deferred<T>? {
+    if (firstFrameWaitLeft(budgetMillis) <= 0) return null
+    return firstFrameScope.async { work() }
+  }
+
+  /** [deferred]'s value if it arrives within what is left of [budgetMillis] before the first frame. */
+  internal fun <T> awaitBeforeFirstFrame(budgetMillis: Long, deferred: Deferred<T>): T? {
+    val left = firstFrameWaitLeft(budgetMillis)
+    return if (left > 0) awaitBlocking(deferred, left) else null
+  }
+
+  /**
    * Gets what [template]'s cards need before they can draw into memory: its prepared document and
    * its fonts (not the images a card shows, which arrive with the card). A card of it then draws
    * on its first frame. What [LiverySlot] waits for before it swaps a new answer in.
    */
-  suspend fun readyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display) {
+  suspend fun readyToDraw(
+    template: LoadedTemplate,
+    display: RcDisplay? = this.display,
+    context: CoroutineContext = Dispatchers.Default,
+  ) {
     coroutineScope {
-      launch { prepareOrNull(template, display) }
+      launch { prepareOrNull(template, display, context) }
       launch { runCatching { typefaces(template) } }
     }
   }
