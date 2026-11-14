@@ -41,7 +41,13 @@ fun LiverySlot(
   key: Any?,
   host: LiveryHost,
   modifier: Modifier = Modifier,
-  fallback: @Composable (reason: String?) -> Unit = {},
+  /**
+   * Drawn while the slot plans (`reason` null) and when it falls back (the reason). By default the
+   * host's [LiveryHost.placeholder] while it plans, and nothing when it falls back.
+   */
+  fallback: @Composable (reason: String?) -> Unit = { reason ->
+    if (reason == null) host.placeholder(LiveryPlaceholder(LocalLiverySlotId.current))
+  },
   slotId: String? = null,
   plan: suspend () -> PlanResult,
 ) {
@@ -50,25 +56,40 @@ fun LiverySlot(
   // The display the template is prepared for, recorded so a host's warm-up prepares the same one.
   val display = rememberLiveryDisplay()
   SideEffect { host.resources.display = display }
+  // Plans, and readies the answer's template to draw: what the slot waits for before it shows it.
+  suspend fun planned(): PlanResult = plan().let { planned ->
+    if (planned !is PlanResult.Ready) return@let planned
+    val template = planned.plan.template
+    host.resources.readyToDraw(template, display)
+    // A template whose bytes the player cannot play draws the app's fallback, never nothing.
+    if (host.resources.cannotPlay(template)) PlanResult.Fallback("${template.entry.designId} cannot be played") else planned
+  }
   // A slot that already had an answer at this revision (scrolled back, reopened) draws it at once
-  // rather than its fallback for a frame; it still replans, and a new answer replaces it.
-  val state = remember(key, host, slotId) { mutableStateOf(slotId?.let { host.resources.lastPlan(it, key, revision) }) }
+  // rather than its fallback for a frame; it still replans, and a new answer replaces it. One with
+  // none, before the screen's first frame, plans off the main thread and waits for it here, within
+  // the host's first-frame budget, so the first frame has its card rather than its fallback.
+  val first = remember(key, host, slotId) {
+    val last = slotId?.let { host.resources.lastPlan(it, key, revision) }
+    val early = if (last == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null
+    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) }
+    FirstAnswer(mutableStateOf(answer), early, revision)
+  }
+  val state = first.state
   LaunchedEffect(state, revision) {
-    val result = plan().let { planned ->
-      if (planned !is PlanResult.Ready) return@let planned
-      val template = planned.plan.template
-      host.resources.readyToDraw(template, display)
-      // A template whose bytes the player cannot play draws the app's fallback, never nothing.
-      if (host.resources.cannotPlay(template)) PlanResult.Fallback("${template.entry.designId} cannot be played") else planned
-    }
+    // The plan started for the first frame, when it is for this revision, rather than a second one.
+    val result = first.early?.takeIf { first.revision == revision }?.await() ?: planned()
     slotId?.let { host.resources.keepPlan(it, key, revision, result) }
     state.value = result
   }
+  MarkFirstFrameDrawn(host.resources)
   val result = state.value
-  when (val r = result) {
-    null -> fallback(null)
-    is PlanResult.Fallback -> fallback(r.reason)
-    is PlanResult.Ready -> LiveryTemplate(r.plan, host, modifier)
+  // The slot's id reaches what it draws: the placeholder, its template's.
+  androidx.compose.runtime.CompositionLocalProvider(LocalLiverySlotId provides slotId) {
+    when (val r = result) {
+      null -> fallback(null)
+      is PlanResult.Fallback -> fallback(r.reason)
+      is PlanResult.Ready -> LiveryTemplate(r.plan, host, modifier)
+    }
   }
 }
 
@@ -121,3 +142,10 @@ fun rememberLiveryDisplay(): RcDisplay {
   val density = LocalDensity.current
   return remember(density.density, density.fontScale) { RcDisplay(density.density, density.fontScale) }
 }
+
+/** A slot's answer, and the plan its first frame started (and may have waited for) at [revision]. */
+private class FirstAnswer(
+  val state: androidx.compose.runtime.MutableState<PlanResult?>,
+  val early: kotlinx.coroutines.Deferred<PlanResult>?,
+  val revision: Long,
+)

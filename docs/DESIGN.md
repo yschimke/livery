@@ -130,7 +130,12 @@ GitHub release downloads send no CORS headers, so a browser client reads a Pages
 <blobs>/<sha256>.rc                     shared by every source
 ```
 
-- Rendering never waits on the network: `resolve` reads only the disk.
+- Rendering never waits on the network: `resolve` reads only the disk. The one wait is a screen's
+  first frame: before it, a slot or template that is not ready waits on the main thread for its work
+  (planned and prepared off it) within `LiveryHost.firstFrameBudgetMillis`, 150 ms by default and
+  shared by the screen, so the first frame has its cards rather than blanks; a `startup` holding the
+  splash screen covers that frame instead, and nothing waits after it. What is not ready then draws
+  `LiveryHost.placeholder` (unplanned content in a feed), held to the template's last height.
 - **No visible redraws.** A card after the first of its template, and any card the app preloaded,
   draws complete on its first frame: no blank frame while fonts load, no fallback for a slot that
   had an answer, no image popping in that is already in memory. In Compose, `LiveryResources` (one

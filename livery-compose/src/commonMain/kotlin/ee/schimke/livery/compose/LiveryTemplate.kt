@@ -99,7 +99,27 @@ class LiveryHost(
    * ([deferLayoutAnimations]). Pass `false` to give every component its own composable.
    */
   val flattenLayout: Boolean = true,
+  /**
+   * How long, in all, a screen's slots and templates may hold its first frame for their work:
+   * planning, preparing and fonts, which run off the main thread while it waits. A slower first
+   * frame with its cards in it rather than a blank one that fills in: on Android the system's
+   * starting window stays up meanwhile. Only before the screen's first frame; after it nothing
+   * waits, so a scroll never does. What is not ready in time draws as it would without the wait
+   * (a slot's fallback, a held height). 0 never waits. The browser cannot wait, whatever this is.
+   */
+  val firstFrameBudgetMillis: Long = DEFAULT_FIRST_FRAME_BUDGET_MILLIS,
+  /**
+   * Drawn in place of a card that cannot draw yet once the screen is up: unplanned content arriving
+   * in a feed, a template's first card nobody prepared. It is held to the height the template last
+   * drew at for this width, when it has drawn before, so the list does not move when the card
+   * arrives: it is measured at exactly that size; without one it takes its own height (a
+   * skeleton's). By default nothing is drawn there.
+   */
+  val placeholder: @Composable (LiveryPlaceholder) -> Unit = {},
 )
+
+/** Long enough to plan and prepare a screen of cards from disk, short of a noticeable delay. */
+const val DEFAULT_FIRST_FRAME_BUDGET_MILLIS: Long = 150
 
 /**
  * Plays one [RenderPlan]. Values are in place before the first frame, so a template arrives showing
@@ -149,7 +169,7 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
     }
   }
   // [RcPreparation.InComposition]: the host chose to prepare here, on this frame.
-  val prepared = preparedState.value
+  val preparedEarly = preparedState.value
     ?: if (inComposition) remember(bytes, host, display) { host.resources.preparedOrNull(plan.template, display) } else null
   // Keyed on the image values too, so a slot that shows another item's picture seeds it from memory.
   val imageValues = plan.bindings.values.filterValues { it is NamedValue.Image }
@@ -162,7 +182,22 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
       typefaceState.value = runCatching { host.resources.typefaces(plan.template) }.getOrDefault(host.fallbackTypefaces)
     }
   }
+  // Before the screen's first frame, a card that is not ready yet (nobody prepared its template)
+  // waits for it here, within the host's first-frame budget, and draws on that frame from memory.
+  val readiedForFirstFrame = remember(bytes, host, display) {
+    val ready = preparedState.value != null && typefaceState.value != null
+    if (ready || host.resources.cannotPlay(plan.template)) false
+    else host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) {
+      // On the host's preparation context, as the card's own preparation below would run.
+      kotlinx.coroutines.coroutineScope {
+        launch { prepareOrNull(plan.template, display, background?.context ?: kotlinx.coroutines.Dispatchers.Default) }
+        launch { runCatching { typefaces(plan.template) } }
+      }
+    }
+      ?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } != null
+  }
   val typefaces = typefaceState.value
+    ?: if (readiedForFirstFrame) host.resources.typefacesNow(plan.template) else null
   val scope = rememberCoroutineScope()
   val tracker = remember(bytes, plan.decisionId, plan.feedItem?.id) { VisibilityTracker() }
   // Each tracker keeps its own item's plan: when the slot shows another item, the old tracker's
@@ -172,18 +207,34 @@ fun LiveryTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier = Modi
   // A template's fonts load before it draws, so text never reflows from a fallback face; and it
   // draws only once it is prepared, which is never in composition under a background strategy.
   val loader = typefaces
+  val prepared = preparedEarly ?: if (readiedForFirstFrame) host.resources.preparedNow(plan.template, display) else null
+  MarkFirstFrameDrawn(host.resources)
   if (host.resources.cannotPlay(plan.template)) {
     // Not a document this player can play: no card, rather than an app that fails with it.
     Layout(modifier) { _, constraints -> layout(constraints.minWidth, constraints.minHeight) {} }
     return
   }
   if (loader == null || prepared == null) {
-    // Nothing to draw yet (a template's first card nobody prepared): hold the height the template
-    // last drew at for this width, so the list does not move when the card arrives.
-    Layout(modifier) { _, constraints ->
+    // Nothing to draw yet (a template's first card nobody prepared): the host's placeholder, held to
+    // the height the template last drew at for this width, so the list does not move when the card
+    // arrives; without one, the placeholder's own height.
+    val slotId = LocalLiverySlotId.current
+    Layout(
+      content = {
+        host.placeholder(
+          LiveryPlaceholder(slotId, plan.contract, plan.template.entry.designId),
+        )
+      },
+      modifier = modifier,
+    ) { measurables, constraints ->
       val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.minWidth
-      val height = host.resources.lastHeight(plan.template, width) ?: 0
-      layout(width, constraints.constrainHeight(height)) {}
+      val last = host.resources.lastHeight(plan.template, width)
+      val child =
+        if (last != null) androidx.compose.ui.unit.Constraints.fixed(width, constraints.constrainHeight(last))
+        else constraints.copy(minWidth = width, maxWidth = width)
+      val placeables = measurables.map { it.measure(child) }
+      val height = last ?: (placeables.maxOfOrNull { it.height } ?: 0)
+      layout(width, constraints.constrainHeight(height)) { placeables.forEach { it.place(0, 0) } }
     }
     return
   }
