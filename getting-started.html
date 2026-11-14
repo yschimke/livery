@@ -150,6 +150,23 @@ so the list does not move when it arrives:</p>
 </code></pre>
 <p>It is told the slot, contract and design when they are known (<code>LiveryPlaceholder</code>). By default nothing
 is drawn there; a <code>LiverySlot</code>'s own <code>fallback</code> replaces it for that slot.</p>
+<p><strong>A feed you do not know up front.</strong> An app with every item in hand can <code>preload</code> or <code>prepareSlot</code> them all.
+One that pages, or fetches as it goes, keeps the cards just ahead of the scroll prepared instead, so each draws
+complete when it scrolls in. <code>LiveryPrepareAhead</code> follows a lazy list: <code>count</code> is how many items you have now
+(it grows as pages arrive), <code>plan</code> is the call the item's slot makes, and the slot uses the same <code>slotId</code> and
+key. Return a null key (or a null plan) for an item that has not loaded:</p>
+<pre><code class="language-kotlin">val state = rememberLazyListState()
+LiveryPrepareAhead(state, host, slotId = &quot;feed&quot;, count = { items.itemCount }, ahead = 8,
+  key = { items.peek(it)?.id }) { i -&gt; items.peek(i)?.let { planner.forAppData(query(it), json(it)) } }
+LazyColumn(state = state) {
+  items(items.itemCount, key = items.itemKey { it.id }) { i -&gt;
+    items[i]?.let { LiverySlot(key = it.id, host = host, slotId = &quot;feed&quot;) { planner.forAppData(query(it), json(it)) } }
+  }
+}
+</code></pre>
+<p><code>items</code> is androidx Paging's <code>LazyPagingItems</code>; <code>peek</code> reads what is loaded without asking for more. Eight cards
+ahead keeps up with a fast fling on a phone; <code>LiveryResources(maxPlans = …)</code> should hold the window and what the
+list keeps composed. <code>PagingActivity</code> in <a href="https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host"><code>livery-baselineprofile/host</code></a> is a working example.</p>
 <p><strong>Emoji load after the first screen (Android).</strong> Compose's text brings in <code>androidx.emoji2</code>, whose
 initializer runs at process start, on the main thread, before the first frame. Livery's manifest turns
 it off, and Livery loads emoji itself, off the main thread, two frames after the app's first template
