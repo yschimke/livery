@@ -123,9 +123,11 @@ class DocumentActivity : ComponentActivity() {
       // The same frame for every lane: padded, the document at the top and as wide as the screen. The
       // template fills the width and takes its own height, so the twin is given no more than that.
       Box(
-        Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "document-screen" }
+        // One semantics block: a second testTag on the same node would lose to the first. The tag
+        // says "document" only once it has been drawn, which is what the benchmarks wait for.
+        Modifier.fillMaxSize()
+          .semantics { testTagsAsResourceId = true; testTag = if (drawn) "document" else "document-screen" }
           .clickable { version++ }
-          .then(if (drawn) Modifier.semantics { testTag = "document" } else Modifier)
           .padding(16.dp),
       ) {
         if (!available) return@Box
