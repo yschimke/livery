@@ -210,6 +210,28 @@ class BackgroundPreparationTest {
     assertTrue(reason!!.contains("cannot be played"), "$reason")
   }
 
+  /**
+   * A host that prepares in composition: the slot readies only the fonts, so the card itself finds
+   * out the template cannot play, and tells its slot, which draws the app's fallback.
+   */
+  @Test fun aSlotThatPreparesInCompositionDrawsTheAppsFallbackForATemplateThatCannotPlay() = runComposeUiTest {
+    val inComposition = LiveryHost(repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, preparation = RcPreparation.InComposition)
+    val placeholder = template.copy(
+      entry = template.entry.copy(sha256 = "placeholder-4"),
+      bytes = "PLACEHOLDER banner-bold".encodeToByteArray(),
+    )
+    var reason: String? = null
+    setContent {
+      LiverySlot(key = 1, host = inComposition, modifier = Modifier.width(320.dp), fallback = { r ->
+        reason = r
+        androidx.compose.foundation.layout.Box(Modifier.size(320.dp, 48.dp).testTag("native"))
+      }) { PlanResult.Ready(RenderPlan(placeholder, contract, Bindings(emptyMap()))) }
+    }
+    waitUntil(timeoutMillis = 10_000) { reason != null }
+    assertEquals(1, onAllNodesWithTag("native").fetchSemanticsNodes().size)
+    assertTrue(reason!!.contains("cannot be played"), "$reason")
+  }
+
   @Test fun aWarmedTemplateDrawsWithoutAPlayerEverWaiting() = runComposeUiTest {
     // The test's own density: the display the template is drawn on.
     runBlocking { host.resources.readyToDraw(template, RcDisplay(density.density, density.fontScale)) }

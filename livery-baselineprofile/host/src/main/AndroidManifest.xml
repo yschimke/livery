@@ -23,28 +23,12 @@
       android:exported="true" />
 
     <!--
-      No emoji font loading in the benchmark host. AndroidX Compose's text stack depends on emoji2,
-      whose startup initializer asks a font provider for the emoji font ~450 ms after the first frame
-      and then makes Compose text re-measure and draw a frame. Nothing here draws emoji, the cost is
-      the same for every lane, and it lands in the middle of what we measure: StartupTimingMetric ends
-      "full display" at the first frame after reportFullyDrawn, so a settled screen measured ~690 ms in
-      every lane (the Compose UI twin included) when the document was drawn by ~150 ms; and a fling or
-      a data change picks up a stray re-layout. Real apps keep the initializer; its cost is not
-      Livery's. Removing its androidx.startup entry is the standard way to opt out.
-      DocumentActivity requests a frame after reportFullyDrawn, since nothing else will draw one now.
-      The provider is only here to carry the removal into the merge: androidx.startup arrives through
-      Compose's emoji2, not as a dependency of this module, so lint cannot see the class (MissingClass).
-      The merged manifest keeps the other initializers and drops this one.
+      No emoji initializer at process start, in every lane: Livery's own manifest removes androidx
+      emoji2's EmojiCompatInitializer from any app that uses it (livery-compose's AndroidManifest.xml),
+      so this host needs no entry of its own. A copy here also failed lint (MissingClass), since the
+      host does not compile against androidx.startup itself. Before it was removed, the initializer
+      loaded the emoji font ~450 ms after the first frame and re-measured all text, in every lane
+      (the Compose UI twin included): ~690 ms to full display for that alone.
     -->
-    <provider
-      android:name="androidx.startup.InitializationProvider"
-      android:authorities="${applicationId}.androidx-startup"
-      android:exported="false"
-      tools:node="merge"
-      tools:ignore="MissingClass">
-      <meta-data
-        android:name="androidx.emoji2.text.EmojiCompatInitializer"
-        tools:node="remove" />
-    </provider>
   </application>
 </manifest>
