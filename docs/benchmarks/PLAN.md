@@ -118,6 +118,13 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
   trace what invalidates the second pass.
 - **The first run and the second differ by a few tenths of a millisecond in the fling, and the order of
   Livery and the twin's main-thread time flipped.** Read differences under about 0.5 ms as noise.
+- **A slot re-planned every card that scrolled in, and composed it twice.** The `livery:*` sections showed 105 plans in a
+  fling, each re-reading the template blob from the APK (0.8 ms) and then replacing the plan the slot already held. The
+  new plan never equalled the old one because `LoadedTemplate` held a `ByteArray` (a data class compares an array by
+  identity), so every replan recomposed the card: 210 compositions for 105 cards. Fixed by keeping a template's bytes in
+  memory by hash and by comparing templates by what names them: per card, planning 1.94 to 0.20 ms, one composition
+  instead of two (2.86 to 2.29 ms), no APK reads. At frame level it is small (the recomposer's time per frame fell 40%,
+  the frame's p90 3.8 to 3.3 ms; the median did not move).
 - **Start-up needs a frame after `reportFullyDrawn()`** and the emoji2 initializer out of the host (see
   the manifest), or the metric measures the next unrelated frame (~690 ms in every lane).
 - **The document host plans ten variants before its first draw**, in the Livery and player lanes only:

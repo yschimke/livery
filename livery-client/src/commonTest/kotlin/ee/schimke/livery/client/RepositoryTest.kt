@@ -11,7 +11,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
@@ -348,6 +350,30 @@ class RepositoryTest {
     })
     r.refresh()
     assertEquals(LoadedTemplate.Origin.Bundled, r.resolve(q)?.origin)
+  }
+
+  @Test fun resolvingATemplateAgainReadsNothingAndGivesTheSameTemplate() = runTest {
+    var reads = 0
+    val r = repo(Host(Fx.manifest()).apply { down = true }, TemplateRepository.Bundled(Fx.manifest()) { sha ->
+      reads++
+      listOf("default-v8").map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }
+    })
+    r.refresh()
+    val first = assertNotNull(r.resolve(q))
+    val second = assertNotNull(r.resolve(q))
+    assertEquals(1, reads, "the bundled blob is read once, not per plan")
+    assertSame(first.bytes, second.bytes, "one copy of a template's bytes")
+    assertEquals(first, second)
+  }
+
+  @Test fun aTemplateLoadedTwiceIsTheSameTemplateWhicheverArrayHoldsItsBytes() {
+    val entry = Fx.entry("tile-default", "default-v8", Fx.inAppV8)
+    val a = LoadedTemplate(entry, null, Fx.blob("default-v8"), LoadedTemplate.Origin.Bundled, Fx.tile)
+    val b = LoadedTemplate(entry, null, Fx.blob("default-v8"), LoadedTemplate.Origin.Bundled, Fx.tile)
+    assertEquals(a, b)
+    assertEquals(a.hashCode(), b.hashCode())
+    assertNotEquals(a, a.copy(origin = LoadedTemplate.Origin.Fresh))
+    assertNotEquals(a, LoadedTemplate(Fx.entry("tile-retro", "retro-v8", Fx.inAppV8), null, Fx.blob("retro-v8"), LoadedTemplate.Origin.Bundled, Fx.tile))
   }
 
   @Test fun placementsAndThemesComeFromTheBundledCatalogBeforeAnyDownload() = runTest {
