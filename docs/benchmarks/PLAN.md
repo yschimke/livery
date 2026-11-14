@@ -16,8 +16,12 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   bump (Renovate). Lanes available now: `preparation = InComposition` and the default.
   A `preprocessor = null` lane needs a no-op `RcPreprocessor` handed to the cache.
 - Every new scenario needs a Compose UI twin and a `TwinRenderParityTest` case. The document
-  scenario reuses `PollTwin` at full-screen size; the template and twin are already held to the
-  same pixels at card width, a full-screen parity case is still to add.
+  scenario puts every lane in the same frame (padded, top-aligned, as wide as the screen; the sample
+  template takes its own height, so it is a card on a full screen, not a design that fills the
+  height) and `thePollTwinMatchesInTheFullScreenFrame` holds the twin to the template there. A
+  design that really fills the screen needs its own twin.
+- Start-up is measured to a first frame with the document in it: the activity calls
+  `reportFullyDrawn()` after that frame, so read `timeToFullDisplayMs`, not the initial display time.
 
 ## Status
 

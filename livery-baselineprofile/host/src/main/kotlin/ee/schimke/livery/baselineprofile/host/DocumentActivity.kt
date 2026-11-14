@@ -5,8 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
@@ -108,20 +109,36 @@ class DocumentActivity : ComponentActivity() {
         }
         ready = true
       }
-      Column(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "document-screen" }) {
-        Box(Modifier.fillMaxSize().clickable { version++ }.semantics { testTag = "document" }) {
-          if (!ready) return@Box
-          val modifier = Modifier.fillMaxSize().padding(16.dp)
-          when (lane) {
-            COMPOSE -> PollTwin(data, modifier)
-            RC -> plan?.plan?.let { p ->
-              val prepared = rememberRcPreparedDocument(p.template.bytes, host.preparation) ?: return@let
-              val values = remember { mutableStateMapOf<String, RcNamedValue>() }
-              values.putAll(p.bindings.toPlayerValues())
-              RcComposePlayer(prepared, modifier, namedValues = values)
-            }
-            else -> plan?.plan?.let { LiveryTemplate(it, host, modifier) }
+      // Content to draw: the twin as soon as the screen is up, the others once planned and prepared.
+      val available = ready && (lane == COMPOSE || plan != null)
+      var drawn by remember { mutableStateOf(false) }
+      LaunchedEffect(available) {
+        if (available) {
+          // After the first frame that has the document in it: the start-up benchmark's end point.
+          withFrameNanos { }
+          drawn = true
+          reportFullyDrawn()
+        }
+      }
+      // The same frame for every lane: padded, the document at the top and as wide as the screen. The
+      // template fills the width and takes its own height, so the twin is given no more than that.
+      Box(
+        Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "document-screen" }
+          .clickable { version++ }
+          .then(if (drawn) Modifier.semantics { testTag = "document" } else Modifier)
+          .padding(16.dp),
+      ) {
+        if (!available) return@Box
+        val modifier = Modifier.fillMaxWidth()
+        when (lane) {
+          COMPOSE -> PollTwin(data, modifier)
+          RC -> plan?.plan?.let { p ->
+            val prepared = rememberRcPreparedDocument(p.template.bytes, host.preparation) ?: return@let
+            val values = remember { mutableStateMapOf<String, RcNamedValue>() }
+            values.putAll(p.bindings.toPlayerValues())
+            RcComposePlayer(prepared, modifier, namedValues = values)
           }
+          else -> plan?.plan?.let { LiveryTemplate(it, host, modifier) }
         }
       }
     }

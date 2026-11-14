@@ -20,7 +20,9 @@ import org.junit.runner.RunWith
  * lane the host offers: Livery with its defaults, Livery preparing in composition, the player alone,
  * and the Compose UI twin.
  *
- * - `*Startup`: cold process start to the first frame of the document (`StartupTimingMetric`).
+ * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
+ *   activity reports fully drawn after that frame, so `timeToFullDisplayMs` is the number; the initial
+ *   display time can stop earlier, at an empty frame).
  * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *
