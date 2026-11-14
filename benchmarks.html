@@ -411,15 +411,78 @@ in <code>.claude/skills/</code> describes how to read these traces.)</p>
 <li><strong>Both lanes held their first frame (the host's hold, in this run); Livery's content arrives later.</strong> The twin's first frame starts at 139 ms
   and its content is on the GPU 18 ms later. Livery's first frame callback starts at 131 ms, measures and lays out,
   and is held with nothing drawn (the Perfetto view below shows these traversals), and its content reaches the GPU at
-  192 ms, 61 ms later. In that stretch the main thread shows no slice longer than a millisecond: the host plans its ten
-  data variants and prepares the document, off the main thread, and nothing traces that work. Part of it is the
-  benchmark host's own planning of ten variants rather than Livery's cost for one; the planned <code>livery:plan</code> and
-  <code>livery:prepare</code> trace sections are what would separate them.</li>
+  192 ms, 61 ms later. In that stretch the main thread shows no slice longer than a millisecond, because the work is
+  on a worker thread: Livery plans the host's ten data variants and prepares the document there. Livery's own trace
+  sections say where those milliseconds go (the next subsection).</li>
 <li><strong>Then Livery's main thread does a little more.</strong> Composition takes 2.9 ms (against 0.7) and measure 5.0 ms
   (against 4.3). Each lane draws two frames before full display; before the first frame was held Livery drew three.</li>
 <li><strong>The GPU's share is the same.</strong> Both lanes compile four pipelines the first time the screen is drawn, 23 ms
   against 27 ms, and the render thread's content frame takes 32 ms against 37. That is the driver, not the template.</li>
 </ul>
+<h3 id="where-liverys-cold-start-goes">Where Livery's cold start goes<a class="headerlink" href="#where-liverys-cold-start-goes" title="Permanent link">#</a></h3>
+<p>Livery marks its own phases in the trace (<code>livery:&lt;phase&gt;:&lt;design&gt;</code>, see the notes below), including work on other
+threads. A later run of the two start-up lanes with them on, median of five (the cold-start numbers above are from the
+run before, so the totals differ by a few milliseconds of run-to-run noise):</p>
+<table>
+<thead>
+<tr>
+<th>Livery section</th>
+<th style="text-align: right;">Count</th>
+<th style="text-align: right;">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>livery:manifest-decode</code> (the bundled catalog's manifest, on the main thread at app start; both lanes)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3.8 ms</td>
+</tr>
+<tr>
+<td><code>livery:plan</code> (planning a card's data)</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">3.5 ms</td>
+</tr>
+<tr>
+<td>of which <code>livery:resolve</code> (choosing and reading the template)</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">3.0 ms</td>
+</tr>
+<tr>
+<td>of which <code>livery:asset-read</code> (the bundled blob; the same one each time)</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1.0 ms</td>
+</tr>
+<tr>
+<td>of which <code>livery:bind</code> (data against the contract)</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">0.5 ms</td>
+</tr>
+<tr>
+<td><code>livery:ready</code>, which is <code>livery:prepare</code> (the document) and the fonts (none here)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">15.7 ms</td>
+</tr>
+<tr>
+<td>of which <code>livery:for-display</code> (the document rewritten for this display's density)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">9.1 ms</td>
+</tr>
+<tr>
+<td><code>livery:compose</code> (the card's composition, on the main thread)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.6 ms</td>
+</tr>
+</tbody>
+</table>
+<p>In order, in the iteration closest to the median (milliseconds after the launch intent): the ten plans run from
+140.0 to 144.2 ms (the first takes 1.4 ms, the rest about 0.2 ms each); the document is prepared from 144.3 to
+158.9 ms, of which the <code>for-display</code> rewrite is 146.3 to 154.9 ms (8.6 ms), with about 2 ms of decode and link before it
+and about 4 ms after; then the main thread composes the card. So the worker's 15 ms of CPU is almost all document
+preparation, and more than half of that is the density rewrite. The host's nine extra plans cost about 3 ms, much
+less than the gap to the Compose UI twin, so the ten-variant caveat above is small.</p>
+<p>Two things this suggests, neither tried: the rewrite and the decode could run before the first frame (an app does this
+with Livery's startup API, which prepares at process start; this host prepares after the activity exists), and a cold
+rewrite of 9 ms may be partly code that was not yet compiled, which a baseline profile of that path would show.</p>
 <h3 id="fling">Fling<a class="headerlink" href="#fling" title="Permanent link">#</a></h3>
 <p><img src="assets/benchmarks/fling-per-frame.svg" alt="Fling per frame: main thread busy 2.91 ms for Compose UI and 3.29 ms for Livery; RenderThread draw 2.31 ms and 2.13 ms" style="max-width:100%;height:auto"></p>
 <table>
@@ -542,9 +605,64 @@ main thread and its render thread; each lane is the iteration closest to its med
 <p>Six frames of the fling, 100 ms (click an image for the full size):</p>
 <p><a href="assets/benchmarks/perfetto-fling-compose-ui.png"><img src="assets/benchmarks/perfetto-fling-compose-ui.png" alt="Perfetto UI: six frames of the Compose UI fling" style="max-width:100%;height:auto;border:1px solid #8884"></a></p>
 <p><a href="assets/benchmarks/perfetto-fling-livery.png"><img src="assets/benchmarks/perfetto-fling-livery.png" alt="Perfetto UI: six frames of the Livery fling" style="max-width:100%;height:auto;border:1px solid #8884"></a></p>
-<p>What the traces cannot tell us: they show the main thread and the render thread. Planning, document preparation
-and font loading run on other threads without trace sections, so what they cost, and what Livery's first frame
-is waiting for, is unmeasured until those sections exist.</p>
+<p>What the traces still cannot tell us: inside <code>prepare</code>, rc-players' decode and link. Its published player has no trace
+spans of its own (3.3.0), so that part is only the difference between Livery's <code>prepare</code> and the <code>for-display</code> section
+inside it.</p>
+<h2 id="liverys-trace-sections">Livery's trace sections<a class="headerlink" href="#liverys-trace-sections" title="Permanent link">#</a></h2>
+<p><code>LiveryTrace</code> (in <code>livery-client</code>) writes named sections to the system trace on Android and does nothing elsewhere; a
+section's name is <code>livery:&lt;phase&gt;[:&lt;design or contract&gt;]</code> and never carries data. Synchronous ones sit on their thread's
+track; ones that can resume on another thread (planning, resolving, preparing, fonts, image fetches) are async tracks.</p>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Wraps</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>livery:plan:&lt;design&gt;</code></td>
+<td><code>SlotPlanner</code> choosing a template and binding data for a slot, decision or feed item</td>
+</tr>
+<tr>
+<td><code>livery:resolve:&lt;design&gt;</code></td>
+<td>the repository choosing the template and reading its bytes</td>
+</tr>
+<tr>
+<td><code>livery:asset-read:&lt;sha&gt;</code>, <code>livery:manifest-decode</code></td>
+<td>the bundled catalog's blobs and manifest (Android)</td>
+</tr>
+<tr>
+<td><code>livery:bind:&lt;contract&gt;</code></td>
+<td><code>ContractBinder.bind</code>, data against the contract</td>
+</tr>
+<tr>
+<td><code>livery:prepare:&lt;design&gt;</code></td>
+<td>the player's document preparation: decode, link, rewrite</td>
+</tr>
+<tr>
+<td><code>livery:for-display</code></td>
+<td>the rewrite for the display, inside <code>prepare</code></td>
+</tr>
+<tr>
+<td><code>livery:ready:&lt;design&gt;</code></td>
+<td>a card's document and fonts ready (<code>readyToDraw</code>)</td>
+</tr>
+<tr>
+<td><code>livery:fonts:&lt;design&gt;</code>, <code>livery:font-load:&lt;sha&gt;</code></td>
+<td>catalog fonts read and loaded</td>
+</tr>
+<tr>
+<td><code>livery:image-resolve:&lt;kind&gt;</code>, <code>livery:image-decode</code></td>
+<td>an image's bytes and their decode</td>
+</tr>
+<tr>
+<td><code>livery:compose:&lt;design&gt;</code></td>
+<td>a card's own composition: its first, and each time its prepared document or fonts arrive; not later recompositions inside the player's own scopes</td>
+</tr>
+</tbody>
+</table>
+<p><code>livery-baselineprofile/traces/compare.py</code> totals them per phase for the cold-start window.</p>
 <h2 id="what-is-not-measured-yet">What is not measured yet<a class="headerlink" href="#what-is-not-measured-yet" title="Permanent link">#</a></h2>
 <p><em>Planned</em>: a warm second visit; continuous animation and idle frames; resize and theme change; a
 per-template split and counts of documents prepared and reused; background preparation traces; memory;
