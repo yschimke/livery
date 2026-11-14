@@ -109,10 +109,11 @@ plan needs), which is in these numbers.
 ### Notes on the host
 
 - **No emoji initializer.** AndroidX Compose depends on `emoji2`, whose startup initializer loads the emoji
-  font about half a second after the first frame and makes Compose text re-measure. Nothing here draws emoji,
-  and it landed in the middle of what is measured: an earlier run showed every lane, the twin included, at
-  about 690 ms to full display for that reason alone. The host removes the initializer; real apps keep it,
-  and its cost is not Livery's.
+  font about half a second after the first frame and makes Compose text re-measure. In an earlier run that
+  put every lane, the twin included, at about 690 ms to full display for that reason alone. Livery's own
+  manifest now removes the initializer from any app that uses it, so no lane here has it. Livery loads
+  emoji itself two frames after its first template draws (`LiveryEmoji`), as it does in an app. That
+  happens during a Livery lane's run, and never in the Compose UI twin's or the player alone's.
 - **Reported fully drawn after the document draws.** The activity asks for one more frame after
   `reportFullyDrawn()`, since `StartupTimingMetric` ends at the next frame drawn.
 
