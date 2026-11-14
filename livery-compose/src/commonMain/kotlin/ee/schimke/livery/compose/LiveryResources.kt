@@ -102,11 +102,12 @@ class LiveryResources(
   @kotlin.concurrent.Volatile internal var player: LiveryPlayer = LiveryPlayer.Cmp
 
   /** [template] prepared by the host's player, if it prepares for itself; a template it cannot play is remembered ([cannotPlay]). */
-  internal suspend fun prepareOwn(template: LoadedTemplate, display: RcDisplay?) {
+  internal suspend fun prepareOwn(template: LoadedTemplate, display: RcDisplay?, context: CoroutineContext = Dispatchers.Default) {
     if (player.usesPreparedDocument) return
     LiveryTrace.async({ "livery:prepare:${template.entry.designId}" }) {
       try {
-        player.prepare(template, display)
+        // Off the caller's thread, as rc-players' preparation is: a card's effect runs on the main thread.
+        withContext(context) { player.prepare(template, display) }
       } catch (e: CancellationException) {
         throw e
       } catch (_: Exception) {
@@ -280,7 +281,7 @@ class LiveryResources(
   ) {
     LiveryTrace.async({ "livery:ready:${template.entry.designId}" }) {
       coroutineScope {
-        if (player.usesPreparedDocument) launch { prepareOrNull(template, display, context) } else launch { prepareOwn(template, display) }
+        if (player.usesPreparedDocument) launch { prepareOrNull(template, display, context) } else launch { prepareOwn(template, display, context) }
         launch { runCatching { typefaces(template) } }
       }
     }
@@ -347,6 +348,14 @@ class LiveryResources(
    * have without a preload: a missing image is fetched again when the card draws.
    */
   suspend fun preload(plan: RenderPlan, display: RcDisplay? = this.display) {
+    if (!player.usesPreparedDocument) {
+      // A player that reads the bytes itself: its own preparation and the fonts (its images are not preloaded here).
+      coroutineScope {
+        launch { prepareOwn(plan.template, display) }
+        launch { runCatching { typefaces(plan.template) } }
+      }
+      return
+    }
     val document = prepareOrNull(plan.template, display)?.document ?: return
     coroutineScope {
       launch { typefaces(plan.template) }

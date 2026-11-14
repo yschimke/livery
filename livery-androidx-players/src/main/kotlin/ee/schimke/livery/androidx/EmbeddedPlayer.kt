@@ -16,25 +16,30 @@ internal class EmbeddedPlayer : ParsingPlayerBase() {
 
   @Composable
   override fun Play(request: PlayerRequest) {
-    val onAction = rememberUpdatedState(request.onAction)
-    val state = remember(request.template.entry.sha256) { RcPlayerState(RemoteDocument(request.template.bytes.toByteArray()).document, "USER") }
-    // Seeded and pushed: a write to a state the document reads recomposes only what reads it.
-    SideEffect {
-      request.values.forEach { (name, v) ->
-        when (v) {
-          is RcNamedValue.Text -> state.stringState(name, "USER").value = v.value
-          is RcNamedValue.Integer -> state.intState(name, "USER").value = v.value
-          is RcNamedValue.FloatValue -> state.floatState(name, "USER").value = v.value
-          is RcNamedValue.Color -> state.colorState(name, "USER").value = Color(v.argb)
-          is RcNamedValue.BooleanValue -> state.booleanState(name, "USER").value = v.value
-          else -> Unit
-        }
-      }
+    val current = rememberUpdatedState(request)
+    // The card's values are in the state before the player composes it, so the first frame shows them, not the template's defaults.
+    val state = remember(request.template.entry.sha256) {
+      RcPlayerState(RemoteDocument(request.template.bytes.toByteArray()).document, "USER").also { it.seed(request.values) }
     }
+    // Later changes: a write to a state the document reads recomposes only what reads it.
+    SideEffect { state.seed(request.values) }
     RcPlayer(
       state = state,
       modifier = request.modifier,
-      onNamedAction = { name, value, _ -> hostAction(name, value, request)?.let(onAction.value) },
+      onNamedAction = { name, value, _ -> hostAction(name, value, current.value)?.let(current.value.onAction) },
     )
+  }
+
+  private fun RcPlayerState.seed(values: Map<String, RcNamedValue>) {
+    values.forEach { (name, v) ->
+      when (v) {
+        is RcNamedValue.Text -> stringState(name, "USER").value = v.value
+        is RcNamedValue.Integer -> intState(name, "USER").value = v.value
+        is RcNamedValue.FloatValue -> floatState(name, "USER").value = v.value
+        is RcNamedValue.Color -> colorState(name, "USER").value = Color(v.argb)
+        is RcNamedValue.BooleanValue -> booleanState(name, "USER").value = v.value
+        else -> Unit
+      }
+    }
   }
 }

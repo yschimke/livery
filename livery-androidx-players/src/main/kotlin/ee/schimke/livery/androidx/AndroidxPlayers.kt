@@ -5,6 +5,7 @@ import androidx.compose.remote.player.compose.RemoteComposePlayerFlags
 import androidx.compose.remote.player.core.RemoteDocument
 import androidx.compose.remote.player.view.RemoteComposePlayer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -19,6 +20,9 @@ import ee.schimke.livery.compose.LiveryPlayer
 import ee.schimke.livery.compose.PlayerRequest
 import ee.schimke.livery.compose.TemplateAction
 import ee.schimke.livery.compose.templateAction
+import ee.schimke.composeai.rcplayer.edit.forDisplay
+import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
+import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -46,31 +50,50 @@ object LiveryAndroidxPlayers {
 
 internal abstract class ParsingPlayerBase : LiveryPlayer {
   private val parsed = ConcurrentHashMap.newKeySet<String>()
+  private val rewritten = ConcurrentHashMap<String, ByteArray>()
 
   override val usesPreparedDocument: Boolean get() = false
 
+  /** Whether the player is handed the document rewritten for the display (density hardcoded, constants folded). */
+  protected open val rewritesForDisplay: Boolean get() = false
+
   override suspend fun prepare(template: LoadedTemplate, display: RcDisplay?) {
-    if (template.entry.sha256 in parsed) return
-    RemoteDocument(template.bytes.toByteArray())
-    parsed.add(template.entry.sha256)
+    val sha = template.entry.sha256
+    if (sha in parsed) return
+    var bytes = template.bytes.toByteArray()
+    if (rewritesForDisplay && display != null) {
+      bytes = RcDocumentCodec.encode(RcDocumentCodec.decode(bytes, RcWireLimits()).forDisplay(display.density, display.fontScale))
+      rewritten[sha] = bytes
+    }
+    RemoteDocument(bytes)
+    parsed.add(sha)
   }
 
   override fun isPrepared(template: LoadedTemplate): Boolean = template.entry.sha256 in parsed
+
+  /** The bytes this player parses for [template]: as published, or rewritten for the display when [prepare] did that. */
+  protected fun bytesFor(template: LoadedTemplate): ByteArray = rewritten[template.entry.sha256] ?: template.bytes.toByteArray()
 }
 
 private class ViewPlayer : ParsingPlayerBase() {
   override val id: String = "androidx-view"
 
+  // The View player does not evaluate density expressions: it is handed literal values.
+  override val rewritesForDisplay: Boolean get() = true
+
   @Composable
   override fun Play(request: PlayerRequest) {
-    val onAction = rememberUpdatedState(request.onAction)
+    // The latest request, for the callback the view keeps; the view itself is per template, so another design or
+    // another version of the bytes gets a new document and a new callback, not the old ones.
+    val current = rememberUpdatedState(request)
     val values = request.values
+    key(request.template.entry.sha256) {
     AndroidView(
       factory = { context ->
         RemoteComposePlayer(context).apply {
           setTheme(request.theme.toViewTheme())
-          setDocument(request.template.bytes.toByteArray())
-          document.document.addActionCallback { name, value -> hostAction(name, value, request)?.let(onAction.value) }
+          setDocument(bytesFor(request.template))
+          document.document.addActionCallback { name, value -> hostAction(name, value, current.value)?.let(current.value.onAction) }
           // Values in place before the first frame.
           values.forEach { (name, v) -> push(name, v) }
         }
@@ -78,6 +101,7 @@ private class ViewPlayer : ParsingPlayerBase() {
       modifier = request.modifier.fillMaxWidth(),
       update = { player -> values.forEach { (name, v) -> player.push(name, v) } },
     )
+    }
   }
 
   private fun RemoteComposePlayer.push(name: String, v: RcNamedValue) {
