@@ -22,13 +22,12 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 one after another rather than interleaved: differences of a few tenths of a millisecond are inside the
 noise, and are shown so you can see that, not as a ranking.
 
-The two screens, whole, as the benchmark host draws them on the phone: the Compose UI twin on the left, the
-Livery template on the right. The sample template takes its own height, so the card sits at the top of
-a full screen; a design that fills the screen needs its own twin.
+The feed the fling benchmark scrolls, whole, as the benchmark host draws it on the phone: 200 cards,
+alternating a promo banner and a poll, the Compose UI twin on the left and Livery on the right.
 
 <div style="display:flex;gap:1rem;flex-wrap:wrap">
-<figure style="margin:0"><img src="assets/benchmarks/document-compose-ui.png" alt="The poll card drawn in Compose UI on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
-<figure style="margin:0"><img src="assets/benchmarks/document-livery.png" alt="The same poll card drawn by Livery on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/feed-compose-ui.png" alt="The feed drawn in Compose UI on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/feed-livery.png" alt="The same feed drawn by Livery on the Pixel 9" width="270" height="606" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
 </div>
 
 They are not pixel-identical on the phone. The twin's card is a little taller (about 1–2 dp, the rows
@@ -55,6 +54,15 @@ turning the deferral off moves it back to the player-alone figure, the direction
 With one run per lane, this does not show that Livery is faster than Compose UI.
 
 ### Full-screen document: changing data
+
+The single-document screen, as drawn on the phone (Compose UI twin, then Livery). The sample template takes
+its own height, so the card sits at the top of a full screen; a design that fills the screen needs its own twin.
+
+<div style="display:flex;gap:1rem;flex-wrap:wrap">
+<figure style="margin:0"><img src="assets/benchmarks/document-compose-ui.png" alt="The poll card drawn in Compose UI on the Pixel 9" width="180" height="404" style="border:1px solid #8884"><figcaption>Compose UI twin</figcaption></figure>
+<figure style="margin:0"><img src="assets/benchmarks/document-livery.png" alt="The same poll card drawn by Livery on the Pixel 9" width="180" height="404" style="border:1px solid #8884"><figcaption>Livery</figcaption></figure>
+</div>
+
 
 One template (`poll-card`) in a padded, top-aligned, full-width frame; the sample template takes its
 own height, so this is a card on a full screen. Tapping the document shows the next of ten data variants,
