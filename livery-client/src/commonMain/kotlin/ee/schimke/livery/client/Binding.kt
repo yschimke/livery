@@ -38,7 +38,10 @@ sealed interface BindResult {
  * Unknown keys are refused, not dropped: a typo in a campaign should fail review, not ship blank.
  */
 object ContractBinder {
-  fun bind(contract: Contract, data: JsonObject): BindResult {
+  fun bind(contract: Contract, data: JsonObject): BindResult =
+    LiveryTrace.section({ "livery:bind:${contract.ref}" }) { bindUntraced(contract, data) }
+
+  private fun bindUntraced(contract: Contract, data: JsonObject): BindResult {
     val problems = mutableListOf<BindingProblem>()
     val out = LinkedHashMap<String, NamedValue>()
 

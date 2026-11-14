@@ -37,6 +37,15 @@ data class LoadedTemplate(
   val assets: List<AssetEntry> = emptyList(),
 ) {
   enum class Origin { Fresh, Stale, Bundled }
+
+  // The same template from the same catalog is equal whichever array holds its bytes: they are named by
+  // `entry.sha256`. Without this two loads were never equal (a data class compares an array by identity), so a
+  // slot that planned again to the answer it already had still replaced it, and its card composed twice.
+  override fun equals(other: Any?): Boolean =
+    other is LoadedTemplate && entry == other.entry && origin == other.origin && design == other.design &&
+      contract == other.contract && assets == other.assets && bytes.size == other.bytes.size
+
+  override fun hashCode(): Int = 31 * entry.hashCode() + origin.hashCode()
 }
 
 /** A design as a picker shows it: before, during and after install. */
@@ -77,7 +86,15 @@ class TemplateRepository(
   private val targets: List<PlayerCapabilities>,
   private val bundled: Bundled? = null,
   private val json: Json = DefaultJson,
+  /** How many templates' bytes are kept in memory by hash, so planning a card again reads nothing. */
+  memoizedDocuments: Int = 16,
 ) {
+  private val documents = DocumentMemo(memoizedDocuments)
+
+  /** [load]'s bytes for [sha256], read once and then kept: a template's bytes never change under its hash. */
+  private suspend fun documentBytes(sha256: String, load: suspend () -> ByteArray?): ByteArray? =
+    documents[sha256] ?: load()?.let { documents.put(sha256, it) }
+
   /** Default location of a message's signed document when it supplies no URL. */
   suspend fun documentUrl(sha256: String): String =
     resolveUrl(source.manifestUrl, (current()?.blobBase ?: "blobs/") + sha256 + ".rc")
@@ -271,7 +288,10 @@ class TemplateRepository(
    * slot that asks most specific first (PROTOCOL.md §5.4). The downloaded catalog answers every
    * query before the bundled one is asked, as for a single query.
    */
-  suspend fun resolveFirst(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? {
+  suspend fun resolveFirst(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? =
+    LiveryTrace.async({ "livery:resolve:${queries.firstOrNull()?.let { it.designId ?: it.contract }}" }) { resolveFirstUntraced(queries) }
+
+  private suspend fun resolveFirstUntraced(queries: List<TemplateQuery>): IndexedValue<LoadedTemplate>? {
     val installed = installedIds()
     // Never draw a skin nobody installed, from the downloaded catalog or the bundled one; a design
     // the query names explicitly is still allowed.
@@ -286,7 +306,7 @@ class TemplateRepository(
       for ((i, query) in queries.withIndex()) {
         for (q in listOfNotNull(query, query.copy(designId = null).takeIf { query.designId != null })) {
           val e = TemplateSelector.select(cached, q, automatic = automatic) ?: continue
-          blobs.get(e.sha256)?.let { return IndexedValue(i, loaded(m, e, it, origin)) }
+          documentBytes(e.sha256) { blobs.get(e.sha256) }?.let { return IndexedValue(i, loaded(m, e, it, origin)) }
         }
       }
     }
@@ -296,7 +316,7 @@ class TemplateRepository(
       val e = TemplateSelector.select(bm, query, automatic = automatic)
         ?: TemplateSelector.select(bm, query.copy(designId = null), automatic = automatic)
         ?: continue
-      b.read(e.sha256)?.let { return IndexedValue(i, loaded(bm, e, it, LoadedTemplate.Origin.Bundled)) }
+      documentBytes(e.sha256) { b.read(e.sha256) }?.let { return IndexedValue(i, loaded(bm, e, it, LoadedTemplate.Origin.Bundled)) }
     }
     return null
   }
@@ -311,7 +331,7 @@ class TemplateRepository(
     val b = bundled ?: return null
     val bm = bundledManifest() ?: return null
     val e = bm.templates.firstOrNull { it.sha256 == sha256 && TemplateSelector.eligible(bm, it, query) } ?: return null
-    val bytes = b.read(e.sha256) ?: return null
+    val bytes = documentBytes(e.sha256) { b.read(e.sha256) } ?: return null
     if (e.assets.any { b.read(it) == null }) return null
     return loaded(bm, e, bytes, LoadedTemplate.Origin.Bundled)
   }
@@ -351,7 +371,7 @@ class TemplateRepository(
       if (m == null) {
         val b = bundled ?: return null
         if (e.assets.any { b.read(it) == null }) return null
-        return b.read(sha)?.let { loaded(catalog, e, it, LoadedTemplate.Origin.Bundled) }
+        return documentBytes(sha) { b.read(sha) }?.let { loaded(catalog, e, it, LoadedTemplate.Origin.Bundled) }
       }
       val bytes = obtain(m, e) ?: return null
       return loaded(m, e, bytes, originOf(m))

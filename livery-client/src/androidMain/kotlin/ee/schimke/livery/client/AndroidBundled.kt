@@ -21,7 +21,9 @@ object AndroidBundled {
     val assets = context.applicationContext.assets
     val base = path.trim('/')
     val manifest = try {
-      assets.open("$base/${Manifest.FILE}").use { TemplateRepository.DefaultJson.decodeFromString(Manifest.serializer(), it.readBytes().decodeToString()) }
+      LiveryTrace.section({ "livery:manifest-decode" }) {
+        assets.open("$base/${Manifest.FILE}").use { TemplateRepository.DefaultJson.decodeFromString(Manifest.serializer(), it.readBytes().decodeToString()) }
+      }
     } catch (_: FileNotFoundException) {
       return null
     }
@@ -32,7 +34,7 @@ object AndroidBundled {
     }
     return TemplateRepository.Bundled(manifest) { sha256 ->
       val file = files[sha256] ?: return@Bundled null
-      withContext(Dispatchers.IO) { runCatching { assets.open(file).use { it.readBytes() } }.getOrNull() }
+      withContext(Dispatchers.IO) { LiveryTrace.section({ "livery:asset-read:${sha256.take(8)}" }) { runCatching { assets.open(file).use { it.readBytes() } }.getOrNull() } }
     }
   }
 }

@@ -67,21 +67,20 @@ it beside the Macrobenchmark JSON, so `benchmark-summary.py` can put it in the s
 
 ### Tracing background work
 
-Preparation, planning and fonts run off the main thread, so frame metrics never see them. Wrap each in
-a named `android.os.Trace` section (`androidx.tracing.trace`, cheap when no trace is recording) and read
-them with `TraceSectionMetric`, which reports count and duration per section:
+*Built.* Preparation, planning and fonts run off the main thread, so frame metrics never see them. `LiveryTrace`
+(`livery-client`) writes `livery:<phase>[:<design>]` sections to the system trace on Android, synchronous ones on their
+thread and async ones for phases that resume elsewhere. They are listed on the Benchmarks page and read by
+`livery-baselineprofile/traces/compare.py`, which totals them per phase in the cold-start window. A first look at where
+Livery's cold start goes (median of 5, Pixel 9): ten plans 3.5 ms, document preparation 15.6 ms of which the
+`for-display` rewrite 9.1 ms, the card's composition 2.6 ms.
 
-| Section | Wraps | Answers |
-| --- | --- | --- |
-| `livery:plan` | `SlotPlanner` / `TemplateSelector` for a slot | How long a card waits for its plan |
-| `livery:prepare` | `prepareOrNull` on the background context | Decode, link and `forDisplay` per template; how fast a catalog warms |
-| `livery:fonts` | `resources.typefaces` | Time to a fallback-free first frame |
-| `livery:images` | image resolution | Network-backed images |
-| `livery:compose-card` | one card's composition | Per-card cost in a feed |
+Limits to remember:
 
-Counts matter as much as durations: `livery:prepare` fired 200 times in a 2-template feed is the bug.
-rc-players' own `rcTrace` categories (3.3.0) mark the player phases and need no work here. The same
-sections show in a Perfetto trace of any run, which is how to see whether preparation overlaps a fling.
+- rc-players 3.3.0's published player has **no trace spans** (no `RcTrace` references in its compose and runtime
+  artifacts), and on Android its tracer is a stub until an app installs a driver. Inside `prepare` only Livery's own
+  `for-display` is visible; the rest is decode and link, as a remainder. Spans in rc-players would split it.
+- Macrobenchmark's `TraceSectionMetric` reads thread tracks, so it does not see the async sections. `compare.py` does.
+- A section marks a phase, not a count of work: read counts too (ten plans, one prepare in the start-up window).
 
 ### Split by template
 
@@ -119,6 +118,13 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
   trace what invalidates the second pass.
 - **The first run and the second differ by a few tenths of a millisecond in the fling, and the order of
   Livery and the twin's main-thread time flipped.** Read differences under about 0.5 ms as noise.
+- **A slot re-planned every card that scrolled in, and composed it twice.** The `livery:*` sections showed 105 plans in a
+  fling, each re-reading the template blob from the APK (0.8 ms) and then replacing the plan the slot already held. The
+  new plan never equalled the old one because `LoadedTemplate` held a `ByteArray` (a data class compares an array by
+  identity), so every replan recomposed the card: 210 compositions for 105 cards. Fixed by keeping a template's bytes in
+  memory by hash and by comparing templates by what names them: per card, planning 1.94 to 0.20 ms, one composition
+  instead of two (2.86 to 2.29 ms), no APK reads. At frame level it is small (the recomposer's time per frame fell 40%,
+  the frame's p90 3.8 to 3.3 ms; the median did not move).
 - **Start-up needs a frame after `reportFullyDrawn()`** and the emoji2 initializer out of the host (see
   the manifest), or the metric measures the next unrelated frame (~690 ms in every lane).
 - **The document host plans ten variants before its first draw**, in the Livery and player lanes only:

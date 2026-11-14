@@ -63,7 +63,7 @@ class SlotPlanner(
    * component's `a2ui:<surfaceId>/<componentId>`); no decision placed it.
    */
   suspend fun forAppData(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult =
-    appData(query, null, data, extra, decisionId)
+    LiveryTrace.async({ "livery:plan:${query.designId ?: query.contract}" }) { appData(query, null, data, extra, decisionId) }
 
   /**
    * App-owned data for a slot that prefers a more specific design: [queries], most specific first
@@ -71,7 +71,10 @@ class SlotPlanner(
    * first query that has a template decides, in one pass over the catalog (PROTOCOL.md §5.4); an
    * experiment's design arm still applies within it, as for [forAppData] with that query.
    */
-  suspend fun forAppData(queries: List<TemplateQuery>, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult {
+  suspend fun forAppData(queries: List<TemplateQuery>, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult =
+    LiveryTrace.async({ "livery:plan:${queries.firstOrNull()?.let { it.designId ?: it.contract }}" }) { planAppData(queries, data, extra, decisionId) }
+
+  private suspend fun planAppData(queries: List<TemplateQuery>, data: JsonObject, extra: Bindings, decisionId: String?): PlanResult {
     require(queries.isNotEmpty()) { "no queries" }
     require(queries.all { it.contract == queries[0].contract }) { "queries for more than one contract" }
     // Nothing automatic for any query: the plain one still draws an arm's design that only an arm
@@ -103,7 +106,10 @@ class SlotPlanner(
   }
 
   /** The server's exact choice and data; [decisionId] also overrides planner error/fallback events. */
-  suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY, decisionId: String? = decision.decisionId): PlanResult {
+  suspend fun forDecision(query: TemplateQuery, decision: Decision, extra: Bindings = Bindings.EMPTY, decisionId: String? = decision.decisionId): PlanResult =
+    LiveryTrace.async({ "livery:plan:${decision.template.designId ?: query.contract}" }) { planDecision(query, decision, extra, decisionId) }
+
+  private suspend fun planDecision(query: TemplateQuery, decision: Decision, extra: Bindings, decisionId: String?): PlanResult {
     if (decision.template.contract != null && decision.template.contract != query.contract) return fallback(query, "decision contract mismatch", decision, decisionId)
     val t = repository.ensure(decision.template, query) ?: return fallback(query, "no template for ${decision.template}", decision, decisionId)
     val ref = decision.template
@@ -114,7 +120,10 @@ class SlotPlanner(
     return plan(t, decision.data, extra, decision, null, decisionId = decisionId)
   }
 
-  suspend fun forFeedItem(query: TemplateQuery, item: FeedItem, extra: Bindings = Bindings.EMPTY): PlanResult {
+  suspend fun forFeedItem(query: TemplateQuery, item: FeedItem, extra: Bindings = Bindings.EMPTY): PlanResult =
+    LiveryTrace.async({ "livery:plan:${item.template.designId ?: query.contract}" }) { planFeedItem(query, item, extra) }
+
+  private suspend fun planFeedItem(query: TemplateQuery, item: FeedItem, extra: Bindings): PlanResult {
     val t = repository.ensure(item.template, query.copy(contract = item.template.contract ?: query.contract))
       ?: return fallback(query, "no template for item ${item.id}", null)
     return plan(t, item.data, extra, null, item)
