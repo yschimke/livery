@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,7 +74,6 @@ import kotlinx.serialization.json.JsonPrimitive
 class FeedActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    hideSystemBars()
     val mode = intent.getStringExtra(MODE) ?: LIVERY
     val cards = List(ITEMS) { i -> if (i % 2 == 0) Card.Banner(i) else Card.Poll(i) }
     val clock = Clock { System.currentTimeMillis() }
@@ -122,7 +122,7 @@ class FeedActivity : ComponentActivity() {
       }
       if (!ready) return@setContent
       LazyColumn(
-        Modifier.fillMaxSize().semantics { testTagsAsResourceId = true; testTag = "feed" },
+        Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId = true; testTag = "feed" },
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         items(cards.size, key = { it }, contentType = { cards[it]::class }) { index ->

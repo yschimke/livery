@@ -3,11 +3,13 @@ package ee.schimke.livery.baselineprofile.host
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,7 +73,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class DocumentActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    hideSystemBars()
+    enableEdgeToEdge()
     val lane = intent.getStringExtra(LANE) ?: LIVERY
     val clock = Clock { System.currentTimeMillis() }
     val repository = TemplateRepository(
@@ -126,6 +128,7 @@ class DocumentActivity : ComponentActivity() {
         // One semantics block: a second testTag on the same node would lose to the first. The tag
         // says "document" only once it has been drawn, which is what the benchmarks wait for.
         Modifier.fillMaxSize()
+          .safeDrawingPadding()
           .semantics { testTagsAsResourceId = true; testTag = if (drawn) "document" else "document-screen" }
           .clickable { version++ }
           .padding(16.dp),
