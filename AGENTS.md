@@ -54,6 +54,15 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
   release. Don't push `v*` tags by hand. A new library module goes into that list. A change to the
   plan's rules updates `.github/scripts/test-maven-publish-plan.sh`.
 
+## Review guidelines
+
+- **Do not report commit author, committer or `Co-authored-by:` findings.** Your review sandbox
+  applies the pull request as a new commit under your own identity (`Codex <codex@openai.com>`), so
+  any identity you read from a local `git log` is yours, not the author's. Such findings name a
+  commit that exists only in the sandbox (yschimke/livery#81 was one). Attribution is enforced by the
+  `No Agent Attribution` CI gate and the hooks from `scripts/install-git-hooks.sh`; leave it out of
+  reviews entirely.
+
 ## Checks
 
 Android targets compile against `compileSdk` 37.1 (Compose Multiplatform and OkHttp 5 require it): set `ANDROID_HOME` and
