@@ -1,7 +1,9 @@
 package ee.schimke.livery.compose
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -39,6 +41,12 @@ class LiveryStartup internal constructor() {
  * Prepares an app's first screen in [scope] (usually `prepareSlot` for each of its slots) and
  * reports when it is ready, for a splash screen to wait on ([LiveryStartup]).
  *
+ * [prepare] runs on [context], a worker by default, from the moment this is called. An activity's
+ * `lifecycleScope` runs on the main thread, and there [prepare] would run its first steps (resolving
+ * a template, reading the bundled catalog) inside `onCreate`, then wait for the main thread to come
+ * free again after the activity is created, when the first frame is already due. On a worker it
+ * overlaps the activity's creation instead, and is usually done before that frame.
+ *
  * Ready is never later than [timeoutMillis]: [prepare] reads the disk, but an image it preloads may
  * come from the network, and a splash screen must not wait on that. Past the limit the screen
  * draws, slots without an answer show their fallback, and [prepare] carries on in the background,
@@ -48,13 +56,14 @@ class LiveryStartup internal constructor() {
 fun LiveryResources.startup(
   scope: CoroutineScope,
   timeoutMillis: Long = DEFAULT_STARTUP_TIMEOUT_MILLIS,
+  context: CoroutineContext = Dispatchers.Default,
   prepare: suspend LiveryResources.() -> Unit,
 ): LiveryStartup {
   val startup = LiveryStartup()
   // The splash screen this startup holds covers the first frame: nothing need wait on the main
   // thread for it too (LiveryHost.firstFrameBudgetMillis).
   firstFrameCovered = true
-  val work = scope.launch {
+  val work = scope.launch(context) {
     try {
       prepare()
     } catch (e: Exception) {

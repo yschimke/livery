@@ -21,8 +21,10 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   height) and `thePollTwinMatchesInTheFullScreenFrame` holds the twin to the template there. A
   design that really fills the screen needs its own twin.
 - Start-up is measured to a first frame with the document in it. The Livery lanes are a `LiverySlot`,
-  as an app writes one, with no host code around it: Livery's first-frame budget holds the first frame
-  for the slot's answer, and the activity calls `reportFullyDrawn()` on Livery's `Impression` event
+  as an app writes one. `livery` (and its `nodefer` and `noflat` variants) prepares the first screen with
+  Livery's `startup` in `onCreate` and keeps the splash screen up until it is ready, as getting-started
+  has it; `livery-nostartup` and `livery-incomposition` have no `startup`, and Livery's first-frame budget
+  holds their first frame for the slot's answer. The activity calls `reportFullyDrawn()` on Livery's `Impression` event
   (which comes after the template's first frame, so it adds no frame of its own; the twin and the
   player report after the frame that composed the document). So `timeToInitialDisplayMs` is the first
   frame Livery draws, and `timeToFullDisplayMs` the frame after its impression.
@@ -32,7 +34,7 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
 | Scenario | State |
 | --- | --- |
 | Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; the JVM profile has its own lanes |
-| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
+| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nostartup, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
 | Document: data change | `DocumentBenchmark.*Change` (`FrameTimingMetric` over 10 taps); first change not yet separated |
 | Document: warm re-open, continuous animation, resize / theme | Planned |
 | Document: bundled vs downloaded, with / without baseline profile | Planned (`CompilationMode.None` vs `Partial`) |
@@ -130,6 +132,41 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
 - **The document host plans ten variants before its first draw**, in the Livery and player lanes only:
   a few tenths of the start-up gap may be that. Plan one variant first and the rest after the first
   draw if it matters.
+
+## Cold start: what is being tried, and what is not yet
+
+The traces put Livery's worker at 140 to 159 ms after the launch intent, after the activity's first composition,
+while the main thread waited from 131 ms. The worker's ~19 ms is planning (3.5 ms for ten plans) and preparing
+the document (15.7 ms, of which the `for-display` rewrite is 9.1 ms).
+
+Done, to measure next:
+
+- **Prepare from `onCreate`.** The `livery` lanes use Livery's `startup` as getting-started has it, and
+  `startup` now runs its block on a worker from the moment it is called. Before this, from an activity's
+  `lifecycleScope`, its first steps ran on the main thread inside `onCreate` and the rest waited for the main
+  thread to come free after the activity was created. The activity's creation (about 97 to 125 ms) should now
+  cover the worker's ~19 ms, before the first frame at about 131 ms. `livery-nostartup` keeps the old path, so
+  one run shows the difference.
+- **The bundled manifest is decoded on first use** (`AndroidBundled`), on the thread that first resolves a
+  template, instead of on the main thread when the repository is built. And the twin's lane builds no
+  repository, where it used to pay for that decode too (3.8 ms), so its numbers were slightly worse than a
+  Compose UI app's.
+
+Not yet, and why:
+
+- **Starting at `Application.onCreate`.** Only if the run above still shows the worker on the first frame's
+  path. It needs app-level state, which getting-started does not ask an app for.
+- **Persisting the display rewrite** (keyed by the source sha, density, font scale and rc-players' version). On
+  Android a `startup` already knows the display (`LiveryResources.display` comes from the system's metrics), so
+  the rewrite (9.1 ms) stays in its work, on the worker. It matters to the first frame only if that work no
+  longer fits in the activity's creation; the run above says. It would still save ~9 ms of worker time per
+  template per process. First check whether part of that is code not yet compiled, which a baseline profile of
+  the path removes: compare the rewrite of the feed's second template, in a warm process, with the first's.
+- **Persisting placeholder heights.** The first screen draws no placeholder (startup or the first-frame
+  budget); only cards that arrive later would use them.
+- **GPU pipeline compiles** (23 to 27 ms on the render thread) are the same in both lanes, so not Livery's gap.
+- **An in-memory copy of each template's bytes** is already in (`DocumentMemo`); the ten `livery:asset-read`
+  sections in the traces above predate it.
 
 ## Next steps, in order
 
