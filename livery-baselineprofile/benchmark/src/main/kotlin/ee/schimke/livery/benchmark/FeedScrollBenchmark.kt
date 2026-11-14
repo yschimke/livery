@@ -55,6 +55,10 @@ class FeedScrollBenchmark {
 
   @Test fun composeUiPausable() = fling("compose", Options.Pausable)
 
+  @Test fun liveryEmbeddedCacheWindow() = fling("livery-embedded", Options.CacheWindow)
+
+  @Test fun liveryEmbeddedPausable() = fling("livery-embedded", Options.Pausable)
+
   private enum class Options(val apply: Intent.() -> Unit) {
     None({}),
     CacheWindow({ putExtra("cacheAhead", 1f).putExtra("cacheBehind", 0.5f) }),
