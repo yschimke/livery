@@ -21,8 +21,8 @@ import org.junit.runner.RunWith
  * composition, deferral, flat layout), the player alone, and the Compose UI twin.
  *
  * - `*Startup`: cold process start to the first frame with the document in it (`StartupTimingMetric`: the
- *   activity reports fully drawn after that frame, so `timeToFullDisplayMs` is the number; the initial
- *   display time can stop earlier, at an empty frame).
+ *   activity holds its first frame until the document can draw, so `timeToInitialDisplayMs` is that
+ *   frame on every lane; it reports fully drawn after it, so `timeToFullDisplayMs` is the frame after).
  * - `*Change`: tapping the document pushes new data; `FrameTimingMetric` over those taps.
  *   The first tap and later ones are not separated yet (see docs/benchmarks/PLAN.md).
  *
