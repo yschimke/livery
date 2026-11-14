@@ -48,6 +48,7 @@ import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
+import ee.schimke.livery.androidx.LiveryAndroidxPlayers
 import ee.schimke.livery.compose.LiveryHost
 import ee.schimke.livery.compose.LiveryResources
 import ee.schimke.livery.compose.startup
@@ -195,6 +196,8 @@ class DocumentActivity : ComponentActivity() {
       LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, events, clock, resources = resources, preparation = RcPreparation.InComposition)
       LIVERY_NO_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = false)
       LIVERY_NO_FLAT -> LiveryHost(repository, actions, events, clock, resources = resources, flattenLayout = false)
+      LIVERY_VIEW -> LiveryHost(repository, actions, events, clock, resources = resources, player = LiveryAndroidxPlayers.View)
+      LIVERY_EMBEDDED -> LiveryHost(repository, actions, events, clock, resources = resources, player = LiveryAndroidxPlayers.Embedded)
       else -> LiveryHost(repository, actions, events, clock, resources = resources)
     }
     val planner = SlotPlanner(repository, {}, clock)
@@ -238,11 +241,14 @@ class DocumentActivity : ComponentActivity() {
     const val LIVERY_IN_COMPOSITION = "livery-incomposition"
     const val LIVERY_NO_DEFER = "livery-nodefer"
     const val LIVERY_NO_FLAT = "livery-noflat"
+    /** Livery with AndroidX's View player, and with its embedded (pure Compose) player (docs/PLAYERS.md). */
+    const val LIVERY_VIEW = "livery-view"
+    const val LIVERY_EMBEDDED = "livery-embedded"
     const val RC = "rc"
     const val COMPOSE = "compose"
     private const val SLOT = "document"
     /** The lanes that prepare their first screen with Livery's startup; the others plan as they compose. */
-    private val STARTUP_LANES = setOf(LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT)
+    private val STARTUP_LANES = setOf(LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED)
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
 }

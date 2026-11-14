@@ -9,7 +9,7 @@ android {
   namespace = "ee.schimke.livery.androidx"
   compileSdk { version = release(37) { minorApiLevel = 1 } }
   defaultConfig {
-    minSdk = 26
+    minSdk = 29
     aarMetadata { minCompileSdk = 36 }
   }
   compileOptions {

@@ -1,5 +1,7 @@
 package ee.schimke.livery.androidx
 
+import androidx.compose.remote.player.compose.ExperimentalRemotePlayerApi
+import androidx.compose.remote.player.compose.RemoteComposePlayerFlags
 import androidx.compose.remote.player.core.RemoteDocument
 import androidx.compose.remote.player.view.RemoteComposePlayer
 import androidx.compose.runtime.Composable
@@ -27,12 +29,17 @@ import java.util.concurrent.ConcurrentHashMap
  * Not drawn through these yet: images bound to data (`livery:value/...`) and Livery's catalog fonts (the
  * platform's typefaces are used). See docs/PLAYERS.md.
  */
+@OptIn(ExperimentalRemotePlayerApi::class)
 object LiveryAndroidxPlayers {
   /** The View player (`RemoteComposePlayer`) in an `AndroidView`. */
   val View: LiveryPlayer = ViewPlayer()
 
   /** The embedded player (`RcPlayer`, pure Compose). */
-  val Embedded: LiveryPlayer = EmbeddedPlayer()
+  val Embedded: LiveryPlayer by lazy {
+    // AndroidX ships the embedded player switched off.
+    RemoteComposePlayerFlags.isEmbeddedPlayerEnabled = true
+    EmbeddedPlayer()
+  }
 }
 
 internal abstract class ParsingPlayerBase : LiveryPlayer {

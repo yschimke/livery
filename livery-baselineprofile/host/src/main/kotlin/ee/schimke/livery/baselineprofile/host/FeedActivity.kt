@@ -39,7 +39,9 @@ import ee.schimke.livery.client.StaticSource
 import ee.schimke.livery.client.TemplateQuery
 import ee.schimke.livery.client.TemplateRepository
 import ee.schimke.livery.client.TrustPolicy
+import ee.schimke.livery.androidx.LiveryAndroidxPlayers
 import ee.schimke.livery.compose.LiveryHost
+import ee.schimke.livery.compose.LiveryPlayer
 import ee.schimke.livery.compose.LiveryResources
 import ee.schimke.livery.compose.LiverySlot
 import ee.schimke.livery.compose.rememberLiveryDisplay
@@ -100,6 +102,11 @@ class FeedActivity : ComponentActivity() {
       resources = LiveryResources(repository, maxPlans = ITEMS),
       deferLayoutAnimations = mode != LIVERY_NO_DEFER,
       flattenLayout = mode != LIVERY_NO_FLAT,
+      player = when (mode) {
+        LIVERY_VIEW -> LiveryAndroidxPlayers.View
+        LIVERY_EMBEDDED -> LiveryAndroidxPlayers.Embedded
+        else -> LiveryPlayer.Cmp
+      },
     )
     val planner = SlotPlanner(repository, {}, clock)
     setContent {
@@ -109,7 +116,7 @@ class FeedActivity : ComponentActivity() {
       val values = remember { mutableStateMapOf<Int, Map<String, RcNamedValue>>() }
       LaunchedEffect(display) {
         when (mode) {
-          LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT -> coroutineScope {
+          LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> coroutineScope {
             host.resources.display = display
             cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { planner.forAppData(card.query, card.json) } } }
           }
@@ -133,7 +140,7 @@ class FeedActivity : ComponentActivity() {
           val card = cards[index]
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
+            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = index, host = host, modifier = modifier, slotId = SLOT) { planner.forAppData(card.query, card.json) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
@@ -208,6 +215,8 @@ class FeedActivity : ComponentActivity() {
     const val LIVERY = "livery"
     const val LIVERY_NO_DEFER = "livery-nodefer"
     const val LIVERY_NO_FLAT = "livery-noflat"
+    const val LIVERY_VIEW = "livery-view"
+    const val LIVERY_EMBEDDED = "livery-embedded"
     const val RC = "rc"
     const val COMPOSE = "compose"
     const val ITEMS = 200

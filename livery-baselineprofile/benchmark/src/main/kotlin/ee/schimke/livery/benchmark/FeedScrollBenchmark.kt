@@ -28,6 +28,8 @@ class FeedScrollBenchmark {
   @Test fun livery() = fling("livery")
 
   /** Livery without the deferred lookahead pass (and so without flat layout): what the deferral saves. */
+  @Test fun liveryView() = fling("livery-view")
+  @Test fun liveryEmbedded() = fling("livery-embedded")
   @Test fun liveryNoDefer() = fling("livery-nodefer")
 
   /** Livery with deferral but one composable per component: what flat layout saves. */
