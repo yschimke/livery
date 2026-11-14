@@ -72,7 +72,7 @@ internal abstract class ParsingPlayerBase : LiveryPlayer {
   override fun isPrepared(template: LoadedTemplate): Boolean = template.entry.sha256 in parsed
 
   /** The bytes this player parses for [template]: as published, or rewritten for the display when [prepare] did that. */
-  protected fun bytesFor(template: LoadedTemplate): ByteArray = rewritten[template.entry.sha256] ?: template.bytes.toByteArray()
+  protected fun bytesFor(template: LoadedTemplate): ByteArray = (rewritten[template.entry.sha256] ?: template.bytes.toByteArray())
 }
 
 private class ViewPlayer : ParsingPlayerBase() {
@@ -88,6 +88,7 @@ private class ViewPlayer : ParsingPlayerBase() {
     val current = rememberUpdatedState(request)
     val values = request.values
     key(request.template.entry.sha256) {
+    val written = remember { mutableMapOf<String, RcNamedValue>() }
     AndroidView(
       factory = { context ->
         RemoteComposePlayer(context).apply {
@@ -95,13 +96,27 @@ private class ViewPlayer : ParsingPlayerBase() {
           setDocument(bytesFor(request.template))
           document.document.addActionCallback { name, value -> hostAction(name, value, current.value)?.let(current.value.onAction) }
           // Values in place before the first frame.
-          values.forEach { (name, v) -> push(name, v) }
+          pushAll(values, written)
         }
       },
       modifier = request.modifier.fillMaxWidth(),
-      update = { player -> values.forEach { (name, v) -> player.push(name, v) } },
+      update = { player -> player.pushAll(values, written) },
     )
     }
+  }
+
+  /** Pushes [values], and clears what an earlier push set that is no longer bound, so it returns to the document's value. */
+  private fun RemoteComposePlayer.pushAll(values: Map<String, RcNamedValue>, written: MutableMap<String, RcNamedValue>) {
+    (written.keys - values.keys).forEach { name ->
+      when (written.remove(name)) {
+        is RcNamedValue.Text -> clearUserLocalString(name)
+        is RcNamedValue.Integer, is RcNamedValue.BooleanValue -> clearUserLocalInt(name)
+        is RcNamedValue.FloatValue -> clearUserLocalFloat(name)
+        is RcNamedValue.Color -> clearUserLocalColor(name)
+        else -> Unit
+      }
+    }
+    values.forEach { (name, v) -> push(name, v); written[name] = v }
   }
 
   private fun RemoteComposePlayer.push(name: String, v: RcNamedValue) {
@@ -111,6 +126,7 @@ private class ViewPlayer : ParsingPlayerBase() {
       is RcNamedValue.FloatValue -> setUserLocalFloat(name, v.value)
       is RcNamedValue.Color -> setUserLocalColor(name, v.argb)
       is RcNamedValue.BooleanValue -> setUserLocalInt(name, if (v.value) 1 else 0)
+      is RcNamedValue.LongValue -> stateUpdater.setNamedLong(name, v.value)
       else -> Unit
     }
   }

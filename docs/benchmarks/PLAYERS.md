@@ -20,7 +20,9 @@ The View player was given the template's bytes, the values and a width, through 
 `CoreDocument.measure` runs, `needsMeasure` clears, the document reports 996 x 280 and a software draw of the view has one
 colour. The document is not the problem (the embedded player draws it; `canBeDisplayed` is true; its profile matches the
 player's). The player never measures a document that sets feature 15 itself (`RemoteComposeView.onMeasure` skips it), so
-I measured it from outside; that was not enough. The cause is not found. Next: ask the AndroidX team or try a document
+I measured it from outside; that was not enough. Handing it the document rewritten for the display (`forDisplay`: density
+hardcoded, constants folded, as the View player is said not to evaluate density expressions) did not change it either, alone or
+together with the manual measure. The cause is not found. Next: ask the AndroidX team or try a document
 created by AndroidX's own creation library on the same player.
 
 ## Cold start, the document (poll card), 5 iterations, min to max
@@ -46,17 +48,21 @@ startup path of #91 is about 47 ms ahead of the first-frame-budget path at the f
 The embedded player draws about twice the frames for the same taps (its change animates over more frames, or recomposes
 more), at a similar cost per frame.
 
-## Feed fling (200 cards, banner and poll)
+## Feed fling (200 cards, banner and poll), with #93's prefetch options
 
-| Lane | frame CPU p50 | p90 | p99 | frame overrun p99 | frames |
-| --- | --- | --- | --- | --- | --- |
-| `livery` | 3.9 ms | 6.2 ms | 8.8 ms | -5.3 ms | 656 |
-| `livery-embedded` | 3.7 ms | 7.7 ms | 11.6 ms | -2.2 ms | 682 |
-| Compose UI twin | 4.0 ms | 6.3 ms | 8.3 ms | -6.0 ms | 656 |
+A second, longer run (all nine lanes in one session) supersedes the first fling numbers. Frame CPU p50 / p90 / p99, ms:
 
-The embedded player is level with the default at the median and 25 to 30% slower in the tail (p90 7.7 against 6.2 ms,
-p99 11.6 against 8.8 ms), with a smaller margin before a frame is missed. The default player in Livery is level with the
-Compose UI twin through p95. No lane missed a frame (overrun stays negative).
+| Lane | default prefetch | cache window (1 ahead, 0.5 behind) | pausable composition |
+| --- | --- | --- | --- |
+| `livery` | 3.8 / 5.9 / 8.3 | 3.8 / 6.2 / 8.6 | 3.7 / 5.6 / 8.1 |
+| Compose UI twin | 3.7 / 5.8 / 8.3 | 3.8 / 6.0 / 8.4 | 3.8 / 6.1 / 8.4 |
+| `livery-embedded` | 3.9 / 8.0 / 11.8 | 3.9 / 8.2 / 12.1 | 3.6 / 7.4 / 11.6 |
+
+- Livery's default player is level with the Compose UI twin in every column, so neither option separates them.
+- The embedded player is level at the median and about 35% slower at p90 and 40% at p99, under every option: the cost is
+  the player, and prefetch does not move it. Its worst frames are the closest to a missed frame (p99 overrun -1.7 to -2.5
+  ms against -5.6 to -6.1 for the others). No lane missed one.
+- The options change frame counts by a few percent either way, which is noise next to the tail difference.
 
 ## Not measured
 
