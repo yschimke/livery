@@ -270,9 +270,10 @@ track; ones that can resume on another thread (planning, resolving, preparing, f
 
 | Section | Wraps |
 | --- | --- |
+| `livery:startup` | an app's `startup`, preparing its first screen (from the call to ready) |
 | `livery:plan:<design>` | `SlotPlanner` choosing a template and binding data for a slot, decision or feed item |
 | `livery:resolve:<design>` | the repository choosing the template and reading its bytes |
-| `livery:asset-read:<sha>`, `livery:manifest-decode` | the bundled catalog's blobs and manifest (Android) |
+| `livery:asset-read:<sha>`, `livery:manifest-decode` | the bundled catalog's blobs and manifest (Android; the manifest is decoded where it is first needed) |
 | `livery:bind:<contract>` | `ContractBinder.bind`, data against the contract |
 | `livery:prepare:<design>` | the player's document preparation: decode, link, rewrite |
 | `livery:for-display` | the rewrite for the display, inside `prepare` |

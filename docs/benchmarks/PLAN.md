@@ -146,7 +146,11 @@ Done, to measure next:
   `lifecycleScope`, its first steps ran on the main thread inside `onCreate` and the rest waited for the main
   thread to come free after the activity was created. The activity's creation (about 97 to 125 ms) should now
   cover the worker's ~19 ms, before the first frame at about 131 ms. `livery-nostartup` keeps the old path, so
-  one run shows the difference.
+  one run shows the difference. Whether the work fits is reported, not inferred: the startup lanes add
+  `TraceSectionMetric`s for `livery:startup` (how long it took) and `host:first-frame-held` (how long the
+  splash screen held the first frame for it, from the activity's first attempt to draw: near 0 when it fits),
+  and `benchmark-summary.py` prints them beside initial and full display. The emulator's numbers are rough;
+  the answer that counts is a device's.
 - **The bundled manifest is decoded on first use** (`AndroidBundled`), on the thread that first resolves a
   template, instead of on the main thread when the repository is built. And the twin's lane builds no
   repository, where it used to pay for that decode too (3.8 ms), so its numbers were slightly worse than a
