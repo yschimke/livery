@@ -1,6 +1,12 @@
 name: Pages
 
-# The documentation site (site/): built on every pull request that touches it, deployed from main.
+# The documentation site (site/): built on every pull request that touches it, published from main.
+#
+# The site is served at https://livery.coo.ee/ by the preview.coo.ee box, which fetches the `site`
+# branch this workflow publishes (yschimke/preview-coo-ee: deploy/image/site-pull.sh, livery.caddy).
+# GitHub Pages (yschimke.github.io/livery) then serves only redirects to the same pages there, and
+# only once livery.coo.ee is serving this commit, so the old address never points at a site that
+# isn't up yet.
 on:
   push:
     branches: [main]
@@ -13,8 +19,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.event_name == 'push' && 'deploy' || github.ref }}
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SITE_URL: https://livery.coo.ee/
 
 jobs:
   build:
@@ -29,15 +38,52 @@ jobs:
           python-version: "3.13"
       - run: pip install markdown==3.11.2
       - run: python3 site/build.py build/site
+      # What livery.coo.ee reports it is serving; the redirect job below waits for it.
+      - run: echo "$GITHUB_SHA" > build/site/version.txt
+      - run: python3 site/redirects.py build/site build/redirects "$SITE_URL"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: build/site
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: build/site
+          path: build/redirects
 
-  deploy:
-    name: Deploy site
+  publish:
+    name: Publish site branch
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+      # One commit per publish on top of the branch's history, so a bad publish can be reverted there.
+      - name: Commit to the site branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # An empty index on top of the branch's last commit: the new tree replaces the old one
+          # whole, so a page the build no longer has is deleted from the branch too.
+          git init -q -b site out
+          cd out
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin site; then git reset -q --soft FETCH_HEAD; fi
+          cp -R ../site/. .
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q --allow-empty -m "site: ${GITHUB_SHA}"
+          git push -q origin site
+
+  redirect:
+    name: Redirect GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       pages: write
       id-token: write
@@ -45,5 +91,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # The box polls the branch every 3 minutes.
+      - name: Wait for livery.coo.ee to serve this commit
+        run: |
+          for i in $(seq 1 60); do
+            if [ "$(curl -fsS --max-time 20 "${SITE_URL}version.txt" 2>/dev/null)" = "$GITHUB_SHA" ]; then
+              echo "${SITE_URL} serves ${GITHUB_SHA}"; exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::${SITE_URL} is not serving ${GITHUB_SHA} after 20 minutes; GitHub Pages left as it was"
+          exit 1
       - id: deployment
         uses: actions/deploy-pages@v4

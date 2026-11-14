@@ -30,7 +30,9 @@ Livery is a general toolkit for server-driven Remote Compose templates. Read
 - **The site is documentation users follow.** `site/pages/` must match the code: a change to a
   public API, CLI flag or catalog file updates the pages that show it, in the same PR, and
   anything not built yet stays marked *Planned*. Build it with `python3 site/build.py build/site`
-  (needs `pip install markdown`); `.github/workflows/pages.yml` deploys it from `main`.
+  (needs `pip install markdown`); `.github/workflows/pages.yml` publishes it from `main` to the
+  `site` branch, which <https://livery.coo.ee/> serves (yschimke/preview-coo-ee), and points
+  GitHub Pages at it with redirects (`site/redirects.py`).
 - **No visible redraws.** A card after the first of its template, and any card the app preloaded,
   draws complete on its first frame (`LiveryResources`, `FirstFrameTest`): composition reads
   documents, fonts and images from memory without suspending, and only a template's first card that
