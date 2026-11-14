@@ -121,6 +121,28 @@ installSplashScreen().setKeepOnScreenCondition { !startup.isReady }
 The slot itself is `LiverySlot(key = data, host = host, slotId = "home.top") { … }`. On desktop, iOS
 and the web, `startup.await()` before showing the first screen.
 
+**Emoji load when you choose (Android).** Compose's text brings in `androidx.emoji2`, whose
+initializer runs at process start, on the main thread, before the first frame. Livery's manifest
+turns it off, so a cold start doesn't pay for it. Load emoji once the first screen is up; until then
+text draws with the platform's own emoji:
+
+```kotlin
+lifecycleScope.launch {
+  startup.await()
+  LiveryEmoji.load(applicationContext)   // off the main thread; does nothing if EmojiCompat is set up
+}
+```
+
+To keep the platform's initializer instead, declare it in your app's manifest:
+
+```xml
+<provider android:name="androidx.startup.InitializationProvider"
+  android:authorities="${applicationId}.androidx-startup" android:exported="false" tools:node="merge">
+  <meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer"
+    android:value="androidx.startup" tools:node="replace" />
+</provider>
+```
+
 **Swift (iOS, macOS)**:
 
 ```swift
