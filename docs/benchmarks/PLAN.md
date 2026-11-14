@@ -103,6 +103,19 @@ per template, keyed by its design id (`poll-card`, `banner-classic`, a real cata
 - **Rc-players' own phases** (`rcTrace`, 3.3.0) are not tagged with a template. Nest them inside
   Livery's per-template section so the trace still attributes them.
 
+## Findings that change the plan
+
+- **Twin parity is checked at density 2.0 only.** On the Pixel 9 (2.625) the twin's card is a little
+  taller than the template's (about 1–2 dp). Add a parity case at 2.625 (and 3.0) before treating the
+  lanes as the same pixels; if the twin is the one that is off, fix the twin.
+- **The Remote Compose lanes recompose twice per data change** (20 recompositions for 10 changes, the
+  twin 10). Consistent with `LiveryTemplate` pushing the values from a `SideEffect`; unconfirmed.
+- **Start-up needs a frame after `reportFullyDrawn()`** and the emoji2 initializer out of the host (see
+  the manifest), or the metric measures the next unrelated frame (~690 ms in every lane).
+- **The document host plans ten variants before its first draw**, in the Livery and player lanes only:
+  a few tenths of the start-up gap may be that. Plan one variant first and the rest after the first
+  draw if it matters.
+
 ## Next steps, in order
 
 1. Lanes for the rest of the switches (`preprocessor = null`, preparation in composition for feeds).

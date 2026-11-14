@@ -104,18 +104,27 @@ class DocumentActivity : ComponentActivity() {
     setContent {
       val display = rememberLiveryDisplay()
       var version by remember { mutableIntStateOf(0) }
-      val data = remember(version) { pollData(version) }
-      // The plan for this data: what a host binds when its value changes.
-      var plan by remember { mutableStateOf<PlanResult.Ready?>(null) }
-      var ready by remember { mutableStateOf(lane == COMPOSE || lane == LIVERY_IN_COMPOSITION) }
-      LaunchedEffect(display, version) {
+      // The data cycles through VARIANTS values. Every variant is planned (bound to the contract)
+      // before the screen shows, so a tap only swaps in a plan that is ready: one recomposition
+      // in every lane, as the twin has. Planning on the tap, in a LaunchedEffect, would add a
+      // recomposition per change to the Livery and player lanes that the twin has no equivalent of.
+      // The cost of binding data is a separate question (a microbenchmark, see docs/benchmarks/PLAN.md).
+      val variant = version % VARIANTS
+      val data = remember(variant) { pollData(variant) }
+      var planned by remember { mutableStateOf<List<PlanResult.Ready>?>(null) }
+      var ready by remember { mutableStateOf(lane == COMPOSE) }
+      LaunchedEffect(display) {
         if (lane != COMPOSE) {
           resources.display = display
-          (planner.forAppData(query, json(data)) as? PlanResult.Ready)?.let { plan = it }
-          if (lane != LIVERY_IN_COMPOSITION) plan?.plan?.template?.let { resources.readyToDraw(it, display) }
+          val all = (0 until VARIANTS).mapNotNull { planner.forAppData(query, json(pollData(it))) as? PlanResult.Ready }
+          if (all.size == VARIANTS) {
+            if (lane != LIVERY_IN_COMPOSITION) resources.readyToDraw(all[0].plan.template, display)
+            planned = all
+          }
         }
         ready = true
       }
+      val plan = planned?.get(variant)
       // Content to draw: the twin as soon as the screen is up, the others once planned and prepared.
       val available = ready && (lane == COMPOSE || plan != null)
       var drawn by remember { mutableStateOf(false) }
@@ -125,6 +134,10 @@ class DocumentActivity : ComponentActivity() {
           withFrameNanos { }
           drawn = true
           reportFullyDrawn()
+          // StartupTimingMetric ends "full display" at the first frame drawn after this report. A
+          // screen that is already drawn and still would otherwise wait for whatever next invalidates
+          // it (here the emoji initializer, at ~650 ms), which is nothing to do with the document.
+          window.decorView.invalidate()
         }
       }
       // The same frame for every lane: padded, the document at the top and as wide as the screen. The
@@ -185,6 +198,7 @@ class DocumentActivity : ComponentActivity() {
 
   companion object {
     const val LANE = "lane"
+    private const val VARIANTS = 10
     const val LIVERY = "livery"
     const val LIVERY_IN_COMPOSITION = "livery-incomposition"
     const val LIVERY_NO_DEFER = "livery-nodefer"
