@@ -42,14 +42,19 @@ data class TemplateAction(val name: String, val args: Map<String, String>)
  */
 fun RcPlayerEvent.toTemplateAction(contract: Contract? = null): TemplateAction? {
   val e = this as? RcPlayerEvent.HostNamedAction ?: return null
-  val isSet = contract?.actions?.get(e.name)?.kind == ActionKinds.SET
-  val args: Map<String, String> = when (val v = e.value) {
+  return templateAction(e.name, e.value, contract)
+}
+
+/** [toTemplateAction] for any player: the name and value of a host named action. */
+fun templateAction(name: String, value: RcHostActionValue, contract: Contract? = null): TemplateAction? {
+  val isSet = contract?.actions?.get(name)?.kind == ActionKinds.SET
+  val args: Map<String, String> = when (val v = value) {
     is RcHostActionValue.TextValue -> if (isSet) mapOf(ActionGate.VALUE to v.value) else parseArgs(v.value) ?: return null
     is RcHostActionValue.IntegerValue -> mapOf("value" to v.value.toString())
     is RcHostActionValue.FloatValue -> mapOf("value" to v.value.toString())
     else -> emptyMap()
   }
-  return TemplateAction(e.name, args)
+  return TemplateAction(name, args)
 }
 
 private fun parseArgs(text: String): Map<String, String>? = ActionArguments.parse(text)

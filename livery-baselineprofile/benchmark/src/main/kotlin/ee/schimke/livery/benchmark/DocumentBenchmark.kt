@@ -43,12 +43,16 @@ class DocumentBenchmark {
   @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
   @Test fun liveryNoDeferStartup() = startup("livery-nodefer", withStartup = true)
   @Test fun liveryNoFlatStartup() = startup("livery-noflat", withStartup = true)
+  @Test fun liveryViewStartup() = startup("livery-view", withStartup = true)
+  @Test fun liveryEmbeddedStartup() = startup("livery-embedded", withStartup = true)
   @Test fun rcPlayerStartup() = startup("rc")
   @Test fun composeUiStartup() = startup("compose")
 
   @Test fun liveryChange() = change("livery")
   @Test fun liveryNoDeferChange() = change("livery-nodefer")
   @Test fun liveryNoFlatChange() = change("livery-noflat")
+  @Test fun liveryViewChange() = change("livery-view")
+  @Test fun liveryEmbeddedChange() = change("livery-embedded")
   @Test fun rcPlayerChange() = change("rc")
   @Test fun composeUiChange() = change("compose")
 

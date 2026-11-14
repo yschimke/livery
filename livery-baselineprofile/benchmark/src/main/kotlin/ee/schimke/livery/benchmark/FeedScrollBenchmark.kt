@@ -29,6 +29,8 @@ class FeedScrollBenchmark {
   @Test fun livery() = fling("livery")
 
   /** Livery without the deferred lookahead pass (and so without flat layout): what the deferral saves. */
+  @Test fun liveryView() = fling("livery-view")
+  @Test fun liveryEmbedded() = fling("livery-embedded")
   @Test fun liveryNoDefer() = fling("livery-nodefer")
 
   /** Livery with deferral but one composable per component: what flat layout saves. */
@@ -52,6 +54,10 @@ class FeedScrollBenchmark {
   @Test fun liveryPausable() = fling("livery", Options.Pausable)
 
   @Test fun composeUiPausable() = fling("compose", Options.Pausable)
+
+  @Test fun liveryEmbeddedCacheWindow() = fling("livery-embedded", Options.CacheWindow)
+
+  @Test fun liveryEmbeddedPausable() = fling("livery-embedded", Options.Pausable)
 
   private enum class Options(val apply: Intent.() -> Unit) {
     None({}),

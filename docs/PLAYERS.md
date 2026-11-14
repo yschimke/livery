@@ -114,6 +114,25 @@ feed, since a `View` in a `LazyColumn` recycles differently from Compose nodes. 
 Livery's trace sections (`livery:*`, see [benchmarks/PLAN.md](benchmarks/PLAN.md)), the number of recompositions per
 change and, per lane, a pixel check against the CMP render. Results go in `docs/benchmarks/PLAYERS.md`.
 
+## Status of the implementation
+
+Built and benchmarked ([benchmarks/PLAYERS.md](benchmarks/PLAYERS.md)):
+
+- `LiveryPlayer` (`livery-compose`): the seam. `LiveryHost(player = …)`, default `LiveryPlayer.Cmp`, so nothing changes
+  for anyone who does not pass one. A player that parses documents itself (`usesPreparedDocument = false`) gets
+  `prepare` and `isPrepared` instead of rc-players' prepared-document cache; fonts, visibility, events, actions and the
+  first-frame rules stay in `LiveryTemplate`. `templateAction(name, value, contract)` is the one action convention.
+- `livery-androidx-players` (not in the published list; minSdk 29, which `remote-player-compose` requires):
+  `LiveryAndroidxPlayers.View` and `.Embedded`. `prepare` parses the bytes once off the main thread to find out whether
+  the document parses; each card then parses its own copy, since a parsed document carries its card's state.
+- Benchmark lanes `livery-view` and `livery-embedded` in the document and feed hosts and benchmarks. The
+  "player alone" lanes (`view`, `embedded`) are not built.
+- **The embedded player draws the `poll-card` correctly** (after setting `RemoteComposePlayerFlags.isEmbeddedPlayerEnabled`,
+  which AndroidX ships off) and benchmarks level with the default player on startup and in the fling's median.
+  **The View player draws nothing for Livery's templates** in `1.0.0-alpha23`, through its own API, through AndroidX's
+  wrapper and with the document measured by hand; the investigation is in the results page. Its lane has no numbers.
+- Not adapted yet: data-bound images (`livery:value/...`) and Livery's catalog fonts, on either player.
+
 ## Open questions
 
 - How a `RemotePreparedDocument` is built and whether the View player takes it.

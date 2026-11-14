@@ -14,7 +14,7 @@ android {
   defaultConfig {
     applicationId = "ee.schimke.livery.baselineprofile.host"
     // Profile capture without root needs API 33; the floor only has to cover the emulator.
-    minSdk = 28
+    minSdk = 29
     targetSdk = 37
     versionCode = 1
     versionName = "1.0"
@@ -46,6 +46,7 @@ val sampleCatalogs by configurations.creating { isCanBeConsumed = false }
 
 dependencies {
   implementation(project(":livery-compose"))
+  implementation(project(":livery-androidx-players"))
   implementation(libs.androidx.activity.compose)
   // DocumentActivity follows getting-started's startup: the splash screen held until the first screen is ready.
   implementation(libs.androidx.core.splashscreen)
