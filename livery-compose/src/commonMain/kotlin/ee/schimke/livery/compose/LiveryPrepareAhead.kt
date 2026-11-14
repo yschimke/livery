@@ -7,7 +7,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import ee.schimke.livery.client.PlanResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -29,7 +33,8 @@ import kotlin.coroutines.CoroutineContext
  * state without a snapshot read, which `peek` is), one request per item; a window of 6 to 10 is enough to stay ahead of a fast fling,
  * and [LiveryResources]' `maxPlans` should hold the window plus what the list keeps composed.
  *
- * [firstVisible] and [lastVisible] are read in a snapshot, so they can read list state directly; the
+ * [plan] should read the item at `index` when it runs (items can move: an answer is dropped if the index no longer has the
+ * key it was asked for). [firstVisible] and [lastVisible] are read in a snapshot, so they can read list state directly; the
  * [LazyListState] overload does. [key] defaults to the index; give the item's id when items can move, and null for
  * an item not loaded yet.
  */
@@ -48,27 +53,35 @@ fun LiveryPrepareAhead(
 ) {
   val currentPlan = rememberUpdatedState(plan)
   val currentKey = rememberUpdatedState(key)
+  // The latest callbacks: a caller's `count = { items.size }` captures that composition's list, and the effect outlives it.
+  val currentFirst = rememberUpdatedState(firstVisible)
+  val currentLast = rememberUpdatedState(lastVisible)
+  val currentCount = rememberUpdatedState(count)
   LaunchedEffect(host, slotId, ahead, behind, context) {
     val inFlight = HashSet<Any?>()
+    // The collector and the workers on [context] both touch the set.
+    val lock = Mutex()
     // The keys are part of what is observed, so an item that loads (a paging placeholder becoming an item) without the
     // window or the count moving still gets requested.
     snapshotFlow {
-      val window = prepareWindow(firstVisible(), lastVisible(), count(), ahead, behind)
+      val window = prepareWindow(currentFirst.value(), currentLast.value(), currentCount.value(), ahead, behind)
       window.map { it to currentKey.value(it) }
     }.collect { window ->
       for ((index, itemKey) in window) {
         // No key: the item is not loaded yet; asked again when its key appears.
-        if (itemKey == null || itemKey in inFlight) continue
+        if (itemKey == null) continue
         // Already planned at this revision and still in memory (bounded: an evicted answer is asked for again).
         if (host.resources.lastPlan(slotId, itemKey, host.repository.revision.value) != null) continue
-        inFlight.add(itemKey)
+        if (!lock.withLock { inFlight.add(itemKey) }) continue
         // Off the main thread: the app's planning and the preparation run on [context], one request per item.
         launch(context) {
           try {
             val result = currentPlan.value(index)
-            if (result != null) host.resources.prepareSlot(slotId, itemKey) { result }
+            // Items can be inserted or removed while this runs: keep the answer only if the index still names the item
+            // it was asked for, so a slot never shows another item's data under this key.
+            if (result != null && currentKey.value(index) == itemKey) host.resources.prepareSlot(slotId, itemKey) { result }
           } finally {
-            inFlight.remove(itemKey)
+            withContext(NonCancellable) { lock.withLock { inFlight.remove(itemKey) } }
           }
         }
       }
