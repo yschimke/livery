@@ -85,6 +85,23 @@ Locally, on a device:
 On an emulator, add
 `-Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR`.
 
+### A T of tests: a spine, a short bar, and sweeps
+
+Running every variant many times took about two hours. The tests are tiered instead (`Tiers.kt`):
+
+| Tier | What | Runs | Time |
+| --- | --- | --- | --- |
+| `@Spine` | what an app chooses between: Livery with its defaults, with preparing ahead (lazy and paged feeds), the Compose UI twin, the startup paths, the animated feed | feed: 6 iterations of 4 flings; start-up 10, data change 8 | about 25 minutes |
+| `@Completion` | one lane for each thing not chosen or not recommended (an option off, another player, a prefetch option, no prepare-ahead), so the comparison is complete | 3 iterations of 3 flings, start-up and change 3 | about 12 minutes |
+| neither | sweeps for working out a value: window sizes, planning costs | 3 iterations of 3 flings | on demand |
+
+`livery-baselineprofile/run-benchmarks.sh routine` runs the spine and the completion bar (about 40 minutes, a third of
+the full set), `spine` the spine alone, `sweeps` the rest, and a list of names (`FeedScrollBenchmark#liveryLazyAhead`)
+those. It runs the instrumentation through `adb` on the APKs Gradle built and pulls the results; the same tiers are
+selected under Gradle with `-Pandroid.testInstrumentationRunnerArguments.annotation=ee.schimke.livery.benchmark.Spine`
+(comma-separate for more). A completion lane is read as "is it wildly off", not by how much: three iterations do not
+separate differences under about 10%.
+
 ## Full-screen document
 
 `DocumentActivity` draws the sample catalog's `poll-card` filling the screen, chosen by the `lane`
