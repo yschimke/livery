@@ -22,8 +22,10 @@ internal class EmbeddedPlayer : ParsingPlayerBase() {
     val state = remember(request.template.entry.sha256) {
       RcPlayerState(RemoteDocument(request.template.bytes.toByteArray()).document, "USER").also { it.seed(request.values, written) }
     }
-    // Later changes: a write to a state the document reads recomposes only what reads it.
-    SideEffect { state.seed(request.values, written) }
+    // Later changes: read here, in composition, so a data update recomposes this player (Livery hands it the same
+    // request while only the data changes); a write to a state the document reads recomposes only what reads it.
+    val values = request.values.toMap()
+    SideEffect { state.seed(values, written) }
     RcPlayer(
       state = state,
       modifier = request.modifier,
