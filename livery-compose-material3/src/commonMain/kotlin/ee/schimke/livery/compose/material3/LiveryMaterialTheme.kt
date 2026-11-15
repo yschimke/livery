@@ -60,3 +60,59 @@ fun ColorScheme.toLiveryTheme(surface: Color = surfaceContainerHigh): Bindings =
       )
       .mapValues { (_, color) -> NamedValue.Color(color.toArgb().toLong() and 0xFFFFFFFFL) }
   )
+
+/**
+ * This scheme with the colour roles [theme] sets (a theme pack's values, or any [Bindings] of
+ * [ThemeRoles]), the inverse of [toLiveryTheme]: so an app's own composables can take the colours
+ * its Livery templates draw with. A role [theme] doesn't set, or sets to a non-colour, keeps this
+ * scheme's colour, so a pack of a few roles lays them over a scheme seeded from its primary.
+ *
+ * `theme.surface` is a card's colour, as [toLiveryTheme] sends it, so it becomes
+ * [ColorScheme.surfaceContainerHigh] when [surfaceIsCard] (the default), and [ColorScheme.surface]
+ * when the pack's surface is the screen. A `theme.surfaceContainerHigh` of its own wins either way.
+ *
+ * To take only some roles (say, only those with their `on` colour), filter [theme] first:
+ * `withLiveryTheme(Bindings(theme.values.filterKeys { it in roles }))`.
+ */
+fun ColorScheme.withLiveryTheme(theme: Bindings, surfaceIsCard: Boolean = true): ColorScheme {
+  fun role(name: String): Color? = (theme.values[name] as? NamedValue.Color)?.let { Color(it.argb) }
+  val packSurface = role(ThemeRoles.SURFACE)
+  return copy(
+    primary = role(ThemeRoles.PRIMARY) ?: primary,
+    onPrimary = role(ThemeRoles.ON_PRIMARY) ?: onPrimary,
+    primaryContainer = role(ThemeRoles.PRIMARY_CONTAINER) ?: primaryContainer,
+    onPrimaryContainer = role(ThemeRoles.ON_PRIMARY_CONTAINER) ?: onPrimaryContainer,
+    inversePrimary = role(ThemeRoles.INVERSE_PRIMARY) ?: inversePrimary,
+    secondary = role(ThemeRoles.SECONDARY) ?: secondary,
+    onSecondary = role(ThemeRoles.ON_SECONDARY) ?: onSecondary,
+    secondaryContainer = role(ThemeRoles.SECONDARY_CONTAINER) ?: secondaryContainer,
+    onSecondaryContainer = role(ThemeRoles.ON_SECONDARY_CONTAINER) ?: onSecondaryContainer,
+    tertiary = role(ThemeRoles.TERTIARY) ?: tertiary,
+    onTertiary = role(ThemeRoles.ON_TERTIARY) ?: onTertiary,
+    tertiaryContainer = role(ThemeRoles.TERTIARY_CONTAINER) ?: tertiaryContainer,
+    onTertiaryContainer = role(ThemeRoles.ON_TERTIARY_CONTAINER) ?: onTertiaryContainer,
+    background = role(ThemeRoles.BACKGROUND) ?: background,
+    onBackground = role(ThemeRoles.ON_BACKGROUND) ?: onBackground,
+    surface = (if (surfaceIsCard) null else packSurface) ?: surface,
+    onSurface = role(ThemeRoles.ON_SURFACE) ?: onSurface,
+    surfaceVariant = role(ThemeRoles.SURFACE_VARIANT) ?: surfaceVariant,
+    onSurfaceVariant = role(ThemeRoles.ON_SURFACE_VARIANT) ?: onSurfaceVariant,
+    surfaceTint = role(ThemeRoles.SURFACE_TINT) ?: surfaceTint,
+    inverseSurface = role(ThemeRoles.INVERSE_SURFACE) ?: inverseSurface,
+    inverseOnSurface = role(ThemeRoles.INVERSE_ON_SURFACE) ?: inverseOnSurface,
+    error = role(ThemeRoles.ERROR) ?: error,
+    onError = role(ThemeRoles.ON_ERROR) ?: onError,
+    errorContainer = role(ThemeRoles.ERROR_CONTAINER) ?: errorContainer,
+    onErrorContainer = role(ThemeRoles.ON_ERROR_CONTAINER) ?: onErrorContainer,
+    outline = role(ThemeRoles.OUTLINE) ?: outline,
+    outlineVariant = role(ThemeRoles.OUTLINE_VARIANT) ?: outlineVariant,
+    scrim = role(ThemeRoles.SCRIM) ?: scrim,
+    surfaceBright = role(ThemeRoles.SURFACE_BRIGHT) ?: surfaceBright,
+    surfaceDim = role(ThemeRoles.SURFACE_DIM) ?: surfaceDim,
+    surfaceContainer = role(ThemeRoles.SURFACE_CONTAINER) ?: surfaceContainer,
+    surfaceContainerHigh = role(ThemeRoles.SURFACE_CONTAINER_HIGH) ?: (if (surfaceIsCard) packSurface else null) ?: surfaceContainerHigh,
+    surfaceContainerHighest = role(ThemeRoles.SURFACE_CONTAINER_HIGHEST) ?: surfaceContainerHighest,
+    surfaceContainerLow = role(ThemeRoles.SURFACE_CONTAINER_LOW) ?: surfaceContainerLow,
+    surfaceContainerLowest = role(ThemeRoles.SURFACE_CONTAINER_LOWEST) ?: surfaceContainerLowest,
+  )
+}
