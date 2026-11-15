@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/yschimke/livery/compare/v0.16.0...v0.17.0) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** rc-players 3.6.0, the release the benchmark page measured ([#109](https://github.com/yschimke/livery/issues/109)) ([6b6efba](https://github.com/yschimke/livery/commit/6b6efbac5d80453a7df6f3babf99b9e6a4857d49))
+
 ## [0.16.0](https://github.com/yschimke/livery/compare/v0.15.0...v0.16.0) (2026-11-15)
 
 
