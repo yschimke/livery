@@ -103,6 +103,14 @@ workflow on pull requests (see <a href="repository-mode.html">Repository mode</a
 <p><code>--inspect</code> decodes every <code>.rc</code> and refuses one that reads or emits anything its sidecar doesn't
 declare, or reads a value as a different type than its contract declares. Use it whenever
 documents come from more than one tool, or from an agent.</p>
+<p>A template animates only what its author asked to animate. AndroidX eases every component to new bounds, and
+fades it across a visibility change, over 300 ms unless the document says otherwise, so a card whose data changes
+eases every change and its player pays for the animation pass. <code>livery build</code> gives every component that names no
+animation a disabled one (rc-player-edit's <code>withoutDefaultAnimations</code>). The published <code>.rc</code> is the result, so every
+player, AndroidX's included, plays it the same, and a component the author did animate keeps its animation. To keep
+AndroidX's defaults, set <code>"defaultAnimations": true</code> in a design's sidecar (that template) or in <code>catalog.json</code> (the
+whole catalog), or build with <code>--default-animations</code> (everything, as the tree has it; the Gradle plugin's
+<code>livery { defaultAnimations.set(true) }</code>).</p>
 <p><code>--a2ui &lt;catalogId&gt;</code> also writes <code>a2ui-catalog.json</code>: the catalog's contracts as
 <a href="https://a2ui.org">A2UI</a> components (one per contract major, at its newest minor), the same schema
 an app's <code>livery-a2ui-compose</code> advertises, for prompting an agent that answers in A2UI.</p>
