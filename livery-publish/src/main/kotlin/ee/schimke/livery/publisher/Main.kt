@@ -22,6 +22,9 @@ private const val USAGE = """livery — build, sign and check a template catalog
       --serial <n>                         default: now in ms (must only grow per channel)
       --inspect                            decode every .rc and check it reads and emits only what
                                            its sidecar declares
+      --default-animations                 keep AndroidX's default animations in every template; by
+                                           default a component asking for none lands at once (also
+                                           `"defaultAnimations": true` in catalog.json or a sidecar)
       --a2ui <catalogId>                   also write a2ui-catalog.json: the catalog's contracts as
                                            A2UI components, the schema to prompt an agent with
       --github <owner/repo> --tag <tag>    flat layout addressed by that release's download URLs;
@@ -74,7 +77,8 @@ fun main(args: Array<String>) {
         val layout = opt("--github")?.let {
           Layout.GitHubRelease(it.substringBefore('/'), it.substringAfter('/'), opt("--tag") ?: error("--github needs --tag"))
         } ?: Layout.Static
-        val builder = if ("--inspect" in a) CatalogBuilder(inspect = CatalogBuilder.INSPECT) else CatalogBuilder()
+        val processors = if ("--default-animations" in a) emptyList() else TemplateProcessor.Defaults
+        val builder = if ("--inspect" in a) CatalogBuilder(inspect = CatalogBuilder.INSPECT, processors = processors) else CatalogBuilder(processors = processors)
         val result = builder.build(src, layout, opt("--serial")?.toLong())
         out.mkdirs()
         result.files.forEach { (path, bytes) -> File(out, path).writeByteString(bytes) }

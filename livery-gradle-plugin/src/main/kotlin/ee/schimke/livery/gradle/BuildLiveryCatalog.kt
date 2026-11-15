@@ -3,6 +3,7 @@ package ee.schimke.livery.gradle
 import ee.schimke.livery.publisher.build
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.publisher.CatalogBuilder
+import ee.schimke.livery.publisher.TemplateProcessor
 import ee.schimke.livery.publisher.CatalogProblems
 import ee.schimke.livery.publisher.Layout
 import java.io.File
@@ -29,12 +30,16 @@ abstract class BuildLiveryCatalog : DefaultTask() {
   @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val source: DirectoryProperty
   @get:Input abstract val assetsPath: Property<String>
   @get:Input abstract val inspect: Property<Boolean>
+  @get:Input abstract val defaultAnimations: Property<Boolean>
   @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
   @TaskAction fun build() {
     val path = assetsPath.get().trim('/')
     require(path.isNotEmpty() && path.split('/').none { it == ".." || it.isEmpty() }) { "livery.assetsPath must be a relative path: '$path'" }
-    val builder = if (inspect.get()) CatalogBuilder(now = { BUNDLED_EPOCH_MS }, inspect = CatalogBuilder.INSPECT) else CatalogBuilder(now = { BUNDLED_EPOCH_MS })
+    val processors = if (defaultAnimations.get()) emptyList() else TemplateProcessor.Defaults
+    val builder =
+      if (inspect.get()) CatalogBuilder(now = { BUNDLED_EPOCH_MS }, inspect = CatalogBuilder.INSPECT, processors = processors)
+      else CatalogBuilder(now = { BUNDLED_EPOCH_MS }, processors = processors)
     val out = try {
       builder.build(source.get().asFile, Layout.Static, serial = BUNDLED_SERIAL)
     } catch (e: CatalogProblems) {

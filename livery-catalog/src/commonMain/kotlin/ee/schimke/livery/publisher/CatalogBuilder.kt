@@ -59,6 +59,13 @@ data class CatalogConfig(
   val imageProxy: ImageProxy? = null,
   /** What clients that don't know contract minors get (PROTOCOL.md §4.3). */
   val minorPolicy: MinorPolicy = MinorPolicy(),
+  /**
+   * Whether templates animate what their author didn't ask to animate. False, the default: the build gives every
+   * component without an animation spec a disabled one ([TemplateProcessor.WithoutDefaultAnimations]), so a card whose
+   * data changes lands at once instead of easing every change over AndroidX's 300 ms default, and players skip the
+   * work those animations take. True keeps AndroidX's default for the whole catalog; a sidecar can say either.
+   */
+  val defaultAnimations: Boolean = false,
 )
 
 /**
@@ -98,6 +105,8 @@ data class TemplateSpec(
   val fonts: List<String> = emptyList(),
   /** Where the document came from (tool, design, revision, commit): copied to the manifest entry. */
   val source: Map<String, String> = emptyMap(),
+  /** [CatalogConfig.defaultAnimations] for this template alone; unset, the catalog's. */
+  val defaultAnimations: Boolean? = null,
 )
 
 /** One entry of `fonts/fonts.json`: a font file beside it and the face it provides. */
@@ -164,6 +173,11 @@ class CatalogBuilder(
    * against its [Contract], when the design's contract exists); returns problems.
    */
   private val inspect: (bytes: ByteString, spec: TemplateSpec, contract: Contract?) -> List<String> = { _, _, _ -> emptyList() },
+  /**
+   * What every template's document goes through before it is checked, hashed and published, in order: by default
+   * [TemplateProcessor.Defaults]. An empty list publishes each `.rc` exactly as it is in the tree.
+   */
+  private val processors: List<TemplateProcessor> = TemplateProcessor.Defaults,
 ) {
   data class Output(
     val manifest: Manifest,
@@ -267,7 +281,7 @@ class CatalogBuilder(
         val specFile = dir.resolve(rc.nameWithoutExtension + ".json")
         if (!specFile.isFile) { problems += "${design.id}/${rc.name}: no ${specFile.name} sidecar"; continue }
         val spec = json.decodeFromString(TemplateSpec.serializer(), specFile.readText())
-        val bytes = rc.readBytes()
+        val bytes = processors.fold(rc.readBytes()) { doc, processor -> processor.process(doc, spec, config) }
         inspect(bytes, spec, contract(design.contract)).forEach { problems += "${design.id}/${rc.name}: $it" }
         contract(design.contract)?.let { c ->
           val undeclared = spec.reads.filterNot { r -> declares(c, r) }
