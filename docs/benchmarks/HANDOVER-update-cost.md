@@ -19,6 +19,11 @@ fix cut recomposition by a third. What remains is one composition of each update
 per-value invalidation in rc-players) and long layout passes in the animation phase (hypothesis 4; up to 17 ms, `measureAndLayout`,
 which the twin does not have). The findings below are the starting numbers.
 
+Update, later the same day (rc-players #915 and #916, unreleased, built from source): the like-for-like pairs are in `LAZY.md`.
+With the bars landing at once Livery's p99 is under the twin's (10.3 against 12.2 ms). With them easing it is 16.6 ms, and the cause is
+`deferLayoutAnimations` (the lookahead deferral): 17 layout passes over 4 ms re-measure about 33 unchanged texts a frame; with
+deferral off the p99 is 10.5 ms. Open: make the deferral not cost a card that changes repeatedly, or fix the re-measure.
+
 ## The finding
 
 In the animated feed lane the visible polls' numbers change every second while the list flings. Pixel 9, Android 17,

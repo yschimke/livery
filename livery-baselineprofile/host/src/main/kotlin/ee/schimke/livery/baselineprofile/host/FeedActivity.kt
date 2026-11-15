@@ -121,7 +121,8 @@ class FeedActivity : ComponentActivity() {
       MemoryKeyValueStore(),
       clock,
       listOf(Capabilities),
-      bundled = AndroidBundled.fromAssets(this),
+      // `eased`: the catalog built with AndroidX's default animations kept, so a bar's template eases as the twin's does.
+      bundled = AndroidBundled.fromAssets(this, if (intent.getBooleanExtra(EASED, false)) "livery-animated" else "livery"),
     )
     // Room for every card's answer: a slot whose prepared answer was evicted would arrive empty
     // and replan, which the other modes never do.
@@ -196,7 +197,7 @@ class FeedActivity : ComponentActivity() {
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
-              is Card.Poll -> PollTwin(card.data, modifier, animateShares = animateMs > 0)
+              is Card.Poll -> PollTwin(card.data, modifier, animateShares = animateMs > 0 && intent.getBooleanExtra(TWIN_EASES, true))
             }
           }
         }
@@ -291,6 +292,10 @@ class FeedActivity : ComponentActivity() {
     const val PLAN_DELAY_MS = "planDelayMs"
     /** Extra: the period, in ms, at which the visible polls' numbers change (0: they do not). */
     const val ANIMATE_MS = "animateMs"
+    /** Extra: the templates keep their default animations (the `livery-animated` catalog), so their bars ease. */
+    const val EASED = "eased"
+    /** Extra (default true): the twin's bars ease to their new shares in the animated lanes; false lands them at once. */
+    const val TWIN_EASES = "twinEases"
     /** Extra: pausable composition in prefetch (see the class). */
     const val PAUSABLE = "pausable"
     /** The flag's value as the library ships it, read before any launch sets it. */

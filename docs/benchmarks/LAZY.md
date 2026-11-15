@@ -95,6 +95,32 @@ the rc-players fix as well. The twin moved by under 0.3 ms between runs.)
   the card's composition (a per-value invalidation in rc-players), and `withoutDefaultAnimations()` for a document whose author
   chose no animation.
 
+### Like for like, with rc-players' per-value invalidation (#915, #916), and the deferral
+
+Since the catalog build turns a template's easing off (#102), `liveryAnimated` lands a bar at once while `composeUiAnimated`'s bars
+ease: not the same work. The lanes now come in pairs: `composeUiAnimatedNoEase` against `liveryAnimated`, and `composeUiAnimated`
+against `liveryAnimatedEased` (the host's second catalog, built with `--default-animations`), plus `liveryAnimatedEasedNoDefer`
+(`deferLayoutAnimations = false`). Pixel 9, rc-players main built from source (3.5.4-SNAPSHOT), spine; p50 / p90 / p99, overrun p99:
+
+| Lane | p50 / p90 / p99 | overrun p99 | frames |
+| --- | --- | --- | --- |
+| Compose UI, no easing | 3.1 / 5.1 / 12.2 | -1.3 | 469 |
+| Livery, no easing (default) | 3.2 / 7.1 / 10.3 | -2.5 | 486 |
+| Compose UI, bars ease | 3.3 / 5.7 / 12.2 | -1.1 | 479 |
+| Livery, bars ease, default deferral | 4.6 / 8.3 / 16.6 | +2.5 | 520 |
+| Livery, bars ease, no deferral | 3.7 / 7.1 / 10.5 | -2.4 | 501 |
+
+- **Without easing, Livery's p99 is under the twin's.** Its p90 is higher (7.1 against 5.1): the update costs more, and the long frames
+  are gone (the previous run's p99 was 17.0 ms, 21.7 before the slot and request fixes).
+- **The long layout passes are the lookahead deferral.** In the eased lane, `AndroidOwner:measureAndLayout` over 4 ms ran 17 times
+  (116 ms, the longest 15.7 ms); inside them `TextAnnotatedStringNode:measure` ran 566 times (28 ms), `TextLayout:initLayout` 415, and 13
+  compositions ran in the measure pass: about 33 texts re-measured on every frame of a bar's easing, though only a bar's width
+  changed. Without deferral: 3 such passes, 15 ms in all, 34 text measures. Without easing: 5 passes, 29 ms. The twin has none.
+- **So deferral is the wrong default for a card that updates on a schedule**: p99 16.6 against 10.5 ms. For a static feed it helps a
+  little (spine `livery` p50 3.4 ms against 3.9 with no deferral, 3 iterations). The player's note (#910) says a document changed a
+  second time keeps the pass; on this lane it still costs. Next: keep the pass after the first change automatically for a card that has
+  changed twice (Livery can count), or fix why the pass re-measures texts whose constraints did not change.
+
 The AndroidX embedded player's animated lane (not on the public page) went from p99 21.5 to 11.8 ms with Livery's change to
 how that adapter takes an update through its request.
 
