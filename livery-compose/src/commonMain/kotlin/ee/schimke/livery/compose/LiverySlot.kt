@@ -11,6 +11,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalDensity
 import ee.schimke.composeai.rcplayer.compose.RcDisplay
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
@@ -110,13 +111,14 @@ fun LiverySlot(
   // A template that finds it cannot play as it composes (a host that prepares in composition) says
   // so here, and the slot draws the app's fallback: for this answer, and for this key when it is
   // shown again at this revision.
-  val cannotPlay = remember(state, revision) {
-    { reason: String ->
-      val fallback = PlanResult.Fallback(reason)
-      slotId?.let { host.resources.keepPlan(it, key, revision, fallback) }
-      state.value = fallback
-    }
+  val markCannotPlay by rememberUpdatedState { reason: String ->
+    val fallback = PlanResult.Fallback(reason)
+    slotId?.let { host.resources.keepPlan(it, key, revision, fallback) }
+    state.value = fallback
   }
+  // One instance for the slot's life: the local is static, so a new value on every data change (a
+  // new key is a new answer state) recomposed everything under it, the whole player tree with it.
+  val cannotPlay = remember { { reason: String -> markCannotPlay(reason) } }
   androidx.compose.runtime.CompositionLocalProvider(LocalLiverySlotId provides slotId, LocalLiveryCannotPlay provides cannotPlay) {
     when (val r = result) {
       null -> fallback(null)
