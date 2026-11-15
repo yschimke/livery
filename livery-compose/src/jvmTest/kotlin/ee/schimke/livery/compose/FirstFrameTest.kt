@@ -222,6 +222,29 @@ class FirstFrameTest {
     assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
   }
 
+  @Test fun aFallbackIsNotBroughtBackByTheNextKey() = runComposeUiTest {
+    val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) })
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed") {
+        when (version) {
+          1 -> PlanResult.Ready(plan("one"))
+          2 -> PlanResult.Fallback("gone")
+          else -> { delay(60); PlanResult.Ready(plan("three")) }
+        }
+      }
+    }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    version = 2
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "fell back: no card")
+    version = 3
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "the dismissed card is not drawn again while the new answer plans")
+  }
+
   @Test fun aSplashScreenStartupMeansNothingWaits() = runComposeUiTest {
     // The app holds its splash screen on a startup: the frame behind it need not wait as well.
     runBlocking { host.resources.startup(this) {}.await() }

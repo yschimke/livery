@@ -94,7 +94,8 @@ fun LiverySlot(
   }
   MarkFirstFrameDrawn(host.resources)
   val result = state.value
-  if (result is PlanResult.Ready) SideEffect { lastDrawn.ready = result }
+  // A fallback drawn means the card is gone: a later key must not bring it back.
+  if (result is PlanResult.Ready) SideEffect { lastDrawn.ready = result } else if (result is PlanResult.Fallback) SideEffect { lastDrawn.ready = null }
   // The slot's id reaches what it draws: the placeholder, its template's.
   // A template that finds it cannot play as it composes (a host that prepares in composition) says
   // so here, and the slot draws the app's fallback: for this answer, and for this key when it is
