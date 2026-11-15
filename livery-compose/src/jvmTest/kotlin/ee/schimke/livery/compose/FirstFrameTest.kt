@@ -204,6 +204,24 @@ class FirstFrameTest {
     assertEquals(1, onAllNodesWithTag("placeholder:feed").fetchSemanticsNodes().size, "no placeholder while the card planned")
   }
 
+  @Test fun newDataForASlotKeepsItsCardUntilTheNewAnswerIsReady() = runComposeUiTest {
+    val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) })
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed") {
+        if (version > 1) delay(60)
+        PlanResult.Ready(plan("headline $version"))
+      }
+    }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    version = 2
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "no placeholder while the new answer plans")
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+  }
+
   @Test fun aSplashScreenStartupMeansNothingWaits() = runComposeUiTest {
     // The app holds its splash screen on a startup: the frame behind it need not wait as well.
     runBlocking { host.resources.startup(this) {}.await() }

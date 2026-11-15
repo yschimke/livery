@@ -76,10 +76,13 @@ fun LiverySlot(
   // the host's first-frame budget, so the first frame has its card rather than its fallback.
   // A window that has drawn already (other content first, then this slot) is past its first frame.
   if (windowHasDrawn()) host.resources.firstFrameDrawn = true
+  // What this slot last drew, kept across [key] changes: new data for a slot that has an answer draws that answer until the
+  // new one is ready, never the placeholder for the time it takes to plan (a visible flicker on every update).
+  val lastDrawn = remember(host, slotId) { LastDrawn() }
   val first = remember(key, host, slotId) {
     val last = slotId?.let { host.resources.lastPlan(it, key, revision) }
     val early = if (last == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null
-    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) }
+    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } ?: lastDrawn.ready
     FirstAnswer(mutableStateOf(answer), early, revision)
   }
   val state = first.state
@@ -91,6 +94,7 @@ fun LiverySlot(
   }
   MarkFirstFrameDrawn(host.resources)
   val result = state.value
+  if (result is PlanResult.Ready) SideEffect { lastDrawn.ready = result }
   // The slot's id reaches what it draws: the placeholder, its template's.
   // A template that finds it cannot play as it composes (a host that prepares in composition) says
   // so here, and the slot draws the app's fallback: for this answer, and for this key when it is
@@ -160,6 +164,9 @@ fun rememberLiveryDisplay(): RcDisplay {
   val density = LocalDensity.current
   return remember(density.density, density.fontScale) { RcDisplay(density.density, density.fontScale) }
 }
+
+/** The last answer a slot drew that had a template in it. */
+private class LastDrawn { var ready: PlanResult.Ready? = null }
 
 /** A slot's answer, and the plan its first frame started (and may have waited for) at [revision]. */
 private class FirstAnswer(
