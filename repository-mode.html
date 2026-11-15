@@ -165,7 +165,22 @@ jobs:
 <tr>
 <td><code>source-artifact</code></td>
 <td>both</td>
-<td>a source tree an earlier job uploaded, downloaded to <code>source</code>, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with an empty tree, since its base was never committed</td>
+<td>a source tree an earlier job uploaded, downloaded to <code>source</code>, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with <code>base-artifact</code>, or with an empty tree without one, since its base was never committed</td>
+</tr>
+<tr>
+<td><code>base-artifact</code></td>
+<td>review</td>
+<td>with <code>source-artifact</code>, the same catalog built from the pull request's base, which an earlier job uploaded: the review compares with it, so a generated catalog gets before and after too (below)</td>
+</tr>
+<tr>
+<td><code>preview-branch</code></td>
+<td>review</td>
+<td>where the preview images go, <code>&lt;preview-branch&gt;/pr-&lt;n&gt;</code> (and <code>-&lt;name&gt;</code>); default <code>livery-previews</code>. Change it when the repository already has a branch of that name: git won't put a branch under another branch's path</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>review</td>
+<td>tells one review from the repository's others, one per catalog: it keys the comment (with a heading), the preview branch (<code>livery-previews/pr-&lt;n&gt;-&lt;name&gt;</code>) and the artifact (<code>livery-previews-&lt;name&gt;</code>); empty for a repository with one catalog</td>
 </tr>
 <tr>
 <td><code>livery-version</code></td>
@@ -255,7 +270,9 @@ Apps read it with <code>GitHubReleaseSource(owner, repo, tag = "catalog")</code>
 <h2 id="pictures-in-the-review">Pictures in the review<a class="headerlink" href="#pictures-in-the-review" title="Permanent link">#</a></h2>
 <p><code>previews: true</code> draws, for each design the change adds, changes or removes, one of its templates
 with every example in its contract (up to four), before and after: the template covering
-<code>preview-size</code>, or the one with the largest smallest size, drawn at that size. The data is the
+<code>preview-size</code> drawn at that size, or else the one with the largest smallest size, drawn at the size
+it was authored at inside its target's range (as the catalog's previews are), so a template whose
+target sets only a width is drawn as tall as it was made. The data is the
 contract's own examples, so the same picture means the same pixels: a design whose templates
 changed but draw the same (an optimisation) shows one row marked unchanged. Placeholders and
 documents that don't decode are listed as not drawn.</p>
@@ -269,6 +286,26 @@ own, <code>livery-previews/pr-&lt;number&gt;</code>, replaced on every push, and
 </code></pre>
 <p>Without it (or from a fork) the comment names the files instead, and the run's <code>livery-previews</code>
 artifact has them. Delete the branches of closed pull requests whenever you like.</p>
+<h3 id="a-generated-catalog-or-several">A generated catalog, or several<a class="headerlink" href="#a-generated-catalog-or-several" title="Permanent link">#</a></h3>
+<p>A catalog whose templates a build captures from Kotlin is never committed, so git has no base for
+the review to compare it with. Build it twice, at the pull request's head and at its base, upload
+both, and pass the base as <code>base-artifact</code>; with several catalogs in one repository, give each
+review its own <code>name</code> so their comments, preview branches and artifacts stay apart:</p>
+<pre><code class="language-yaml">  review:
+    needs: build   # uploads catalog-&lt;series&gt; and catalog-&lt;series&gt;-base for each series
+    strategy:
+      matrix:
+        series: [droidcon, kotlinconf]
+    uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
+    with:
+      source: build/catalog/${{ matrix.series }}
+      source-artifact: catalog-${{ matrix.series }}
+      base-artifact: catalog-${{ matrix.series }}-base
+      name: ${{ matrix.series }}
+      livery-version: 0.3.0
+      previews: true
+    permissions: { contents: write, pull-requests: write }
+</code></pre>
 <h2 id="older-preview-data">Older preview data<a class="headerlink" href="#older-preview-data" title="Permanent link">#</a></h2>
 <p>A contract's <code>examples</code> are the data every template is previewed, reviewed and verified with. When a
 change edits or drops one, the old data doesn't stop mattering: an installed app may still send data
