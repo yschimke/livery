@@ -38,23 +38,23 @@ import org.junit.runner.RunWith
 class DocumentBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
-  @Test fun liveryStartup() = startup("livery", withStartup = true)
-  @Test fun liveryNoStartupStartup() = startup("livery-nostartup")
-  @Test fun liveryInCompositionStartup() = startup("livery-incomposition")
-  @Test fun liveryNoDeferStartup() = startup("livery-nodefer", withStartup = true)
-  @Test fun liveryNoFlatStartup() = startup("livery-noflat", withStartup = true)
-  @Test fun liveryViewStartup() = startup("livery-view", withStartup = true)
-  @Test fun liveryEmbeddedStartup() = startup("livery-embedded", withStartup = true)
-  @Test fun rcPlayerStartup() = startup("rc")
-  @Test fun composeUiStartup() = startup("compose")
+  @Test @Spine fun liveryStartup() = startup("livery", Tier.Spine, withStartup = true)
+  @Test @Spine fun liveryNoStartupStartup() = startup("livery-nostartup", Tier.Spine)
+  @Test @Completion fun liveryInCompositionStartup() = startup("livery-incomposition", Tier.Completion)
+  @Test @Completion fun liveryNoDeferStartup() = startup("livery-nodefer", Tier.Completion, withStartup = true)
+  @Test @Completion fun liveryNoFlatStartup() = startup("livery-noflat", Tier.Completion, withStartup = true)
+  @Test @Completion fun liveryViewStartup() = startup("livery-view", Tier.Completion, withStartup = true)
+  @Test @Completion fun liveryEmbeddedStartup() = startup("livery-embedded", Tier.Completion, withStartup = true)
+  @Test @Completion fun rcPlayerStartup() = startup("rc", Tier.Completion)
+  @Test @Spine fun composeUiStartup() = startup("compose", Tier.Spine)
 
-  @Test fun liveryChange() = change("livery")
-  @Test fun liveryNoDeferChange() = change("livery-nodefer")
-  @Test fun liveryNoFlatChange() = change("livery-noflat")
-  @Test fun liveryViewChange() = change("livery-view")
-  @Test fun liveryEmbeddedChange() = change("livery-embedded")
-  @Test fun rcPlayerChange() = change("rc")
-  @Test fun composeUiChange() = change("compose")
+  @Test @Spine fun liveryChange() = change("livery", Tier.Spine)
+  @Test @Completion fun liveryNoDeferChange() = change("livery-nodefer", Tier.Completion)
+  @Test @Completion fun liveryNoFlatChange() = change("livery-noflat", Tier.Completion)
+  @Test @Completion fun liveryViewChange() = change("livery-view", Tier.Completion)
+  @Test @Completion fun liveryEmbeddedChange() = change("livery-embedded", Tier.Completion)
+  @Test @Completion fun rcPlayerChange() = change("rc", Tier.Completion)
+  @Test @Spine fun composeUiChange() = change("compose", Tier.Spine)
 
   /**
    * The lanes with Livery's startup also report how long it took (`livery:startup`) and how long the
@@ -62,8 +62,9 @@ class DocumentBenchmark {
    * the activity's creation, and the time the first frame waited for it when it does not.
    */
   @OptIn(ExperimentalMetricApi::class)
-  private fun startup(lane: String, withStartup: Boolean = false) = measure(
+  private fun startup(lane: String, tier: Tier, withStartup: Boolean = false) = measure(
     lane,
+    tier.startupIterations,
     listOf(StartupTimingMetric()) +
       if (withStartup) {
         listOf(
@@ -74,20 +75,20 @@ class DocumentBenchmark {
     StartupMode.COLD,
   ) {}
 
-  private fun change(lane: String) = measure(lane, listOf(FrameTimingMetric()), StartupMode.WARM) {
-    repeat(TAPS) {
+  private fun change(lane: String, tier: Tier) = measure(lane, tier.changeIterations, listOf(FrameTimingMetric()), StartupMode.WARM) {
+    repeat(tier.taps) {
       device.findObject(By.res("document")).click()
       device.waitForIdle()
     }
   }
 
-  private fun measure(lane: String, metrics: List<Metric>, mode: StartupMode, block: MacrobenchmarkScope.() -> Unit) =
+  private fun measure(lane: String, iterations: Int, metrics: List<Metric>, mode: StartupMode, block: MacrobenchmarkScope.() -> Unit) =
     rule.measureRepeated(
       packageName = PACKAGE,
       metrics = metrics,
       compilationMode = CompilationMode.Partial(),
       startupMode = mode,
-      iterations = 5,
+      iterations = iterations,
       setupBlock = { if (mode == StartupMode.WARM) { pressHome(); open(lane) } },
     ) {
       if (mode == StartupMode.COLD) open(lane)
@@ -101,6 +102,5 @@ class DocumentBenchmark {
 
   private companion object {
     const val PACKAGE = "ee.schimke.livery.baselineprofile.host"
-    const val TAPS = 10
   }
 }

@@ -28,72 +28,72 @@ class FeedScrollBenchmark {
   @get:Rule val rule = MacrobenchmarkRule()
 
   /** Livery slots: planning, binding, events and the player, as an app's feed runs them. */
-  @Test fun livery() = fling("livery")
+  @Test @Spine fun livery() = fling("livery", tier = Tier.Spine)
 
   /** Livery without the deferred lookahead pass (and so without flat layout): what the deferral saves. */
-  @Test fun liveryView() = fling("livery-view")
-  @Test fun liveryEmbedded() = fling("livery-embedded")
-  @Test fun liveryNoDefer() = fling("livery-nodefer")
+  @Test @Completion fun liveryView() = fling("livery-view", tier = Tier.Completion)
+  @Test @Completion fun liveryEmbedded() = fling("livery-embedded", tier = Tier.Completion)
+  @Test @Completion fun liveryNoDefer() = fling("livery-nodefer", tier = Tier.Completion)
 
   /** Livery with deferral but one composable per component: what flat layout saves. */
-  @Test fun liveryNoFlat() = fling("livery-noflat")
+  @Test @Completion fun liveryNoFlat() = fling("livery-noflat", tier = Tier.Completion)
 
   /** The same prepared documents and values, played by the player with nothing of Livery around it. */
-  @Test fun rcPlayer() = fling("rc")
+  @Test @Completion fun rcPlayer() = fling("rc", tier = Tier.Completion)
 
   /** The same designs written in Compose UI, drawing the same pixels (TwinRenderParityTest). */
-  @Test fun composeUi() = fling("compose")
+  @Test @Spine fun composeUi() = fling("compose", tier = Tier.Spine)
 
   /**
    * Compose's own prefetch options, each for Livery and for the twin, so it is measured as a
    * difference to each (FeedActivity): a cache window of one viewport ahead and half behind, and
    * pausable composition in prefetch.
    */
-  @Test fun liveryCacheWindow() = fling("livery", Options.CacheWindow)
+  @Test @Completion fun liveryCacheWindow() = fling("livery", Options.CacheWindow, tier = Tier.Completion)
 
-  @Test fun composeUiCacheWindow() = fling("compose", Options.CacheWindow)
+  @Test fun composeUiCacheWindow() = fling("compose", Options.CacheWindow, tier = Tier.Completion)
 
-  @Test fun liveryPausable() = fling("livery", Options.Pausable)
+  @Test @Completion fun liveryPausable() = fling("livery", Options.Pausable, tier = Tier.Completion)
 
-  @Test fun composeUiPausable() = fling("compose", Options.Pausable)
+  @Test fun composeUiPausable() = fling("compose", Options.Pausable, tier = Tier.Completion)
 
-  @Test fun liveryEmbeddedCacheWindow() = fling("livery-embedded", Options.CacheWindow)
+  @Test fun liveryEmbeddedCacheWindow() = fling("livery-embedded", Options.CacheWindow, tier = Tier.Completion)
 
-  @Test fun liveryEmbeddedPausable() = fling("livery-embedded", Options.Pausable)
+  @Test fun liveryEmbeddedPausable() = fling("livery-embedded", Options.Pausable, tier = Tier.Completion)
 
   /**
    * Lazy: nothing prepared up front, each slot plans as it composes (planning made to take 20 ms, as an app's own
    * work does). `liveryLazyNoAhead` has the slots alone; `liveryLazyAhead` adds LiveryPrepareAhead with 8 cards ahead
    * of the scroll; `liveryLazyAheadCacheWindow` also gives the list a cache window.
    */
-  @Test fun liveryLazyNoAhead() = fling("livery", Options.LazyNoAhead)
+  @Test @Completion fun liveryLazyNoAhead() = fling("livery", Options.LazyNoAhead, tier = Tier.Completion)
 
-  @Test fun liveryLazyAhead() = fling("livery", Options.LazyAhead)
+  @Test @Spine fun liveryLazyAhead() = fling("livery", Options.LazyAhead, tier = Tier.Spine)
 
-  @Test fun liveryLazyAheadCacheWindow() = fling("livery", Options.LazyAheadCacheWindow)
+  @Test fun liveryLazyAheadCacheWindow() = fling("livery", Options.LazyAheadCacheWindow, tier = Tier.Completion)
 
   /** An infinite feed from androidx Paging (PagingActivity), pages of 20 taking 300 ms, planning 20 ms a card. */
-  @Test fun pagingNoAhead() = fling("livery", Options.PagingNoAhead)
+  @Test @Completion fun pagingNoAhead() = fling("livery", Options.PagingNoAhead, tier = Tier.Completion)
 
-  @Test fun pagingAhead() = fling("livery", Options.PagingAhead)
+  @Test @Spine fun pagingAhead() = fling("livery", Options.PagingAhead, tier = Tier.Spine)
 
   /** The window's size and the planning cost: 2, 4 and 16 cards ahead (8 is `liveryLazyAhead`), and planning at 60 ms. */
-  @Test fun liveryLazyAhead2() = fling("livery", Options.Ahead2)
+  @Test fun liveryLazyAhead2() = fling("livery", Options.Ahead2, tier = Tier.Completion)
 
-  @Test fun liveryLazyAhead4() = fling("livery", Options.Ahead4)
+  @Test fun liveryLazyAhead4() = fling("livery", Options.Ahead4, tier = Tier.Completion)
 
-  @Test fun liveryLazyAhead16() = fling("livery", Options.Ahead16)
+  @Test fun liveryLazyAhead16() = fling("livery", Options.Ahead16, tier = Tier.Completion)
 
-  @Test fun liveryLazyNoAheadSlow() = fling("livery", Options.NoAheadSlow)
+  @Test fun liveryLazyNoAheadSlow() = fling("livery", Options.NoAheadSlow, tier = Tier.Completion)
 
-  @Test fun liveryLazyAheadSlow() = fling("livery", Options.AheadSlow)
+  @Test fun liveryLazyAheadSlow() = fling("livery", Options.AheadSlow, tier = Tier.Completion)
 
   /** The visible polls' numbers change every second while the list flings, for Livery (lazy, 8 ahead), its embedded player and the twin. */
-  @Test fun liveryAnimated() = fling("livery", Options.AnimatedLazy)
+  @Test @Spine fun liveryAnimated() = fling("livery", Options.AnimatedLazy, tier = Tier.Spine)
 
-  @Test fun liveryEmbeddedAnimated() = fling("livery-embedded", Options.AnimatedLazy)
+  @Test @Completion fun liveryEmbeddedAnimated() = fling("livery-embedded", Options.AnimatedLazy, tier = Tier.Completion)
 
-  @Test fun composeUiAnimated() = fling("compose", Options.Animated)
+  @Test @Spine fun composeUiAnimated() = fling("compose", Options.Animated, tier = Tier.Spine)
 
   private enum class Options(val activity: String = "FeedActivity", val apply: Intent.() -> Unit) {
     Ahead2(apply = { putExtra("ahead", 2).putExtra("planDelayMs", 20L) }),
@@ -114,14 +114,14 @@ class FeedScrollBenchmark {
   }
 
   @OptIn(ExperimentalMetricApi::class)
-  private fun fling(mode: String, options: Options = Options.None) =
+  private fun fling(mode: String, options: Options = Options.None, tier: Tier = Tier.Completion) =
     rule.measureRepeated(
       packageName = PACKAGE,
       // Placeholders composed during the fling: cards that reached the screen before they were ready.
       metrics = listOf(FrameTimingMetric(), TraceSectionMetric("host:placeholder", TraceSectionMetric.Mode.Sum)),
       compilationMode = CompilationMode.Partial(),
       startupMode = StartupMode.WARM,
-      iterations = 5,
+      iterations = tier.iterations,
       setupBlock = {
         pressHome()
         startFeed(mode, options)
@@ -129,7 +129,7 @@ class FeedScrollBenchmark {
     ) {
       val feed = device.findObject(By.res("feed"))
       feed.setGestureMargin(device.displayWidth / 5)
-      repeat(FLINGS) {
+      repeat(tier.flings) {
         feed.fling(Direction.DOWN)
         device.waitForIdle()
       }
@@ -144,6 +144,5 @@ class FeedScrollBenchmark {
 
   private companion object {
     const val PACKAGE = "ee.schimke.livery.baselineprofile.host"
-    const val FLINGS = 6
   }
 }
