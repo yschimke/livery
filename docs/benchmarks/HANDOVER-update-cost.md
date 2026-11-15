@@ -3,6 +3,13 @@
 **Task:** find out why updating the data of a visible Livery card costs about twice what the same update costs a Compose UI
 card, and make it cheaper without giving up anything Livery guarantees. This note is everything the previous session knew.
 
+**Status (15 November 2026):** split on the JVM, see [`LAZY.md`](LAZY.md#where-an-updates-cost-goes-jvm-15-november-2026).
+The player alone costs what Livery does; the cost was mostly rc-players' (hypotheses 3 and 4, plus a rounded clip's size
+readback invalidating the whole player on every frame of an easing: yschimke/rc-players#910). Livery's own share was
+hypotheses 1 and 6 (a static local given a new lambda per key, and a `PlayerRequest` rebuilt per plan), fixed. Left: the
+Pixel 9 lanes and the spine after the rc-players release, one composition per updated card per change, and applying
+`withoutDefaultAnimations()` at catalog build time or as a client option.
+
 ## The finding
 
 In the animated feed lane the visible polls' numbers change every second while the list flings. Pixel 9, Android 17,
