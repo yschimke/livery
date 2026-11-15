@@ -179,7 +179,8 @@ class FeedActivity : ComponentActivity() {
       if (!ready) return@setContent
       val listState = if (cacheWindow != null) rememberLazyListState(cacheWindow) else rememberLazyListState()
       if (lazyAhead != null && lazyAhead >= 0 && mode.startsWith("livery")) {
-        LiveryPrepareAhead(listState, host, SLOT, count = { cards.size }, ahead = lazyAhead) { index -> plan(cards[index]) }
+        // The same card and key a slot below uses at this tick, so what is prepared ahead is what scrolls in.
+        LiveryPrepareAhead(listState, host, SLOT, count = { cards.size }, ahead = lazyAhead, key = { slotKey(it, tick) }) { index -> plan(cardAt(cards, index, tick, animateMs)) }
       }
       LazyColumn(
         Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId = true; testTag = "feed" },
@@ -187,16 +188,15 @@ class FeedActivity : ComponentActivity() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         items(cards.size, key = { it }, contentType = { cards[it]::class }) { index ->
-          val base = cards[index]
-          val version = if (animateMs > 0 && base is Card.Poll) tick else 0
-          val card = if (version > 0) Card.Poll(index, version) else base
+          val card = cardAt(cards, index, tick, animateMs)
+          val version = if (card is Card.Poll) card.version else 0
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = if (version > 0) index to version else index, host = host, modifier = modifier, slotId = SLOT) { plan(card) }
+            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = slotKey(index, if (version > 0) version else 0), host = host, modifier = modifier, slotId = SLOT) { plan(card) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
-              is Card.Poll -> PollTwin(card.data, modifier)
+              is Card.Poll -> PollTwin(card.data, modifier, animateShares = animateMs > 0)
             }
           }
         }
@@ -212,6 +212,15 @@ class FeedActivity : ComponentActivity() {
     val named = remember(values) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(values) } }
     RcComposePlayer(prepared, modifier, namedValues = named)
   }
+
+  /** Card [index] at animation [tick]: a poll has moved on by then, a banner never changes. */
+  private fun cardAt(cards: List<Card>, index: Int, tick: Int, animateMs: Long): Card {
+    val base = cards[index]
+    return if (animateMs > 0 && tick > 0 && base is Card.Poll) Card.Poll(index, tick) else base
+  }
+
+  /** A slot's key for card [index] at [tick]: the index, and the tick for a poll that has been updated. */
+  private fun slotKey(index: Int, tick: Int): Any = if (tick > 0 && index % 2 == 1) index to tick else index
 
   /** The templates' bytes by design, read from the bundled catalog once. */
   private val cardBytes: Map<String?, ByteArray> by lazy {
@@ -234,7 +243,7 @@ class FeedActivity : ComponentActivity() {
       override val json = JsonObject(mapOf("headline" to JsonPrimitive(data.headline), "body" to JsonPrimitive(data.body), "cta" to JsonPrimitive(data.cta)))
     }
 
-    class Poll(index: Int, version: Int = 0) : Card() {
+    class Poll(index: Int, val version: Int = 0) : Card() {
       // [version] moves the numbers, as an update to a live poll would.
       private val kotlin = if (version == 0) 0.52f else 0.40f + (version % 10) * 0.02f
       val data = PollData(

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +60,8 @@ fun BannerTwin(data: BannerData, modifier: Modifier = Modifier) {
  * which is what Compose UI would write.
  */
 @Composable
-fun PollTwin(data: PollData, modifier: Modifier = Modifier) {
+/** [animateShares]: a bar eases to its new share, as the template's does when its data changes (the benchmark's animated lanes). */
+fun PollTwin(data: PollData, modifier: Modifier = Modifier, animateShares: Boolean = false) {
   Column(
     modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface).padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -78,7 +80,7 @@ fun PollTwin(data: PollData, modifier: Modifier = Modifier) {
           BasicText(option.result, style = TextStyle(OnSurface, 14.sp))
         }
         Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Track)) {
-          Box(Modifier.fillMaxWidth(option.share).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Primary))
+          Box(Modifier.fillMaxWidth(if (animateShares) animateFloatAsState(option.share).value else option.share).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Primary))
         }
       }
     }
