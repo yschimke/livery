@@ -9,6 +9,9 @@ import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.TemplateEvent
 import ee.schimke.livery.protocol.TemplateRef
+import ee.schimke.livery.publisher.CatalogConfig
+import ee.schimke.livery.publisher.TemplateProcessor
+import ee.schimke.livery.publisher.TemplateSpec
 import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test
@@ -37,8 +40,14 @@ class ComponentPreviewFixtureTest {
   private val contract = json.decodeFromJsonElement(Contract.serializer(), read("two-way/contracts/quantity.json"))
   private val ref = json.decodeFromJsonElement(TemplateRef.serializer(), descriptor.getValue("template"))
   private val data = descriptor.getValue("data").jsonObject
-  private val bytes = File(samples, "two-way/designs/quantity-stepper/in-app.rc").readBytes().toByteString()
-  private val target = json.decodeFromJsonElement(Target.serializer(), read("two-way/designs/quantity-stepper/in-app.json").getValue("target"))
+  private val captured = File(samples, "two-way/designs/quantity-stepper/in-app.rc").readBytes().toByteString()
+  private val sidecar = read("two-way/designs/quantity-stepper/in-app.json")
+  // What the catalog publishes, and so what a preview pins: the captured document through the build's template
+  // processors (by default, its default animations turned off), under this design's sidecar and catalog.
+  private val bytes = TemplateProcessor.Defaults.fold(captured) { document, processor ->
+    processor.process(document, json.decodeFromJsonElement(TemplateSpec.serializer(), sidecar), json.decodeFromJsonElement(CatalogConfig.serializer(), read("two-way/catalog.json")))
+  }
+  private val target = json.decodeFromJsonElement(Target.serializer(), sidecar.getValue("target"))
   private val entry = TemplateEntry(ref.sha256!!, bytes.size.toLong(), ref.designId!!, contract.ref, target)
   private val design = Design(ref.designId!!, contract.ref, "Quantity stepper")
 

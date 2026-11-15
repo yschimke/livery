@@ -44,6 +44,8 @@ kotlin {
       api(libs.okio)
     }
     wasmJsMain.dependencies { implementation(libs.ktor.client.js) }
+    // ComponentPreviewFixtureTest: the bytes a catalog publishes for a captured template (its TemplateProcessors).
+    jvmTest.dependencies { implementation(project(":livery-catalog")) }
     commonTest.dependencies {
       implementation(kotlin("test"))
       implementation(libs.kotlinx.coroutines.test)
