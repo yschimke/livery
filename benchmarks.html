@@ -82,9 +82,163 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 <td>Livery, no flat layout</td>
 <td><code>flattenLayout = false</code></td>
 </tr>
+<tr>
+<td>Livery, lazy</td>
+<td>Nothing prepared before the list shows: each slot plans as it composes, and <code>LiveryPrepareAhead</code> keeps the next 8 cards prepared (planning made to take 20 ms a card, as an app's own work would)</td>
+</tr>
+<tr>
+<td>Livery, paged</td>
+<td>The same over an endless androidx Paging feed, pages of 20 taking 300 ms</td>
+</tr>
 </tbody>
 </table>
-<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">#</a></h2>
+<h2 id="latest-run-15-november">Latest run: 15 November<a class="headerlink" href="#latest-run-15-november" title="Permanent link">#</a></h2>
+<p><strong>Pixel 9, Android 17 (API 37), rc-players 3.5.1, 15 November 2026</strong>, <code>benchmarkRelease</code> with the shipped baseline
+profiles. One device, lanes run one after another. The tests are a T: a <strong>spine</strong> of the variants an app would choose
+between, run more (feed: 5 iterations of 4 flings; start-up: 10; data change: 8), and a short bar of the rest for
+completeness (3 iterations of 3 flings), which says whether a lane is wildly off and not by how much. The first run
+below (14 November) is the one the trace analysis explains.</p>
+<h3 id="feed-fling">Feed fling<a class="headerlink" href="#feed-fling" title="Permanent link">#</a></h3>
+<p>Frame CPU p50 / p90 / p99, and the margin before a missed frame (overrun p99; negative is time to spare). No lane
+here missed a frame.</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">CPU p50</th>
+<th style="text-align: right;">CPU p90</th>
+<th style="text-align: right;">CPU p99</th>
+<th style="text-align: right;">Overrun p99</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">6.2 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.9 ms</td>
+</tr>
+<tr>
+<td>Livery, everything prepared before the list shows</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">6.1 ms</td>
+<td style="text-align: right;">8.7 ms</td>
+<td style="text-align: right;">−5.5 ms</td>
+</tr>
+<tr>
+<td>Livery, lazy: next 8 cards prepared ahead</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">6.3 ms</td>
+<td style="text-align: right;">8.9 ms</td>
+<td style="text-align: right;">−5.3 ms</td>
+</tr>
+<tr>
+<td>Livery, paged (androidx Paging), next 8 ahead</td>
+<td style="text-align: right;">3.6 ms</td>
+<td style="text-align: right;">5.7 ms</td>
+<td style="text-align: right;">7.9 ms</td>
+<td style="text-align: right;">−6.1 ms</td>
+</tr>
+</tbody>
+</table>
+<p>Livery is level with the Compose UI twin, through p99, whether it prepares everything first or only the cards just
+ahead of the scroll, and over a paged feed. The other lanes (3 iterations, so read them as "not far off"): no deferral
+3.6 / 5.8 / 8.1 ms, no flat layout 3.5 / 5.6 / 7.8, and the player alone 4.2 / 6.5 / 9.4.</p>
+<p><strong>Preparing ahead is what keeps a lazy feed level.</strong> A card that scrolls in before its plan is ready draws the host's
+placeholder and swaps when it arrives. Counting the placeholders that became visible (5 iterations of 6 flings, planning
+made to take 20 ms a card): with each slot planning as it composes, <strong>18</strong> cards reached the screen unprepared and p99
+was 11.0 ms; with a plan three times slower, <strong>108</strong> and 12.2 ms; the paged feed, <strong>15</strong> and 10.5 ms. With
+<code>LiveryPrepareAhead</code> and a window of 2, 4 or 8 cards: <strong>0</strong> in every case, p99 8.3 to 8.9 ms, and 8 still held at the
+60 ms plan. The window has to cover the planning time of the fastest fling (about 6 cards a second here); the default
+is 8.</p>
+<p><strong>Compose's prefetch options did not help.</strong> Livery with a cache window (one viewport ahead, half behind) was
+3.8 / 6.1 / 8.6 ms and with pausable composition in prefetch 3.5 / 6.0 / 8.4, against 3.9 / 6.1 / 8.7 without either;
+the Compose UI twin, measured the same way earlier that day, 3.8 / 6.0 / 8.4 and 3.8 / 6.1 / 8.4 against 3.7 / 5.8 / 8.3.
+This feed prepares every card before it shows, so prefetch has little left to hide; a feed whose plans arrive late is
+what the lazy lanes above are for. (Compose turned pausable composition off by default in 1.10.6 for stability, and
+removed the flag in 1.13.0-alpha03; this measures it, it doesn't recommend it.)</p>
+<h3 id="animated-feed-liverys-update-cost-is-higher">Animated feed: Livery's update cost is higher<a class="headerlink" href="#animated-feed-liverys-update-cost-is-higher" title="Permanent link">#</a></h3>
+<p>The visible polls' numbers change every second while the list flings, a bar easing to its new width in both lanes.</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">CPU p50</th>
+<th style="text-align: right;">CPU p90</th>
+<th style="text-align: right;">CPU p99</th>
+<th style="text-align: right;">Overrun p99</th>
+<th style="text-align: right;">Visible placeholders</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">3.2 ms</td>
+<td style="text-align: right;">5.3 ms</td>
+<td style="text-align: right;">12.1 ms</td>
+<td style="text-align: right;">−1.3 ms</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>Livery</td>
+<td style="text-align: right;">5.2 ms</td>
+<td style="text-align: right;">11.1 ms</td>
+<td style="text-align: right;">21.7 ms</td>
+<td style="text-align: right;"><strong>+9.2 ms</strong></td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Here Livery is slower, and misses frames the twin does not.</strong> In the trace, the main thread spends 901 ms in
+recomposition during the fling against 107 ms for the twin (439 composition passes against 151), and the template is
+composed 244 times at about 1.4 ms, where the twin's update costs about 0.7 ms. Binding, preparing and planning are not
+it (binding is 54 ms over 427 updates; preparing is memoized; planning is off the main thread): it is the player and
+the template recomposing on each data change, and laying out again. How much is the Remote Compose player and how much
+Livery's own code around it is not yet split, and it is being worked on
+(<a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/HANDOVER-update-cost.md"><code>docs/benchmarks/HANDOVER-update-cost.md</code></a>).</p>
+<p>An earlier version of Livery also flickered here: a slot whose data changed drew the placeholder while it planned the
+new answer (166 times in a run). A slot now keeps its card until the new answer is ready (and <code>LiverySlot</code> takes an
+<code>identity</code> for which card it is), and the placeholders are 0.</p>
+<h3 id="full-screen-document-changing-data-and-cold-start">Full-screen document: changing data and cold start<a class="headerlink" href="#full-screen-document-changing-data-and-cold-start" title="Permanent link">#</a></h3>
+<p>Data change, 10 taps (<code>FrameTimingMetric</code>): Compose UI 4.1 / 5.5 / 6.0 ms over 10 frames, Livery 5.0 / 10.3 / 12.6 ms
+over 21: two frames a change where the twin draws one, as in the first run.</p>
+<p>Cold start, process start to the first frame with the document in it, 10 iterations, median (range):</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th style="text-align: right;">Initial display</th>
+<th style="text-align: right;">Full display</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Livery (<code>startup</code>, splash screen held)</td>
+<td style="text-align: right;">144 ms (131–211)</td>
+<td style="text-align: right;">208 ms (198–241)</td>
+</tr>
+<tr>
+<td>Livery, no <code>startup</code> (first-frame budget)</td>
+<td style="text-align: right;">211 ms (187–222)</td>
+<td style="text-align: right;">244 ms (211–248)</td>
+</tr>
+<tr>
+<td>Compose UI</td>
+<td style="text-align: right;">199 ms (173–231)</td>
+<td style="text-align: right;">213 ms (190–236)</td>
+</tr>
+</tbody>
+</table>
+<p>With <code>startup</code> Livery's first frame is the one with its card in it, at about the time the twin's first frame arrives;
+without <code>startup</code> the first-frame budget holds it until the slot's answer is there, about 65 ms later. Livery's
+<code>startup</code> itself took 23 ms (21–33) on a worker thread, and the splash screen was held for it by 0 ms in the median
+(24 ms at worst): it fits in the activity's creation on this phone. The ranges overlap: with ten runs per lane the
+ordering between Livery with <code>startup</code> and the twin is a tendency, and the 65 ms to the no-<code>startup</code> lane is not.
+The other lanes (3 iterations; initial / full display): no deferral 138 / 199 ms, no flat layout 182 / 213, preparing
+in composition 210 / 240. The player alone's first frame (143 ms) is an empty one, drawn before its document is ready,
+so it has no comparable initial display; its full display is 245 ms.</p>
+<h2 id="first-run-14-november">First run: 14 November<a class="headerlink" href="#first-run-14-november" title="Permanent link">#</a></h2>
 <p><strong>Pixel 9, Android 17 (API 37), rc-players 3.3.0, 14 November 2026.</strong> Macrobenchmark on a
 <code>benchmarkRelease</code> build with the shipped baseline profiles, 5 iterations per test. One device, lanes run
 one after another rather than interleaved: differences of a few tenths of a millisecond are inside the
@@ -102,7 +256,7 @@ alternating a promo banner and a poll, the Compose UI twin on the left and Liver
 sitting slightly lower), although <code>TwinRenderParityTest</code> finds no differing pixel at density 2.0 on the JVM.
 This phone is at 2.625. Until the test also runs at that density, treat the lanes as the same design, not
 the same pixels.</p>
-<h3 id="feed-fling">Feed fling<a class="headerlink" href="#feed-fling" title="Permanent link">#</a></h3>
+<h3 id="feed-fling_1">Feed fling<a class="headerlink" href="#feed-fling_1" title="Permanent link">#</a></h3>
 <p>6 flings down 200 sample cards (<code>banner-classic</code> and <code>poll-card</code>), <code>FrameTimingMetric</code>. A frame's CPU
 time, and its overrun against the 16.7 ms budget (negative is time to spare).</p>
 <table>
@@ -193,7 +347,7 @@ belongs to the app's list, the flag to Compose):</p>
 </tr>
 </tbody>
 </table>
-<p><em>Planned</em>: their numbers, with the next device run.</p>
+<p>Their numbers are in the latest run above.</p>
 <h3 id="full-screen-document-changing-data">Full-screen document: changing data<a class="headerlink" href="#full-screen-document-changing-data" title="Permanent link">#</a></h3>
 <p>One template (<code>poll-card</code>) in a padded, top-aligned, full-width frame; the sample template takes its
 own height, so this is a card on a full screen. Tapping the document shows the next of ten data variants,
@@ -307,8 +461,8 @@ the frame after <code>reportFullyDrawn()</code>.</p>
 <code>livery</code> lanes prepare their first screen with Livery's <code>startup</code> in <code>onCreate</code> and keep the splash screen up until it
 is ready, as getting-started tells an app to; <code>livery-nostartup</code> has no <code>startup</code>, and Livery's first-frame budget
 (<code>LiveryHost.firstFrameBudgetMillis</code>, 150 ms) holds its first frame for the slot's answer instead. The Compose UI
-twin builds nothing of Livery, where in this run it also read the bundled catalog. <em>Planned</em>: these numbers again
-with that host, with the next device run.</p>
+twin builds nothing of Livery, where in this run it also read the bundled catalog. The latest run above is these
+numbers again with that host.</p>
 <p>The Compose UI twin reaches a drawn document about 26 ms before Livery (194 against 220 ms), and the Remote Compose
 lanes sit between 219 and 236 ms, within 20 ms of each other, which with one run per lane is not a ranking. The Livery
 lanes also plan ten data variants before their first draw (nine more than one plan needs), which is in these numbers.</p>
@@ -702,7 +856,7 @@ track; ones that can resume on another thread (planning, resolving, preparing, f
 </table>
 <p><code>livery-baselineprofile/traces/compare.py</code> totals them per phase for the cold-start window.</p>
 <h2 id="what-is-not-measured-yet">What is not measured yet<a class="headerlink" href="#what-is-not-measured-yet" title="Permanent link">#</a></h2>
-<p><em>Planned</em>: a warm second visit; continuous animation and idle frames; resize and theme change; a
+<p><em>Planned</em>: a warm second visit; idle frames; resize and theme change; a
 per-template split and counts of documents prepared and reused; background preparation traces; memory;
 baseline profile on against off; a low-end device. The plan, in order, is
 <a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/PLAN.md"><code>docs/benchmarks/PLAN.md</code></a>.</p>
@@ -710,6 +864,9 @@ baseline profile on against off; a low-end device. The plan, in order, is
 <p>With a phone connected (a device with a low battery is refused, as it throttles):</p>
 <pre><code class="language-sh">./gradlew :livery-benchmark:connectedBenchmarkReleaseAndroidTest
 </code></pre>
+<p>or, tiered, through <code>adb</code> (about 40 minutes for the routine set, a third of every variant): the spine and the short bar
+of the rest with <code>livery-baselineprofile/run-benchmarks.sh routine</code>, the spine alone with <code>spine</code>, and the sweeps for
+working out a value (window sizes, planning costs) with <code>sweeps</code>.</p>
 <p>The tables under "What the traces show" are <code>python3 livery-baselineprofile/traces/compare.py &lt;the run's
 traces&gt; --svg site/assets/benchmarks</code>, and the Perfetto UI screenshots are
 <code>livery-baselineprofile/traces/screenshots.py</code>, which serves the official Perfetto UI (checked against its
