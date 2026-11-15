@@ -49,6 +49,7 @@ class LiveryCatalogPlugin : Plugin<Project> {
     ext.source.convention(project.layout.projectDirectory.dir("livery"))
     ext.assetsPath.convention("livery")
     ext.inspect.convention(true)
+    ext.defaultAnimations.convention(false)
     ext.capture.outputDir.convention(project.layout.buildDirectory.dir("livery/captured"))
     ext.capture.jvmArgs.convention(emptyList())
     // The project's own code, when it has any: where a catalog's designs usually live.
@@ -75,6 +76,7 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.source.set(ext.capture.mainClass.flatMap { capture.flatMap { c -> c.outputDir } }.orElse(ext.source))
       t.assetsPath.set(ext.assetsPath)
       t.inspect.set(ext.inspect)
+      t.defaultAnimations.set(ext.defaultAnimations)
       t.outputDir.set(project.layout.buildDirectory.dir("generated/livery/assets"))
     }
     // livery-render at the version this plugin was built with, unless the build names its own.
@@ -117,6 +119,13 @@ abstract class LiveryCatalogExtension {
 
   /** Decode every `.rc` and check it against its sidecar (`livery build --inspect`). */
   abstract val inspect: Property<Boolean>
+
+  /**
+   * Whether the templates keep AndroidX's default animations (`livery build --default-animations`). False, the
+   * default: every component that asks for no animation lands at once ([ee.schimke.livery.publisher.TemplateProcessor]),
+   * unless `catalog.json` or its sidecar says `defaultAnimations: true`. True publishes every `.rc` as it is.
+   */
+  abstract val defaultAnimations: Property<Boolean>
 
   /** Capturing the templates from Kotlin at build time; unset, [source] is built as it is. */
   @get:Nested abstract val capture: LiveryCaptureExtension

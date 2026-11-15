@@ -331,6 +331,12 @@ every `.rc` and refuses one that reads or emits anything its sidecar doesn't dec
 value as a different type than its contract declares (a named value's type comes from its default
 in the document).
 
+Before a template is checked and hashed it goes through the builder's `TemplateProcessor`s, and what
+they make of it is what clients download. The default one is rc-player-edit's `withoutDefaultAnimations`:
+every component that names no animation gets a disabled one, so only what the author animated animates,
+in every player. `"defaultAnimations": true` in a sidecar or `catalog.json`, `--default-animations`, or
+a builder with no processors publishes the tree's bytes unchanged.
+
 Contracts evolve within a major only by minor changes (PROTOCOL.md §4.3): additions carry `since`,
 and the build refuses two minors of one major whose difference isn't a minor change. Each template
 entry gets `requiresMinor`, the newest `since` it reads or emits, and `TemplateQuery.minor` keeps a
