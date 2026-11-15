@@ -194,9 +194,17 @@ removed the flag in 1.13.0-alpha03; this measures it, it doesn't recommend it.)<
 recomposition during the fling against 107 ms for the twin (439 composition passes against 151), and the template is
 composed 244 times at about 1.4 ms, where the twin's update costs about 0.7 ms. Binding, preparing and planning are not
 it (binding is 54 ms over 427 updates; preparing is memoized; planning is off the main thread): it is the player and
-the template recomposing on each data change, and laying out again. How much is the Remote Compose player and how much
-Livery's own code around it is not yet split, and it is being worked on
-(<a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/HANDOVER-update-cost.md"><code>docs/benchmarks/HANDOVER-update-cost.md</code></a>).</p>
+the template recomposing on each data change, and laying out again.</p>
+<p>Split on the JVM (<code>./gradlew :livery-compose:liveryAnimatedProfile</code>, the same lane on Compose Desktop), the player alone,
+given the same updating values, costs what Livery does: about 34,400 composable bodies run per update across the visible
+cards, against the twin's 770. Livery adds about 1,500 of its own. Almost all of it is the player composing the whole card
+again on every frame of the bar's easing. In rc-players, a rounded clip's size readback invalidated the whole player as the
+size moved, and a deferred lookahead pass was rebuilt twice for every change. With the fix
+(<a href="https://github.com/yschimke/rc-players/pull/910">yschimke/rc-players#910</a>, not yet released) and Livery's own (a slot
+recomposed its whole card on every new key), an update runs about 2,800 bodies, and Livery's p90 frame matches the twin's
+there. What remains is one composition of each updated card per change. The numbers above are rc-players 3.5.1, and the
+Pixel 9 run after the release is still to do; the split is in
+<a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/LAZY.md"><code>docs/benchmarks/LAZY.md</code></a>.</p>
 <p>An earlier version of Livery also flickered here: a slot whose data changed drew the placeholder while it planned the
 new answer (166 times in a run). A slot now keeps its card until the new answer is ready (and <code>LiverySlot</code> takes an
 <code>identity</code> for which card it is), and the placeholders are 0.</p>
