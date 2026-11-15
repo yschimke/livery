@@ -89,7 +89,9 @@ jobs:
 | Input | Workflow | |
 |---|---|---|
 | `source` | both | the source tree, relative to the repository root |
-| `source-artifact` | both | a source tree an earlier job uploaded, downloaded to `source`, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with an empty tree, since its base was never committed |
+| `source-artifact` | both | a source tree an earlier job uploaded, downloaded to `source`, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with `base-artifact`, or with an empty tree without one, since its base was never committed |
+| `base-artifact` | review | with `source-artifact`, the same catalog built from the pull request's base, which an earlier job uploaded: the review compares with it, so a generated catalog gets before and after too (below) |
+| `name` | review | tells one review from the repository's others, one per catalog: it keys the comment (with a heading), the preview branch (`livery-previews/pr-<n>-<name>`) and the artifact (`livery-previews-<name>`); empty for a repository with one catalog |
 | `livery-version` | both | the Livery CLI release to run |
 | `inspect` | both | decode every template (`--inspect`); default `true` |
 | `comment` | review | post the report on the pull request; default `true` |
@@ -160,7 +162,9 @@ A season swaps the design a contract's slots draw, for everyone, between two dat
 
 `previews: true` draws, for each design the change adds, changes or removes, one of its templates
 with every example in its contract (up to four), before and after: the template covering
-`preview-size`, or the one with the largest smallest size, drawn at that size. The data is the
+`preview-size` drawn at that size, or else the one with the largest smallest size, drawn at the size
+it was authored at inside its target's range (as the catalog's previews are), so a template whose
+target sets only a width is drawn as tall as it was made. The data is the
 contract's own examples, so the same picture means the same pixels: a design whose templates
 changed but draw the same (an optimisation) shows one row marked unchanged. Placeholders and
 documents that don't decode are listed as not drawn.
@@ -178,6 +182,30 @@ own, `livery-previews/pr-<number>`, replaced on every push, and cites that commi
 
 Without it (or from a fork) the comment names the files instead, and the run's `livery-previews`
 artifact has them. Delete the branches of closed pull requests whenever you like.
+
+### A generated catalog, or several
+
+A catalog whose templates a build captures from Kotlin is never committed, so git has no base for
+the review to compare it with. Build it twice, at the pull request's head and at its base, upload
+both, and pass the base as `base-artifact`; with several catalogs in one repository, give each
+review its own `name` so their comments, preview branches and artifacts stay apart:
+
+```yaml
+  review:
+    needs: build   # uploads catalog-<series> and catalog-<series>-base for each series
+    strategy:
+      matrix:
+        series: [droidcon, kotlinconf]
+    uses: yschimke/livery/.github/workflows/catalog-review.yml@v0.3.0
+    with:
+      source: build/catalog/${{ matrix.series }}
+      source-artifact: catalog-${{ matrix.series }}
+      base-artifact: catalog-${{ matrix.series }}-base
+      name: ${{ matrix.series }}
+      livery-version: 0.3.0
+      previews: true
+    permissions: { contents: write, pull-requests: write }
+```
 
 ## Older preview data
 
