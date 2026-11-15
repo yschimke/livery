@@ -35,9 +35,9 @@ for r in "${runs[@]}"; do
   n=$((n + 1))
   # shellcheck disable=SC2086
   adb shell am instrument -w $r -e additionalTestOutputDir "$dev" "$pkg/androidx.test.runner.AndroidJUnitRunner" | tail -4
-  # Each run writes the same file name: keep every run's.
+  # Each run clears the output directory when it starts and writes the same file name: pull each run's before the next.
   adb shell mv "$dev/$pkg-benchmarkData.json" "$dev/run$n-benchmarkData.json" || true
+  mkdir -p "$out" && adb pull "$dev/." "$out" >/dev/null
 done
 echo "took $(( ($(date +%s) - start) / 60 )) minutes"
-mkdir -p "$out" && adb pull "$dev/." "$out" >/dev/null
 echo "results in $out (run<n>-benchmarkData.json, one for each tier run, and a Perfetto trace for each iteration: livery-baselineprofile/traces/)"

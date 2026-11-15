@@ -1,5 +1,6 @@
 package ee.schimke.livery.review
 
+import ee.schimke.livery.publisher.build
 import ee.schimke.livery.publisher.load
 import java.io.File
 import java.nio.file.Files
@@ -41,6 +42,16 @@ class PlayCommandTest {
     assertEquals(0, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", sample.path, "--example", "on", "--out", File(out, "c.png").path))
     val broken = Files.createTempDirectory("broken").toFile().also { File(it, "catalog.json").writeText("{") }
     assertEquals(2, play("$sample/designs/tile-default/in-app.rc", "--contract", "$sample/contracts/status-tile.json", "--catalog", broken.path, "--example", "on", "--out", File(out, "d.png").path))
+  }
+
+  @Test fun aSourceTemplateFindsItsPublishedEntry() {
+    // The build rewrites the poll card (its default animations off), so its entry names the published bytes' hash;
+    // the source file still finds it, for its fonts and images.
+    val built = ee.schimke.livery.publisher.CatalogBuilder(now = { 0 }).build(sample, ee.schimke.livery.publisher.Layout.Static, serial = 0)
+    val source = okio.ByteString.of(*File(sample, "designs/poll-card/in-app.rc").readBytes())
+    val entry = kotlin.test.assertNotNull(publishedEntry(built, source))
+    assertEquals("poll-card", entry.designId)
+    kotlin.test.assertNotEquals(source.sha256().hex(), entry.sha256, "the poll card was published as it is in the tree")
   }
 
   @Test fun aJavaThatWontStartIsAnErrorNotAFailure() {

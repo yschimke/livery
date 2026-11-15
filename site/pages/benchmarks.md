@@ -20,7 +20,7 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 
 ## Latest run: 15 November
 
-**Pixel 9, Android 17 (API 37), rc-players 3.5.1, 15 November 2026**, `benchmarkRelease` with the shipped baseline
+**Pixel 9, Android 17 (API 37), rc-players 3.5.3, 15 November 2026**, `benchmarkRelease` with the shipped baseline
 profiles. One device, lanes run one after another. The tests are a T: a **spine** of the variants an app would choose
 between, run more (feed: 5 iterations of 4 flings; start-up: 10; data change: 8), and a short bar of the rest for
 completeness (3 iterations of 3 flings), which says whether a lane is wildly off and not by how much. The first run
@@ -33,14 +33,14 @@ here missed a frame.
 
 | Lane | CPU p50 | CPU p90 | CPU p99 | Overrun p99 |
 | --- | ---: | ---: | ---: | ---: |
-| Compose UI | 3.9 ms | 6.2 ms | 8.4 ms | −5.9 ms |
-| Livery, everything prepared before the list shows | 3.9 ms | 6.1 ms | 8.7 ms | −5.5 ms |
-| Livery, lazy: next 8 cards prepared ahead | 3.9 ms | 6.3 ms | 8.9 ms | −5.3 ms |
-| Livery, paged (androidx Paging), next 8 ahead | 3.6 ms | 5.7 ms | 7.9 ms | −6.1 ms |
+| Compose UI | 3.6 ms | 5.8 ms | 8.0 ms | −6.2 ms |
+| Livery, everything prepared before the list shows | 3.8 ms | 6.0 ms | 8.4 ms | −5.8 ms |
+| Livery, lazy: next 8 cards prepared ahead | 3.5 ms | 5.6 ms | 8.3 ms | −6.0 ms |
+| Livery, paged (androidx Paging), next 8 ahead | 3.5 ms | 5.4 ms | 8.1 ms | −6.3 ms |
 
 Livery is level with the Compose UI twin, through p99, whether it prepares everything first or only the cards just
 ahead of the scroll, and over a paged feed. The other lanes (3 iterations, so read them as "not far off"): no deferral
-3.6 / 5.8 / 8.1 ms, no flat layout 3.5 / 5.6 / 7.8, and the player alone 4.2 / 6.5 / 9.4.
+3.7 / 5.8 / 8.2 ms, no flat layout 3.6 / 5.9 / 8.9, and the player alone 3.9 / 6.3 / 8.5.
 
 **Preparing ahead is what keeps a lazy feed level.** A card that scrolls in before its plan is ready draws the host's
 placeholder and swaps when it arrives. Counting the placeholders that became visible (5 iterations of 6 flings, planning
@@ -48,66 +48,69 @@ made to take 20 ms a card): with each slot planning as it composes, **18** cards
 was 11.0 ms; with a plan three times slower, **108** and 12.2 ms; the paged feed, **15** and 10.5 ms. With
 `LiveryPrepareAhead` and a window of 2, 4 or 8 cards: **0** in every case, p99 8.3 to 8.9 ms, and 8 still held at the
 60 ms plan. The window has to cover the planning time of the fastest fling (about 6 cards a second here); the default
-is 8.
+is 8. (The short bar's shorter flings agree: 10 and 8 unprepared cards without a window.)
 
 **Compose's prefetch options did not help.** Livery with a cache window (one viewport ahead, half behind) was
-3.8 / 6.1 / 8.6 ms and with pausable composition in prefetch 3.5 / 6.0 / 8.4, against 3.9 / 6.1 / 8.7 without either;
+3.5 / 5.8 / 8.8 ms and with pausable composition in prefetch 3.4 / 5.6 / 7.9, against 3.8 / 6.0 / 8.4 without either;
 the Compose UI twin, measured the same way earlier that day, 3.8 / 6.0 / 8.4 and 3.8 / 6.1 / 8.4 against 3.7 / 5.8 / 8.3.
 This feed prepares every card before it shows, so prefetch has little left to hide; a feed whose plans arrive late is
 what the lazy lanes above are for. (Compose turned pausable composition off by default in 1.10.6 for stability, and
 removed the flag in 1.13.0-alpha03; this measures it, it doesn't recommend it.)
 
-### Animated feed: Livery's update cost is higher
+### Animated feed
 
 The visible polls' numbers change every second while the list flings, a bar easing to its new width in both lanes.
 
 | Lane | CPU p50 | CPU p90 | CPU p99 | Overrun p99 | Visible placeholders |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Compose UI | 3.2 ms | 5.3 ms | 12.1 ms | −1.3 ms | 0 |
-| Livery | 5.2 ms | 11.1 ms | 21.7 ms | **+9.2 ms** | 0 |
+| Compose UI | 3.4 ms | 5.7 ms | 11.9 ms | −1.7 ms | 0 |
+| Livery | 5.4 ms | 8.8 ms | 17.0 ms | +3.0 ms | 0 |
 
-**Here Livery is slower, and misses frames the twin does not.** In the trace, the main thread spends 901 ms in
-recomposition during the fling against 107 ms for the twin (439 composition passes against 151), and the template is
-composed 244 times at about 1.4 ms, where the twin's update costs about 0.7 ms. Binding, preparing and planning are not
-it (binding is 54 ms over 427 updates; preparing is memoized; planning is off the main thread): it is the player and
-the template recomposing on each data change, and laying out again.
+**Livery updates a card more slowly than Compose UI does, and still misses an occasional frame the twin does not**,
+though the gap is much smaller than it was (p99 21.7 ms and p90 11.1 ms before the changes below; the twin did not move).
+In the trace, the main thread spends 241 ms in recomposition during the fling against 75 ms for the twin (213
+composition passes against 96), and the template is composed 96 times at about 0.9 ms each, where the twin's update costs
+about 0.7 ms. What remains is mostly layout: a few long `measureAndLayout` passes (up to 17 ms) as bars ease, which the
+twin does not have. Binding, preparing and planning are not it (binding is 46 ms over 270 updates; preparing is memoized;
+planning is off the main thread).
 
-Split on the JVM (`./gradlew :livery-compose:liveryAnimatedProfile`, the same lane on Compose Desktop), the player alone,
-given the same updating values, costs what Livery does: about 34,400 composable bodies run per update across the visible
-cards, against the twin's 770. Livery adds about 1,500 of its own. Almost all of it is the player composing the whole card
-again on every frame of the bar's easing. In rc-players, a rounded clip's size readback invalidated the whole player as the
-size moved, and a deferred lookahead pass was rebuilt twice for every change. With the fix
-([yschimke/rc-players#910](https://github.com/yschimke/rc-players/pull/910), not yet released) and Livery's own (a slot
-recomposed its whole card on every new key), an update runs about 2,800 bodies, and Livery's p90 frame matches the twin's
-there. What remains is one composition of each updated card per change. The numbers above are rc-players 3.5.1, and the
-Pixel 9 run after the release is still to do; the split is in
+Where the cost was: on the JVM (`./gradlew :livery-compose:liveryAnimatedProfile`, the same lane on Compose Desktop) the
+player alone, given the same updating values, cost what Livery did, about 34,400 composable bodies run per update across
+the visible cards against the twin's 770, and Livery added about 1,500 of its own. The player composed the whole card
+again on every frame of a bar's easing (a rounded clip's size readback invalidated the whole player as the size moved,
+and a deferred lookahead pass was rebuilt twice for every change), and a slot recomposed its whole card on every new key.
+Those are fixed in rc-players 3.5.3 and in Livery, and an update now runs about 2,800 bodies. On the phone the two
+fixes are not equal: Livery's own accounts for most of the improvement (p99 17.0 ms and p90 9.5 ms with the previous
+rc-players, 3.5.1, as well), and the rc-players fix takes the main thread's recomposition during the fling from 361 to
+241 ms and p90 from 9.5 to 8.8 ms. What is left is one composition of each updated card per change, and the layout
+animation. The split is in
 [`docs/benchmarks/LAZY.md`](https://github.com/yschimke/livery/blob/main/docs/benchmarks/LAZY.md).
 
-An earlier version of Livery also flickered here: a slot whose data changed drew the placeholder while it planned the
-new answer (166 times in a run). A slot now keeps its card until the new answer is ready (and `LiverySlot` takes an
-`identity` for which card it is), and the placeholders are 0.
+Livery also used to flicker here: a slot whose data changed drew the placeholder while it planned the new answer (166
+times in a run). A slot now keeps its card until the new answer is ready (and `LiverySlot` takes an `identity` for which
+card it is), and the placeholders are 0.
 
 ### Full-screen document: changing data and cold start
 
-Data change, 10 taps (`FrameTimingMetric`): Compose UI 4.1 / 5.5 / 6.0 ms over 10 frames, Livery 5.0 / 10.3 / 12.6 ms
-over 21: two frames a change where the twin draws one, as in the first run.
+Data change, 10 taps (`FrameTimingMetric`): Compose UI 4.1 / 5.4 / 8.0 ms over 10 frames, Livery 5.1 / 10.0 / 11.5 ms
+over 20: two frames a change where the twin draws one, as in the first run.
 
 Cold start, process start to the first frame with the document in it, 10 iterations, median (range):
 
 | Lane | Initial display | Full display |
 | --- | ---: | ---: |
-| Livery (`startup`, splash screen held) | 144 ms (131–211) | 208 ms (198–241) |
-| Livery, no `startup` (first-frame budget) | 211 ms (187–222) | 244 ms (211–248) |
-| Compose UI | 199 ms (173–231) | 213 ms (190–236) |
+| Livery (`startup`, splash screen held) | 189 ms (137–208) | 214 ms (201–240) |
+| Livery, no `startup` (first-frame budget) | 213 ms (188–228) | 242 ms (222–260) |
+| Compose UI | 190 ms (183–209) | 203 ms (189–217) |
 
 With `startup` Livery's first frame is the one with its card in it, at about the time the twin's first frame arrives;
-without `startup` the first-frame budget holds it until the slot's answer is there, about 65 ms later. Livery's
-`startup` itself took 23 ms (21–33) on a worker thread, and the splash screen was held for it by 0 ms in the median
-(24 ms at worst): it fits in the activity's creation on this phone. The ranges overlap: with ten runs per lane the
-ordering between Livery with `startup` and the twin is a tendency, and the 65 ms to the no-`startup` lane is not.
-The other lanes (3 iterations; initial / full display): no deferral 138 / 199 ms, no flat layout 182 / 213, preparing
-in composition 210 / 240. The player alone's first frame (143 ms) is an empty one, drawn before its document is ready,
-so it has no comparable initial display; its full display is 245 ms.
+the first-frame budget without `startup` holds it until the slot's answer is there, 20 to 25 ms later at the median. Livery's
+`startup` itself took 21 ms on a worker thread, and the splash screen was held for it by 0 ms in the median: it fits in the
+activity's creation on this phone. The ranges are wide and overlap (Livery's initial display has run from 131 to 211 ms
+across runs, and the twin's from 173 to 231), so with ten runs per lane the order of Livery with `startup` and the
+twin is a tendency, not a result. The other lanes (3 iterations; initial / full display): no deferral 138 / 199 ms,
+no flat layout 182 / 213, preparing in composition 210 / 240. The player alone's first frame (143 ms) is an empty one, drawn
+before its document is ready, so it has no comparable initial display; its full display is 245 ms.
 
 ## First run: 14 November
 

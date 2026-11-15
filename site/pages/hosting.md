@@ -42,6 +42,15 @@ jobs:
 declare, or reads a value as a different type than its contract declares. Use it whenever
 documents come from more than one tool, or from an agent.
 
+A template animates only what its author asked to animate. AndroidX eases every component to new bounds, and
+fades it across a visibility change, over 300 ms unless the document says otherwise, so a card whose data changes
+eases every change and its player pays for the animation pass. `livery build` gives every component that names no
+animation a disabled one (rc-player-edit's `withoutDefaultAnimations`). The published `.rc` is the result, so every
+player, AndroidX's included, plays it the same, and a component the author did animate keeps its animation. To keep
+AndroidX's defaults, set `"defaultAnimations": true` in a design's sidecar (that template) or in `catalog.json` (the
+whole catalog), or build with `--default-animations` (everything, as the tree has it; the Gradle plugin's
+`livery { defaultAnimations.set(true) }`).
+
 `--a2ui <catalogId>` also writes `a2ui-catalog.json`: the catalog's contracts as
 [A2UI](https://a2ui.org) components (one per contract major, at its newest minor), the same schema
 an app's `livery-a2ui-compose` advertises, for prompting an agent that answers in A2UI.

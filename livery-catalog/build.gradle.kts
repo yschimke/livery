@@ -21,6 +21,10 @@ kotlin {
       api(project(":livery-client"))
       // TemplateInspector, for `--inspect`: what a document really reads and emits.
       api(project(":livery-instantiate"))
+      // The template processors (TemplateProcessor): rc-player-edit's document rewrites.
+      implementation(project.dependencies.platform(libs.rc.players.bom))
+      implementation(libs.rc.player.edit)
+      implementation(libs.rc.player.protocol)
       // Source trees: the system's file system at the JVM edge, a FakeFileSystem in memory.
       api(libs.okio)
       implementation(libs.okio.fakefilesystem)

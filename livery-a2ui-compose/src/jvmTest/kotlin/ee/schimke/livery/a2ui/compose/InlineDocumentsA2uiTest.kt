@@ -1,5 +1,6 @@
 package ee.schimke.livery.a2ui.compose
 
+import ee.schimke.livery.publisher.build
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import androidx.a2ui.model.protocol.A2uiClientErrorMessage
@@ -35,8 +36,15 @@ object InlineFixtures {
   private val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
   val key = TrustedKey("app", pair.public.encoded.takeLast(32).toByteArray().toByteString())
 
-  /** The sample's real promo banner document. */
-  val banner: ByteString = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }, "designs/banner-classic/in-app.rc").readBytes().toByteString()
+  /**
+   * The sample's real promo banner document, as its catalog publishes it: the build's template processors run over
+   * the tree's `.rc`, so an agent naming a bundled document by its hash names the published bytes, from the manifest.
+   */
+  val banner: ByteString = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" }).let { tree ->
+    val built = ee.schimke.livery.publisher.CatalogBuilder(now = { 0 }).build(tree, ee.schimke.livery.publisher.Layout.Static, serial = 0)
+    val entry = built.manifest.templates.single { it.designId == "banner-classic" && it.target.surface == "in-app" }
+    built.files.getValue("blobs/${entry.sha256}.rc")
+  }
 
   /** The banner with a runtime shader defined in it. */
   val bannerWithShader: ByteString = RcDocumentCodec.decode(banner.toByteArray(), RcWireLimits()).let { d ->
