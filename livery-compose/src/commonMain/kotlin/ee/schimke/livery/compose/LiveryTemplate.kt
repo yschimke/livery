@@ -157,7 +157,7 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
     val current by rememberUpdatedState(plan)
     // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.
     val pushed = (plan.bindings + extra).toPlayerValues()
-    val values = remember(bytes) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
+    val values = remember(bytes, plan.decisionId, plan.feedItem?.id) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
     SideEffect {
       values.keys.toList().filter { it !in pushed }.forEach(values::remove)
       values.putAll(pushed)
@@ -279,19 +279,23 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
         LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
         LocalRcFlattenLayout provides host.flattenLayout,
       ) {
-        host.player.Play(
-          PlayerRequest(
-            template = plan.template,
-            prepared = prepared,
-            values = values,
-            bindings = { current.bindings },
-            imageLoader = imageLoader,
-            typefaces = loader,
-            theme = host.theme,
-            onAction = { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } },
-            modifier = Modifier,
-          ),
-        )
+        // One player state per item or decision: a data update to the same one keeps it, another one starts fresh, so
+        // document-local state never carries from one card to the next.
+        androidx.compose.runtime.key(plan.decisionId, plan.feedItem?.id) {
+          host.player.Play(
+            PlayerRequest(
+              template = plan.template,
+              prepared = prepared,
+              values = values,
+              bindings = { current.bindings },
+              imageLoader = imageLoader,
+              typefaces = loader,
+              theme = host.theme,
+              onAction = { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } },
+              modifier = Modifier,
+            ),
+          )
+        }
       }
     }
     LaunchedEffect(tracker) {
