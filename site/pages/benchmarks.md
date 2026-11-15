@@ -20,7 +20,7 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 
 ## Latest run: 15 November
 
-**Pixel 9, Android 17 (API 37), rc-players main built from source (3.5.4-SNAPSHOT: the per-value invalidation changes, not yet released), 15 November 2026**, `benchmarkRelease` with the shipped baseline
+**Pixel 9, Android 17 (API 37), rc-players main built from source as 3.5.4-SNAPSHOT, the code since released as rc-players 3.6.0 with the per-value invalidation changes, which Livery now depends on, 15 November 2026**, `benchmarkRelease` with the shipped baseline
 profiles. One device, lanes run one after another. The tests are a T: a **spine** of the variants an app would choose
 between, run more (feed: 5 iterations of 4 flings; start-up: 10; data change: 8), and a short bar of the rest for
 completeness (3 iterations of 3 flings), which says whether a lane is wildly off and not by how much. The first run
