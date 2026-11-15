@@ -128,7 +128,12 @@ beside its data: `repository.theme("dusk")` gives them as bindings to pass as `e
 pack recolours every template that reads those names, with no new document. To use the app's own
 Material 3 colours (dynamic colour included), `livery-compose-material3` gives
 `MaterialTheme.colorScheme.toLiveryTheme()` as the same bindings, with `theme.surface` from the
-scheme's `surfaceContainerHigh` (the surface a card sits on) unless you pass another. Theme packs and
+scheme's `surfaceContainerHigh` (the surface a card sits on) unless you pass another. The other way,
+`colorScheme.withLiveryTheme(pack)` lays a theme pack's roles over a Material 3 scheme, so the app's
+own composables take the colours its templates draw with (from the next release). Roles the pack
+doesn't set keep the scheme's colour, so a pack of a few roles works over a scheme seeded from its
+primary. `theme.surface` is a card's colour, so it becomes `surfaceContainerHigh`; pass
+`surfaceIsCard = false` for a pack whose surface is the screen's. Theme packs and
 placement rules come from `repository.current()`: the downloaded catalog, or the bundled one before
 the first download.
 
