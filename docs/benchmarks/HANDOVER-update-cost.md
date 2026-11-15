@@ -10,6 +10,15 @@ hypotheses 1 and 6 (a static local given a new lambda per key, and a `PlayerRequ
 Pixel 9 lanes and the spine after the rc-players release, one composition per updated card per change, and applying
 `withoutDefaultAnimations()` at catalog build time or as a client option.
 
+## Status
+
+Worked on since: Livery's slot and request fixes and rc-players' fix for a rounded clip's size readback and the deferred lookahead
+pass are in, and the animated lane was re-run on the phone (`docs/benchmarks/LAZY.md`): p99 21.7 to 17.0 ms against the twin's
+11.9, recomposition 901 to 241 ms. Livery's own change gave most of the p99 (17.0 ms on rc-players 3.5.1 too); the rc-players
+fix cut recomposition by a third. What remains is one composition of each updated card per change (hypothesis 3 below, a
+per-value invalidation in rc-players) and long layout passes in the animation phase (hypothesis 4; up to 17 ms, `measureAndLayout`,
+which the twin does not have). The findings below are the starting numbers.
+
 ## The finding
 
 In the animated feed lane the visible polls' numbers change every second while the list flings. Pixel 9, Android 17,

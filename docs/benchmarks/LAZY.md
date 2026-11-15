@@ -63,64 +63,40 @@ window has to cover the planning time of the fastest fling (about 6 cards a seco
 ## Animation: the visible polls' numbers change every second while the list flings
 
 `liveryAnimated`, `liveryEmbeddedAnimated` and `composeUiAnimated` (the twin's bars ease to their new shares too, as the
-template's do), with prepare-ahead on for Livery.
+template's do), with prepare-ahead on for Livery. Pixel 9, spine (5 iterations of 4 flings). Frame CPU p50 / p90 / p99 and the
+margin before a missed frame (overrun p99), iteration 2's main thread in the trace:
 
-| Lane | p99 frame CPU | overrun p99 | frames | placeholders |
-| --- | --- | --- | --- | --- |
-| Compose UI twin (bars animated) | 12.0 | -1.5 | 724 | 0 |
-| Livery, before the slot fix | 17.2 | +3.0 | 716 | 166 |
-| Livery, with the slot fix | 21.1 | +8.2 | 882 | 0 |
-| Livery embedded, before the fix | 23.1 | +9.0 | 754 | 173 |
-| Livery embedded, with the fix | 21.7 | +10.4 | 772 | – |
+| Lane | p50 / p90 / p99 | overrun p99 | frames | `Recomposer:recompose` | composition passes | template compositions |
+| --- | --- | --- | --- | --- | --- | --- |
+| Compose UI twin (bars animated) | 3.4 / 5.7 / 11.9 | -1.7 | 489 | 75 ms (17) | 96 | none |
+| Livery, rc-players 3.5.1, before this work | 5.2 / 11.1 / 21.7 | +9.2 | 574 | 901 ms (173) | 439 | 244 at 1.4 ms |
+| Livery, slot and request fixes, rc-players 3.5.1 | 5.6 / 9.5 / 17.0 | +2.7 | 564 | 361 ms (88) | 301 | 97 at 0.8 ms |
+| Livery, slot and request fixes, rc-players 3.5.3 | 5.4 / 8.8 / 17.0 | +3.0 | 530 | 241 ms (59) | 213 | 96 at 0.9 ms |
 
-- **A flicker.** A `LiverySlot` whose key changed (new data) drew the placeholder while it planned the new answer: 166
-  placeholders in the run (counted as composed, so some were off screen), card, placeholder, card on every update. Fixed in the
-  slot (it keeps the card it drew while its `identity` is the same: the feed passes the card's index), which took the visible
-  ones to 0.
-- **The cost of an update is what remains.** Main thread, during the fling (iteration 2): `Recomposer:recompose` 901 ms for Livery
-  against 107 ms for the twin; 439 composition passes against 151; the template composed 244 times at about 1.4 ms (350 ms
-  in all) against the twin's 0.7 ms an update. Binding is not it (`livery:bind` 427 calls, 54 ms in all, and 424 prepares for
-  17 ms): it is the player composing a document node by node for every change.
-- **Layout animation is part of the extra frames**: the template eases a bar to its new width, as 112 ms of animation-phase work
-  (the twin, with its bars animated, spends 6 ms); Livery draws 872 frames to the twin's 724.
-### Where an update's cost goes (JVM, 15 November 2026)
+(The first row of Livery is the 15 November spine run; the other two are the same lane built with Livery's change, then with
+the rc-players fix as well. The twin moved by under 0.3 ms between runs.)
 
-`./gradlew :livery-compose:liveryAnimatedProfile` plays the same lane on the JVM (Compose Desktop, software raster, so the shape
-of the numbers rather than their size): poll cards in a `LazyColumn`, every card's numbers changing once a second, drawn by the
-twin, by the player alone with its values map updated in place (`rc`), and by Livery. Besides frame times it counts every
-composable body that ran, with Compose's composition tracer. The list is held still (`-Plivery.feed.step=0`) to show the
-updates alone; scrolling 4 px a frame gives the same picture. With no updates all three cost the same (p99 5.1 to 6.2 ms).
+- **A flicker, fixed first.** A `LiverySlot` whose key changed (new data) drew the placeholder while it planned the new answer:
+  166 placeholders in the run (counted as composed, so some were off screen), card, placeholder, card on every update. Fixed in
+  the slot (it keeps the card it drew while its `identity` is the same: the feed passes the card's index), which took the
+  visible ones to 0.
+- **Livery's own change did most of the work on the phone**: the slot provided a static composition local with a new lambda for
+  every key (so every update recomposed the whole player tree under it), and `LiveryTemplate` built a new request for every plan
+  (so the player never skipped a data-only change). p99 21.7 to 17.0 ms, recomposition 901 to 361 ms, template compositions 244
+  to 97.
+- **The rc-players fix takes a third more off the main thread** (361 to 241 ms of recomposition, 301 to 213 passes) and p90
+  from 9.5 to 8.8 ms, but the p99 does not move on the device (17.0 ms). On the JVM, where the same lane runs software-rendered,
+  it was far larger (34,400 composable bodies per update down to 2,660): the bodies it removes are mostly cheap on a phone.
+  What it fixes: a rounded clip's size readback invalidated the whole player as a bar's width moved (every frame of the easing),
+  and a deferred lookahead pass was rebuilt twice for every host change.
+- **What is left**: one composition of each updated card per change, and layout: in the last run `AndroidOwner:measureAndLayout`
+  took 71 ms in the animation phase over 7 passes, the longest 17 ms, where the twin has none. That is the p99.
+- Next: why a bar's layout animation needs a long pass (the lookahead), whether an update that only changes values can skip
+  the card's composition (a per-value invalidation in rc-players), and `withoutDefaultAnimations()` for a document whose author
+  chose no animation.
 
-| Lane | p90 | p99 | bodies run per update |
-| --- | ---: | ---: | ---: |
-| Compose UI twin, bars eased | 4.82 ms | 6.55 ms | 768 |
-| Compose UI twin, no easing | 4.80 ms | 6.30 ms | 169 |
-| player alone, rc-players 3.5.1 | 9.92 ms | 18.15 ms | 34,398 |
-| Livery, rc-players 3.5.1 | 9.05 ms | 16.85 ms | 35,911 |
-| Livery with its fixes, rc-players 3.5.1 | 9.96 ms | 16.07 ms | 34,564 |
-| player alone, yschimke/rc-players#910 | 4.74 ms | 14.51 ms | 2,660 |
-| Livery with its fixes, #910 | 4.84 ms | 12.98 ms | 2,826 |
-| Livery, #910, templates through `withoutDefaultAnimations()` | 4.44 ms | 11.64 ms | 1,274 |
-
-- **The player alone costs what Livery costs**: Livery adds about 1,500 bodies to the player's 34,400. Almost all of it was in
-  rc-players. Bodies by frame after an update, player alone: `24 2185 1922 1922 … (17 frames) 213 213 … 878`: the whole card
-  composed again on every frame of the bar's 300 ms easing. The twin: `196 0 158 158 158 17 17 17`.
-- **Why, in rc-players** ([yschimke/rc-players#910](https://github.com/yschimke/rc-players/pull/910)): the creation library writes a
-  size readback for every rounded clip, and a component publishing its size from the measure pass invalidated the whole player
-  whenever the size moved, so every frame of a bar's easing recomposed every node. Also, a player that defers the lookahead pass
-  rebuilt the tree twice for each change, switching the pass on as the change landed and off once it settled. #910 repaints
-  instead when nothing laid out reads the size, and keeps the pass for a document changed a second time.
-- **Livery's own share**: a slot handed a new `LocalLiveryCannotPlay` lambda (a static local) on every new key, which recomposed
-  the whole player tree under it; and `LiveryTemplate` built a new `PlayerRequest` for every plan, so the player never skipped a
-  data-only change. Both fixed. That is the 34,564 against 35,911 above, and the 166 bodies a Livery update costs over the
-  player alone with #910 (64 + 111 + 1,989 + 427 against 24 + 1,989 + 427).
-- **What remains**: a changed value still composes the whole card once (about 480 bodies a card), because one invalidation
-  counter drives every node in the player. That, all on one frame when every visible card updates at once, is the p99 gap to
-  the twin. The easing itself is now cheap (p90 matches the twin's).
-- **Animation as an author's choice**: rc-players' `withoutDefaultAnimations()` gives every component without an animation spec a
-  disabled one, so only what the template asks to animate does, and a template with nothing to animate never builds the
-  lookahead pass. Livery can apply it at catalog build time or as a client option (not yet: it needs the rc-players release).
-- Not yet measured on the Pixel 9: the lanes above with #910, and the spine before and after.
+The AndroidX embedded player's animated lane (not on the public page) went from p99 21.5 to 11.8 ms with Livery's change to
+how that adapter takes an update through its request.
 
 ## Running them
 
