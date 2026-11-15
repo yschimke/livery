@@ -34,6 +34,23 @@ class TemplateInspectorTest {
     assertEquals(listOf("reads [hero] that its sidecar doesn't declare"), problems)
   }
 
+  /**
+   * A breakpoint's component size (rc-players' `RcSizeBreakpoint`) and a Wear container's frame are
+   * named values the document and its host fill in: no sidecar declares them.
+   */
+  @Test fun aDocumentsOwnExpressionsAndItsHostsValuesNeedNoDeclaration() {
+    val d = RcDocumentCodec.decode(tile.toByteArray(), RcWireLimits())
+    val named = listOf(
+      RcNamedVariable(9001, RcNamedVariable.FLOAT_TYPE, "USER:__rc_breakpoint_0"),
+      RcNamedVariable(9002, RcNamedVariable.FLOAT_TYPE, "USER:wear.container.horizontal_padding"),
+    )
+    val bytes = RcDocumentCodec.encode(d.copy(operations = named + d.operations)).toByteString()
+    val f = TemplateInspector.facts(bytes)!!
+    assertTrue("__rc_breakpoint_0" in f.reads && "wear.container.horizontal_padding" in f.reads, "${f.reads}")
+    assertEquals(setOf("light.kitchen.state", "light.kitchen.is_on"), f.declaredReads)
+    assertEquals(emptyList(), TemplateInspector.problems(bytes, listOf("light.kitchen.state", "light.kitchen.is_on"), listOf("ha")))
+  }
+
   @Test fun typesComeFromTheDocument() {
     val f = TemplateInspector.facts(tile)!!
     val right = Contract("ha/tile", 1, inputs = mapOf("light.kitchen.state" to InputSpec(ValueType.String), "light.kitchen.is_on" to InputSpec(ValueType.Bool)))

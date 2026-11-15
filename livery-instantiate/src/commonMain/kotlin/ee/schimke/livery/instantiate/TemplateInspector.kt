@@ -26,8 +26,11 @@ data class TemplateFacts(
   /** The [RiskyFeature]s its operations use: what a document arriving outside a catalog is held to. */
   val features: Set<RiskyFeature> = emptySet(),
 ) {
-  /** [reads] without the names a host writes itself: what a sidecar declares. */
-  val declaredReads: Set<String> get() = reads - TemplateInspector.HOST_NAMES
+  /**
+   * [reads] without the names a host writes itself or the document computes for itself: what a
+   * sidecar declares.
+   */
+  val declaredReads: Set<String> get() = reads.filterNot(TemplateInspector::isInternal).toSet()
 }
 
 /**
@@ -39,6 +42,16 @@ data class TemplateFacts(
 object TemplateInspector {
   /** Named values a host writes into a document itself (a Wear container's frame, a screen's insets), never data. */
   val HOST_NAMES: Set<String> = RcWearContainer.FRAME_NAMES + RcWearContainer.COLOR + ScreenValues.NAMES
+
+  /**
+   * The prefix rc-players' creation library gives the named expressions it registers itself, such
+   * as `RcSizeBreakpoint`'s and `RcMinSizeGate`'s component size (`__rc_breakpoint_<n>`): values
+   * the document computes as it plays, never data a slot binds.
+   */
+  const val INTERNAL_PREFIX: String = "__rc_"
+
+  /** Whether a document's named value [name] is the host's or its own, not one a sidecar declares. */
+  fun isInternal(name: String): Boolean = name in HOST_NAMES || name.startsWith(INTERNAL_PREFIX)
 
   /** The document's facts, or null when the bytes aren't a Remote Compose document. */
   fun facts(template: ByteString): TemplateFacts? = runCatching {
@@ -55,7 +68,8 @@ object TemplateInspector {
 
   /**
    * Problems with [template] against its sidecar's [reads] and [emits]; empty when it is consistent.
-   * Names a host writes itself (a Wear container's `wear.container.*`) need no declaration.
+   * Names a host writes itself (a Wear container's `wear.container.*`) and the document's own
+   * expressions ([INTERNAL_PREFIX]) need no declaration.
    */
   fun problems(template: ByteString, reads: Collection<String>, emits: Collection<String>): List<String> {
     val f = facts(template) ?: return listOf("not a Remote Compose document")

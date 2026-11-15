@@ -39,7 +39,10 @@ jobs:
 ```
 
 `--inspect` decodes every `.rc` and refuses one that reads or emits anything its sidecar doesn't
-declare, or reads a value as a different type than its contract declares. Use it whenever
+declare, or reads a value as a different type than its contract declares. Named values the host
+writes itself (a Wear container's `wear.container.*`, a screen's insets) and those the document
+computes for itself (rc-players' `__rc_` expressions, such as `RcSizeBreakpoint`'s size) are not
+reads a sidecar declares. Use it whenever
 documents come from more than one tool, or from an agent.
 
 A template animates only what its author asked to animate. AndroidX eases every component to new bounds, and

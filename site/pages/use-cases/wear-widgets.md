@@ -40,6 +40,13 @@ Draw the container's padding, corner radius and fill from the `wear.container.ho
 `wear.container.vertical_padding`, `wear.container.corner_radius` and `wear.container.color` named
 values (rc-players' `RcWearContainer`), so one capture fits every watch's containers.
 
+Containers differ a lot between watches: Glance Wear's own preview frames
+(`androidx.glance.wear:wear-tooling-preview`) run from a 200×108 dp Large with 8 dp padding on a
+round Pixel Watch to a 160×136 dp one with 35 dp side padding on a Samsung, which leaves 90 dp for
+content. Where one layout can't fit them all, switch on the container's live size with rc-players'
+`RcSizeBreakpoint` or `RcMinSizeGate`; the size it reads is the document's own (`__rc_…`), so the
+sidecar doesn't declare it.
+
 Taps must have constant arguments, such as `{"entity":"light.kitchen"}`. A `PendingIntent` is fixed
 when the widget is published, so a tap whose arguments are an expression can't be carried; it is
 left out (the host ignores it).
