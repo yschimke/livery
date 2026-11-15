@@ -91,6 +91,7 @@ jobs:
 | `source` | both | the source tree, relative to the repository root |
 | `source-artifact` | both | a source tree an earlier job uploaded, downloaded to `source`, for a catalog whose templates a build generates (captured from Kotlin): the review then compares it with `base-artifact`, or with an empty tree without one, since its base was never committed |
 | `base-artifact` | review | with `source-artifact`, the same catalog built from the pull request's base, which an earlier job uploaded: the review compares with it, so a generated catalog gets before and after too (below) |
+| `preview-branch` | review | where the preview images go, `<preview-branch>/pr-<n>` (and `-<name>`); default `livery-previews`. Change it when the repository already has a branch of that name: git won't put a branch under another branch's path |
 | `name` | review | tells one review from the repository's others, one per catalog: it keys the comment (with a heading), the preview branch (`livery-previews/pr-<n>-<name>`) and the artifact (`livery-previews-<name>`); empty for a repository with one catalog |
 | `livery-version` | both | the Livery CLI release to run |
 | `inspect` | both | decode every template (`--inspect`); default `true` |

@@ -39,6 +39,10 @@ on:
         description: Tells this review apart from the repository's others (one per catalog), in its comment, its preview branch (`livery-previews/pr-<n>-<name>`) and its artifact (`livery-previews-<name>`). Empty for a repository with one catalog.
         type: string
         default: ''
+      preview-branch:
+        description: Where the preview images go, as `<preview-branch>/pr-<n>` (and `-<name>`). Change it when the repository already has a branch of that name, which git won't let a branch path pass through.
+        type: string
+        default: livery-previews
       livery-version:
         description: The Livery CLI release to use (e.g. 0.3.0).
         type: string
@@ -166,6 +170,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           NAME: ${{ inputs.name }}
+          BRANCH: ${{ inputs.preview-branch }}
         run: |
           dir="$RUNNER_TEMP/previews"
           if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then exit 0; fi
@@ -178,7 +183,7 @@ jobs:
             GIT_COMMITTER_NAME='github-actions[bot]' GIT_COMMITTER_EMAIL='41898282+github-actions[bot]@users.noreply.github.com' \
             git commit-tree "$tree" -m "Livery previews for #$PR${NAME:+ ($NAME)}")"
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic $auth" push -q -f "https://github.com/$REPO.git" "$sha:refs/heads/livery-previews/pr-$PR${NAME:+-$NAME}"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" push -q -f "https://github.com/$REPO.git" "$sha:refs/heads/$BRANCH/pr-$PR${NAME:+-$NAME}"
           echo "base=https://raw.githubusercontent.com/$REPO/$sha" >> "$GITHUB_OUTPUT"
       - name: Report
         env:
