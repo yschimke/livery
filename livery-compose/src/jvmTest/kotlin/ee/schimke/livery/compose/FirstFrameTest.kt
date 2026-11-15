@@ -245,6 +245,32 @@ class FirstFrameTest {
     assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "the dismissed card is not drawn again while the new answer plans")
   }
 
+  @Test fun anotherItemGetsAFreshPlayerAndNewDataForTheSameItemKeepsIt() = runComposeUiTest {
+    var starts = 0
+    val player = object : LiveryPlayer {
+      override val id = "counting"
+      override val usesPreparedDocument = false
+
+      @androidx.compose.runtime.Composable
+      override fun Play(request: PlayerRequest) {
+        androidx.compose.runtime.remember { starts++ }
+      }
+    }
+    val counting = LiveryHost(repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, player = player)
+    fun itemPlan(id: String, title: String) = plan(title).copy(feedItem = ee.schimke.livery.protocol.FeedItem(id, ee.schimke.livery.protocol.TemplateRef(designId = "banner-classic")))
+    var current by mutableStateOf(itemPlan("a", "one"))
+    mainClock.autoAdvance = false
+    setContent { LiveryTemplate(current, counting, Modifier.size(320.dp, 120.dp)) }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts)
+    current = itemPlan("a", "two")
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts, "new data for the same item keeps its player")
+    current = itemPlan("b", "three")
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(2, starts, "another item starts a fresh one")
+  }
+
   @Test fun aSplashScreenStartupMeansNothingWaits() = runComposeUiTest {
     // The app holds its splash screen on a startup: the frame behind it need not wait as well.
     runBlocking { host.resources.startup(this) {}.await() }
