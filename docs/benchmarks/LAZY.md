@@ -72,8 +72,8 @@ template's do), with prepare-ahead on for Livery.
 | Livery embedded, with the fix | 21.7 | +10.4 | 772 | 1 |
 
 - **A flicker.** A `LiverySlot` whose key changed (new data) drew the placeholder while it planned the new answer: 166
-  placeholders in the run, card, placeholder, card on every update. Fixed in the slot (it keeps the card it drew), which took
-  them to 1.
+  placeholders in the run, card, placeholder, card on every update. Fixed in the slot (it keeps the card it drew while its
+  `identity` is the same: the feed passes the card's index), which took them to 1.
 - **The cost of an update is what remains.** Main thread, during the fling (iteration 2): `Recomposer:recompose` 901 ms for Livery
   against 107 ms for the twin; 439 composition passes against 151; the template composed 244 times at about 1.4 ms (350 ms
   in all) against the twin's 0.7 ms an update. Binding is not it (`livery:bind` 427 calls, 54 ms in all, and 424 prepares for

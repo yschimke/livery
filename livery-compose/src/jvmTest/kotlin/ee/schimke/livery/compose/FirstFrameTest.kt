@@ -209,7 +209,7 @@ class FirstFrameTest {
     var version by mutableStateOf(1)
     mainClock.autoAdvance = false
     setContent {
-      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed") {
+      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed", identity = "the card") {
         if (version > 1) delay(60)
         PlanResult.Ready(plan("headline $version"))
       }
@@ -220,6 +220,44 @@ class FirstFrameTest {
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(0, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "no placeholder while the new answer plans")
     assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+  }
+
+  @Test fun anotherCardIsAFreshPlayerAndStartsFromTheFallback() = runComposeUiTest {
+    var starts = 0
+    val player = object : LiveryPlayer {
+      override val id = "counting"
+      override val usesPreparedDocument = false
+
+      @androidx.compose.runtime.Composable
+      override fun Play(request: PlayerRequest) {
+        androidx.compose.runtime.remember { starts++ }
+      }
+    }
+    val counting = LiveryHost(
+      repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, player = player,
+      placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) },
+    )
+    var card by mutableStateOf("a")
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    setContent {
+      // The key carries the data; the identity says which card it is.
+      LiverySlot(card to version, counting, Modifier.size(320.dp, 120.dp), slotId = "feed", identity = card) {
+        if (card != "a" || version > 1) delay(60)
+        PlanResult.Ready(plan("$card $version"))
+      }
+    }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts)
+    version = 2
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts, "new data for the same card keeps its player")
+    assertEquals(0, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "and its card")
+    card = "b"
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "another card starts from the fallback")
+    repeat(10) { mainClock.advanceTimeByFrame() }
+    assertEquals(2, starts, "with a fresh player")
   }
 
   @Test fun aFallbackIsNotBroughtBackByTheNextKey() = runComposeUiTest {

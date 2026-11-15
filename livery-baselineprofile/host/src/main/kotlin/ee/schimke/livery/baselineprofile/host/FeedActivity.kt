@@ -192,7 +192,7 @@ class FeedActivity : ComponentActivity() {
           val version = if (card is Card.Poll) card.version else 0
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = slotKey(index, if (version > 0) version else 0), host = host, modifier = modifier, slotId = SLOT) { plan(card) }
+            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = slotKey(index, if (version > 0) version else 0), host = host, modifier = modifier, slotId = SLOT, identity = index) { plan(card) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
