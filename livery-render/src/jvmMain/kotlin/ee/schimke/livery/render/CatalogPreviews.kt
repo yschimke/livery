@@ -326,6 +326,16 @@ object CatalogPreviews {
     return (widthPx / d).toInt() to (heightPx / d).toInt()
   }
 
+  /**
+   * Where [rc] is drawn for [target], in dp: the size it was authored at, inside its target's range,
+   * else its surface's usual size, as the catalog previews draw it (and `livery review`). Null when
+   * the bytes aren't a document this player reads.
+   */
+  fun drawSize(rc: ByteArray, target: Target): Pair<Int, Int>? {
+    val header = runCatching { RcDocumentCodec.decode(rc, RcWireLimits()).header }.getOrNull() ?: return null
+    return size(authoredDp(header.width, header.height, header.density, header.modern), target)
+  }
+
   /** The document's own size ([own], in dp), inside its target's range; else its surface's usual size. */
   internal fun size(own: Pair<Int, Int>, target: Target): Pair<Int, Int> {
     val (w, h) = own.takeIf { it.first > 0 && it.second > 0 } ?: when (target.surface) {

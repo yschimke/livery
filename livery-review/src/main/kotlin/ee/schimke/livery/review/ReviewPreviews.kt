@@ -13,6 +13,7 @@ import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.publisher.CatalogBuilder
 import ee.schimke.livery.publisher.CompatibilityCheck
 import ee.schimke.livery.publisher.CompatibilityCheck.DesignPreview
+import ee.schimke.livery.render.CatalogPreviews
 import ee.schimke.livery.render.RenderSpec
 import ee.schimke.livery.render.TemplateRenderer
 import java.io.File
@@ -24,7 +25,9 @@ import java.io.File
  * template's bytes that draws the same (an optimisation) reads as one.
  *
  * One template per design: the one covering [size] when given (both before and after), else the
- * one with the largest smallest size, drawn at that smallest size, where it has the most room.
+ * one with the largest smallest size, drawn at the size it was authored at inside its target's range
+ * (as the catalog previews draw it): a document whose target only sets a width is drawn as tall as
+ * it was made, not cut at a default height.
  */
 class ReviewPreviews(
   private val out: File,
@@ -67,9 +70,12 @@ class ReviewPreviews(
     // A size only the old tree covers (a variant this change removes) still draws its before.
     val chosen = pick(now) ?: pick(was) ?: return DesignPreview(design, "", 0, 0, emptyList(),
       if (size != null) "no template covers ${size.first}×${size.second} dp" else "no template is a Remote Compose document")
-    // At its smallest size, or, with no minimum, the default within its maximum.
+    // As authored, inside its target's range; for a document that can't say, at its smallest size,
+    // or, with no minimum, the default within its maximum.
     val r = chosen.target.size
-    val (w, h) = size ?: ((r.minWidthDp?.takeIf { it > 0 } ?: minOf(DEFAULT_W, r.maxWidthDp ?: DEFAULT_W)) to
+    val authored = (if (chosen in now) after else before)?.files?.get("blobs/${chosen.sha256}.rc")
+      ?.let { CatalogPreviews.drawSize(it.toByteArray(), chosen.target) }
+    val (w, h) = size ?: authored ?: ((r.minWidthDp?.takeIf { it > 0 } ?: minOf(DEFAULT_W, r.maxWidthDp ?: DEFAULT_W)) to
       (r.minHeightDp?.takeIf { it > 0 } ?: minOf(DEFAULT_H, r.maxHeightDp ?: DEFAULT_H)))
     fun same(list: List<TemplateEntry>) = list.firstOrNull { it.target == chosen.target } ?: list.firstOrNull { it.target.size.covers(w, h) && it.target.surface == chosen.target.surface }
     val a = same(now)?.let { it to after!! }

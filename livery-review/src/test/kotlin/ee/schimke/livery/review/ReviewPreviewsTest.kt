@@ -2,6 +2,7 @@ package ee.schimke.livery.review
 
 import ee.schimke.livery.publisher.compareTrees
 import ee.schimke.livery.publisher.CompatibilityCheck
+import ee.schimke.livery.render.CatalogPreviews
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -86,8 +87,25 @@ class ReviewPreviewsTest {
     File(tree, "designs/tile-default/in-app.json").let { f ->
       f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"maxWidthDp\": 180, \"maxHeightDp\": 90 }"))
     }
-    val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
-    assertEquals(180 to 90, tile.widthDp to tile.heightDp)
+    val c = CompatibilityCheck.compareTrees(tree, sample, "main")
+    val tile = ReviewPreviews(temp("previews")).render(c).single { it.design == "tile-default" }
+    // Within the maximum: the authored width cut to it, the authored height (already inside it) kept.
+    assertTrue(tile.widthDp <= 180 && tile.heightDp <= 90, tile.toString())
+    val t = c.after!!.manifest.templates.single { it.designId == "tile-default" && it.target.size.maxWidthDp == 180 }
+    assertEquals(CatalogPreviews.drawSize(c.after!!.files.getValue("blobs/${t.sha256}.rc").toByteArray(), t.target), tile.widthDp to tile.heightDp)
+  }
+
+  @Test fun aTemplateWithOnlyAMinimumWidthIsDrawnAsTallAsItWasMade() {
+    // A target that says nothing about height: drawn at the document's own size, not cut at a default.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"minWidthDp\": 120 }"))
+    }
+    val c = CompatibilityCheck.compareTrees(tree, sample, "main")
+    val tile = ReviewPreviews(temp("previews")).render(c).single { it.design == "tile-default" }
+    val t = c.after!!.manifest.templates.single { it.designId == "tile-default" && it.target.size.minWidthDp == 120 }
+    val authored = CatalogPreviews.drawSize(c.after!!.files.getValue("blobs/${t.sha256}.rc").toByteArray(), t.target)
+    assertEquals(authored, tile.widthDp to tile.heightDp)
   }
 
   @Test fun eachSideBindsWithItsOwnContract() {

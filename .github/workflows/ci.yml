@@ -146,6 +146,25 @@ jobs:
     permissions:
       contents: read
 
+  # The same review given a base, as a repository whose catalog a build generates passes the tree
+  # built from the pull request's base: here the sample against itself, so a named review that
+  # compares two trees and finds nothing changed.
+  catalog-review-base:
+    name: Catalog review workflow (generated base)
+    needs: build
+    uses: ./.github/workflows/catalog-review.yml
+    with:
+      source: build/sample-catalog-source
+      source-artifact: sample-catalog-source
+      base-artifact: sample-catalog-source
+      name: sample
+      livery-artifact: livery-cli
+      inspect: false
+      comment: false
+      previews: true
+    permissions:
+      contents: read
+
   catalog-publish:
     name: Catalog publish workflow
     needs: build
@@ -243,7 +262,7 @@ jobs:
   # The one check the `Protect Main` ruleset requires (yschimke/renovate-config `repo-policy/`).
   # Add a job to `needs` instead of to the ruleset, so adding or renaming a job never wedges PRs.
   gradle:
-    needs: [changes, build, swift, catalog-review, catalog-publish, web]
+    needs: [changes, build, swift, catalog-review, catalog-review-base, catalog-publish, web]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -256,6 +275,7 @@ jobs:
           SWIFT: ${{ needs.swift.result }}
           SWIFT_NEEDED: ${{ needs.changes.outputs.swift }}
           REVIEW: ${{ needs.catalog-review.result }}
+          REVIEW_BASE: ${{ needs.catalog-review-base.result }}
           PUBLISH: ${{ needs.catalog-publish.result }}
           WEB: ${{ needs.web.result }}
         run: |
@@ -263,6 +283,7 @@ jobs:
           [ "$CHANGES" = success ] || ok=false
           [ "$BUILD" = success ] || ok=false
           [ "$REVIEW" = success ] || ok=false
+          [ "$REVIEW_BASE" = success ] || ok=false
           [ "$PUBLISH" = success ] || ok=false
           [ "$WEB" = success ] || ok=false
           if [ "$SWIFT_NEEDED" = true ]; then [ "$SWIFT" = success ] || ok=false
