@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.15.0](https://github.com/yschimke/livery/compare/v0.14.0...v0.15.0) (2026-11-15)
+
+
+### Features
+
+* **compose:** a LiveryPlayer seam, and the AndroidX embedded and View players, benchmarked ([#94](https://github.com/yschimke/livery/issues/94)) ([bd31614](https://github.com/yschimke/livery/commit/bd316143bad9c3500ab8a063c46e663bcfdaaa2a))
+* **compose:** LiveryPrepareAhead for lazy and paged feeds, with an androidx Paging demo ([#95](https://github.com/yschimke/livery/issues/95)) ([5d06872](https://github.com/yschimke/livery/commit/5d068723819a28351924a881f589eec342f52b99))
+
+
+### Bug Fixes
+
+* **compose:** a slot with new data keeps its card until the new answer is ready ([#96](https://github.com/yschimke/livery/issues/96)) ([f66bb82](https://github.com/yschimke/livery/commit/f66bb82af6e3ecbef1c83f954bda9066e122a9fa))
+
+
+### Performance Improvements
+
+* **compose:** start up off the main thread, and read the bundled catalog when first used ([#91](https://github.com/yschimke/livery/issues/91)) ([3269754](https://github.com/yschimke/livery/commit/32697542b9988b0b684aa0196560dc0579d5ce87))
+
 ## [0.14.0](https://github.com/yschimke/livery/compare/v0.13.0...v0.14.0) (2026-11-14)
 
 
