@@ -135,6 +135,25 @@ each changed design drawn with its contract's examples, before and after (see
 <a href="repository-mode.html#pictures-in-the-review">Repository mode</a>).</p>
 <p>The serial defaults to the build time in milliseconds, which only grows. If you pass <code>--serial</code>
 yourself, never let it go down for a channel: apps refuse a lower one as a rollback.</p>
+<p>A build is reproducible. The blobs are the captured <code>.rc</code> bytes, which are the same on every run
+and machine, and only the manifest's <code>serial</code>, <code>generatedAtEpochMs</code> and <code>expiresAtEpochMs</code> read the
+clock. Set <a href="https://reproducible-builds.org/specs/source-date-epoch/"><code>SOURCE_DATE_EPOCH</code></a> (seconds)
+and the clock reads that instead, so two builds of one tree at one <code>SOURCE_DATE_EPOCH</code> write the
+same catalog byte for byte.</p>
+<p>Pin it to the time you publish, not to an older time such as the commit's. The serial defaults to
+it, and apps refuse a serial lower than the last one they accepted as a rollback; the expiry counts
+from it too, so an old time publishes a catalog that is already close to stale. Moving a channel
+from the default wall-clock serial to the publish time keeps the serial growing, since each
+publish happens later than the last:</p>
+<pre><code class="language-bash">export SOURCE_DATE_EPOCH=$(date +%s)   # once per publish
+livery build catalog public/catalog/main --key acme.key --key-id acme-1
+</code></pre>
+<p>The manifest records the time it was built with (<code>generatedAtEpochMs</code>), so anyone can check a
+published catalog by rebuilding the same tree with it and comparing bytes:</p>
+<pre><code class="language-bash">SOURCE_DATE_EPOCH=$(( $(jq .generatedAtEpochMs published/manifest.json) / 1000 )) \
+  livery build catalog rebuilt --serial &quot;$(jq .serial published/manifest.json)&quot;
+diff -r published rebuilt   # identical, apart from a manifest.sig.json you did not re-sign
+</code></pre>
 <h2 id="static-hosts-and-cdns">Static hosts and CDNs<a class="headerlink" href="#static-hosts-and-cdns" title="Permanent link">#</a></h2>
 <pre><code class="language-bash">livery build catalog public/catalog/main --key acme.key --key-id acme-1
 </code></pre>
