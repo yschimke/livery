@@ -153,6 +153,10 @@ jobs:
           code=$?
           set -e
           echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ -n "$BASE_ARTIFACT" ]; then
+            # The report names what it compared with: the base, not the runner's download folder.
+            sed -i "s#$RUNNER_TEMP/livery-base#the base${BASE:+ (${BASE:0:7})}#g" "$RUNNER_TEMP/review.md"
+          fi
       - name: Publish the previews
         if: ${{ inputs.previews && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         id: previews
