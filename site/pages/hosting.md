@@ -73,6 +73,18 @@ each changed design drawn with its contract's examples, before and after (see
 The serial defaults to the build time in milliseconds, which only grows. If you pass `--serial`
 yourself, never let it go down for a channel: apps refuse a lower one as a rollback.
 
+A build is reproducible. The blobs are the captured `.rc` bytes, which are the same on every run
+and machine, and only the manifest's `serial`, `generatedAtEpochMs` and `expiresAtEpochMs` read the
+clock. Set [`SOURCE_DATE_EPOCH`](https://reproducible-builds.org/specs/source-date-epoch/) (seconds)
+and the clock reads that instead, so two builds of one tree write the same catalog byte for byte:
+
+```bash
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) livery build catalog public/catalog/main
+```
+
+The commit time only grows along one branch, so it is a serial apps accept, as long as each
+publish is from a newer commit.
+
 ## Static hosts and CDNs
 
 ```bash
