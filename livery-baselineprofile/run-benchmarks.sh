@@ -15,13 +15,14 @@ cd "$(dirname "$0")"
 what=${1:-routine}
 out=${2:-/tmp/livery-benchmarks-$(date +%Y%m%d-%H%M)}
 pkg=ee.schimke.livery.benchmark
-# The runner ANDs a comma-separated annotation list, so a union is one run for each.
+# The runner treats a comma-separated `annotation` list as tests with ALL of them, and a `notAnnotation` list as tests with NONE
+# of them (one -e each would keep only the last): so a union of tiers is one run for each.
 runs=()
 case "$what" in
   routine) runs=("-e annotation $pkg.Spine" "-e annotation $pkg.Completion") ;;
   spine) runs=("-e annotation $pkg.Spine") ;;
   completion) runs=("-e annotation $pkg.Completion") ;;
-  sweeps) runs=("-e notAnnotation $pkg.Spine -e notAnnotation $pkg.Completion") ;;
+  sweeps) runs=("-e notAnnotation $pkg.Spine,$pkg.Completion") ;;
   *) runs=("-e class $(echo "$what" | sed "s/\(^\|,\)/\1$pkg./g")") ;;
 esac
 adb install -r -d host/build/outputs/apk/benchmarkRelease/livery-baselineprofile-host-benchmarkRelease.apk >/dev/null

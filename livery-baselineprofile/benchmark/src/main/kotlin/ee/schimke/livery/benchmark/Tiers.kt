@@ -9,8 +9,9 @@ package ee.schimke.livery.benchmark
  *   prefetch option), so the comparison is complete. Few iterations: it says whether a lane is wildly off, not by how much.
  * - Neither: sweeps for working out a value (window sizes, planning costs). Not in the routine run; run them by name.
  *
- * Run a tier with the runner argument `annotation`, e.g. `-e annotation ee.schimke.livery.benchmark.Spine` (see
- * `livery-baselineprofile/README.md`); `Spine,Completion` is the routine run.
+ * Run a tier with the runner argument `annotation`, e.g. `-e annotation ee.schimke.livery.benchmark.Spine`, one tier at a
+ * time: a comma-separated list selects the tests with all of its annotations, not either (see
+ * `livery-baselineprofile/README.md`, and `run-benchmarks.sh routine`, which runs the two in turn).
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

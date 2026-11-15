@@ -97,9 +97,10 @@ Running every variant many times took about two hours. The tests are tiered inst
 
 `livery-baselineprofile/run-benchmarks.sh routine` runs the spine and the completion bar (about 40 minutes, a third of
 the full set), `spine` the spine alone, `sweeps` the rest, and a list of names (`FeedScrollBenchmark#liveryLazyAhead`)
-those. It runs the instrumentation through `adb` on the APKs Gradle built and pulls the results; the same tiers are
-selected under Gradle with `-Pandroid.testInstrumentationRunnerArguments.annotation=ee.schimke.livery.benchmark.Spine`
-(comma-separate for more). A completion lane is read as "is it wildly off", not by how much: three iterations do not
+those. It runs the instrumentation through `adb` on the APKs Gradle built and pulls the results. Under Gradle a tier is
+selected with `-Pandroid.testInstrumentationRunnerArguments.annotation=ee.schimke.livery.benchmark.Spine`, and the routine set
+is two invocations, one for `Spine` and one for `Completion`: the runner selects the tests with *all* of a comma-separated
+list of annotations, which no test has, so listing both selects nothing. A completion lane is read as "is it wildly off", not by how much: three iterations do not
 separate differences under about 10%.
 
 ## Full-screen document
