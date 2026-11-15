@@ -100,7 +100,7 @@ the rc-players fix as well. The twin moved by under 0.3 ms between runs.)
 Since the catalog build turns a template's easing off (#102), `liveryAnimated` lands a bar at once while `composeUiAnimated`'s bars
 ease: not the same work. The lanes now come in pairs: `composeUiAnimatedNoEase` against `liveryAnimated`, and `composeUiAnimated`
 against `liveryAnimatedEased` (the host's second catalog, built with `--default-animations`), plus `liveryAnimatedEasedNoDefer`
-(`deferLayoutAnimations = false`). Pixel 9, rc-players main built from source (3.5.4-SNAPSHOT), spine; p50 / p90 / p99, overrun p99:
+(`deferLayoutAnimations = false`). Pixel 9, rc-players main built from source (3.5.4-SNAPSHOT, released as 3.6.0), spine; p50 / p90 / p99, overrun p99:
 
 | Lane | p50 / p90 / p99 | overrun p99 | frames |
 | --- | --- | --- | --- |
