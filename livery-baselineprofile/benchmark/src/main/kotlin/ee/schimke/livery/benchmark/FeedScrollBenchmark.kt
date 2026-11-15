@@ -95,7 +95,21 @@ class FeedScrollBenchmark {
 
   @Test @Spine fun composeUiAnimated() = fling("compose", Options.Animated, tier = Tier.Spine)
 
+  /**
+   * Animated, like for like. Since the catalog build turns a template's easing off unless its author asked for it, `liveryAnimated`
+   * lands a bar at once while `composeUiAnimated`'s bars ease: not the same work. `composeUiAnimatedNoEase` is its pair, and
+   * `liveryAnimatedEased` (the catalog built with `--default-animations`) is the pair of `composeUiAnimated`; `liveryAnimatedEasedNoDefer`
+   * is the eased one without Livery's lookahead deferral.
+   */
+  @Test @Spine fun composeUiAnimatedNoEase() = fling("compose", Options.AnimatedNoEase, tier = Tier.Spine)
+
+  @Test @Spine fun liveryAnimatedEased() = fling("livery", Options.AnimatedLazyEased, tier = Tier.Spine)
+
+  @Test @Spine fun liveryAnimatedEasedNoDefer() = fling("livery-nodefer", Options.AnimatedLazyEased, tier = Tier.Spine)
+
   private enum class Options(val activity: String = "FeedActivity", val apply: Intent.() -> Unit) {
+    AnimatedNoEase(apply = { putExtra("animateMs", 1000L).putExtra("twinEases", false) }),
+    AnimatedLazyEased(apply = { putExtra("ahead", 8).putExtra("planDelayMs", 20L).putExtra("animateMs", 1000L).putExtra("eased", true) }),
     Ahead2(apply = { putExtra("ahead", 2).putExtra("planDelayMs", 20L) }),
     Ahead4(apply = { putExtra("ahead", 4).putExtra("planDelayMs", 20L) }),
     Ahead16(apply = { putExtra("ahead", 16).putExtra("planDelayMs", 20L) }),

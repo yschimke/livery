@@ -71,5 +71,21 @@ val buildSampleCatalog = tasks.register<JavaExec>("buildSampleCatalog") {
   doFirst { out.get().asFile.deleteRecursively() }
 }
 
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(buildSampleCatalog) }
-tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(buildSampleCatalog) }
+// The same catalog with AndroidX's default animations kept (`--default-animations`), for the animated lanes that compare a template
+// whose bars ease with a twin whose bars ease: FeedActivity's `eased` extra reads it. The default catalog's templates land at once.
+val buildSampleCatalogAnimated = tasks.register<JavaExec>("buildSampleCatalogAnimated") {
+  description = "Builds the sample catalog with its default animations kept, into the host's assets at livery-animated/."
+  classpath = liveryCli
+  mainClass.set("ee.schimke.livery.publisher.MainKt")
+  val samples: FileCollection = sampleCatalogs
+  val out = layout.buildDirectory.dir("generated/livery-assets/livery-animated")
+  inputs.files(samples).withPathSensitivity(PathSensitivity.RELATIVE)
+  outputs.dir(out)
+  argumentProviders += CommandLineArgumentProvider {
+    listOf("build", samples.singleFile.resolve("catalog").absolutePath, out.get().asFile.absolutePath, "--default-animations")
+  }
+  doFirst { out.get().asFile.deleteRecursively() }
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(buildSampleCatalog, buildSampleCatalogAnimated) }
+tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(buildSampleCatalog, buildSampleCatalogAnimated) }
