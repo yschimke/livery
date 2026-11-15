@@ -161,7 +161,12 @@ LazyColumn(state = state) {
 
 `items` is androidx Paging's `LazyPagingItems`; `peek` reads what is loaded without asking for more. Eight cards
 ahead keeps up with a fast fling on a phone; `LiveryResources(maxPlans = …)` should hold the window and what the
-list keeps composed. `PagingActivity` in [`livery-baselineprofile/host`](https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host) is a working example.
+list keeps composed. A slot whose `key` carries its data (so it changes when the data does) says which card it is with `identity`: new data
+for the same identity keeps the card on screen until the new answer is ready and updates it in place, so only what
+changed animates; another identity is another card and starts from the placeholder with a fresh player, so nothing a
+person did in one card (a selection, some input) carries to the next. It defaults to `key`.
+
+`PagingActivity` in [`livery-baselineprofile/host`](https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host) is a working example.
 
 **Emoji load after the first screen (Android).** Compose's text brings in `androidx.emoji2`, whose
 initializer runs at process start, on the main thread, before the first frame. Livery's manifest turns

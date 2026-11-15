@@ -50,6 +50,15 @@ fun LiverySlot(
     if (reason == null) host.placeholder(LiveryPlaceholder(LocalLiverySlotId.current))
   },
   slotId: String? = null,
+  /**
+   * Which card this slot shows, when [key] also carries its data. While the identity is the same, new data (a changed
+   * [key]) keeps the card the slot drew until the new answer is ready, and the player keeps its state: only what changed
+   * animates, with no placeholder in between. A different identity is another card: the slot draws [fallback] while it
+   * plans, and the player starts fresh, so document-local state (a selection, an input) never carries from one card to
+   * the next. Defaults to [key]: every key is its own card, which is right when it names the item, and an app whose key
+   * is the item's data passes the item's id here.
+   */
+  identity: Any? = key,
   plan: suspend () -> PlanResult,
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
@@ -76,13 +85,14 @@ fun LiverySlot(
   // the host's first-frame budget, so the first frame has its card rather than its fallback.
   // A window that has drawn already (other content first, then this slot) is past its first frame.
   if (windowHasDrawn()) host.resources.firstFrameDrawn = true
-  // What this slot last drew, kept across [key] changes: new data for a slot that has an answer draws that answer until the
-  // new one is ready, never the placeholder for the time it takes to plan (a visible flicker on every update).
+  // What this slot last drew, kept across [key] changes while it is the same [identity]: new data for a slot that has an answer
+  // draws that answer until the new one is ready, never the placeholder for the time it takes to plan (a flicker on every
+  // update). Another identity is another card, and starts from the fallback.
   val lastDrawn = remember(host, slotId) { LastDrawn() }
   val first = remember(key, host, slotId) {
     val last = slotId?.let { host.resources.lastPlan(it, key, revision) }
     val early = if (last == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null
-    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } ?: lastDrawn.ready
+    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } ?: lastDrawn.ready?.takeIf { lastDrawn.identity == identity }
     FirstAnswer(mutableStateOf(answer), early, revision)
   }
   val state = first.state
@@ -95,7 +105,7 @@ fun LiverySlot(
   MarkFirstFrameDrawn(host.resources)
   val result = state.value
   // A fallback drawn means the card is gone: a later key must not bring it back.
-  if (result is PlanResult.Ready) SideEffect { lastDrawn.ready = result } else if (result is PlanResult.Fallback) SideEffect { lastDrawn.ready = null }
+  if (result is PlanResult.Ready) SideEffect { lastDrawn.ready = result; lastDrawn.identity = identity } else if (result is PlanResult.Fallback) SideEffect { lastDrawn.ready = null }
   // The slot's id reaches what it draws: the placeholder, its template's.
   // A template that finds it cannot play as it composes (a host that prepares in composition) says
   // so here, and the slot draws the app's fallback: for this answer, and for this key when it is
@@ -111,7 +121,8 @@ fun LiverySlot(
     when (val r = result) {
       null -> fallback(null)
       is PlanResult.Fallback -> fallback(r.reason)
-      is PlanResult.Ready -> LiveryTemplate(r.plan, host, modifier)
+      // Keyed by identity: another card gets a fresh composition, so no player state carries over.
+      is PlanResult.Ready -> androidx.compose.runtime.key(identity) { LiveryTemplate(r.plan, host, modifier) }
     }
   }
 }
@@ -167,7 +178,10 @@ fun rememberLiveryDisplay(): RcDisplay {
 }
 
 /** The last answer a slot drew that had a template in it. */
-private class LastDrawn { var ready: PlanResult.Ready? = null }
+private class LastDrawn {
+  var ready: PlanResult.Ready? = null
+  var identity: Any? = null
+}
 
 /** A slot's answer, and the plan its first frame started (and may have waited for) at [revision]. */
 private class FirstAnswer(

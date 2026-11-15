@@ -85,6 +85,7 @@ class PagingActivity : ComponentActivity() {
       {},
       clock,
       resources = LiveryResources(repository, maxPlans = 512),
+      placeholder = { FeedPlaceholder(it) },
     )
     val planner = SlotPlanner(repository, {}, clock)
     suspend fun plan(entry: Entry) = run {

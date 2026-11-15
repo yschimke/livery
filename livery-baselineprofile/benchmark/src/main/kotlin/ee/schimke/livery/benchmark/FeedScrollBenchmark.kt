@@ -4,7 +4,9 @@ import android.content.Intent
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
+import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.StartupMode
+import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
@@ -75,7 +77,32 @@ class FeedScrollBenchmark {
 
   @Test fun pagingAhead() = fling("livery", Options.PagingAhead)
 
+  /** The window's size and the planning cost: 2, 4 and 16 cards ahead (8 is `liveryLazyAhead`), and planning at 60 ms. */
+  @Test fun liveryLazyAhead2() = fling("livery", Options.Ahead2)
+
+  @Test fun liveryLazyAhead4() = fling("livery", Options.Ahead4)
+
+  @Test fun liveryLazyAhead16() = fling("livery", Options.Ahead16)
+
+  @Test fun liveryLazyNoAheadSlow() = fling("livery", Options.NoAheadSlow)
+
+  @Test fun liveryLazyAheadSlow() = fling("livery", Options.AheadSlow)
+
+  /** The visible polls' numbers change every second while the list flings, for Livery (lazy, 8 ahead), its embedded player and the twin. */
+  @Test fun liveryAnimated() = fling("livery", Options.AnimatedLazy)
+
+  @Test fun liveryEmbeddedAnimated() = fling("livery-embedded", Options.AnimatedLazy)
+
+  @Test fun composeUiAnimated() = fling("compose", Options.Animated)
+
   private enum class Options(val activity: String = "FeedActivity", val apply: Intent.() -> Unit) {
+    Ahead2(apply = { putExtra("ahead", 2).putExtra("planDelayMs", 20L) }),
+    Ahead4(apply = { putExtra("ahead", 4).putExtra("planDelayMs", 20L) }),
+    Ahead16(apply = { putExtra("ahead", 16).putExtra("planDelayMs", 20L) }),
+    NoAheadSlow(apply = { putExtra("ahead", -1).putExtra("planDelayMs", 60L) }),
+    AheadSlow(apply = { putExtra("ahead", 8).putExtra("planDelayMs", 60L) }),
+    AnimatedLazy(apply = { putExtra("ahead", 8).putExtra("planDelayMs", 20L).putExtra("animateMs", 1000L) }),
+    Animated(apply = { putExtra("animateMs", 1000L) }),
     PagingNoAhead("PagingActivity", { putExtra("ahead", -1).putExtra("planDelayMs", 20L) }),
     PagingAhead("PagingActivity", { putExtra("ahead", 8).putExtra("planDelayMs", 20L) }),
     LazyNoAhead(apply = { putExtra("ahead", -1).putExtra("planDelayMs", 20L) }),
@@ -86,10 +113,12 @@ class FeedScrollBenchmark {
     Pausable(apply = { putExtra("pausable", true) }),
   }
 
+  @OptIn(ExperimentalMetricApi::class)
   private fun fling(mode: String, options: Options = Options.None) =
     rule.measureRepeated(
       packageName = PACKAGE,
-      metrics = listOf(FrameTimingMetric()),
+      // Placeholders composed during the fling: cards that reached the screen before they were ready.
+      metrics = listOf(FrameTimingMetric(), TraceSectionMetric("host:placeholder", TraceSectionMetric.Mode.Sum)),
       compilationMode = CompilationMode.Partial(),
       startupMode = StartupMode.WARM,
       iterations = 5,
