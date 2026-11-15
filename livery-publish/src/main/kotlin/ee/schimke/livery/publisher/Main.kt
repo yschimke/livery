@@ -21,7 +21,9 @@ private const val USAGE = """livery — build, sign and check a template catalog
       --key <file> --key-id <id>           sign manifest.json (writes manifest.sig.json)
       --serial <n>                         default: now in ms (must only grow per channel); with
                                            SOURCE_DATE_EPOCH set, "now" is that time, so two
-                                           builds of one tree write the same bytes
+                                           builds of one tree write the same bytes (set it to
+                                           the publish time, never an older one: apps refuse a
+                                           lower serial, and the expiry counts from it)
       --inspect                            decode every .rc and check it reads and emits only what
                                            its sidecar declares
       --default-animations                 keep AndroidX's default animations in every template; by
