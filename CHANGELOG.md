@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.16.0](https://github.com/yschimke/livery/compare/v0.15.0...v0.16.0) (2026-11-15)
+
+
+### Features
+
+* **catalog-review:** compare a generated catalog with its base, and name each review ([#103](https://github.com/yschimke/livery/issues/103)) ([9db0831](https://github.com/yschimke/livery/commit/9db083184527401f4640214df8fc3d0ecacd74bb))
+* **catalog:** templates animate only what their author asked for, unless a catalog says otherwise ([#102](https://github.com/yschimke/livery/issues/102)) ([dfc60da](https://github.com/yschimke/livery/commit/dfc60da5e7285da8bb839d90a2e1ebce45d6c94a))
+* **compose-material3:** ColorScheme.withLiveryTheme, the inverse of toLiveryTheme ([#99](https://github.com/yschimke/livery/issues/99)) ([625e22e](https://github.com/yschimke/livery/commit/625e22e91524e6a2492f7d75081415594c560ac8))
+
+
+### Bug Fixes
+
+* **compose:** a data update no longer recomposes the whole player from its slot ([#101](https://github.com/yschimke/livery/issues/101)) ([7352d3f](https://github.com/yschimke/livery/commit/7352d3fe000971a258e5ee895c58ccce9a7e1204))
+* **publish:** livery build honours SOURCE_DATE_EPOCH, and a check that captures are reproducible ([#104](https://github.com/yschimke/livery/issues/104)) ([88113a2](https://github.com/yschimke/livery/commit/88113a28fdfd5e84f171991017ca8aeb31e76125))
+* **review:** a target no preview can draw is reported, not thrown ([#106](https://github.com/yschimke/livery/issues/106)) ([be4a34d](https://github.com/yschimke/livery/commit/be4a34da97ccaea537c9a21974321a418a3ef4b8))
+
 ## [0.15.0](https://github.com/yschimke/livery/compare/v0.14.0...v0.15.0) (2026-11-15)
 
 
