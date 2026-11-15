@@ -70,9 +70,18 @@ The visible polls' numbers change every second while the list flings, a bar easi
 recomposition during the fling against 107 ms for the twin (439 composition passes against 151), and the template is
 composed 244 times at about 1.4 ms, where the twin's update costs about 0.7 ms. Binding, preparing and planning are not
 it (binding is 54 ms over 427 updates; preparing is memoized; planning is off the main thread): it is the player and
-the template recomposing on each data change, and laying out again. How much is the Remote Compose player and how much
-Livery's own code around it is not yet split, and it is being worked on
-([`docs/benchmarks/HANDOVER-update-cost.md`](https://github.com/yschimke/livery/blob/main/docs/benchmarks/HANDOVER-update-cost.md)).
+the template recomposing on each data change, and laying out again.
+
+Split on the JVM (`./gradlew :livery-compose:liveryAnimatedProfile`, the same lane on Compose Desktop), the player alone,
+given the same updating values, costs what Livery does: about 34,400 composable bodies run per update across the visible
+cards, against the twin's 770. Livery adds about 1,500 of its own. Almost all of it is the player composing the whole card
+again on every frame of the bar's easing. In rc-players, a rounded clip's size readback invalidated the whole player as the
+size moved, and a deferred lookahead pass was rebuilt twice for every change. With the fix
+([yschimke/rc-players#910](https://github.com/yschimke/rc-players/pull/910), not yet released) and Livery's own (a slot
+recomposed its whole card on every new key), an update runs about 2,800 bodies, and Livery's p90 frame matches the twin's
+there. What remains is one composition of each updated card per change. The numbers above are rc-players 3.5.1, and the
+Pixel 9 run after the release is still to do; the split is in
+[`docs/benchmarks/LAZY.md`](https://github.com/yschimke/livery/blob/main/docs/benchmarks/LAZY.md).
 
 An earlier version of Livery also flickered here: a slot whose data changed drew the placeholder while it planned the
 new answer (166 times in a run). A slot now keeps its card until the new answer is ready (and `LiverySlot` takes an

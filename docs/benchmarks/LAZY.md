@@ -83,8 +83,44 @@ template's do), with prepare-ahead on for Livery.
   17 ms): it is the player composing a document node by node for every change.
 - **Layout animation is part of the extra frames**: the template eases a bar to its new width, as 112 ms of animation-phase work
   (the twin, with its bars animated, spends 6 ms); Livery draws 872 frames to the twin's 724.
-- Next: a player-alone animated lane (to split the player's cost from Livery's own), and whether an update that only changes values
-  can recompose less than the whole template.
+### Where an update's cost goes (JVM, 15 November 2026)
+
+`./gradlew :livery-compose:liveryAnimatedProfile` plays the same lane on the JVM (Compose Desktop, software raster, so the shape
+of the numbers rather than their size): poll cards in a `LazyColumn`, every card's numbers changing once a second, drawn by the
+twin, by the player alone with its values map updated in place (`rc`), and by Livery. Besides frame times it counts every
+composable body that ran, with Compose's composition tracer. The list is held still (`-Plivery.feed.step=0`) to show the
+updates alone; scrolling 4 px a frame gives the same picture. With no updates all three cost the same (p99 5.1 to 6.2 ms).
+
+| Lane | p90 | p99 | bodies run per update |
+| --- | ---: | ---: | ---: |
+| Compose UI twin, bars eased | 4.82 ms | 6.55 ms | 768 |
+| Compose UI twin, no easing | 4.80 ms | 6.30 ms | 169 |
+| player alone, rc-players 3.5.1 | 9.92 ms | 18.15 ms | 34,398 |
+| Livery, rc-players 3.5.1 | 9.05 ms | 16.85 ms | 35,911 |
+| Livery with its fixes, rc-players 3.5.1 | 9.96 ms | 16.07 ms | 34,564 |
+| player alone, yschimke/rc-players#910 | 4.74 ms | 14.51 ms | 2,660 |
+| Livery with its fixes, #910 | 4.84 ms | 12.98 ms | 2,826 |
+| Livery, #910, templates through `withoutDefaultAnimations()` | 4.44 ms | 11.64 ms | 1,274 |
+
+- **The player alone costs what Livery costs**: Livery adds about 1,500 bodies to the player's 34,400. Almost all of it was in
+  rc-players. Bodies by frame after an update, player alone: `24 2185 1922 1922 … (17 frames) 213 213 … 878`: the whole card
+  composed again on every frame of the bar's 300 ms easing. The twin: `196 0 158 158 158 17 17 17`.
+- **Why, in rc-players** ([yschimke/rc-players#910](https://github.com/yschimke/rc-players/pull/910)): the creation library writes a
+  size readback for every rounded clip, and a component publishing its size from the measure pass invalidated the whole player
+  whenever the size moved, so every frame of a bar's easing recomposed every node. Also, a player that defers the lookahead pass
+  rebuilt the tree twice for each change, switching the pass on as the change landed and off once it settled. #910 repaints
+  instead when nothing laid out reads the size, and keeps the pass for a document changed a second time.
+- **Livery's own share**: a slot handed a new `LocalLiveryCannotPlay` lambda (a static local) on every new key, which recomposed
+  the whole player tree under it; and `LiveryTemplate` built a new `PlayerRequest` for every plan, so the player never skipped a
+  data-only change. Both fixed. That is the 34,564 against 35,911 above, and the 166 bodies a Livery update costs over the
+  player alone with #910 (64 + 111 + 1,989 + 427 against 24 + 1,989 + 427).
+- **What remains**: a changed value still composes the whole card once (about 480 bodies a card), because one invalidation
+  counter drives every node in the player. That, all on one frame when every visible card updates at once, is the p99 gap to
+  the twin. The easing itself is now cheap (p90 matches the twin's).
+- **Animation as an author's choice**: rc-players' `withoutDefaultAnimations()` gives every component without an animation spec a
+  disabled one, so only what the template asks to animate does, and a template with nothing to animate never builds the
+  lookahead pass. Livery can apply it at catalog build time or as a client option (not yet: it needs the rc-players release).
+- Not yet measured on the Pixel 9: the lanes above with #910, and the spine before and after.
 
 ## Running them
 

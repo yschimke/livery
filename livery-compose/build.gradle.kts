@@ -99,3 +99,25 @@ tasks.register<JavaExec>("liveryFeedProfile") {
   (findProperty("livery.jvmArgs") as String?)?.let { jvmArgs(it.split(' ')) }
   outputs.upToDateWhen { false }
 }
+
+// `liveryAnimatedProfile`: the benchmark's animated feed lane (poll cards whose numbers change every second) on the
+// JVM, with what each update recomposes (AnimatedFeedProfile.kt). -Plivery.feed.step=0 holds the list still,
+// -Plivery.feed.updates=false stops the updates, -Plivery.feed.lanes=… picks lanes.
+tasks.register<JavaExec>("liveryAnimatedProfile") {
+  description = "Poll cards updating every second in a LazyColumn: Livery, the player alone and Compose UI."
+  group = "verification"
+  val test = kotlin.jvm().compilations.getByName("test")
+  classpath = files(test.output.allOutputs, test.runtimeDependencyFiles)
+  mainClass.set("ee.schimke.livery.compose.AnimatedFeedProfileMain")
+  val samples: FileCollection = feedProfileSamples
+  inputs.files(samples)
+  argumentProviders += CommandLineArgumentProvider {
+    listOf(layout.buildDirectory.dir("profile").get().asFile.absolutePath, samples.singleFile.resolve("catalog").absolutePath)
+  }
+  (findProperty("livery.feed.lanes") as String?)?.let { systemProperty("livery.feed.lanes", it) }
+  (findProperty("livery.feed.step") as String?)?.let { systemProperty("livery.feed.step", it) }
+  (findProperty("livery.feed.updates") as String?)?.let { systemProperty("livery.feed.updates", it) }
+  (findProperty("livery.feed.debug") as String?)?.let { systemProperty("livery.feed.debug", it) }
+  (findProperty("livery.jvmArgs") as String?)?.let { jvmArgs(it.split(' ')) }
+  outputs.upToDateWhen { false }
+}

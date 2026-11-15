@@ -282,7 +282,10 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
         // One player state per item or decision: a data update to the same one keeps it, another one starts fresh, so
         // document-local state never carries from one card to the next.
         androidx.compose.runtime.key(plan.decisionId, plan.feedItem?.id) {
-          host.player.Play(
+          // The same request while only the data changes: the values reach the player through [values], and the
+          // bindings and actions through [current], so a data update skips this call and the player recomposes only
+          // where it reads what changed, rather than from its root on every plan.
+          val request = remember(plan.template, prepared, values, imageLoader, loader, host) {
             PlayerRequest(
               template = plan.template,
               prepared = prepared,
@@ -293,8 +296,9 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
               theme = host.theme,
               onAction = { a -> scope.launch { host.actions.dispatch(current, a.name, a.args) } },
               modifier = Modifier,
-            ),
-          )
+            )
+          }
+          host.player.Play(request)
         }
       }
     }

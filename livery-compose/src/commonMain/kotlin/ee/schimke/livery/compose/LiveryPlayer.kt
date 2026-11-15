@@ -23,7 +23,11 @@ class PlayerRequest(
   val template: LoadedTemplate,
   /** The document prepared for the display, for a player whose [LiveryPlayer.usesPreparedDocument]; null for any other. */
   val prepared: RcPreparedDocument?,
-  /** The values to show, in place before the first frame; later changes are pushed here without restarting the document. */
+  /**
+   * The values to show, in place before the first frame; later changes are pushed here without restarting the document.
+   * A data update hands the player the same request, so [LiveryPlayer.Play] may be skipped: a player reads this map as
+   * snapshot state (in composition, an `AndroidView` update block or a `snapshotFlow`), never only from a `SideEffect`.
+   */
   val values: SnapshotStateMap<String, RcNamedValue>,
   /** The card's current bindings, for a player that resolves a data-bound image itself. */
   val bindings: () -> Bindings,
