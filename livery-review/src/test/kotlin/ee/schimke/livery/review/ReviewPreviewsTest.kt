@@ -108,6 +108,16 @@ class ReviewPreviewsTest {
     assertEquals(authored, tile.widthDp to tile.heightDp)
   }
 
+  @Test fun aTargetNoPreviewCanDrawIsReportedNotThrown() {
+    // A minimum above the largest preview size: that design says why it wasn't drawn, the rest go on.
+    val tree = temp("tree").also { sample.copyRecursively(it) }
+    File(tree, "designs/tile-default/in-app.json").let { f ->
+      f.writeText(f.readText().replace("\"profiles\": [\"androidx\"]", "\"profiles\": [\"androidx\"], \"size\": { \"minHeightDp\": 5000 }"))
+    }
+    val tile = ReviewPreviews(temp("previews")).render(CompatibilityCheck.compareTrees(tree, sample, "main")).single { it.design == "tile-default" }
+    assertEquals("size out of range", tile.failure, tile.toString())
+  }
+
   @Test fun eachSideBindsWithItsOwnContract() {
     // The template is unchanged, a contract default isn't: the before is drawn with the old one.
     val tree = temp("tree").also { sample.copyRecursively(it) }
