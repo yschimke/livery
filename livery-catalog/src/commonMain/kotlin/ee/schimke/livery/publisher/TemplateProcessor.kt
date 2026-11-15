@@ -20,10 +20,14 @@ fun interface TemplateProcessor {
      * catalog whose `catalog.json`, sets `defaultAnimations: true`, and for a document it cannot decode.
      */
     val WithoutDefaultAnimations: TemplateProcessor = TemplateProcessor { bytes, spec, config ->
-      if (spec.defaultAnimations ?: config.defaultAnimations) return@TemplateProcessor bytes
-      val document = runCatching { RcDocumentCodec.decode(bytes.toByteArray()) }.getOrNull() ?: return@TemplateProcessor bytes
+      if (spec.defaultAnimations ?: config.defaultAnimations) bytes else withoutDefaultAnimations(bytes)
+    }
+
+    /** [WithoutDefaultAnimations]' rewrite of [bytes], whatever a sidecar or catalog says; [bytes] when it changes nothing. */
+    fun withoutDefaultAnimations(bytes: ByteString): ByteString {
+      val document = runCatching { RcDocumentCodec.decode(bytes.toByteArray()) }.getOrNull() ?: return bytes
       val rewritten = document.withoutDefaultAnimations()
-      if (rewritten === document) bytes else RcDocumentCodec.encode(rewritten).toByteString()
+      return if (rewritten === document) bytes else RcDocumentCodec.encode(rewritten).toByteString()
     }
 
     /** What [CatalogBuilder] runs unless it is given other processors. */

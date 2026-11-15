@@ -7,6 +7,7 @@ import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.ContractBinder
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.publisher.CatalogBuilder
+import ee.schimke.livery.publisher.TemplateProcessor
 import ee.schimke.livery.publisher.CatalogProblems
 import ee.schimke.livery.publisher.KeptExamples
 import ee.schimke.livery.publisher.Layout
@@ -94,12 +95,13 @@ class PlayCommand : LiveryCommand {
       runCatching { CatalogBuilder(now = { 0 }).build(it, Layout.Static, serial = 0) }
         .getOrElse { e -> return "error: --catalog $it doesn't build: ${(e as? CatalogProblems)?.problems ?: e.message}" }
     }
-    val sha = bytes.sha256().hex()
-    val entry = built?.manifest?.templates?.firstOrNull { it.sha256 == sha }
+    val entry = built?.let { publishedEntry(it, bytes) }
+    // What the catalog publishes for this file (its template processors' result), as the app plays it.
+    val played = entry?.let { built.files["blobs/${it.sha256}.rc"] } ?: bytes
     return try {
       val images = built?.let { CatalogImages(it, bindings) } ?: ee.schimke.composeai.rcplayer.compose.RcImageLoader.Default
       val fonts = if (built != null && entry != null) CatalogFonts.forTemplate(built, entry) else ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader.Default
-      out.writeBytes(TemplateRenderer.png(bytes, bindings, spec, images, fonts).toByteArray())
+      out.writeBytes(TemplateRenderer.png(played, bindings, spec, images, fonts).toByteArray())
       "played: $out"
     } catch (e: Throwable) {
       "failed: ${generateSequence(e) { it.cause }.take(3).joinToString(", caused by ") { "${it.javaClass.simpleName}: ${it.message}" }}"
@@ -191,4 +193,14 @@ class PlayCommand : LiveryCommand {
     val SDK_FILE = "android-all-instrumented-$SDK_VERSION.jar" // its name in the cache, as Robolectric looks for it
     val JSON = Json { ignoreUnknownKeys = true }
   }
+}
+
+/**
+ * The manifest entry [built] publishes for a source template's [bytes]: the catalog build runs its template processors
+ * over each `.rc` ([TemplateProcessor]), so an entry names the published bytes' hash, which is the file's own only when
+ * no processor changed it.
+ */
+internal fun publishedEntry(built: CatalogBuilder.Output, bytes: okio.ByteString): ee.schimke.livery.protocol.TemplateEntry? {
+  val hashes = listOf(bytes, TemplateProcessor.withoutDefaultAnimations(bytes)).map { it.sha256().hex() }
+  return hashes.firstNotNullOfOrNull { sha -> built.manifest.templates.firstOrNull { it.sha256 == sha } }
 }
