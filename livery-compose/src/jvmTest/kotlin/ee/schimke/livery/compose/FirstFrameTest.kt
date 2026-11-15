@@ -204,6 +204,73 @@ class FirstFrameTest {
     assertEquals(1, onAllNodesWithTag("placeholder:feed").fetchSemanticsNodes().size, "no placeholder while the card planned")
   }
 
+  @Test fun newDataForASlotKeepsItsCardUntilTheNewAnswerIsReady() = runComposeUiTest {
+    val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) })
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed") {
+        if (version > 1) delay(60)
+        PlanResult.Ready(plan("headline $version"))
+      }
+    }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    version = 2
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "no placeholder while the new answer plans")
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+  }
+
+  @Test fun aFallbackIsNotBroughtBackByTheNextKey() = runComposeUiTest {
+    val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) })
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    setContent {
+      LiverySlot(version, host, Modifier.size(320.dp, 120.dp).testTag("card"), slotId = "feed") {
+        when (version) {
+          1 -> PlanResult.Ready(plan("one"))
+          2 -> PlanResult.Fallback("gone")
+          else -> { delay(60); PlanResult.Ready(plan("three")) }
+        }
+      }
+    }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    version = 2
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "fell back: no card")
+    version = 3
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "the dismissed card is not drawn again while the new answer plans")
+  }
+
+  @Test fun anotherItemGetsAFreshPlayerAndNewDataForTheSameItemKeepsIt() = runComposeUiTest {
+    var starts = 0
+    val player = object : LiveryPlayer {
+      override val id = "counting"
+      override val usesPreparedDocument = false
+
+      @androidx.compose.runtime.Composable
+      override fun Play(request: PlayerRequest) {
+        androidx.compose.runtime.remember { starts++ }
+      }
+    }
+    val counting = LiveryHost(repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, player = player)
+    fun itemPlan(id: String, title: String) = plan(title).copy(feedItem = ee.schimke.livery.protocol.FeedItem(id, ee.schimke.livery.protocol.TemplateRef(designId = "banner-classic")))
+    var current by mutableStateOf(itemPlan("a", "one"))
+    mainClock.autoAdvance = false
+    setContent { LiveryTemplate(current, counting, Modifier.size(320.dp, 120.dp)) }
+    repeat(5) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts)
+    current = itemPlan("a", "two")
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(1, starts, "new data for the same item keeps its player")
+    current = itemPlan("b", "three")
+    repeat(3) { mainClock.advanceTimeByFrame() }
+    assertEquals(2, starts, "another item starts a fresh one")
+  }
+
   @Test fun aSplashScreenStartupMeansNothingWaits() = runComposeUiTest {
     // The app holds its splash screen on a startup: the frame behind it need not wait as well.
     runBlocking { host.resources.startup(this) {}.await() }
