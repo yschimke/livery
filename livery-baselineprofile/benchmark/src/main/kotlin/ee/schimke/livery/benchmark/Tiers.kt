@@ -23,6 +23,6 @@ annotation class Completion
 /** How many times a lane is measured, and how much it does each time. */
 internal enum class Tier(val iterations: Int, val flings: Int, val startupIterations: Int, val changeIterations: Int, val taps: Int) {
   // A cold start is a few seconds, so the spine can afford many of them; a fling of the feed is half a minute.
-  Spine(iterations = 6, flings = 4, startupIterations = 10, changeIterations = 8, taps = 10),
+  Spine(iterations = 5, flings = 4, startupIterations = 10, changeIterations = 8, taps = 10),
   Completion(iterations = 3, flings = 3, startupIterations = 3, changeIterations = 3, taps = 6),
 }
