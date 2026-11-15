@@ -79,6 +79,7 @@ swift test                      # the Swift package, on macOS
 ./gradlew :livery-publish:installDist :livery-capture-cmp:sampleCatalogs && livery-publish/build/install/livery/bin/livery build livery-capture-cmp/build/samples/catalog build/sample-catalog
 ./gradlew :livery-render:jvmTest -Plivery.render.out=build/renders   # keep the test renders to look at
 scripts/test-agent-attribution.sh
+scripts/check-capture-determinism.sh   # two fresh captures of the samples write the same bytes
 ```
 
 CI's required check is the aggregate `gradle` job (which needs `build` and, when a change touches `swift/`, `Package.swift` or `conformance/`, `swift`) (`.github/workflows/ci.yml`): add a job to its

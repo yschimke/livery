@@ -82,6 +82,32 @@ each changed design drawn with its contract's examples, before and after (see
 The serial defaults to the build time in milliseconds, which only grows. If you pass `--serial`
 yourself, never let it go down for a channel: apps refuse a lower one as a rollback.
 
+A build is reproducible. The blobs are the captured `.rc` bytes, which are the same on every run
+and machine, and only the manifest's `serial`, `generatedAtEpochMs` and `expiresAtEpochMs` read the
+clock. Set [`SOURCE_DATE_EPOCH`](https://reproducible-builds.org/specs/source-date-epoch/) (seconds)
+and the clock reads that instead, so two builds of one tree at one `SOURCE_DATE_EPOCH` write the
+same catalog byte for byte.
+
+Pin it to the time you publish, not to an older time such as the commit's. The serial defaults to
+it, and apps refuse a serial lower than the last one they accepted as a rollback; the expiry counts
+from it too, so an old time publishes a catalog that is already close to stale. Moving a channel
+from the default wall-clock serial to the publish time keeps the serial growing, since each
+publish happens later than the last:
+
+```bash
+export SOURCE_DATE_EPOCH=$(date +%s)   # once per publish
+livery build catalog public/catalog/main --key acme.key --key-id acme-1
+```
+
+The manifest records the time it was built with (`generatedAtEpochMs`), so anyone can check a
+published catalog by rebuilding the same tree with it and comparing bytes:
+
+```bash
+SOURCE_DATE_EPOCH=$(( $(jq .generatedAtEpochMs published/manifest.json) / 1000 )) \
+  livery build catalog rebuilt --serial "$(jq .serial published/manifest.json)"
+diff -r published rebuilt   # identical, apart from a manifest.sig.json you did not re-sign
+```
+
 ## Static hosts and CDNs
 
 ```bash

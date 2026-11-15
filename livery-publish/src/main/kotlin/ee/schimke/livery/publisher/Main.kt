@@ -19,7 +19,11 @@ private const val USAGE = """livery — build, sign and check a template catalog
   livery keygen <name>                 writes <name>.key (private) and <name>.pub (raw public, base64)
   livery build <src> <out> [options]   validates <src> and writes a catalog to <out>
       --key <file> --key-id <id>           sign manifest.json (writes manifest.sig.json)
-      --serial <n>                         default: now in ms (must only grow per channel)
+      --serial <n>                         default: now in ms (must only grow per channel); with
+                                           SOURCE_DATE_EPOCH set, "now" is that time, so two
+                                           builds of one tree write the same bytes (set it to
+                                           the publish time, never an older one: apps refuse a
+                                           lower serial, and the expiry counts from it)
       --inspect                            decode every .rc and check it reads and emits only what
                                            its sidecar declares
       --default-animations                 keep AndroidX's default animations in every template; by
@@ -77,8 +81,9 @@ fun main(args: Array<String>) {
         val layout = opt("--github")?.let {
           Layout.GitHubRelease(it.substringBefore('/'), it.substringAfter('/'), opt("--tag") ?: error("--github needs --tag"))
         } ?: Layout.Static
+        val now = buildClock(System.getenv("SOURCE_DATE_EPOCH"))
         val processors = if ("--default-animations" in a) emptyList() else TemplateProcessor.Defaults
-        val builder = if ("--inspect" in a) CatalogBuilder(inspect = CatalogBuilder.INSPECT, processors = processors) else CatalogBuilder(processors = processors)
+        val builder = if ("--inspect" in a) CatalogBuilder(now = now, inspect = CatalogBuilder.INSPECT, processors = processors) else CatalogBuilder(now = now, processors = processors)
         val result = builder.build(src, layout, opt("--serial")?.toLong())
         out.mkdirs()
         result.files.forEach { (path, bytes) -> File(out, path).writeByteString(bytes) }
@@ -168,4 +173,17 @@ fun main(args: Array<String>) {
 private fun usage(extensions: List<LiveryCommand> = LiveryCommand.installed()): Nothing {
   System.err.println(USAGE + extensions.joinToString("") { it.usage.trimEnd() + "\n" })
   exitProcess(64)
+}
+
+/**
+ * The clock `livery build` stamps a manifest with (`serial`, `generatedAtEpochMs`,
+ * `expiresAtEpochMs`): the wall clock, or [sourceDateEpoch] when set — the reproducible-builds
+ * convention (https://reproducible-builds.org/specs/source-date-epoch/), seconds since the epoch —
+ * so that a build of one tree at one commit writes the same catalog, byte for byte, wherever it runs.
+ */
+internal fun buildClock(sourceDateEpoch: String?): () -> Long {
+  val fixed = sourceDateEpoch?.trim()?.takeIf { it.isNotEmpty() }?.let {
+    requireNotNull(it.toLongOrNull()) { "SOURCE_DATE_EPOCH must be whole seconds since the epoch, not '$it'" } * 1000
+  }
+  return if (fixed != null) { { fixed } } else { { System.currentTimeMillis() } }
 }
