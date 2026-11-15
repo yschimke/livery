@@ -158,9 +158,14 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
     // [extra] are values the host writes (a screen's insets): pushed with the data, never part of the plan.
     val pushed = (plan.bindings + extra).toPlayerValues()
     val values = remember(bytes, plan.decisionId, plan.feedItem?.id) { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
-    SideEffect {
-      values.keys.toList().filter { it !in pushed }.forEach(values::remove)
-      values.putAll(pushed)
+    // Written as this composes, before the player below reads them: the player applies a change in
+    // the composition that sees it, so new data draws on this frame, as a composable given new
+    // parameters would. Pushed from a SideEffect, it drew a frame later. Only what moved is written,
+    // so an unchanged plan writes nothing; read unobserved, so the write does not recompose this
+    // function again.
+    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+      values.keys.filter { it !in pushed }.forEach(values::remove)
+      pushed.forEach { (name, value) -> if (values[name] != value) values[name] = value }
     }
     // Shared by every card of this template: decoding, linking, the layout tree and the state seed are
     // done once per template, not per card, and (by default) off the main thread. Each card's player

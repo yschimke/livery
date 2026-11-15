@@ -102,7 +102,8 @@ tasks.register<JavaExec>("liveryFeedProfile") {
 
 // `liveryAnimatedProfile`: the benchmark's animated feed lane (poll cards whose numbers change every second) on the
 // JVM, with what each update recomposes (AnimatedFeedProfile.kt). -Plivery.feed.step=0 holds the list still,
-// -Plivery.feed.updates=false stops the updates, -Plivery.feed.lanes=… picks lanes.
+// -Plivery.feed.updates=false stops the updates, -Plivery.feed.lanes=… picks lanes; -Plivery.feed.skipTicks,
+// -Plivery.feed.phases and -Plivery.feed.invalidations say which frame of an update does what, and why.
 tasks.register<JavaExec>("liveryAnimatedProfile") {
   description = "Poll cards updating every second in a LazyColumn: Livery, the player alone and Compose UI."
   group = "verification"
@@ -118,6 +119,9 @@ tasks.register<JavaExec>("liveryAnimatedProfile") {
   (findProperty("livery.feed.step") as String?)?.let { systemProperty("livery.feed.step", it) }
   (findProperty("livery.feed.updates") as String?)?.let { systemProperty("livery.feed.updates", it) }
   (findProperty("livery.feed.debug") as String?)?.let { systemProperty("livery.feed.debug", it) }
+  (findProperty("livery.feed.phases") as String?)?.let { systemProperty("livery.feed.phases", it) }
+  (findProperty("livery.feed.skipTicks") as String?)?.let { systemProperty("livery.feed.skipTicks", it) }
+  (findProperty("livery.feed.invalidations") as String?)?.let { systemProperty("livery.feed.invalidations", it) }
   (findProperty("livery.jvmArgs") as String?)?.let { jvmArgs(it.split(' ')) }
   outputs.upToDateWhen { false }
 }

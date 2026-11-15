@@ -16,6 +16,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.tooling.setObserver
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
@@ -71,8 +73,26 @@ import okio.ByteString.Companion.toByteString
  * skipped), by name and by frame after an update: what an update recomposes, and for how long.
  * `-Dlivery.feed.debug=true` prints the snapshot state written on each frame around the first update: what keeps a
  * player recomposing.
+ *
+ * Narrowing an update down (`-P` on the Gradle task, as the system properties here):
+ * - `livery.feed.skipTicks=N` counts the frames after an update only from the N+1th update on: the steady state of a
+ *   card, without the first changes that switch a deferred lookahead pass on and off;
+ * - `livery.feed.phases=true` prints, for frames 0..[PHASE_DETAIL] after an update, which composables ran and which
+ *   state was written: which frame of the update does what;
+ * - `livery.feed.invalidations=true` prints, for one update after the skipped ones, which state invalidated which
+ *   composable (Compose's composition observer), which state the player's top level read, and where (the stack) state
+ *   was written outside composition: why a frame recomposed. It is how the top level was found reading every version
+ *   it published (rc-players `RcValueVersions.publish`).
+ *
+ * The `rc` lanes write the card's values as it composes, as `LiveryTemplate` does; `rc-flat` and `rc-noflat` split
+ * `rc`'s two settings (the flat layout, the deferred lookahead pass) to tell them apart.
  */
-@OptIn(InternalComposeTracingApi::class, ExperimentalRcPlayerApi::class)
+@OptIn(
+  InternalComposeTracingApi::class,
+  ExperimentalRcPlayerApi::class,
+  androidx.compose.runtime.InternalComposeApi::class,
+  androidx.compose.runtime.ExperimentalComposeRuntimeApi::class,
+)
 object AnimatedFeedProfileMain {
   private val counts = HashMap<String, Int>()
   private var counting = false
@@ -80,6 +100,12 @@ object AnimatedFeedProfileMain {
   private var updates = true
   /** Bodies run at each frame of an update's cycle (frame 0: the frame after the update), summed over updates. */
   private val byPhase = LongArray(TICK_FRAMES)
+  /** With `-Dlivery.feed.phases=true`: which composables ran, and which state was written, at frames 1..[PHASE_DETAIL]. */
+  private val PHASES = System.getProperty("livery.feed.phases") == "true"
+  private const val PHASE_DETAIL = 4
+  private var phase = 0
+  private val phaseCounts = Array(PHASE_DETAIL + 1) { HashMap<String, Int>() }
+  private val phaseWrites = Array(PHASE_DETAIL + 1) { HashMap<String, Int>() }
 
   @JvmStatic
   fun main(args: Array<String>) {
@@ -92,7 +118,9 @@ object AnimatedFeedProfileMain {
       override fun isTraceInProgress() = counting
       override fun traceEventStart(key: Int, dirty1: Int, dirty2: Int, info: String) {
         val name = info.substringBefore(" (")
+        pendingScope?.let { scopeNames.putIfAbsent(it, name); pendingScope = null }
         counts[name] = (counts[name] ?: 0) + 1
+        if (PHASES && phase in 1..PHASE_DETAIL) phaseCounts[phase].merge(name, 1, Int::plus)
         bodies++
       }
       override fun traceEventEnd() {}
@@ -108,10 +136,20 @@ object AnimatedFeedProfileMain {
         counts.clear()
         counting = true
         byPhase.fill(0)
+        phaseCounts.forEach { it.clear() }
+        phaseWrites.forEach { it.clear() }
         results.getValue(lane) += feed.run(lane, step, FRAMES / ROUNDS)
         counting = false
         byPhase.forEachIndexed { k, v -> phases.getValue(lane)[k] += v }
         counts.forEach { (k, v) -> composed.getValue(lane).merge(k, v, Int::plus) }
+        if (PHASES && round == ROUNDS - 1) {
+          val perTick = (FRAMES / ROUNDS / TICK_FRAMES).coerceAtLeast(1)
+          println("== $lane")
+          for (k in 0..PHASE_DETAIL) {
+            println("  frame $k: ran " + phaseCounts[k].entries.sortedByDescending { it.value }.take(14).joinToString { "${it.key.substringAfterLast('.')}=${it.value / perTick}" })
+            println("  frame $k: wrote " + phaseWrites[k].entries.sortedByDescending { it.value }.take(10).joinToString { "${it.key}=${it.value / perTick}" })
+          }
+        }
       }
     }
     val ticks = FRAMES / TICK_FRAMES
@@ -141,6 +179,7 @@ object AnimatedFeedProfileMain {
         c.entries.sortedByDescending { it.value }.take(TOP).forEach { (k, v) -> appendLine("- ${"%.1f".format(v.toDouble() / ticks)} $k") }
       }
     }
+    if (INVALIDATIONS) invalidations.forEach { (k, v) -> println("invalidation ${v}x $k") }
     File(out, "animated.md").writeText(report)
     println(report)
   }
@@ -212,19 +251,26 @@ object AnimatedFeedProfileMain {
       var tick by mutableIntStateOf(0)
       val list = LazyListState()
       val scene = ImageComposeScene(WIDTH, HEIGHT, Density(DENSITY)) {
+        if (INVALIDATIONS) {
+          val composition = androidx.compose.runtime.currentComposer.composition
+          androidx.compose.runtime.DisposableEffect(composition) {
+            val handle = composition.setObserver(compositionObserver)
+            onDispose { handle?.dispose() }
+          }
+        }
         LazyColumn(Modifier.fillMaxSize(), state = list, verticalArrangement = Arrangement.spacedBy(12.dp)) {
           items(ITEMS, key = { it }) { i ->
             val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             val t = tick
             when (lane) {
               "compose", "compose-snap" -> PollTwin(data(i, t), modifier, animateShares = lane == "compose")
-              "rc", "rc-nodefer" -> {
+              "rc", "rc-nodefer", "rc-flat", "rc-noflat" -> {
                 val prepared = rememberRcPreparedDocument(remember { poll.bytes.toByteArray() }, host.preparation)
                 if (prepared != null) {
                   val pushed = plan(i, t).bindings.toPlayerValues()
                   val values = remember { mutableStateMapOf<String, RcNamedValue>().apply { putAll(pushed) } }
-                  SideEffect { values.putAll(pushed) }
-                  CompositionLocalProvider(LocalRcDeferLayoutAnimations provides (lane != "rc-nodefer"), LocalRcFlattenLayout provides (lane != "rc-nodefer")) {
+                  Snapshot.withoutReadObservation { pushed.forEach { (k, v) -> if (values[k] != v) values[k] = v } }
+                  CompositionLocalProvider(LocalRcDeferLayoutAnimations provides (lane == "rc" || lane == "rc-noflat"), LocalRcFlattenLayout provides (lane == "rc" || lane == "rc-flat")) {
                     RcComposePlayer(prepared, modifier, namedValues = values)
                   }
                 }
@@ -250,10 +296,20 @@ object AnimatedFeedProfileMain {
             println("frame $f: bodies=$bodies written=$written")
           }
           bodies = 0
+          phase = (f + 1) % TICK_FRAMES
+          explained = counting && (f + 1) / TICK_FRAMES == SKIP_TICKS + 1 && phase <= PHASE_DETAIL
+          val observer = if (PHASES && counting && phase <= PHASE_DETAIL) Snapshot.registerApplyObserver { changed, _ ->
+            changed.forEach { o -> phaseWrites[phase].merge(o.toString().anonymous().take(60), 1, Int::plus) }
+          } else null
+          val stacks = if (INVALIDATIONS && explained) Snapshot.registerGlobalWriteObserver { o ->
+            invalidations.merge("frame $phase wrote ${o.toString().anonymous().take(40)} @ ${stack()}", 1, Int::plus)
+          } else null
           val start = System.nanoTime()
           scene.render(time).close()
           val took = System.nanoTime() - start
-          byPhase[(f + 1) % TICK_FRAMES] += bodies.toLong()
+          stacks?.dispose()
+          observer?.dispose()
+          if (f >= SKIP_TICKS * TICK_FRAMES) byPhase[(f + 1) % TICK_FRAMES] += bodies.toLong()
           took
         }
       } finally {
@@ -262,6 +318,34 @@ object AnimatedFeedProfileMain {
     }
   }
 
+  private val INVALIDATIONS = System.getProperty("livery.feed.invalidations") == "true"
+  private val invalidations = sortedMapOf<String, Int>()
+  /** The update `livery.feed.invalidations` explains: the first after the skipped ones, frames 0..[PHASE_DETAIL]. */
+  private var explained = false
+  /** A scope entered and not yet named: the tracer names it by the next composable body it starts. */
+  private var pendingScope: Any? = null
+  private val scopeNames = java.util.WeakHashMap<Any, String>()
+
+  private fun String.anonymous() = replace(Regex("@[0-9a-f]+"), "")
+
+  private fun stack() = Throwable().stackTrace.drop(2).filter { ("rcplayer" in it.className || "livery" in it.className) && "AnimatedFeedProfile" !in it.className }.take(4)
+    .joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+
+  private val compositionObserver = object : androidx.compose.runtime.tooling.CompositionObserver {
+    override fun onBeginComposition(composition: androidx.compose.runtime.tooling.ObservableComposition) {}
+    override fun onScopeEnter(scope: androidx.compose.runtime.RecomposeScope) { pendingScope = scope }
+    override fun onReadInScope(scope: androidx.compose.runtime.RecomposeScope, value: Any) {
+      if (explained && scopeNames[scope]?.endsWith("RcComposePlayerResolved") == true)
+        invalidations.merge("frame $phase top level read ${value.toString().anonymous().take(50)} @ ${stack()}", 1, Int::plus)
+    }
+    override fun onScopeExit(scope: androidx.compose.runtime.RecomposeScope) {}
+    override fun onEndComposition(composition: androidx.compose.runtime.tooling.ObservableComposition) {}
+    override fun onScopeInvalidated(scope: androidx.compose.runtime.RecomposeScope, value: Any?) {
+      if (explained) invalidations.merge("frame $phase invalidated ${scopeNames[scope] ?: "?"} by ${value.toString().anonymous().take(60)}", 1, Int::plus)
+    }
+    override fun onScopeDisposed(scope: androidx.compose.runtime.RecomposeScope) {}
+  }
+  private val SKIP_TICKS = System.getProperty("livery.feed.skipTicks")?.toInt() ?: 0
   private val DEBUG = System.getProperty("livery.feed.debug") == "true"
   private const val ITEMS = 200
   private const val WIDTH = 720
