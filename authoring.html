@@ -280,6 +280,10 @@ to an output branch. Livery's own samples work this way, on the plain JVM:
 <li><code>DesignFolder.write</code> writes <code>&lt;name&gt;.rc</code> and <code>&lt;name&gt;.json</code> and removes templates no longer
   captured. A catalog repository that does commit its <code>.rc</code> (another tool's output, say) can keep
   them current with <code>check</code>, which lists what differs from a capture.</li>
+<li><code>CatalogSource(dir)</code> writes the rest of a tree's generated part from Kotlin: <code>writeCatalog</code>
+  (<code>catalog.json</code>), <code>writeContract</code> (<code>contracts/&lt;name&gt;.json</code>, from a <code>Contract</code> or a <code>ContractDef</code>)
+  and <code>writeDesign</code> (<code>designs/&lt;id&gt;/design.json</code> and its templates, through <code>DesignFolder</code>). It
+  leaves the hand-edited files (<code>themes/</code>, <code>placements/</code>, <code>fonts/</code>) alone.</li>
 <li>Lists are <code>"&lt;list&gt;.&lt;i&gt;.&lt;field&gt;"</code> with <code>v.int("&lt;list&gt;.count")</code>; theme roles are <code>theme.*</code>
   colours the host fills.</li>
 <li><code>v.action(name, args)</code> sends the arguments the action declares, checked when you capture; a
