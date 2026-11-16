@@ -35,6 +35,20 @@ private object CardContract : ContractDef("demo/card", major = 2, minor = 1, tit
       )
 }
 
+/** A contract with a list: each item's fields are handles too. */
+private object AgendaContract : ContractDef("demo/agenda", major = 1) {
+  val heading = string("heading", maxLength = 10)
+  val talks = list("talks", max = 3) {
+    string("title", required = true, maxLength = 40)
+    bool("starred")
+  }
+  val talkTitle = talks.field("title")
+  val starred = talks.field("starred")
+
+  override val examples
+    get() = mapOf("default" to mapOf(heading to "Today", talks to listOf(mapOf(talkTitle to "Keynote", starred to true), mapOf(talkTitle to "Lunch"))))
+}
+
 private object OtherContract : ContractDef("demo/other", major = 1) {
   val name = string("name")
 }
@@ -157,5 +171,34 @@ class ContractDefTest {
     }
     assertSame(CardContract.theme.getValue(ThemeRoles.SURFACE), CardContract.inputs.single { it.name == ThemeRoles.SURFACE })
     assertFailsWith<IllegalArgumentException> { object : ContractDef("demo/themed", 1) { val t = themeRoles(listOf("primary")) } }
+  }
+
+  @Test fun aListIsDeclaredWithItsFieldsAndNamesEachValue() {
+    val c = AgendaContract.toContract()
+    assertEquals(listOf("talks"), c.lists.keys.toList())
+    assertEquals(
+      ListSpec(mapOf("title" to InputSpec(ValueType.String, required = true, maxLength = 40), "starred" to InputSpec(ValueType.Bool)), max = 3),
+      c.lists["talks"],
+    )
+    assertEquals(listOf("title", "starred"), AgendaContract.talks.fields.map { it.name })
+    assertEquals("talks.count", AgendaContract.talks.countName)
+    assertEquals("talks.2.title", AgendaContract.talks.valueName(2, AgendaContract.talkTitle))
+    assertFailsWith<IllegalArgumentException> { AgendaContract.talks.valueName(3, AgendaContract.talkTitle) }
+    assertFailsWith<IllegalArgumentException> { AgendaContract.talks.valueName(0, AgendaContract.heading) }
+    assertFailsWith<IllegalArgumentException> { AgendaContract.talks.field("speaker") }
+  }
+
+  @Test fun aListsExampleIsItsItemsAndBinds() {
+    val example = AgendaContract.toContract().examples.getValue("default")
+    assertEquals(
+      """{"heading":"Today","talks":[{"title":"Keynote","starred":true},{"title":"Lunch"}]}""",
+      example.toString(),
+    )
+    assertFailsWith<IllegalArgumentException> { AgendaContract.data(mapOf(AgendaContract.talks to listOf(mapOf(AgendaContract.heading to "x")))) }
+  }
+
+  @Test fun fitTrimsToMaxLengthWithAnEllipsis() {
+    assertEquals("Today", AgendaContract.heading.fit("Today"))
+    assertEquals("Tomorrow…", AgendaContract.heading.fit("Tomorrow morning"))
   }
 }

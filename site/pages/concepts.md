@@ -40,12 +40,17 @@ object SessionContract : ContractDef("conf/session", major = 1, title = "Session
   val title = string("title", required = true, maxLength = 120)
   val speakers = string("speakers", maxLength = 80, description = "names, comma separated")
   val live = bool("live", default = false)
+  val tags = list("tags", max = 3) { string("label", maxLength = 20) }   // tags.count, tags.0.label, …
+  val tagLabel = tags.field("label")
   val theme = themeRoles()                         // theme.primary, theme.onSurface, …
   val open = action("open", "app:open-session")
   val tickets = action("tickets", ActionKinds.OPEN_URL, arg = "url")
 
   override val examples get() = mapOf(
-    "default" to mapOf(title to "Building adaptive apps", speakers to "Jane Doe", live to true),
+    "default" to mapOf(
+      title to "Building adaptive apps", speakers to "Jane Doe", live to true,
+      tags to listOf(mapOf(tagLabel to "Android"), mapOf(tagLabel to "Compose")),
+    ),
   )
 }
 
@@ -57,6 +62,11 @@ val data = SessionContract.data(mapOf(SessionContract.title to session.title))  
   `bool`, `color` (ARGB default, optional `role`), `image`, and `input(name, spec)` for anything
   else; `action(name, kind, args)`, `action(name, kind, arg = "url")` for one required string
   argument, and `setAction(name, input)` for a `set`.
+- `list(name, max) { … }` declares a list (PROTOCOL.md §4.1) and its items' fields; `field(name)`
+  is a field's handle, and `countName` and `valueName(index, field)` the names a template reads. A
+  list's value in an example or `data(…)` is its items, each a map keyed by the list's fields.
+- `fit(value)` on a string input trims an app's own over-long text to its `maxLength`, ending in
+  `…`, before binding would refuse it.
 - `toContract()` is the protocol's own `Contract`, in declaration order. A name declared twice, a
   `since` above the contract's minor, a required input with a `since`, or an example keyed by
   another contract's handle fails at once.
