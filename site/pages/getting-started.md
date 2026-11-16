@@ -161,10 +161,12 @@ LazyColumn(state = state) {
 
 `items` is androidx Paging's `LazyPagingItems`; `peek` reads what is loaded without asking for more. Eight cards
 ahead keeps up with a fast fling on a phone; `LiveryResources(maxPlans = …)` should hold the window and what the
-list keeps composed. A slot whose `key` carries its data (so it changes when the data does) says which card it is with `identity`: new data
-for the same identity keeps the card on screen until the new answer is ready and updates it in place, so only what
-changed animates; another identity is another card and starts from the placeholder with a fresh player, so nothing a
-person did in one card (a selection, some input) carries to the next. It defaults to `key`.
+list keeps composed. A card whose data changes while it is on screen is a slot with an `item` (which card it is) and `data` (what it shows now):
+`LiverySlot(item = id, data = version, host = host) { … }`. New data for the same item keeps the card on screen until the
+new answer is ready and updates it in place, so only what changed animates, and with no placeholder in between; another
+item is another card and starts from the placeholder with a fresh player, so nothing a person did in one card (a selection,
+some input) carries to the next. A slot with one `key` treats every key as its own card; `identity` overrides that. To prepare
+such a slot ahead, `LiveryPrepareAhead`'s `key` is `LiverySlotKey(item, data)`.
 
 `PagingActivity` in [`livery-baselineprofile/host`](https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host) is a working example.
 
