@@ -65,6 +65,18 @@ data class CatalogPreview(
   val frame: String? = null,
 )
 
+/**
+ * A mode of the caller's own for every host-themed template, beside `light`, `dark` and the tree's
+ * theme packs: a [theme] its app pushes that no pack holds (a user's dynamic colour scheme, through
+ * `ColorScheme.toLiveryTheme()`), or values a demo recolours with. The page behind it is the
+ * theme's `theme.surface`, else the mode's.
+ */
+data class PreviewMode(val name: String, val dark: Boolean, val theme: Bindings) {
+  init {
+    require(name !in setOf("light", "dark") && !name.startsWith("theme-")) { "'$name' is a built-in mode's name" }
+  }
+}
+
 /** Something a preview couldn't be drawn for: an example that doesn't bind, a missing contract. */
 @Serializable
 data class PreviewProblem(val design: String, val template: String?, val example: String?, val message: String)
@@ -139,7 +151,7 @@ object CatalogPreviews {
   private val pretty = Json { prettyPrint = true; encodeDefaults = true }
 
   /** The source tree's preview matrix, and what couldn't become a case. Reads only; draws nothing. */
-  fun cases(source: File, wearHosts: List<RcWearHost> = RcWearHost.All): PreviewCases {
+  fun cases(source: File, wearHosts: List<RcWearHost> = RcWearHost.All, modes: List<PreviewMode> = emptyList()): PreviewCases {
     require(source.resolve("designs").isDirectory) { "$source has no designs/: not a catalog source tree" }
     val contracts = source.resolve("contracts").jsonFiles().map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val packs = source.resolve("themes").jsonFiles().map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
@@ -175,7 +187,7 @@ object CatalogPreviews {
               return@forEach
             }
           }
-          modes(target, packs).forEach { mode ->
+          modes(target, packs, modes).forEach { mode ->
             cases += PreviewCase(
               design.id, name, example, mode.name, target, document, width, height, mode.dark,
               mode.background(target), (bindings + mode.theme).values,
@@ -203,8 +215,9 @@ object CatalogPreviews {
     density: Float = 2f,
     draw: Boolean = true,
     wearHosts: List<RcWearHost> = RcWearHost.All,
+    modes: List<PreviewMode> = emptyList(),
   ): PreviewIndex {
-    val matrix = cases(source, wearHosts)
+    val matrix = cases(source, wearHosts, modes)
     out.deleteRecursively()
     out.mkdirs()
     // The documents each case names, copied once: the export is whole without the source tree.
@@ -335,11 +348,12 @@ object CatalogPreviews {
         }
   }
 
-  private fun modes(target: Target, packs: List<ThemePack>): List<Mode> = when (target.theme) {
+  private fun modes(target: Target, packs: List<ThemePack>, extra: List<PreviewMode>): List<Mode> = when (target.theme) {
     Target.baked(dark = true) -> listOf(Mode("dark", true, Bindings.EMPTY))
     Target.baked(dark = false) -> listOf(Mode("light", false, Bindings.EMPTY))
     else -> listOf(baseline(dark = false), baseline(dark = true)) +
-      packs.map { Mode("theme-${it.id}", it.mode == "dark", Bindings(it.values)) }
+      packs.map { Mode("theme-${it.id}", it.mode == "dark", Bindings(it.values)) } +
+      extra.map { Mode(it.name, it.dark, it.theme) }
   }
 
   /**

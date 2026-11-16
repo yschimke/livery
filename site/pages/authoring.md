@@ -226,7 +226,10 @@ capture) with nothing written by hand. What the tree already says decides what i
   example that doesn't bind fails the task, after the rest are drawn.
 - **Modes**: a `host`-themed template in `light` and `dark` (Material 3's baseline scheme bound to
   its `theme.*` roles, as an app pushes its own) and under each theme pack in `themes/`
-  (`theme-<id>`); a `baked:dark` or `baked:light` template once, in its own mode.
+  (`theme-<id>`); a `baked:dark` or `baked:light` template once, in its own mode. Called from
+  code, `CatalogPreviews.render(…, modes = listOf(PreviewMode("dynamic-rose", dark = true, theme)))`
+  adds modes of your own: a theme your app pushes that no pack holds, such as a user's dynamic
+  colour scheme through `ColorScheme.toLiveryTheme()`.
 - **Size**: the document's own (the size it was captured at), kept inside its target's range.
 - **Wear widgets** are also drawn in each watch host's container of their kind (`wear:small` or
   `wear:large`): its size, with the `wear.container.*` padding and corner radius the watch writes

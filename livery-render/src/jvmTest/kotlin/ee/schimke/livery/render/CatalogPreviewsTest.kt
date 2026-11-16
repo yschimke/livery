@@ -48,6 +48,16 @@ class CatalogPreviewsTest {
     assertEquals(unreadable, index.problems, "only the placeholders")
   }
 
+  /** A caller's own mode draws every host-themed template once more, with its theme; a baked one keeps its own. */
+  @Test fun aCallersModeIsOneMoreMode() {
+    val rose = PreviewMode("dynamic-rose", dark = true, theme = ee.schimke.livery.client.Bindings(mapOf("theme.primary" to NamedValue.Color(0xFFD81B60))))
+    val cases = CatalogPreviews.cases(samples, modes = listOf(rose)).cases
+    val tile = cases.filter { it.design == "tile-default" && it.template == "in-app" }
+    assertEquals(setOf("light", "dark", "theme-dusk", "dynamic-rose"), tile.map { it.mode }.toSet())
+    assertEquals(NamedValue.Color(0xFFD81B60), tile.first { it.mode == "dynamic-rose" }.values["theme.primary"])
+    kotlin.test.assertFailsWith<IllegalArgumentException> { PreviewMode("theme-x", false, ee.schimke.livery.client.Bindings.EMPTY) }
+  }
+
   /** A Wear widget is also drawn in each host's container of its kind, named for the host. */
   @Test fun aWearWidgetIsDrawnInEachHostsContainer() {
     val large = Target(Surfaces.WEAR_WIDGET, 7, listOf("glance-wear"), theme = "baked:dark", container = "wear:large")
