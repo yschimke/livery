@@ -1,0 +1,731 @@
+{
+  "device": "Pixel 9, Android API 37, charging",
+  "date": "2026-11-16",
+  "rc-players": "main built from source, 3.6.2-SNAPSHOT (after the 3.6.1 release; includes #919, a host value change composes the player once)",
+  "livery": "main at 0c7eddc (#112)",
+  "run": "routine set (spine and completion)",
+  "method": "Macrobenchmark, benchmarkRelease with the shipped baseline profiles; livery-baselineprofile/run-benchmarks.sh routine",
+  "results": {
+    "DocumentBenchmark.composeUiChange": {
+      "tier": "spine",
+      "frameCount": 11.0,
+      "frameDurationCpuMs": {
+        "P50": 4.0,
+        "P90": 5.1,
+        "P99": 8.1
+      },
+      "frameOverrunMs": {
+        "P50": -10.6,
+        "P90": -9.2,
+        "P99": -6.3
+      }
+    },
+    "DocumentBenchmark.composeUiStartup": {
+      "tier": "spine",
+      "timeToFullDisplayMs": {
+        "min": 183.2,
+        "median": 200.5,
+        "max": 227.5
+      },
+      "timeToInitialDisplayMs": {
+        "min": 171.2,
+        "median": 186.0,
+        "max": 206.9
+      }
+    },
+    "DocumentBenchmark.liveryChange": {
+      "tier": "spine",
+      "frameCount": 19.5,
+      "frameDurationCpuMs": {
+        "P50": 4.9,
+        "P90": 10.2,
+        "P99": 12.0
+      },
+      "frameOverrunMs": {
+        "P50": -9.8,
+        "P90": -4.2,
+        "P99": -2.6
+      }
+    },
+    "DocumentBenchmark.liveryEmbeddedChange": {
+      "tier": "completion",
+      "frameCount": 17.0,
+      "frameDurationCpuMs": {
+        "P50": 4.7,
+        "P90": 17.4,
+        "P99": 18.2
+      },
+      "frameOverrunMs": {
+        "P50": -10.0,
+        "P90": 1.8,
+        "P99": 3.4
+      }
+    },
+    "DocumentBenchmark.liveryEmbeddedStartup": {
+      "tier": "completion",
+      "host:first-frame-heldFirstMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "livery:startupFirstMs": {
+        "min": 10.3,
+        "median": 10.8,
+        "max": 16.1
+      },
+      "timeToFullDisplayMs": {
+        "min": 207.0,
+        "median": 224.4,
+        "max": 233.6
+      },
+      "timeToInitialDisplayMs": {
+        "min": 168.4,
+        "median": 195.1,
+        "max": 195.5
+      }
+    },
+    "DocumentBenchmark.liveryInCompositionStartup": {
+      "tier": "completion",
+      "timeToFullDisplayMs": {
+        "min": 230.8,
+        "median": 234.0,
+        "max": 246.7
+      },
+      "timeToInitialDisplayMs": {
+        "min": 195.6,
+        "median": 204.7,
+        "max": 218.4
+      }
+    },
+    "DocumentBenchmark.liveryNoDeferChange": {
+      "tier": "completion",
+      "frameCount": 11.0,
+      "frameDurationCpuMs": {
+        "P50": 5.3,
+        "P90": 11.2,
+        "P99": 12.9
+      },
+      "frameOverrunMs": {
+        "P50": -9.4,
+        "P90": -3.5,
+        "P99": -2.4
+      }
+    },
+    "DocumentBenchmark.liveryNoDeferStartup": {
+      "tier": "completion",
+      "host:first-frame-heldFirstMs": {
+        "min": 0.0,
+        "median": 12.3,
+        "max": 17.5
+      },
+      "livery:startupFirstMs": {
+        "min": 23.5,
+        "median": 29.2,
+        "max": 30.7
+      },
+      "timeToFullDisplayMs": {
+        "min": 202.2,
+        "median": 226.1,
+        "max": 233.7
+      },
+      "timeToInitialDisplayMs": {
+        "min": 148.1,
+        "median": 188.9,
+        "max": 197.0
+      }
+    },
+    "DocumentBenchmark.liveryNoFlatChange": {
+      "tier": "completion",
+      "frameCount": 11.0,
+      "frameDurationCpuMs": {
+        "P50": 5.1,
+        "P90": 9.9,
+        "P99": 11.4
+      },
+      "frameOverrunMs": {
+        "P50": -9.6,
+        "P90": -4.0,
+        "P99": -2.7
+      }
+    },
+    "DocumentBenchmark.liveryNoFlatStartup": {
+      "tier": "completion",
+      "host:first-frame-heldFirstMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 23.5
+      },
+      "livery:startupFirstMs": {
+        "min": 24.3,
+        "median": 25.5,
+        "max": 38.6
+      },
+      "timeToFullDisplayMs": {
+        "min": 215.4,
+        "median": 233.2,
+        "max": 257.3
+      },
+      "timeToInitialDisplayMs": {
+        "min": 151.2,
+        "median": 200.6,
+        "max": 223.1
+      }
+    },
+    "DocumentBenchmark.liveryNoStartupStartup": {
+      "tier": "spine",
+      "timeToFullDisplayMs": {
+        "min": 201.6,
+        "median": 240.1,
+        "max": 255.1
+      },
+      "timeToInitialDisplayMs": {
+        "min": 172.2,
+        "median": 209.8,
+        "max": 223.9
+      }
+    },
+    "DocumentBenchmark.liveryStartup": {
+      "tier": "spine",
+      "host:first-frame-heldFirstMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 16.3
+      },
+      "livery:startupFirstMs": {
+        "min": 24.7,
+        "median": 27.9,
+        "max": 30.7
+      },
+      "timeToFullDisplayMs": {
+        "min": 206.4,
+        "median": 214.3,
+        "max": 239.7
+      },
+      "timeToInitialDisplayMs": {
+        "min": 140.5,
+        "median": 188.8,
+        "max": 200.7
+      }
+    },
+    "DocumentBenchmark.liveryViewChange": {
+      "tier": "completion",
+      "frameCount": 17.0,
+      "frameDurationCpuMs": {
+        "P50": 4.3,
+        "P90": 9.5,
+        "P99": 18.8
+      },
+      "frameOverrunMs": {
+        "P50": -10.6,
+        "P90": -5.6,
+        "P99": 3.5
+      }
+    },
+    "DocumentBenchmark.liveryViewStartup": {
+      "tier": "completion",
+      "host:first-frame-heldFirstMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "livery:startupFirstMs": {
+        "min": 23.3,
+        "median": 23.8,
+        "max": 24.5
+      },
+      "timeToFullDisplayMs": {
+        "min": 190.7,
+        "median": 191.3,
+        "max": 208.5
+      },
+      "timeToInitialDisplayMs": {
+        "min": 138.5,
+        "median": 143.2,
+        "max": 144.4
+      }
+    },
+    "DocumentBenchmark.rcPlayerChange": {
+      "tier": "completion",
+      "frameCount": 11.0,
+      "frameDurationCpuMs": {
+        "P50": 4.0,
+        "P90": 5.6,
+        "P99": 9.9
+      },
+      "frameOverrunMs": {
+        "P50": -10.5,
+        "P90": -8.2,
+        "P99": -3.1
+      }
+    },
+    "DocumentBenchmark.rcPlayerStartup": {
+      "tier": "completion",
+      "timeToFullDisplayMs": {
+        "min": 231.1,
+        "median": 259.0,
+        "max": 277.5
+      },
+      "timeToInitialDisplayMs": {
+        "min": 143.9,
+        "median": 150.9,
+        "max": 155.9
+      }
+    },
+    "FeedScrollBenchmark.composeUi": {
+      "tier": "spine",
+      "frameCount": 441.0,
+      "frameDurationCpuMs": {
+        "P50": 3.6,
+        "P90": 5.9,
+        "P99": 8.4
+      },
+      "frameOverrunMs": {
+        "P50": -10.3,
+        "P90": -8.4,
+        "P99": -5.9
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.composeUiAnimated": {
+      "tier": "spine",
+      "frameCount": 490.0,
+      "frameDurationCpuMs": {
+        "P50": 3.1,
+        "P90": 5.2,
+        "P99": 12.0
+      },
+      "frameOverrunMs": {
+        "P50": -10.7,
+        "P90": -9.0,
+        "P99": -1.4
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.composeUiAnimatedNoEase": {
+      "tier": "spine",
+      "frameCount": 463.0,
+      "frameDurationCpuMs": {
+        "P50": 3.0,
+        "P90": 4.9,
+        "P99": 12.0
+      },
+      "frameOverrunMs": {
+        "P50": -10.8,
+        "P90": -9.1,
+        "P99": -1.3
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.livery": {
+      "tier": "spine",
+      "frameCount": 449.0,
+      "frameDurationCpuMs": {
+        "P50": 3.8,
+        "P90": 6.1,
+        "P99": 8.4
+      },
+      "frameOverrunMs": {
+        "P50": -10.0,
+        "P90": -8.1,
+        "P99": -5.8
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryAnimated": {
+      "tier": "spine",
+      "frameCount": 448.0,
+      "frameDurationCpuMs": {
+        "P50": 2.4,
+        "P90": 5.0,
+        "P99": 18.8
+      },
+      "frameOverrunMs": {
+        "P50": -11.3,
+        "P90": -8.6,
+        "P99": 6.6
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryAnimatedEased": {
+      "tier": "spine",
+      "frameCount": 502.0,
+      "frameDurationCpuMs": {
+        "P50": 5.8,
+        "P90": 8.4,
+        "P99": 18.9
+      },
+      "frameOverrunMs": {
+        "P50": -8.0,
+        "P90": -5.3,
+        "P99": 5.1
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryAnimatedEasedNoDefer": {
+      "tier": "spine",
+      "frameCount": 474.0,
+      "frameDurationCpuMs": {
+        "P50": 2.9,
+        "P90": 5.9,
+        "P99": 18.6
+      },
+      "frameOverrunMs": {
+        "P50": -10.8,
+        "P90": -7.7,
+        "P99": 5.8
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryCacheWindow": {
+      "tier": "completion",
+      "frameCount": 325.0,
+      "frameDurationCpuMs": {
+        "P50": 3.7,
+        "P90": 6.2,
+        "P99": 8.7
+      },
+      "frameOverrunMs": {
+        "P50": -10.2,
+        "P90": -7.9,
+        "P99": -5.4
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryEmbedded": {
+      "tier": "completion",
+      "frameCount": 339.0,
+      "frameDurationCpuMs": {
+        "P50": 3.3,
+        "P90": 6.4,
+        "P99": 9.8
+      },
+      "frameOverrunMs": {
+        "P50": -10.6,
+        "P90": -7.4,
+        "P99": -4.1
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryEmbeddedAnimated": {
+      "tier": "completion",
+      "frameCount": 379.0,
+      "frameDurationCpuMs": {
+        "P50": 3.3,
+        "P90": 6.8,
+        "P99": 11.8
+      },
+      "frameOverrunMs": {
+        "P50": -10.4,
+        "P90": -6.8,
+        "P99": -1.8
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryLazyAhead": {
+      "tier": "spine",
+      "frameCount": 433.0,
+      "frameDurationCpuMs": {
+        "P50": 3.4,
+        "P90": 5.6,
+        "P99": 7.9
+      },
+      "frameOverrunMs": {
+        "P50": -10.5,
+        "P90": -8.6,
+        "P99": -6.3
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryLazyNoAhead": {
+      "tier": "completion",
+      "frameCount": 314.0,
+      "frameDurationCpuMs": {
+        "P50": 2.8,
+        "P90": 6.6,
+        "P99": 11.4
+      },
+      "frameOverrunMs": {
+        "P50": -11.0,
+        "P90": -7.4,
+        "P99": -2.6
+      },
+      "host:placeholderCount": {
+        "min": 3.0,
+        "median": 8.0,
+        "max": 12.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryNoDefer": {
+      "tier": "completion",
+      "frameCount": 329.0,
+      "frameDurationCpuMs": {
+        "P50": 3.5,
+        "P90": 5.8,
+        "P99": 8.9
+      },
+      "frameOverrunMs": {
+        "P50": -10.2,
+        "P90": -8.3,
+        "P99": -5.1
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryNoFlat": {
+      "tier": "completion",
+      "frameCount": 336.0,
+      "frameDurationCpuMs": {
+        "P50": 3.6,
+        "P90": 5.8,
+        "P99": 8.4
+      },
+      "frameOverrunMs": {
+        "P50": -10.1,
+        "P90": -8.3,
+        "P99": -5.8
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryPausable": {
+      "tier": "completion",
+      "frameCount": 346.0,
+      "frameDurationCpuMs": {
+        "P50": 3.6,
+        "P90": 5.4,
+        "P99": 7.8
+      },
+      "frameOverrunMs": {
+        "P50": -10.1,
+        "P90": -8.4,
+        "P99": -6.6
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.liveryView": {
+      "tier": "completion",
+      "frameCount": 329.0,
+      "frameDurationCpuMs": {
+        "P50": 3.1,
+        "P90": 5.3,
+        "P99": 7.5
+      },
+      "frameOverrunMs": {
+        "P50": -11.5,
+        "P90": -9.3,
+        "P99": -7.2
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.pagingAhead": {
+      "tier": "spine",
+      "frameCount": 455.0,
+      "frameDurationCpuMs": {
+        "P50": 3.7,
+        "P90": 6.0,
+        "P99": 8.3
+      },
+      "frameOverrunMs": {
+        "P50": -10.1,
+        "P90": -8.1,
+        "P99": -5.5
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.pagingNoAhead": {
+      "tier": "completion",
+      "frameCount": 325.0,
+      "frameDurationCpuMs": {
+        "P50": 2.8,
+        "P90": 6.6,
+        "P99": 10.7
+      },
+      "frameOverrunMs": {
+        "P50": -11.0,
+        "P90": -7.3,
+        "P99": -3.2
+      },
+      "host:placeholderCount": {
+        "min": 5.0,
+        "median": 8.0,
+        "max": 13.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    },
+    "FeedScrollBenchmark.rcPlayer": {
+      "tier": "completion",
+      "frameCount": 333.0,
+      "frameDurationCpuMs": {
+        "P50": 3.2,
+        "P90": 5.2,
+        "P99": 8.2
+      },
+      "frameOverrunMs": {
+        "P50": -10.6,
+        "P90": -8.7,
+        "P99": -6.2
+      },
+      "host:placeholderCount": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      },
+      "host:placeholderSumMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0
+      }
+    }
+  }
+}

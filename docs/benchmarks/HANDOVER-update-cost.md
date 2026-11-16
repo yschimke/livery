@@ -24,6 +24,11 @@ With the bars landing at once Livery's p99 is under the twin's (10.3 against 12.
 `deferLayoutAnimations` (the lookahead deferral): 17 layout passes over 4 ms re-measure about 33 unchanged texts a frame; with
 deferral off the p99 is 10.5 ms. Open: make the deferral not cost a card that changes repeatedly, or fix the re-measure.
 
+Update, 16 November (rc-players main, 3.6.2-SNAPSHOT, and Livery main): the ordinary frame is now as cheap as the twin's or cheaper (Livery
+with no easing: p50 2.4, p90 5.0 against the twin's 3.0 and 4.9), and the p99 is a tick frame of 18.8 ms (twin 12.0): every visible card's
+update composes on one frame, about 10 ms of recomposition plus 6 ms of draw recording. See `LAZY.md`. Open: spread a batch of updates over
+frames, or avoid re-recording the draw of a card whose update only moves a bar.
+
 ## The finding
 
 In the animated feed lane the visible polls' numbers change every second while the list flings. Pixel 9, Android 17,
