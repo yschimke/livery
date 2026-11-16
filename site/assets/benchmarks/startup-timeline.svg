@@ -2,32 +2,32 @@
 <rect width="100%" height="100%" rx="8" fill="#fafafa" stroke="#ddd"/>
 <text x="16" y="26" font-size="15" font-weight="600" fill="#222">Cold start: milliseconds from the launch intent (median of the iterations)</text>
 <line x1="120.0" y1="56" x2="120.0" y2="206" stroke="#e4e4e4"/><text x="120.0" y="50" text-anchor="middle" fill="#777" font-size="11">0</text>
-<line x1="282.7" y1="56" x2="282.7" y2="206" stroke="#e4e4e4"/><text x="282.7" y="50" text-anchor="middle" fill="#777" font-size="11">50</text>
-<line x1="445.5" y1="56" x2="445.5" y2="206" stroke="#e4e4e4"/><text x="445.5" y="50" text-anchor="middle" fill="#777" font-size="11">100</text>
-<line x1="608.2" y1="56" x2="608.2" y2="206" stroke="#e4e4e4"/><text x="608.2" y="50" text-anchor="middle" fill="#777" font-size="11">150</text>
-<line x1="770.9" y1="56" x2="770.9" y2="206" stroke="#e4e4e4"/><text x="770.9" y="50" text-anchor="middle" fill="#777" font-size="11">200</text>
+<line x1="278.5" y1="56" x2="278.5" y2="206" stroke="#e4e4e4"/><text x="278.5" y="50" text-anchor="middle" fill="#777" font-size="11">50</text>
+<line x1="437.0" y1="56" x2="437.0" y2="206" stroke="#e4e4e4"/><text x="437.0" y="50" text-anchor="middle" fill="#777" font-size="11">100</text>
+<line x1="595.6" y1="56" x2="595.6" y2="206" stroke="#e4e4e4"/><text x="595.6" y="50" text-anchor="middle" fill="#777" font-size="11">150</text>
+<line x1="754.1" y1="56" x2="754.1" y2="206" stroke="#e4e4e4"/><text x="754.1" y="50" text-anchor="middle" fill="#777" font-size="11">200</text>
 <text x="110" y="86" text-anchor="end" fill="#222" font-weight="600">Compose UI</text>
-<rect x="120.0" y="68" width="326.8" height="30" fill="#9aa5b1"><title>process and app start: 0 to 100 ms</title></rect>
-<text x="283.4" y="88" text-anchor="middle" fill="#111" font-size="11">100</text>
-<rect x="446.8" y="68" width="125.0" height="30" fill="#6c8ebf"><title>activity create and resume: 100 to 139 ms</title></rect>
-<text x="509.2" y="88" text-anchor="middle" fill="#111" font-size="11">38</text>
-<rect x="571.7" y="68" width="58.6" height="30" fill="#e0a030"><title>first frame to the content reaching the GPU: 139 to 157 ms</title></rect>
-<text x="601.0" y="88" text-anchor="middle" fill="#111" font-size="11">18</text>
-<rect x="630.3" y="68" width="121.1" height="30" fill="#5aa469"><title>GPU draw, until full display: 157 to 194 ms</title></rect>
-<text x="690.9" y="88" text-anchor="middle" fill="#111" font-size="11">37</text>
-<text x="757.4" y="88" fill="#222" font-weight="600">194 ms</text>
-<text x="120" y="116" fill="#555" font-size="11">frames drawn before full display: 2; GPU pipeline compiles: 27 ms</text>
+<rect x="120.0" y="68" width="316.9" height="30" fill="#9aa5b1"><title>process and app start: 0 to 100 ms</title></rect>
+<text x="278.4" y="88" text-anchor="middle" fill="#111" font-size="11">100</text>
+<rect x="436.9" y="68" width="97.6" height="30" fill="#6c8ebf"><title>activity create and resume: 100 to 131 ms</title></rect>
+<text x="485.7" y="88" text-anchor="middle" fill="#111" font-size="11">31</text>
+<rect x="534.5" y="68" width="45.3" height="30" fill="#e0a030"><title>first frame to the content reaching the GPU: 131 to 145 ms</title></rect>
+<text x="557.2" y="88" text-anchor="middle" fill="#111" font-size="11">14</text>
+<rect x="579.9" y="68" width="174.8" height="30" fill="#5aa469"><title>GPU draw, until full display: 145 to 200 ms</title></rect>
+<text x="667.3" y="88" text-anchor="middle" fill="#111" font-size="11">55</text>
+<text x="760.7" y="88" fill="#222" font-weight="600">200 ms</text>
+<text x="120" y="116" fill="#555" font-size="11">frames drawn before full display: 2; GPU pipeline compiles: 34 ms</text>
 <text x="110" y="164" text-anchor="end" fill="#222" font-weight="600">Livery</text>
-<rect x="120.0" y="146" width="317.0" height="30" fill="#9aa5b1"><title>process and app start: 0 to 97 ms</title></rect>
-<text x="278.5" y="166" text-anchor="middle" fill="#111" font-size="11">97</text>
-<rect x="437.0" y="146" width="110.3" height="30" fill="#6c8ebf"><title>activity create and resume: 97 to 131 ms</title></rect>
-<text x="492.2" y="166" text-anchor="middle" fill="#111" font-size="11">34</text>
-<rect x="547.3" y="146" width="198.2" height="30" fill="#e0a030"><title>first frame to the content reaching the GPU: 131 to 192 ms</title></rect>
-<text x="646.4" y="166" text-anchor="middle" fill="#111" font-size="11">61</text>
-<rect x="745.5" y="146" width="91.5" height="30" fill="#5aa469"><title>GPU draw, until full display: 192 to 220 ms</title></rect>
-<text x="791.3" y="166" text-anchor="middle" fill="#111" font-size="11">28</text>
-<text x="843.0" y="166" fill="#222" font-weight="600">220 ms</text>
-<text x="120" y="194" fill="#555" font-size="11">frames drawn before full display: 2; GPU pipeline compiles: 23 ms</text>
+<rect x="120.0" y="146" width="313.6" height="30" fill="#9aa5b1"><title>process and app start: 0 to 99 ms</title></rect>
+<text x="276.8" y="166" text-anchor="middle" fill="#111" font-size="11">99</text>
+<rect x="433.6" y="146" width="100.3" height="30" fill="#6c8ebf"><title>activity create and resume: 99 to 131 ms</title></rect>
+<text x="483.7" y="166" text-anchor="middle" fill="#111" font-size="11">32</text>
+<rect x="533.9" y="146" width="77.2" height="30" fill="#e0a030"><title>first frame to the content reaching the GPU: 131 to 155 ms</title></rect>
+<text x="572.5" y="166" text-anchor="middle" fill="#111" font-size="11">24</text>
+<rect x="611.1" y="146" width="225.9" height="30" fill="#5aa469"><title>GPU draw, until full display: 155 to 226 ms</title></rect>
+<text x="724.0" y="166" text-anchor="middle" fill="#111" font-size="11">71</text>
+<text x="843.0" y="166" fill="#222" font-weight="600">226 ms</text>
+<text x="120" y="194" fill="#555" font-size="11">frames drawn before full display: 2; GPU pipeline compiles: 34 ms</text>
 <rect x="120" y="256" width="12" height="12" fill="#9aa5b1"/><text x="137" y="266" fill="#333" font-size="11">process and app start</text>
 <rect x="257.6" y="256" width="12" height="12" fill="#6c8ebf"/><text x="274.6" y="266" fill="#333" font-size="11">activity create and resume</text>
 <rect x="423.20000000000005" y="256" width="12" height="12" fill="#e0a030"/><text x="440.20000000000005" y="266" fill="#333" font-size="11">first frame to the content reaching the GPU</text>

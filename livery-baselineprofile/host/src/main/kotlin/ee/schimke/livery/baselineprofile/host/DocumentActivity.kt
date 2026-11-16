@@ -182,7 +182,9 @@ class DocumentActivity : ComponentActivity() {
             RcComposePlayer(prepared, modifier, namedValues = values)
             SideEffect { rcComposed = true }
           }
-          else -> LiverySlot(key = variant, host = livery!!.host, modifier = modifier, slotId = SLOT) {
+          // One card whose data (the variant) changes with each tap: its identity is the document, so it updates in place, the card
+          // staying on screen while the new answer plans and its player keeping its state.
+          else -> LiverySlot(key = variant, host = livery!!.host, modifier = modifier, slotId = SLOT, identity = SLOT) {
             livery.planner.forAppData(livery.query, json(data))
           }
         }
