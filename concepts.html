@@ -78,12 +78,17 @@ share one declaration, and a rename breaks both at compile time:</p>
   val title = string(&quot;title&quot;, required = true, maxLength = 120)
   val speakers = string(&quot;speakers&quot;, maxLength = 80, description = &quot;names, comma separated&quot;)
   val live = bool(&quot;live&quot;, default = false)
+  val tags = list(&quot;tags&quot;, max = 3) { string(&quot;label&quot;, maxLength = 20) }   // tags.count, tags.0.label, …
+  val tagLabel = tags.field(&quot;label&quot;)
   val theme = themeRoles()                         // theme.primary, theme.onSurface, …
   val open = action(&quot;open&quot;, &quot;app:open-session&quot;)
   val tickets = action(&quot;tickets&quot;, ActionKinds.OPEN_URL, arg = &quot;url&quot;)
 
   override val examples get() = mapOf(
-    &quot;default&quot; to mapOf(title to &quot;Building adaptive apps&quot;, speakers to &quot;Jane Doe&quot;, live to true),
+    &quot;default&quot; to mapOf(
+      title to &quot;Building adaptive apps&quot;, speakers to &quot;Jane Doe&quot;, live to true,
+      tags to listOf(mapOf(tagLabel to &quot;Android&quot;), mapOf(tagLabel to &quot;Compose&quot;)),
+    ),
   )
 }
 
@@ -95,6 +100,11 @@ val data = SessionContract.data(mapOf(SessionContract.title to session.title))  
   <code>bool</code>, <code>color</code> (ARGB default, optional <code>role</code>), <code>image</code>, and <code>input(name, spec)</code> for anything
   else; <code>action(name, kind, args)</code>, <code>action(name, kind, arg = "url")</code> for one required string
   argument, and <code>setAction(name, input)</code> for a <code>set</code>.</li>
+<li><code>list(name, max) { … }</code> declares a list (PROTOCOL.md §4.1) and its items' fields; <code>field(name)</code>
+  is a field's handle, and <code>countName</code> and <code>valueName(index, field)</code> the names a template reads. A
+  list's value in an example or <code>data(…)</code> is its items, each a map keyed by the list's fields.</li>
+<li><code>fit(value)</code> on a string input trims an app's own over-long text to its <code>maxLength</code>, ending in
+  <code>…</code>, before binding would refuse it.</li>
 <li><code>toContract()</code> is the protocol's own <code>Contract</code>, in declaration order. A name declared twice, a
   <code>since</code> above the contract's minor, a required input with a <code>since</code>, or an example keyed by
   another contract's handle fails at once.</li>
