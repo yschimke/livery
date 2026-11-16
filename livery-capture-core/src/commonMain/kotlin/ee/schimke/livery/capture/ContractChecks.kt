@@ -32,6 +32,12 @@ class ContractChecks(val contract: Contract) {
 
   fun float(name: String): Float = (default(name, ValueType.Float) as? JsonPrimitive)?.doubleOrNull?.toFloat() ?: 0f
 
+  /** That [name] is an image input (or a list's image field): the URL a template draws it from, `livery:value/<name>` (PROTOCOL.md §6.1). */
+  fun image(name: String): String {
+    default(name, ValueType.Image)
+    return "livery:value/$name"
+  }
+
   fun bool(name: String): Boolean = (default(name, ValueType.Bool) as? JsonPrimitive)?.booleanOrNull ?: false
 
   /** A colour input's or a `theme.*` role's default as ARGB, or null when the contract gives none. */

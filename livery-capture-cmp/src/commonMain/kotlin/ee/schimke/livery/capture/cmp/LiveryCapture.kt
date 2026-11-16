@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import ee.schimke.composeai.rccreation.common.Profile
 import ee.schimke.composeai.rccreation.compose.capture.RemoteCreationDisplayInfo
 import ee.schimke.composeai.rccreation.compose.capture.RemoteDensity
+import ee.schimke.composeai.rccreation.compose.capture.RemoteDensityBehavior
 import ee.schimke.composeai.rccreation.compose.capture.captureCommonRemoteDocument
 import ee.schimke.livery.capture.CapturedTemplate
 import ee.schimke.livery.protocol.Target
@@ -39,6 +40,14 @@ object LiveryCapture {
    * background colour that reads a named value on Android 16) is not checked here: the capture is
    * a template, and the host's instantiation (`livery-instantiate`, `rc-widget-launcher`) makes
    * those literal. `livery-verify` plays an instantiated capture on Android 16's own player.
+   *
+   * The document is laid out at 160 dpi (a dp is a pixel), with the host's density as an expression
+   * ([RemoteDensity.Host]). [densityBehavior] is written into its header: [RemoteDensityBehavior.Dp]
+   * for an app's own player, which then scales the document's sizes by its density; a widget's
+   * level 7 player has none, so leave it [RemoteDensityBehavior.Legacy] there.
+   *
+   * [fonts] are the font families the content names (a brand's face): they go into the sidecar, so
+   * a family in the catalog's `fonts/fonts.json` downloads with the template.
    */
   suspend fun capture(
     target: Target,
@@ -46,10 +55,12 @@ object LiveryCapture {
     heightDp: Int,
     source: Map<String, String> = emptyMap(),
     profile: Profile = target.captureProfile(),
+    densityBehavior: RemoteDensityBehavior = RemoteDensityBehavior.Legacy,
+    fonts: Collection<String> = emptyList(),
     content: @Composable () -> Unit,
   ): CapturedTemplate {
     val bytes = captureCommonRemoteDocument(
-      creationDisplayInfo = RemoteCreationDisplayInfo(widthDp, heightDp, 160),
+      creationDisplayInfo = RemoteCreationDisplayInfo(widthDp, heightDp, 160, densityBehavior = densityBehavior),
       remoteDensity = RemoteDensity.Host,
       profile = profile,
       content = content,
@@ -57,6 +68,6 @@ object LiveryCapture {
     profile.problems(bytes).takeIf { it.isNotEmpty() }?.let { problems ->
       throw IllegalStateException("the capture wouldn't play as ${target.profiles.joinToString("+")} on ${target.surface}: ${problems.joinToString("; ")}")
     }
-    return CapturedTemplate.of(bytes.toByteString(), target, source)
+    return CapturedTemplate.of(bytes.toByteString(), target, source, fonts)
   }
 }

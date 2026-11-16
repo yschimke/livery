@@ -15,7 +15,7 @@ values and emit the actions its contract declares, and each records where the do
 | | Compose code (`livery-capture-cmp`, `livery-capture`) | Compose UI Builder (`livery-uibuilder`) |
 |---|---|---|
 | You write | a `@Composable` with `RemoteText`, `RemoteColumn`, … | a design on UI Builder's canvas |
-| Contract values | `LiveryValues(contract).string("title")`, … | host inputs from `livery ui-builder scaffold` |
+| Contract values | `LiveryValues(contract).string("title")`, or by handle from a `ContractDef`: `LiveryValues(SessionContract).string(SessionContract.title)` | host inputs from `livery ui-builder scaffold` |
 | A wrong name or type | fails the capture | refused by `livery ui-builder import` |
 | Into the catalog | `DesignFolder.write` from a unit test, at build time | `livery ui-builder import` |
 | Kept current by | the build: the `.rc` is build output, never committed | importing a newer UI Builder revision |
@@ -80,6 +80,24 @@ fun StatusTile(v: LiveryValues) {
   }
 }
 ```
+
+Given a `ContractDef` ([Concepts](concepts.md)), `LiveryValues(SessionContract)` also takes its
+handles, so a renamed input fails to compile, and a handle of another contract fails the capture:
+
+```kotlin
+val v = LiveryValues(SessionContract)
+RemoteText(v.string(SessionContract.title))
+RemoteImage(v.image(SessionContract.photo), contentDescription = null)   // livery:value/photo
+for (i in 0 until 3) RemoteText(v.string(SessionContract.tags, i, SessionContract.tagLabel))
+v.count(SessionContract.tags)                                            // tags.count
+v.action(SessionContract.open)
+v.action(SessionContract.tickets, v.string(SessionContract.ticketUrl))  // its one argument, as the document plays
+```
+
+`livery-capture-cmp`'s `LiveryCapture.capture` also takes `densityBehavior`
+(`RemoteDensityBehavior.Dp` for an app's own player, which then scales the document by its
+density; leave a widget's `Legacy`) and `fonts`, the families the content names, which go into the
+sidecar so a family in `fonts/fonts.json` downloads with the template.
 
 Commit the Kotlin, not the `.rc`: capture each target once and write the design's folder into the
 build directory, where a Gradle task lays it over the hand-written catalog source tree
