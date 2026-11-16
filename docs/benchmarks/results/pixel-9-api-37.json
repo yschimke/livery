@@ -6,16 +6,16 @@
   "results": {
     "DocumentBenchmark.composeUiChange": {
       "tier": "spine",
-      "frameCount": 9.5,
+      "frameCount": 9.0,
       "frameDurationCpuMs": {
-        "P50": 4.3,
-        "P90": 5.6,
-        "P99": 6.4
+        "P50": 3.9,
+        "P90": 5.9,
+        "P99": 8.0
       },
       "frameOverrunMs": {
-        "P50": -10.4,
-        "P90": -8.4,
-        "P99": -7.8
+        "P50": -10.9,
+        "P90": -8.9,
+        "P99": -5.7
       }
     },
     "DocumentBenchmark.composeUiStartup": {
@@ -33,16 +33,16 @@
     },
     "DocumentBenchmark.liveryChange": {
       "tier": "spine",
-      "frameCount": 19.0,
+      "frameCount": 9.0,
       "frameDurationCpuMs": {
-        "P50": 4.0,
-        "P90": 6.6,
-        "P99": 8.2
+        "P50": 6.3,
+        "P90": 8.6,
+        "P99": 9.1
       },
       "frameOverrunMs": {
-        "P50": -10.4,
-        "P90": -7.7,
-        "P99": -5.9
+        "P50": -8.4,
+        "P90": -5.8,
+        "P99": -4.5
       }
     },
     "DocumentBenchmark.liveryDeferChange": {
@@ -57,7 +57,8 @@
         "P50": -9.5,
         "P90": -3.8,
         "P99": -3.0
-      }
+      },
+      "livery": "62bf078"
     },
     "DocumentBenchmark.liveryDeferStartup": {
       "tier": "completion",
@@ -94,7 +95,8 @@
         "P50": -10.0,
         "P90": 1.9,
         "P99": 3.4
-      }
+      },
+      "livery": "62bf078"
     },
     "DocumentBenchmark.liveryEmbeddedStartup": {
       "tier": "completion",
@@ -144,7 +146,8 @@
         "P50": -11.2,
         "P90": -7.8,
         "P99": -6.9
-      }
+      },
+      "livery": "62bf078"
     },
     "DocumentBenchmark.liveryNoFlatStartup": {
       "tier": "completion",
@@ -217,7 +220,8 @@
         "P50": -10.9,
         "P90": -4.3,
         "P99": -0.7
-      }
+      },
+      "livery": "62bf078"
     },
     "DocumentBenchmark.liveryViewStartup": {
       "tier": "completion",
@@ -254,7 +258,8 @@
         "P50": -10.7,
         "P90": -8.3,
         "P99": -0.4
-      }
+      },
+      "livery": "62bf078"
     },
     "DocumentBenchmark.rcPlayerStartup": {
       "tier": "completion",

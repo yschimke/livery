@@ -90,12 +90,14 @@ card on a full screen. Tapping the document shows the next of ten data variants,
 
 | Lane | Frames over 10 changes | CPU p50 | CPU p90 | CPU p99 | Overrun p99 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Compose UI | 9.5 | 4.3 ms | 5.6 ms | 6.4 ms | −7.8 ms |
-| Livery | 19 | 4.0 ms | 6.6 ms | 8.2 ms | −5.9 ms |
-| Livery, no flat layout | 11 | 3.8 ms | 6.4 ms | 6.8 ms | −6.9 ms |
+| Compose UI | 9 | 3.9 ms | 5.9 ms | 8.0 ms | −5.7 ms |
+| Livery | 9 | 6.3 ms | 8.6 ms | 9.1 ms | −4.5 ms |
 
-Livery draws about two frames for each change, the twin one; with `flattenLayout = false` it draws one, and the p99 matches the
-twin's. A tap in the Perfetto UI, 100 ms:
+Both draw one frame for each change. Livery plans the new data from memory when the template it chose for the slot is already
+known (`LiverySlot`'s `planNow`, `SlotPlanner.forAppDataNow`), so the new card composes in the frame the tap lands in. That
+frame carries the whole update (compose, layout, draw), so its CPU time is higher than the twin's, with the same frame
+count. The first data of a slot, a catalog change, or data the contract rejects takes the usual plan, off the main thread, and
+the card draws a frame later. A tap in the Perfetto UI, 100 ms:
 
 <a href="assets/benchmarks/perfetto-change-compose-ui.png"><img src="assets/benchmarks/perfetto-change-compose-ui.png" alt="Perfetto UI: the Compose UI twin, a data change" style="max-width:100%;height:auto;border:1px solid #8884"></a>
 
@@ -284,4 +286,4 @@ the same comparison without a device, with software rendering, for quick iterati
 
 ## Tested at
 
-Livery [`62bf078`](https://github.com/yschimke/livery/commit/62bf078), rc-players 3.6.1, Pixel 9, Android 17 (API 37).
+Livery [`62bf078`](https://github.com/yschimke/livery/commit/62bf078), rc-players 3.6.1, Pixel 9, Android 17 (API 37); the data-change lanes (Compose UI and Livery) and their Perfetto traces at [`36ab4c7`](https://github.com/yschimke/livery/commit/36ab4c7).
