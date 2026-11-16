@@ -24,7 +24,7 @@ python3 livery-baselineprofile/traces/compare.py <dir with the traces> [--a comp
   [--only startup|fling] [--svg site/assets/benchmarks]
 ```
 
-It takes the median over the iterations of two lanes (`composeUi`, `livery`, `rcPlayer`, `liveryNoDefer`,
+It takes the median over the iterations of two lanes (`composeUi`, `livery`, `rcPlayer`, `liveryDefer`,
 `liveryNoFlat`) and prints Markdown tables for cold start and for the fling; `--svg` writes
 `startup-timeline.svg` and `fling-per-frame.svg`. Its SQL is in the script; extend that, do not paste
 one-off queries into the page.

@@ -41,7 +41,7 @@ class DocumentBenchmark {
   @Test @Spine fun liveryStartup() = startup("livery", Tier.Spine, withStartup = true)
   @Test @Spine fun liveryNoStartupStartup() = startup("livery-nostartup", Tier.Spine)
   @Test @Completion fun liveryInCompositionStartup() = startup("livery-incomposition", Tier.Completion)
-  @Test @Completion fun liveryNoDeferStartup() = startup("livery-nodefer", Tier.Completion, withStartup = true)
+  @Test @Completion fun liveryDeferStartup() = startup("livery-defer", Tier.Completion, withStartup = true)
   @Test @Completion fun liveryNoFlatStartup() = startup("livery-noflat", Tier.Completion, withStartup = true)
   @Test @Completion fun liveryViewStartup() = startup("livery-view", Tier.Completion, withStartup = true)
   @Test @Completion fun liveryEmbeddedStartup() = startup("livery-embedded", Tier.Completion, withStartup = true)
@@ -49,7 +49,7 @@ class DocumentBenchmark {
   @Test @Spine fun composeUiStartup() = startup("compose", Tier.Spine)
 
   @Test @Spine fun liveryChange() = change("livery", Tier.Spine)
-  @Test @Completion fun liveryNoDeferChange() = change("livery-nodefer", Tier.Completion)
+  @Test @Completion fun liveryDeferChange() = change("livery-defer", Tier.Completion)
   @Test @Completion fun liveryNoFlatChange() = change("livery-noflat", Tier.Completion)
   @Test @Completion fun liveryViewChange() = change("livery-view", Tier.Completion)
   @Test @Completion fun liveryEmbeddedChange() = change("livery-embedded", Tier.Completion)

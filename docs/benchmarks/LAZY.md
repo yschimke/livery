@@ -128,20 +128,23 @@ Pixel 9, 16 November, spine; p50 / p90 / p99, overrun p99:
 | Lane | p50 / p90 / p99 | overrun p99 | frames |
 | --- | --- | --- | --- |
 | Compose UI, no easing | 3.0 / 4.9 / 12.0 | -1.3 | 463 |
-| Livery, no easing (default) | 2.4 / 5.0 / 18.8 | +6.6 | 448 |
+| Livery, no easing (deferred: the default in that run) | 2.4 / 5.0 / 18.8 | +6.6 | 448 |
 | Compose UI, bars ease | 3.1 / 5.2 / 12.0 | -1.4 | 490 |
-| Livery, bars ease, default deferral | 5.8 / 8.4 / 18.9 | +5.1 | 502 |
-| Livery, bars ease, no deferral | 2.9 / 5.9 / 18.6 | +5.8 | 474 |
+| Livery, bars ease, deferred (the default in that run) | 5.8 / 8.4 / 18.9 | +5.1 | 502 |
+| Livery, bars ease, no deferral (today's default) | 2.9 / 5.9 / 18.6 | +5.8 | 474 |
 
 - **The ordinary frame improved a lot** (Livery with no easing: p50 3.2 to 2.4, p90 7.1 to 5.0 against the previous rc-players), **and the
   p99 got worse** (10.3 to 18.8): the same ~18.7 ms in all three Livery lanes. In `liveryAnimated`'s iteration 2, 13 frames were over 12 ms
   (the longest 20 ms; the twin has none): each with about 10 ms of `Recomposer:recompose` (43 composition passes in all) and about 6 ms of
   drawing (`draw-VRI`, 79 ms over the 13). A host value change now composes the player once, on the frame it lands, so every visible
   card's update lands on one frame (every second) where the previous build spread it over several.
-- **The lookahead deferral** no longer decides the p99 (18.9 with it, 18.6 without) but still shows in the median of the eased lane (5.8
+- **The lookahead deferral** (now off by default) no longer decides the p99 (18.9 with it, 18.6 without) but still shows in the median of the eased lane (5.8
   against 2.9 ms).
 - Next: the tick frame: ~10 ms of composition across the visible cards plus ~6 ms of recording their draw. Spreading a batch of updates
   over frames (or not recording the draw of a card whose update changes only a bar) is the candidate; the twin's worst frames stay at 12 ms.
+
+Since this run `deferLayoutAnimations` is off by default: the eased lane's default is the no-deferral row, and the benchmark lanes
+are now `livery` (the default) and `livery-defer`.
 
 The AndroidX embedded player's animated lane (not on the public page) went from p99 21.5 to 11.8 ms with Livery's change to
 how that adapter takes an update through its request.

@@ -81,8 +81,9 @@ import kotlinx.serialization.json.JsonPrimitive
  *   first frame waits for it within [LiveryHost.firstFrameBudgetMillis];
  * - `livery-incomposition`: [RcPreparation.InComposition] and no [startup] (the document is prepared
  *   on the main thread in the first composition; nothing was prepared ahead);
- * - `livery-nodefer`: `livery` but `deferLayoutAnimations = false` (the lookahead pass runs on
- *   every frame; flat layout needs the deferral, so it is off too);
+ * - `livery-defer`: `livery` but `deferLayoutAnimations = true` (a template whose layout animates
+ *   skips the lookahead pass, and lays out flat, until its data first changes; the default catalog's
+ *   templates have no layout animations, so it changes nothing for them);
  * - `livery-noflat`: `livery` but `flattenLayout = false` (every component its own composable);
  * - `rc`: the prepared document played by [RcComposePlayer] with nothing of Livery around it;
  * - `compose`: the Compose UI twin, which TwinRenderParityTest holds to the template's pixels. It
@@ -214,7 +215,7 @@ class DocumentActivity : ComponentActivity() {
     private val events = EventSink { if (it.type == TemplateEvent.Type.Impression) impression.value = true }
     val host = when (lane) {
       LIVERY_IN_COMPOSITION -> LiveryHost(repository, actions, events, clock, resources = resources, preparation = RcPreparation.InComposition)
-      LIVERY_NO_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = false)
+      LIVERY_DEFER -> LiveryHost(repository, actions, events, clock, resources = resources, deferLayoutAnimations = true)
       LIVERY_NO_FLAT -> LiveryHost(repository, actions, events, clock, resources = resources, flattenLayout = false)
       LIVERY_VIEW -> LiveryHost(repository, actions, events, clock, resources = resources, player = LiveryAndroidxPlayers.View)
       LIVERY_EMBEDDED -> LiveryHost(repository, actions, events, clock, resources = resources, player = LiveryAndroidxPlayers.Embedded)
@@ -259,7 +260,7 @@ class DocumentActivity : ComponentActivity() {
     const val LIVERY = "livery"
     const val LIVERY_NO_STARTUP = "livery-nostartup"
     const val LIVERY_IN_COMPOSITION = "livery-incomposition"
-    const val LIVERY_NO_DEFER = "livery-nodefer"
+    const val LIVERY_DEFER = "livery-defer"
     const val LIVERY_NO_FLAT = "livery-noflat"
     /** Livery with AndroidX's View player, and with its embedded (pure Compose) player (docs/PLAYERS.md). */
     const val LIVERY_VIEW = "livery-view"
@@ -270,7 +271,7 @@ class DocumentActivity : ComponentActivity() {
     /** The splash screen holding the first frame for the startup, in the trace. */
     const val FIRST_FRAME_HELD = "host:first-frame-held"
     /** The lanes that prepare their first screen with Livery's startup; the others plan as they compose. */
-    private val STARTUP_LANES = setOf(LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED)
+    private val STARTUP_LANES = setOf(LIVERY, LIVERY_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED)
     private val Capabilities = PlayerCapabilities(Surfaces.IN_APP, maxRcApiLevel = 7, profiles = setOf("androidx"))
   }
 }

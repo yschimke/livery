@@ -30,12 +30,12 @@ class FeedScrollBenchmark {
   /** Livery slots: planning, binding, events and the player, as an app's feed runs them. */
   @Test @Spine fun livery() = fling("livery", tier = Tier.Spine)
 
-  /** Livery without the deferred lookahead pass (and so without flat layout): what the deferral saves. */
   @Test @Completion fun liveryView() = fling("livery-view", tier = Tier.Completion)
   @Test @Completion fun liveryEmbedded() = fling("livery-embedded", tier = Tier.Completion)
-  @Test @Completion fun liveryNoDefer() = fling("livery-nodefer", tier = Tier.Completion)
+  /** Livery with the lookahead pass deferred (off by default): it changes nothing for the default catalog's templates, which have no layout animations. */
+  @Test @Completion fun liveryDefer() = fling("livery-defer", tier = Tier.Completion)
 
-  /** Livery with deferral but one composable per component: what flat layout saves. */
+  /** Livery with one composable per component: what flat layout saves. */
   @Test @Completion fun liveryNoFlat() = fling("livery-noflat", tier = Tier.Completion)
 
   /** The same prepared documents and values, played by the player with nothing of Livery around it. */
@@ -98,14 +98,14 @@ class FeedScrollBenchmark {
   /**
    * Animated, like for like. Since the catalog build turns a template's easing off unless its author asked for it, `liveryAnimated`
    * lands a bar at once while `composeUiAnimated`'s bars ease: not the same work. `composeUiAnimatedNoEase` is its pair, and
-   * `liveryAnimatedEased` (the catalog built with `--default-animations`) is the pair of `composeUiAnimated`; `liveryAnimatedEasedNoDefer`
-   * is the eased one without Livery's lookahead deferral.
+   * `liveryAnimatedEased` (the catalog built with `--default-animations`) is the pair of `composeUiAnimated`; `liveryAnimatedEasedDefer`
+   * is the eased one with Livery's lookahead deferral, which was the default until it was measured here.
    */
   @Test @Spine fun composeUiAnimatedNoEase() = fling("compose", Options.AnimatedNoEase, tier = Tier.Spine)
 
   @Test @Spine fun liveryAnimatedEased() = fling("livery", Options.AnimatedLazyEased, tier = Tier.Spine)
 
-  @Test @Spine fun liveryAnimatedEasedNoDefer() = fling("livery-nodefer", Options.AnimatedLazyEased, tier = Tier.Spine)
+  @Test @Spine fun liveryAnimatedEasedDefer() = fling("livery-defer", Options.AnimatedLazyEased, tier = Tier.Spine)
 
   private enum class Options(val activity: String = "FeedActivity", val apply: Intent.() -> Unit) {
     AnimatedNoEase(apply = { putExtra("animateMs", 1000L).putExtra("twinEases", false) }),

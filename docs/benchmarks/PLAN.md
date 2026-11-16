@@ -11,9 +11,11 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   80 ms CPU a frame. Use it for *counts* (frames, invalidations, nodes, misses). Timings need a
   real device (`./gradlew :livery-benchmark:connectedBenchmarkReleaseAndroidTest`; keep results in
   `docs/benchmarks/`).
-- **rc-players 3.3.0 is in** (#71): `LiveryHost.deferLayoutAnimations` and `flattenLayout` default to
-  true, so a lane per optimisation is a host argument: `livery-nodefer` (flat layout needs the
-  deferral, so it goes too), `livery-noflat` and, for documents, `livery-incomposition`. A
+- **rc-players 3.3.0 is in** (#71): `LiveryHost.flattenLayout` defaults to true, and
+  `deferLayoutAnimations` did until the animated feed showed it costs cards that update on a
+  schedule (it is off now), so a lane per optimisation is a host argument: `livery-defer` (the
+  deferral on; it changes nothing for templates without layout animations, the catalog's default),
+  `livery-noflat` and, for documents, `livery-incomposition`. A
   `preprocessor = null` lane still needs a no-op `RcPreprocessor` handed to the cache.
 - Every new scenario needs a Compose UI twin and a `TwinRenderParityTest` case. The document
   scenario puts every lane in the same frame (padded, top-aligned, as wide as the screen; the sample
@@ -21,7 +23,7 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
   height) and `thePollTwinMatchesInTheFullScreenFrame` holds the twin to the template there. A
   design that really fills the screen needs its own twin.
 - Start-up is measured to a first frame with the document in it. The Livery lanes are a `LiverySlot`,
-  as an app writes one. `livery` (and its `nodefer` and `noflat` variants) prepares the first screen with
+  as an app writes one. `livery` (and its `defer` and `noflat` variants) prepares the first screen with
   Livery's `startup` in `onCreate` and keeps the splash screen up until it is ready, as getting-started
   has it; `livery-nostartup` and `livery-incomposition` have no `startup`, and Livery's first-frame budget
   holds their first frame for the slot's answer. The activity calls `reportFullyDrawn()` on Livery's `Impression` event
@@ -33,8 +35,8 @@ identical pixels: the **Compose UI twin**, the **player alone** (`rc`), **Livery
 
 | Scenario | State |
 | --- | --- |
-| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-nodefer`, `livery-noflat`, `rc`, `compose` on device; Livery and Compose UI each with a cache window (one viewport ahead, half behind) and with pausable composition in prefetch; the JVM profile has its own lanes |
-| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nostartup, livery-nodefer, livery-noflat, livery-incomposition, rc, compose) |
+| Feed fling (`FeedScrollBenchmark`, JVM `liveryFeedProfile`) | `livery`, `livery-defer`, `livery-noflat`, `rc`, `compose` on device; Livery and Compose UI each with a cache window (one viewport ahead, half behind) and with pausable composition in prefetch; the JVM profile has its own lanes |
+| Document: cold start to first frame | `DocumentBenchmark.*Startup` (livery, livery-nostartup, livery-defer, livery-noflat, livery-incomposition, rc, compose) |
 | Document: data change | `DocumentBenchmark.*Change` (`FrameTimingMetric` over 10 taps); first change not yet separated |
 | Document: warm re-open, continuous animation, resize / theme | Planned |
 | Document: bundled vs downloaded, with / without baseline profile | Planned (`CompilationMode.None` vs `Partial`) |
