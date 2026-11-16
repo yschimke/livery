@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.19.0](https://github.com/yschimke/livery/compare/v0.18.0...v0.19.0) (2026-11-16)
+
+
+### Features
+
+* **capture:** typed contract authoring: lists, images, handles in LiveryValues, capture fonts ([#117](https://github.com/yschimke/livery/issues/117)) ([f8d8505](https://github.com/yschimke/livery/commit/f8d850549ee0f38dfb19407dc09e2a3a7e69800d))
+* **catalog:** CatalogSource writes a tree's generated part; livery build checks theme packs ([#118](https://github.com/yschimke/livery/issues/118)) ([280d5aa](https://github.com/yschimke/livery/commit/280d5aaed47e14cfeb3eff140068a7a945f8bced))
+* **compose:** LiverySlot(item, data): new data keeps the card, another item starts fresh ([#122](https://github.com/yschimke/livery/issues/122)) ([1327f93](https://github.com/yschimke/livery/commit/1327f932a5b93df26ae720d28440163dceb6e684))
+* **gradle:** several catalogs in one module, each built, bundled and previewed on its own ([#119](https://github.com/yschimke/livery/issues/119)) ([78d678e](https://github.com/yschimke/livery/commit/78d678e758d9ab5a169ed29dbb6eb86dcceaf2d2))
+* **render:** catalog previews draw Wear widgets in each host's container, and take the caller's own modes ([#116](https://github.com/yschimke/livery/issues/116)) ([c7cef03](https://github.com/yschimke/livery/commit/c7cef034d5ffbb6cdb8e0a73cdd9f533651a0bcd))
+
+
+### Bug Fixes
+
+* **capture:** a dynamic action argument is always sent as a JSON object ([#120](https://github.com/yschimke/livery/issues/120)) ([c7a0159](https://github.com/yschimke/livery/commit/c7a0159f91a59f4fbd5e6b545999eabf170a0c36))
+
 ## [0.18.0](https://github.com/yschimke/livery/compare/v0.17.0...v0.18.0) (2026-11-16)
 
 
