@@ -56,8 +56,8 @@ fun LiverySlot(
    * [key]) keeps the card the slot drew until the new answer is ready, and the player keeps its state: only what changed
    * animates, with no placeholder in between. A different identity is another card: the slot draws [fallback] while it
    * plans, and the player starts fresh, so document-local state (a selection, an input) never carries from one card to
-   * the next. Defaults to [key]: every key is its own card, which is right when it names the item, and an app whose key
-   * is the item's data passes the item's id here.
+   * the next. Defaults to [key]: every key is its own card, which is right when it names the item. A slot whose key carries
+   * its data is better written `LiverySlot(item, data, …)`, which says which part is which.
    */
   identity: Any? = key,
   plan: suspend () -> PlanResult,
@@ -128,6 +128,35 @@ fun LiverySlot(
     }
   }
 }
+
+/**
+ * The key a slot with an [item] and its [data] plans, remembers and prepares under: what [LiveryPrepareAhead]'s `key` gives
+ * for the same item and data, so what is prepared ahead is what scrolls in.
+ */
+data class LiverySlotKey(val item: Any?, val data: Any?)
+
+/**
+ * A [LiverySlot] for a card whose data changes: [item] says which card it is (an id), [data] is what it shows now (a
+ * version, a payload, the data itself: anything that changes when what [plan] reads changes). New [data] for the same [item]
+ * keeps the card on screen until the new answer is ready and updates it in place, with its player's state: only what changed
+ * animates, and no placeholder appears in between. Another [item] is another card: the slot draws [fallback] while it plans
+ * and the player starts fresh, so nothing a person did in one card (a selection, some input) carries to the next.
+ *
+ * With a [slotId] the slot remembers each (item, data)'s answer, and [LiveryResources.prepareSlot] / [LiveryPrepareAhead] prepare
+ * it under [LiverySlotKey] of the same two.
+ */
+@Composable
+fun LiverySlot(
+  item: Any?,
+  data: Any?,
+  host: LiveryHost,
+  modifier: Modifier = Modifier,
+  fallback: @Composable (reason: String?) -> Unit = { reason ->
+    if (reason == null) host.placeholder(LiveryPlaceholder(LocalLiverySlotId.current))
+  },
+  slotId: String? = null,
+  plan: suspend () -> PlanResult,
+) = LiverySlot(LiverySlotKey(item, data), host, modifier, fallback, slotId, item, plan)
 
 /**
  * The designs a picker offers for [contract], refreshed with the catalog and after an install or
