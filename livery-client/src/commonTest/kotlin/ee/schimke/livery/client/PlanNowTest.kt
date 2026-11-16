@@ -50,4 +50,30 @@ class PlanNowTest {
     planner.forAppData(query, data("Hall"))
     assertNotNull(planner.forAppDataNow(query, data("Hall")))
   }
+
+  @Test fun aDownloadedCatalogThatAgedOutIsNotPlannedFromMemory() = runTest {
+    var now = 1_000L
+    val names = listOf("default-v7", "retro-v7")
+    val json = kotlinx.serialization.json.Json { encodeDefaults = false }
+    val fetcher = Fetcher { url, _ ->
+      when {
+        url.endsWith("manifest.json") -> FetchResult.Ok(okio.ByteString.Companion.run { json.encodeToString(Manifest.serializer(), m).encodeToByteArray().toByteString() }, "e")
+        else -> {
+          val sha = url.substringAfterLast('/').removeSuffix(".rc")
+          names.map(Fx::blob).firstOrNull { FakeCrypto.sha(it) == sha }?.let { FetchResult.Ok(it, null) } ?: FetchResult.Failed(404, "no blob")
+        }
+      }
+    }
+    val downloaded = TemplateRepository(
+      StaticSource("https://cdn.example/c"), fetcher, FakeCrypto, TrustPolicy.AllowUnsigned,
+      MemoryBlobStore(), MemoryKeyValueStore(), { now }, listOf(Fx.inApp),
+    )
+    assertIs<RefreshResult.Updated>(downloaded.refresh())
+    val p = SlotPlanner(downloaded, {}, { now })
+    assertIs<PlanResult.Ready>(p.forAppData(query, data("Hall")))
+    assertNotNull(p.forAppDataNow(query, data("Hall")))
+    // The revision does not change when the catalog ages out, but the usual plan would no longer play it.
+    now = m.expiresAtEpochMs + TemplateRepository.STALE_GRACE_MS + 1
+    assertNull(p.forAppDataNow(query, data("Hall")))
+  }
 }

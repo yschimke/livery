@@ -356,6 +356,12 @@ class TemplateRepository(
     return !d.revoked && (d.install == InstallPolicy.Always || designId in installedIds())
   }
 
+  /**
+   * The epoch millisecond after which the answer [resolve] gives now stops holding for age: the cached catalog's
+   * expiry plus [STALE_GRACE_MS], or [Long.MAX_VALUE] when the bundled catalog answers (it does not age out).
+   */
+  internal suspend fun validUntilEpochMs(): Long = usable()?.let { it.expiresAtEpochMs + STALE_GRACE_MS } ?: Long.MAX_VALUE
+
   /** The cached manifest while it may still be played: until [STALE_GRACE_MS] past its expiry. */
   private suspend fun usable(): Manifest? = manifest()?.takeIf { clock.nowEpochMs() < it.expiresAtEpochMs + STALE_GRACE_MS }
 

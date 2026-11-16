@@ -61,15 +61,15 @@ class SlotPlanner(
   private val experiments: Experiments? = null,
 ) {
   /** The templates the plain choice for a query resolved to, and the catalog revision they were resolved at: what [forAppDataNow] plans from. */
-  private val resolved = AtomicReference<Map<TemplateQuery, Pair<Long, LoadedTemplate>>>(emptyMap())
+  private val resolved = AtomicReference<Map<TemplateQuery, Resolved>>(emptyMap())
 
-  private fun keepResolved(query: TemplateQuery, revision: Long, template: LoadedTemplate) {
+  private fun keepResolved(query: TemplateQuery, revision: Long, deadline: Long, template: LoadedTemplate) {
     while (true) {
       val current = resolved.load()
-      val next = LinkedHashMap<TemplateQuery, Pair<Long, LoadedTemplate>>(current.size + 1)
+      val next = LinkedHashMap<TemplateQuery, Resolved>(current.size + 1)
       next.putAll(current)
       next.remove(query)
-      next[query] = revision to template
+      next[query] = Resolved(revision, deadline, template)
       while (next.size > MAX_RESOLVED) next.remove(next.keys.first())
       if (resolved.compareAndSet(current, next)) return
     }
@@ -84,8 +84,8 @@ class SlotPlanner(
    */
   fun forAppDataNow(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult.Ready? {
     if (experiments != null && query.designId == null) return null
-    val (revision, template) = resolved.load()[query] ?: return null
-    if (revision != repository.revision.value) return null
+    val (revision, deadline, template) = resolved.load()[query] ?: return null
+    if (revision != repository.revision.value || clock.nowEpochMs() >= deadline) return null
     val contract = template.contract ?: return null
     val bound = ContractBinder.bind(contract, data) as? BindResult.Ok ?: return null
     return PlanResult.Ready(RenderPlan(template, contract, bound.bindings + extra, null, null, emptyMap(), decisionId))
@@ -138,7 +138,7 @@ class SlotPlanner(
     }
     val t = usual() ?: return fallback(query, "no template", null, decisionId)
     // The plain choice, for forAppDataNow: only when no arm could have decided otherwise.
-    if (arm == null) keepResolved(query, revision, t)
+    if (arm == null) keepResolved(query, revision, repository.validUntilEpochMs(), t)
     return plan(t, data, extra, null, null, decisionId = decisionId)
   }
 
@@ -216,3 +216,6 @@ class ActionRouter(
 }
 
 private const val MAX_RESOLVED = 16
+
+/** A remembered choice: the catalog revision and age deadline it holds until, and the template. */
+private data class Resolved(val revision: Long, val deadlineEpochMs: Long, val template: LoadedTemplate)
