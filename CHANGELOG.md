@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0](https://github.com/yschimke/livery/compare/v0.17.0...v0.18.0) (2026-11-16)
+
+
+### Performance Improvements
+
+* **compose:** a card's new values reach its player as it composes ([#112](https://github.com/yschimke/livery/issues/112)) ([0c7eddc](https://github.com/yschimke/livery/commit/0c7eddc8414d498a367642c4a13613c2b2c3f935))
+* **compose:** layout animations are no longer deferred by default ([#114](https://github.com/yschimke/livery/issues/114)) ([736da29](https://github.com/yschimke/livery/commit/736da29af87a07f0b774be6a4aa0a0172e0e37b6))
+
 ## [0.17.0](https://github.com/yschimke/livery/compare/v0.16.0...v0.17.0) (2026-11-15)
 
 
