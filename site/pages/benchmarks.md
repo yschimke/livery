@@ -118,7 +118,7 @@ in pairs doing the same visible work.
 median and p90 are at or under the twin's, and the p99 (18 ms, with missed frames) is that frame: all the visible cards' new
 values compose in one frame, where the twin's worst frames stay near 12 ms. In the trace, 13 frames of a run are over 12 ms
 (the longest 20 ms), each with about 10 ms of recomposition and about 6 ms of drawing, where the twin has none over 12 ms.
-The longest frame of the run, the twin above and Livery below, 100 ms:
+The longest frame of the run with the bars landing at once, the twin above and Livery below, 100 ms:
 
 <a href="assets/benchmarks/perfetto-animated-compose-ui.png"><img src="assets/benchmarks/perfetto-animated-compose-ui.png" alt="Perfetto UI: the Compose UI twin, the longest frame of the animated feed" style="max-width:100%;height:auto;border:1px solid #8884"></a>
 

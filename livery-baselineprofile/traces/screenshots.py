@@ -69,7 +69,7 @@ SCENARIOS = {
     "feed": ("Feed fling", ("FeedScrollBenchmark_composeUi", "FeedScrollBenchmark_livery"), "frames", "cost", "mid"),
     "scrolling": ("Lazy feed, next 8 cards prepared ahead", ("FeedScrollBenchmark_composeUi", "FeedScrollBenchmark_liveryLazyAhead"), "frames", "cost", "mid"),
     "change": ("Changing a document's data", ("DocumentBenchmark_composeUiChange", "DocumentBenchmark_liveryChange"), "frames", "cost", "mid"),
-    "animated": ("Animated feed: the longest frame", ("FeedScrollBenchmark_composeUiAnimated", "FeedScrollBenchmark_liveryAnimated"), "frames", "peakcost", "peak"),
+    "animated": ("Animated feed (bars land at once): the longest frame", ("FeedScrollBenchmark_composeUiAnimatedNoEase", "FeedScrollBenchmark_liveryAnimated"), "frames", "peakcost", "peak"),
 }
 
 
