@@ -21,7 +21,6 @@ import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.CompositionLocalProvider
-import ee.schimke.composeai.rcplayer.compose.LocalRcDeferLayoutAnimations
 import ee.schimke.composeai.rcplayer.compose.ExperimentalRcPlayerApi
 import ee.schimke.composeai.rcplayer.compose.LocalRcFlattenLayout
 import ee.schimke.composeai.rcplayer.compose.LocalRcPreparation
@@ -80,31 +79,15 @@ class LiveryHost(
    */
   val preparation: RcPreparation = RcPreparation.Background(resources.documents),
   /**
-   * Whether a template whose layout animates (one built with `--default-animations`, or with
-   * animations of its own) skips the lookahead pass behind AndroidX's bounds animations until its
-   * data first changes (rc-players' `LocalRcDeferLayoutAnimations`), and lays out flat until then.
-   * A template the catalog published without layout animations, the default, never takes the pass
-   * either way.
-   *
-   * Off by default: a card that animates its layout is usually one whose data changes, and in a
-   * feed every card that scrolls in switches the pass on at its first change, rebuilding its tree,
-   * and off again once that change settles. On a Pixel 9, cards whose bars ease every second missed
-   * frames with it (p99 16.6 ms against 10.5 without, and the Compose UI twin's 12.2). Turn it on
-   * for a feed of such templates that scrolls a lot and rarely changes, which it makes a little
-   * cheaper. A template that animates, reads the clock, scrolls, takes input or writes its own state
-   * keeps the pass regardless.
-   */
-  val deferLayoutAnimations: Boolean = false,
-  /**
    * Whether a template's plain boxes, rows, columns and texts are laid out and drawn by their
    * container in one node (rc-players' experimental `LocalRcFlattenLayout`), rather than one
    * composable each: fewer layout nodes and less composition per card in a feed. Every tap target,
    * data-driven badge and custom component stays a component of its own, and the texts stay in the
    * semantics tree, and anything the flat layout cannot draw exactly as the components would (a
    * row aligned by baseline, a clip around a composed child, auto-sized text) stays on the
-   * per-component path. Applies to a template while it takes no lookahead pass: always for one
-   * without layout animations, the catalog's default, and until its first change for one whose
-   * animations are deferred ([deferLayoutAnimations]). Pass `false` to give every component its own
+   * per-component path. Applies to a template that takes no lookahead pass: every one the catalog
+   * published without layout animations, the default; one that keeps AndroidX's (`--default-animations`)
+   * takes the pass and stays on the per-component path. Pass `false` to give every component its own
    * composable.
    */
   val flattenLayout: Boolean = true,
@@ -290,7 +273,6 @@ private fun PlayTemplate(plan: RenderPlan, host: LiveryHost, modifier: Modifier,
     }.onSizeChanged { host.resources.keepHeight(plan.template, it.width, it.height) }) {
       CompositionLocalProvider(
         LocalRcPreparation provides host.preparation,
-        LocalRcDeferLayoutAnimations provides host.deferLayoutAnimations,
         LocalRcFlattenLayout provides host.flattenLayout,
       ) {
         // One player state per item or decision: a data update to the same one keeps it, another one starts fresh, so
