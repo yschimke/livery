@@ -248,8 +248,15 @@ capture) with nothing written by hand. What the tree already says decides what i
   example that doesn't bind fails the task, after the rest are drawn.
 - **Modes**: a `host`-themed template in `light` and `dark` (Material 3's baseline scheme bound to
   its `theme.*` roles, as an app pushes its own) and under each theme pack in `themes/`
-  (`theme-<id>`); a `baked:dark` or `baked:light` template once, in its own mode.
+  (`theme-<id>`); a `baked:dark` or `baked:light` template once, in its own mode. Called from
+  code, `CatalogPreviews.render(…, modes = listOf(PreviewMode("dynamic-rose", dark = true, theme)))`
+  adds modes of your own: a theme your app pushes that no pack holds, such as a user's dynamic
+  colour scheme through `ColorScheme.toLiveryTheme()`.
 - **Size**: the document's own (the size it was captured at), kept inside its target's range.
+- **Wear widgets** are also drawn in each watch host's container of their kind (`wear:small` or
+  `wear:large`): its size, with the `wear.container.*` padding and corner radius the watch writes
+  in. The hosts are rc-widget's `RcWearHost.All` (a Pixel Watch's squircle and a Galaxy Watch's
+  round container) unless `CatalogPreviews.render` is given others.
 - **Background**: the scheme's or theme pack's surface, else the mode's (black on a watch).
 - **Fonts** from `fonts/fonts.json`, and one placeholder for every image: no network.
 
@@ -257,7 +264,8 @@ capture) with nothing written by hand. What the tree already says decides what i
 ./gradlew renderLiveryPreviews   # build/livery/previews/index.html
 ```
 
-It writes `<design>/<template>/<example>/<mode>.png`, a `previews.json` index and an `index.html`
+It writes `<design>/<template>/<example>/<mode>.png` (and `<mode>/<host>.png` for a Wear widget in
+a host's container, `dark/galaxy.png`), a `previews.json` index and an `index.html`
 that shows them all. Each picture comes from Compose Multiplatform's player on Skia (`livery-render`),
 in its own JVM. The task resolves `ee.schimke.composeai:livery-render` at the plugin's version from
 the build's repositories; set `previews { classpath.from(…) }` to use another. It is cacheable.
@@ -271,7 +279,7 @@ cases without drawing them.
 
 Beside it, `remote-document-cases.json` holds the same cases in compose-preview's shared shape
 (`RemoteDocumentCasesV1`, in compose-preview-contracts). Each case has an `id`
-(`<design>/<template>/<example>/<mode>`), its target as a player profile (`androidx7`, `widgetsV7`,
+(`<design>/<template>/<example>/<mode>`, then `/<host>` in a Wear host's container), its target as a player profile (`androidx7`, `widgetsV7`,
 `wearWidgets`), and its values in the daemon's `kind` form; an image value is left at the document's
 default. compose-preview's `render-cases` draws that file with each surface's own player (the AndroidX
 player, a launcher widget's `RemoteViews`, Glance Wear) under Robolectric. That command is *Planned*:

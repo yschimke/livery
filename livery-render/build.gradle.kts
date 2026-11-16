@@ -17,6 +17,9 @@ kotlin {
       implementation(project(":livery-catalog"))
       // Material 3's baseline schemes as theme roles, for the previews' light and dark modes.
       implementation(project(":livery-compose-material3"))
+      // A Wear widget host's containers (`RcWearHost`), to draw a Wear widget in each of them.
+      implementation(project.dependencies.platform(libs.rc.players.bom))
+      implementation(libs.rc.widget.core)
       // Platform-neutral: Skia's natives for every desktop platform, so the published library (and
       // livery-mcp's zip, built on Linux) renders on Linux, macOS and Windows. Never
       // compose.desktop.currentOs here: it would publish the build machine's platform as
