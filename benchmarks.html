@@ -244,32 +244,27 @@ card on a full screen. Tapping the document shows the next of ten data variants,
 <tbody>
 <tr>
 <td>Compose UI</td>
-<td style="text-align: right;">9.5</td>
-<td style="text-align: right;">4.3 ms</td>
-<td style="text-align: right;">5.6 ms</td>
-<td style="text-align: right;">6.4 ms</td>
-<td style="text-align: right;">−7.8 ms</td>
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">3.9 ms</td>
+<td style="text-align: right;">5.9 ms</td>
+<td style="text-align: right;">8.0 ms</td>
+<td style="text-align: right;">−5.7 ms</td>
 </tr>
 <tr>
 <td>Livery</td>
-<td style="text-align: right;">19</td>
-<td style="text-align: right;">4.0 ms</td>
-<td style="text-align: right;">6.6 ms</td>
-<td style="text-align: right;">8.2 ms</td>
-<td style="text-align: right;">−5.9 ms</td>
-</tr>
-<tr>
-<td>Livery, no flat layout</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: right;">3.8 ms</td>
-<td style="text-align: right;">6.4 ms</td>
-<td style="text-align: right;">6.8 ms</td>
-<td style="text-align: right;">−6.9 ms</td>
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">6.3 ms</td>
+<td style="text-align: right;">8.6 ms</td>
+<td style="text-align: right;">9.1 ms</td>
+<td style="text-align: right;">−4.5 ms</td>
 </tr>
 </tbody>
 </table>
-<p>Livery draws about two frames for each change, the twin one; with <code>flattenLayout = false</code> it draws one, and the p99 matches the
-twin's. A tap in the Perfetto UI, 100 ms:</p>
+<p>Both draw one frame for each change. Livery plans the new data from memory when the template it chose for the slot is already
+known (<code>LiverySlot</code>'s <code>planNow</code>, <code>SlotPlanner.forAppDataNow</code>), so the new card composes in the frame the tap lands in. That
+frame carries the whole update (compose, layout, draw), so its CPU time is higher than the twin's, with the same frame
+count. The first data of a slot, a catalog change, or data the contract rejects takes the usual plan, off the main thread, and
+the card draws a frame later. A tap in the Perfetto UI, 100 ms:</p>
 <p><a href="assets/benchmarks/perfetto-change-compose-ui.png"><img src="assets/benchmarks/perfetto-change-compose-ui.png" alt="Perfetto UI: the Compose UI twin, a data change" style="max-width:100%;height:auto;border:1px solid #8884"></a></p>
 <p><a href="assets/benchmarks/perfetto-change-livery.png"><img src="assets/benchmarks/perfetto-change-livery.png" alt="Perfetto UI: Livery, a data change" style="max-width:100%;height:auto;border:1px solid #8884"></a></p>
 <h2 id="animated-feed">Animated feed<a class="headerlink" href="#animated-feed" title="Permanent link">#</a></h2>
@@ -730,7 +725,7 @@ hashes) and the traces from your own machine and writes only the images. The raw
 are in <code>livery-baselineprofile/</code>; its README describes each lane. A JVM profile (<code>:livery-compose:liveryFeedProfile</code>) gives
 the same comparison without a device, with software rendering, for quick iteration.</p>
 <h2 id="tested-at">Tested at<a class="headerlink" href="#tested-at" title="Permanent link">#</a></h2>
-<p>Livery <a href="https://github.com/yschimke/livery/commit/62bf078"><code>62bf078</code></a>, rc-players 3.6.1, Pixel 9, Android 17 (API 37).</p>
+<p>Livery <a href="https://github.com/yschimke/livery/commit/62bf078"><code>62bf078</code></a>, rc-players 3.6.1, Pixel 9, Android 17 (API 37); the data-change lanes (Compose UI and Livery) and their Perfetto traces at <a href="https://github.com/yschimke/livery/commit/eb5d6b1"><code>eb5d6b1</code></a>.</p>
     <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/benchmarks.md">Edit this page</a></p>
   </main>
 </div>
