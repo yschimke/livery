@@ -121,6 +121,9 @@ against `liveryAnimatedEased` (the host's second catalog, built with `--default-
   second time keeps the pass; on this lane it still costs. Next: keep the pass after the first change automatically for a card that has
   changed twice (Livery can count), or fix why the pass re-measures texts whose constraints did not change.
 
+Since this run `deferLayoutAnimations` is off by default: the eased lane's default is the no-deferral row, and the benchmark lanes
+are now `livery` (the default) and `livery-defer`.
+
 The AndroidX embedded player's animated lane (not on the public page) went from p99 21.5 to 11.8 ms with Livery's change to
 how that adapter takes an update through its request.
 

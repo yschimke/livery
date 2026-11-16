@@ -66,7 +66,8 @@ import okio.ByteString.Companion.toByteString
  * change every [TICK_FRAMES] frames (a second at 60 fps), as `FeedActivity`'s `animateMs=1000` does, drawn by:
  * - **compose** / **compose-snap**: the Compose UI twin, its bars eased (`animateShares`) or not;
  * - **rc** / **rc-nodefer**: the player alone, its values map updated in place, lookahead deferred or not;
- * - **livery** / **livery-nodefer**: a [LiverySlot] per card, keyed by its data as the benchmark's are.
+ * - **livery** / **livery-defer**: a [LiverySlot] per card, keyed by its data as the benchmark's are, with the host's
+ *   default (no deferral) or `deferLayoutAnimations = true`.
  *
  * Each frame scrolls by [STEP] px (0 with `-Dlivery.feed.step=0`: updates only; `-Dlivery.feed.updates=false`: scrolling
  * only). Besides frame times it counts, through Compose's composition tracer, every composable body that ran (was not
@@ -111,7 +112,7 @@ object AnimatedFeedProfileMain {
   fun main(args: Array<String>) {
     val out = File(args.getOrElse(0) { "build/profile" }).also { it.mkdirs() }
     val samples = File(args.getOrElse(1) { error("pass the sample catalog directory") })
-    val lanes = System.getProperty("livery.feed.lanes")?.split(',') ?: listOf("compose", "compose-snap", "rc", "rc-nodefer", "livery", "livery-nodefer")
+    val lanes = System.getProperty("livery.feed.lanes")?.split(',') ?: listOf("compose", "compose-snap", "rc", "rc-nodefer", "livery", "livery-defer")
     val step = System.getProperty("livery.feed.step")?.toFloat() ?: STEP
     updates = System.getProperty("livery.feed.updates")?.toBoolean() ?: true
     Composer.setTracer(object : CompositionTracer {
@@ -119,8 +120,10 @@ object AnimatedFeedProfileMain {
       override fun traceEventStart(key: Int, dirty1: Int, dirty2: Int, info: String) {
         val name = info.substringBefore(" (")
         pendingScope?.let { scopeNames.putIfAbsent(it, name); pendingScope = null }
-        counts[name] = (counts[name] ?: 0) + 1
-        if (PHASES && phase in 1..PHASE_DETAIL) phaseCounts[phase].merge(name, 1, Int::plus)
+        if (sampled) {
+          counts[name] = (counts[name] ?: 0) + 1
+          if (PHASES && phase in 0..PHASE_DETAIL) phaseCounts[phase].merge(name, 1, Int::plus)
+        }
         bodies++
       }
       override fun traceEventEnd() {}
@@ -143,7 +146,7 @@ object AnimatedFeedProfileMain {
         byPhase.forEachIndexed { k, v -> phases.getValue(lane)[k] += v }
         counts.forEach { (k, v) -> composed.getValue(lane).merge(k, v, Int::plus) }
         if (PHASES && round == ROUNDS - 1) {
-          val perTick = (FRAMES / ROUNDS / TICK_FRAMES).coerceAtLeast(1)
+          val perTick = sampledTicks.coerceAtLeast(1)
           println("== $lane")
           for (k in 0..PHASE_DETAIL) {
             println("  frame $k: ran " + phaseCounts[k].entries.sortedByDescending { it.value }.take(14).joinToString { "${it.key.substringAfterLast('.')}=${it.value / perTick}" })
@@ -152,7 +155,8 @@ object AnimatedFeedProfileMain {
         }
       }
     }
-    val ticks = FRAMES / TICK_FRAMES
+    // Per update counted: the updates after the skipped ones, in every round.
+    val ticks = (ROUNDS * sampledTicks).coerceAtLeast(1)
     val report = buildString {
       appendLine("# Animated feed: poll cards updating every $TICK_FRAMES frames")
       appendLine()
@@ -241,7 +245,7 @@ object AnimatedFeedProfileMain {
       val host = LiveryHost(
         repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock,
         resources = LiveryResources(repository, maxPlans = ITEMS * 4),
-        deferLayoutAnimations = lane != "livery-nodefer",
+        deferLayoutAnimations = lane == "livery-defer",
       )
       host.resources.display = display
       runBlocking {
@@ -282,6 +286,7 @@ object AnimatedFeedProfileMain {
       }
       try {
         var time = 0L
+        sampled = false
         scene.render(time).close()
         return List(frames) { f ->
           if (list.firstVisibleItemIndex > ITEMS - 12) { list.requestScrollToItem(0); scene.render(time).close() }
@@ -297,8 +302,9 @@ object AnimatedFeedProfileMain {
           }
           bodies = 0
           phase = (f + 1) % TICK_FRAMES
+          sampled = f >= SKIP_TICKS * TICK_FRAMES
           explained = counting && (f + 1) / TICK_FRAMES == SKIP_TICKS + 1 && phase <= PHASE_DETAIL
-          val observer = if (PHASES && counting && phase <= PHASE_DETAIL) Snapshot.registerApplyObserver { changed, _ ->
+          val observer = if (PHASES && counting && sampled && phase <= PHASE_DETAIL) Snapshot.registerApplyObserver { changed, _ ->
             changed.forEach { o -> phaseWrites[phase].merge(o.toString().anonymous().take(60), 1, Int::plus) }
           } else null
           val stacks = if (INVALIDATIONS && explained) Snapshot.registerGlobalWriteObserver { o ->
@@ -309,7 +315,7 @@ object AnimatedFeedProfileMain {
           val took = System.nanoTime() - start
           stacks?.dispose()
           observer?.dispose()
-          if (f >= SKIP_TICKS * TICK_FRAMES) byPhase[(f + 1) % TICK_FRAMES] += bodies.toLong()
+          if (sampled) byPhase[(f + 1) % TICK_FRAMES] += bodies.toLong()
           took
         }
       } finally {
@@ -346,6 +352,10 @@ object AnimatedFeedProfileMain {
     override fun onScopeDisposed(scope: androidx.compose.runtime.RecomposeScope) {}
   }
   private val SKIP_TICKS = System.getProperty("livery.feed.skipTicks")?.toInt() ?: 0
+  /** Whether this frame's composition is counted: false for the updates [SKIP_TICKS] skips, in every round. */
+  private var sampled = false
+  /** The updates counted in each round. */
+  private val sampledTicks get() = FRAMES / ROUNDS / TICK_FRAMES - SKIP_TICKS
   private val DEBUG = System.getProperty("livery.feed.debug") == "true"
   private const val ITEMS = 200
   private const val WIDTH = 720
