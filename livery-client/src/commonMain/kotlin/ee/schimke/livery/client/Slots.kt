@@ -5,6 +5,8 @@ import ee.schimke.livery.protocol.Decision
 import ee.schimke.livery.protocol.FeedItem
 import ee.schimke.livery.protocol.TemplateEvent
 import kotlinx.serialization.json.JsonObject
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 /**
  * Everything a player needs for one slot: the document, the values to push (or bake in), and who
@@ -51,12 +53,44 @@ fun interface EventSink {
  * choice. Either way the plan carries the arm, and its exposure is reported when it draws, through
  * [Experiments.sink].
  */
+@OptIn(ExperimentalAtomicApi::class)
 class SlotPlanner(
   private val repository: TemplateRepository,
   private val events: EventSink,
   private val clock: Clock,
   private val experiments: Experiments? = null,
 ) {
+  /** The templates the plain choice for a query resolved to, and the catalog revision they were resolved at: what [forAppDataNow] plans from. */
+  private val resolved = AtomicReference<Map<TemplateQuery, Resolved>>(emptyMap())
+
+  private fun keepResolved(query: TemplateQuery, revision: Long, deadline: Long, template: LoadedTemplate) {
+    while (true) {
+      val current = resolved.load()
+      val next = LinkedHashMap<TemplateQuery, Resolved>(current.size + 1)
+      next.putAll(current)
+      next.remove(query)
+      next[query] = Resolved(revision, deadline, template)
+      while (next.size > MAX_RESOLVED) next.remove(next.keys.first())
+      if (resolved.compareAndSet(current, next)) return
+    }
+  }
+
+  /**
+   * [forAppData] from memory, for [LiverySlot]'s `planNow`: the plan when the template [query] chooses is already known at this
+   * catalog revision (an earlier plan for the query resolved it) and [data] fits its contract, otherwise null. It never
+   * suspends and reads nothing from the disk, so a slot can plan new data in the composition that has it and draw it in that
+   * frame, not a frame later. Null means "plan the usual way": the first plan of a query, a catalog change, data the contract
+   * rejects (the usual plan reports it), or a planner with [experiments] and a query that names no design (an arm may pick one).
+   */
+  fun forAppDataNow(query: TemplateQuery, data: JsonObject, extra: Bindings = Bindings.EMPTY, decisionId: String? = null): PlanResult.Ready? {
+    if (experiments != null && query.designId == null) return null
+    val (revision, deadline, template) = resolved.load()[query] ?: return null
+    if (revision != repository.revision.value || clock.nowEpochMs() >= deadline) return null
+    val contract = template.contract ?: return null
+    val bound = ContractBinder.bind(contract, data) as? BindResult.Ok ?: return null
+    return PlanResult.Ready(RenderPlan(template, contract, bound.bindings + extra, null, null, emptyMap(), decisionId))
+  }
+
   /**
    * App-owned data, e.g. a smart-home card: [data] is recomputed and pushed on every change.
    * [decisionId] is what every event of the plan carries, the planner's own included (an A2UI
@@ -85,6 +119,7 @@ class SlotPlanner(
 
   /** [forAppData] for [query], whose usual choice is [resolved] when the caller already has it. */
   private suspend fun appData(query: TemplateQuery, resolved: LoadedTemplate?, data: JsonObject, extra: Bindings, decisionId: String?): PlanResult {
+    val revision = repository.revision.value
     val usual = suspend { resolved ?: repository.resolve(query) }
     val arm = if (query.designId == null) experiments?.designFor(query.contract) else null
     val design = arm?.designId
@@ -102,6 +137,8 @@ class SlotPlanner(
       }
     }
     val t = usual() ?: return fallback(query, "no template", null, decisionId)
+    // The plain choice, for forAppDataNow: only when no arm could have decided otherwise.
+    if (arm == null) keepResolved(query, revision, repository.validUntilEpochMs(), t)
     return plan(t, data, extra, null, null, decisionId = decisionId)
   }
 
@@ -177,3 +214,8 @@ class ActionRouter(
     h?.invoke(plan, action, args + check.args)
   }
 }
+
+private const val MAX_RESOLVED = 16
+
+/** A remembered choice: the catalog revision and age deadline it holds until, and the template. */
+private data class Resolved(val revision: Long, val deadlineEpochMs: Long, val template: LoadedTemplate)

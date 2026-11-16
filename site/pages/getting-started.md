@@ -168,6 +168,12 @@ item is another card and starts from the placeholder with a fresh player, so not
 some input) carries to the next. A slot with one `key` treats every key as its own card; `identity` overrides that. To prepare
 such a slot ahead, `LiveryPrepareAhead`'s `key` is `LiverySlotKey(item, data)`.
 
+New data lands a frame after it arrives by default: planning runs off the main thread. When the template is already in memory (it is
+after the first card of it), pass `planNow` and the slot draws the new answer in the frame the data arrives in:
+`LiverySlot(item = id, data = version, host = host, planNow = { planner.forAppDataNow(query, data) }) { planner.forAppData(query, data) }`.
+`forAppDataNow` plans from memory and returns null when it cannot (the first plan of a query, a changed catalog, data the contract
+rejects), and the slot then plans the usual way.
+
 `PagingActivity` in [`livery-baselineprofile/host`](https://github.com/yschimke/livery/tree/main/livery-baselineprofile/host) is a working example.
 
 **Emoji load after the first screen (Android).** Compose's text brings in `androidx.emoji2`, whose

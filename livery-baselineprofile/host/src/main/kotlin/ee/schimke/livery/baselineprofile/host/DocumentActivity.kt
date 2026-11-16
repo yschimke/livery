@@ -184,7 +184,11 @@ class DocumentActivity : ComponentActivity() {
           }
           // One card whose data (the variant) changes with each tap: its identity is the document, so it updates in place, the card
           // staying on screen while the new answer plans and its player keeping its state.
-          else -> LiverySlot(key = variant, host = livery!!.host, modifier = modifier, slotId = SLOT, identity = SLOT) {
+          else -> LiverySlot(
+            item = SLOT, data = variant, host = livery!!.host, modifier = modifier, slotId = SLOT,
+            // The new data planned from memory, drawn in the frame the tap lands in.
+            planNow = { livery.planner.forAppDataNow(livery.query, json(data)) },
+          ) {
             livery.planner.forAppData(livery.query, json(data))
           }
         }

@@ -146,6 +146,15 @@ class LiveryResources(
   fun cannotPlay(template: LoadedTemplate): Boolean = unplayable[template.entry.sha256] != null
 
   /**
+   * Whether a card of [template] can draw complete in this composition: playable, its fonts in memory, and its document prepared
+   * (the host's player's own preparation, or the prepared document for [display]). What [LiverySlot]'s `planNow` answer waits for
+   * before it is drawn at once.
+   */
+  internal fun isReadyToDraw(template: LoadedTemplate, display: RcDisplay? = this.display): Boolean =
+    !cannotPlay(template) && typefacesNow(template) != null &&
+      if (player.usesPreparedDocument) preparedNow(template, display) != null || preparedNow(template, display = null) != null else player.isPrepared(template)
+
+  /**
    * The height [template] last drew at for a width of [widthPx], or null: what a card of it reserves
    * while it cannot draw yet, so the list around it does not move when it does. Another card's data
    * may wrap differently, so it is the template's usual height, not this card's.
