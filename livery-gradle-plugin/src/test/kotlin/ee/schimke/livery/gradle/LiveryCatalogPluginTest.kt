@@ -48,4 +48,28 @@ class LiveryCatalogPluginTest {
     val result = run(project(inspect = true), "buildLiveryCatalog", fail = true)
     assertTrue("not a Remote Compose document" in result.output, result.output.takeLast(2000))
   }
+
+  /** One module, two catalogs: each built from its own tree into its own assets, and run by buildLiveryCatalog. */
+  @Test fun eachNamedCatalogIsBuiltOnItsOwn() {
+    val dir = Files.createTempDirectory("app").toFile()
+    val samples = File(requireNotNull(System.getProperty("livery.samples")) { "run through Gradle: gradle/sample-catalogs.gradle.kts" })
+    for (name in listOf("north", "south-east")) samples.copyRecursively(File(dir, "catalogs/$name"))
+    File(dir, "settings.gradle.kts").writeText("rootProject.name = \"app\"\n")
+    File(dir, "build.gradle.kts").writeText(
+      """
+      plugins { id("ee.schimke.composeai.livery.catalog") }
+      livery {
+        source.set(layout.projectDirectory.dir("catalogs"))
+        inspect.set(false)
+        catalogs { register("north"); register("south-east") }
+      }
+      """.trimIndent()
+    )
+    val result = run(dir, "buildLiveryCatalog")
+    assertEquals(TaskOutcome.SUCCESS, result.task(":buildLiveryCatalogNorth")?.outcome)
+    assertEquals(TaskOutcome.SUCCESS, result.task(":buildLiveryCatalogSouthEast")?.outcome)
+    assertEquals(TaskOutcome.SKIPPED, result.task(":buildLiveryCatalog")?.outcome, "there is no one tree to build")
+    assertTrue(File(dir, "build/generated/livery/catalogs/north/livery/north/manifest.json").isFile)
+    assertTrue(File(dir, "build/generated/livery/catalogs/south-east/livery/south-east/manifest.json").isFile)
+  }
 }
