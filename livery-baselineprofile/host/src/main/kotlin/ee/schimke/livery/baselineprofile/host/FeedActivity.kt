@@ -72,8 +72,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * The feed `:livery-benchmark` flings: [ITEMS] cards, alternating the sample catalog's
  * `banner-classic` and `poll-card`, each with its own data, drawn one of three ways (`mode`):
  * - `livery`: a [LiverySlot] per card, as an app's feed is built: planned, bound to the contract,
- *   tracked for impressions and viewability, playing the template; `livery-nodefer` and
- *   `livery-noflat` are the same with `deferLayoutAnimations = false` / `flattenLayout = false`,
+ *   tracked for impressions and viewability, playing the template; `livery-defer` and
+ *   `livery-noflat` are the same with `deferLayoutAnimations = true` / `flattenLayout = false`,
  *   so each optimisation's share stays measured;
  * - `rc`: the same prepared documents played directly by [RcComposePlayer] with the same values,
  *   with nothing of Livery around them: the player alone;
@@ -133,7 +133,7 @@ class FeedActivity : ComponentActivity() {
       clock,
       resources = LiveryResources(repository, maxPlans = ITEMS),
       placeholder = { FeedPlaceholder(it) },
-      deferLayoutAnimations = mode != LIVERY_NO_DEFER,
+      deferLayoutAnimations = mode == LIVERY_DEFER,
       flattenLayout = mode != LIVERY_NO_FLAT,
       player = when (mode) {
         LIVERY_VIEW -> LiveryAndroidxPlayers.View
@@ -162,7 +162,7 @@ class FeedActivity : ComponentActivity() {
       val values = remember { mutableStateMapOf<Int, Map<String, RcNamedValue>>() }
       LaunchedEffect(display) {
         when (mode) {
-          LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> coroutineScope {
+          LIVERY, LIVERY_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> coroutineScope {
             host.resources.display = display
             if (lazyAhead == null) cards.forEachIndexed { index, card -> launch { host.resources.prepareSlot(SLOT, index) { plan(card) } } }
           }
@@ -193,7 +193,7 @@ class FeedActivity : ComponentActivity() {
           val version = if (card is Card.Poll) card.version else 0
           val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
           when (mode) {
-            LIVERY, LIVERY_NO_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = slotKey(index, if (version > 0) version else 0), host = host, modifier = modifier, slotId = SLOT, identity = index) { plan(card) }
+            LIVERY, LIVERY_DEFER, LIVERY_NO_FLAT, LIVERY_VIEW, LIVERY_EMBEDDED -> LiverySlot(key = slotKey(index, if (version > 0) version else 0), host = host, modifier = modifier, slotId = SLOT, identity = index) { plan(card) }
             RC -> PlayerCard(card, values[index].orEmpty(), host, modifier)
             else -> when (card) {
               is Card.Banner -> BannerTwin(card.data, modifier)
@@ -277,7 +277,7 @@ class FeedActivity : ComponentActivity() {
   companion object {
     const val MODE = "mode"
     const val LIVERY = "livery"
-    const val LIVERY_NO_DEFER = "livery-nodefer"
+    const val LIVERY_DEFER = "livery-defer"
     const val LIVERY_NO_FLAT = "livery-noflat"
     const val LIVERY_VIEW = "livery-view"
     const val LIVERY_EMBEDDED = "livery-embedded"

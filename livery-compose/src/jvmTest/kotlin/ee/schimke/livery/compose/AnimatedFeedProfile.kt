@@ -66,7 +66,8 @@ import okio.ByteString.Companion.toByteString
  * change every [TICK_FRAMES] frames (a second at 60 fps), as `FeedActivity`'s `animateMs=1000` does, drawn by:
  * - **compose** / **compose-snap**: the Compose UI twin, its bars eased (`animateShares`) or not;
  * - **rc** / **rc-nodefer**: the player alone, its values map updated in place, lookahead deferred or not;
- * - **livery** / **livery-nodefer**: a [LiverySlot] per card, keyed by its data as the benchmark's are.
+ * - **livery** / **livery-defer**: a [LiverySlot] per card, keyed by its data as the benchmark's are, with the host's
+ *   default (no deferral) or `deferLayoutAnimations = true`.
  *
  * Each frame scrolls by [STEP] px (0 with `-Dlivery.feed.step=0`: updates only; `-Dlivery.feed.updates=false`: scrolling
  * only). Besides frame times it counts, through Compose's composition tracer, every composable body that ran (was not
@@ -111,7 +112,7 @@ object AnimatedFeedProfileMain {
   fun main(args: Array<String>) {
     val out = File(args.getOrElse(0) { "build/profile" }).also { it.mkdirs() }
     val samples = File(args.getOrElse(1) { error("pass the sample catalog directory") })
-    val lanes = System.getProperty("livery.feed.lanes")?.split(',') ?: listOf("compose", "compose-snap", "rc", "rc-nodefer", "livery", "livery-nodefer")
+    val lanes = System.getProperty("livery.feed.lanes")?.split(',') ?: listOf("compose", "compose-snap", "rc", "rc-nodefer", "livery", "livery-defer")
     val step = System.getProperty("livery.feed.step")?.toFloat() ?: STEP
     updates = System.getProperty("livery.feed.updates")?.toBoolean() ?: true
     Composer.setTracer(object : CompositionTracer {
@@ -244,7 +245,7 @@ object AnimatedFeedProfileMain {
       val host = LiveryHost(
         repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock,
         resources = LiveryResources(repository, maxPlans = ITEMS * 4),
-        deferLayoutAnimations = lane != "livery-nodefer",
+        deferLayoutAnimations = lane == "livery-defer",
       )
       host.resources.display = display
       runBlocking {

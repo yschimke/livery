@@ -11,9 +11,9 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 | --- | --- |
 | Compose UI | The hand-written twin of the design |
 | Player alone | The prepared document played by `RcComposePlayer`, nothing of Livery around it |
-| Livery | `LiverySlot` / `LiveryTemplate` with the defaults: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's `startup`, with the splash screen up until it is ready, as getting-started has it |
+| Livery | `LiverySlot` / `LiveryTemplate` with the defaults at the time of the run: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's `startup`, with the splash screen up until it is ready, as getting-started has it. Since these runs, layout animations are no longer deferred by default: the "no deferral" lanes are today's default |
 | Livery, no startup | The same with no `startup`: the slot plans as it first composes, and its first frame waits within the first-frame budget (start-up only) |
-| Livery, no deferral | `deferLayoutAnimations = false` (flat layout needs the deferral, so it is off too) |
+| Livery, no deferral | `deferLayoutAnimations = false`, now the default. A template whose layout animates then never lays out flat; the catalog's templates have no layout animations unless built with `--default-animations` |
 | Livery, no flat layout | `flattenLayout = false` |
 | Livery, lazy | Nothing prepared before the list shows: each slot plans as it composes, and `LiveryPrepareAhead` keeps the next 8 cards prepared (planning made to take 20 ms a card, as an app's own work would) |
 | Livery, paged | The same over an endless androidx Paging feed, pages of 20 taking 300 ms |
@@ -68,21 +68,23 @@ unless its author asked for it (`"defaultAnimations": true`), so a bar lands at 
 | Compose UI, bars land at once | 3.1 ms | 5.1 ms | 12.2 ms | −1.3 ms |
 | Livery, bars land at once (the default) | 3.2 ms | 7.1 ms | **10.3 ms** | −2.5 ms |
 | Compose UI, bars ease | 3.3 ms | 5.7 ms | 12.2 ms | −1.1 ms |
-| Livery, bars ease, default deferral | 4.6 ms | 8.3 ms | 16.6 ms | +2.5 ms |
-| Livery, bars ease, no deferral | 3.7 ms | 7.1 ms | **10.5 ms** | −2.4 ms |
+| Livery, bars ease, deferred (the default in this run) | 4.6 ms | 8.3 ms | 16.6 ms | +2.5 ms |
+| Livery, bars ease, no deferral (today's default) | 3.7 ms | 7.1 ms | **10.5 ms** | −2.4 ms |
 
 **Where the templates' bars land at once, Livery's p99 is below the twin's (10.3 against 12.2 ms) and misses no frame**,
 with a higher p90 (7.1 against 5.1 ms): each update costs it more, but without the long frames. (Before the changes in
 Livery's slot and in rc-players that made a value change recompose, measure and draw only what read it, the same lane's p99 was
 21.7 ms.)
 
-**Where the bars ease, Livery's default is slower and misses frames: 16.6 ms at p99 against the twin's 12.2.** The cost is layout:
+**Where the bars ease, Livery's default in this run was slower and missed frames: 16.6 ms at p99 against the twin's 12.2.** The cost is layout:
 17 long `measureAndLayout` passes in the run (116 ms in all, the longest 15.7 ms), in which about 33 texts are measured again on
 every frame of a bar's easing though no text changed, and compositions run inside the measure pass. The twin has no pass over
-4 ms. It is Livery's `deferLayoutAnimations` (the default): it skips AndroidX's lookahead pass until a card's data first changes, and
-a card that changes every second keeps paying for it. **Turned off, the eased lane's p99 is 10.5 ms, under the twin's** (3 long
-passes, 15 ms in all). The option is the right default for a list that scrolls and rarely changes (a static feed is a little cheaper with it: p50 3.4
-against 3.9 ms) and the wrong one for cards that update on a schedule: `LiveryHost(deferLayoutAnimations = false)`.
+4 ms. It is Livery's `deferLayoutAnimations` (the default in this run): it skips AndroidX's lookahead pass until a card's data first
+changes, switching it on then and off again once the change settles, each time rebuilding the card's tree, and in a feed every card
+that scrolls in pays for that. **Turned off, the eased lane's p99 is 10.5 ms, under the twin's** (3 long
+passes, 15 ms in all). The option suits a list that scrolls and rarely changes (a static feed is a little cheaper with it: p50 3.4
+against 3.9 ms) and costs cards that update on a schedule, so it is now off by default; a feed of rarely changing templates that
+keep their layout animations can turn it on with `LiveryHost(deferLayoutAnimations = true)`.
 
 Livery also used to flicker here: a slot whose data changed drew the placeholder while it planned the new answer (166
 times in a run). A slot now keeps its card until the new answer is ready (and `LiverySlot` takes an `identity` for which
