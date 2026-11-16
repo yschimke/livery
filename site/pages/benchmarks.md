@@ -11,9 +11,8 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 | --- | --- |
 | Compose UI | The hand-written twin of the design |
 | Player alone | The prepared document played by `RcComposePlayer`, nothing of Livery around it |
-| Livery | `LiverySlot` / `LiveryTemplate` with the defaults at the time of the run: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's `startup`, with the splash screen up until it is ready, as getting-started has it. Since these runs, layout animations are no longer deferred by default: the "no deferral" lanes are today's default |
+| Livery | `LiverySlot` / `LiveryTemplate` with the defaults: background preparation, flat layout. Its first screen is prepared by Livery's `startup`, with the splash screen up until it is ready, as getting-started has it. |
 | Livery, no startup | The same with no `startup`: the slot plans as it first composes, and its first frame waits within the first-frame budget (start-up only) |
-| Livery, no deferral | `deferLayoutAnimations = false`, now the default. A template whose layout animates then never lays out flat; the catalog's templates have no layout animations unless built with `--default-animations` |
 | Livery, no flat layout | `flattenLayout = false` |
 | Livery, lazy | Nothing prepared before the list shows: each slot plans as it composes, and `LiveryPrepareAhead` keeps the next 8 cards prepared (planning made to take 20 ms a card, as an app's own work would) |
 | Livery, paged | The same over an endless androidx Paging feed, pages of 20 taking 300 ms |
@@ -66,10 +65,10 @@ doing the same visible work.
 | Lane | CPU p50 | CPU p90 | CPU p99 | Overrun p99 |
 | --- | ---: | ---: | ---: | ---: |
 | Compose UI, bars land at once | 3.0 ms | 4.9 ms | 12.0 ms | −1.3 ms |
-| Livery, bars land at once (deferred, the default in this run) | 2.4 ms | 5.0 ms | 18.8 ms | +6.6 ms |
+| Livery, bars land at once (layout animations deferred, an option since removed) | 2.4 ms | 5.0 ms | 18.8 ms | +6.6 ms |
 | Compose UI, bars ease | 3.1 ms | 5.2 ms | 12.0 ms | −1.4 ms |
-| Livery, bars ease, deferred (the default in this run) | 5.8 ms | 8.4 ms | 18.9 ms | +5.1 ms |
-| Livery, bars ease, no deferral (today's default) | 2.9 ms | 5.9 ms | 18.6 ms | +5.8 ms |
+| Livery, bars ease, layout animations deferred (an option since removed) | 5.8 ms | 8.4 ms | 18.9 ms | +5.1 ms |
+| Livery, bars ease | 2.9 ms | 5.9 ms | 18.6 ms | +5.8 ms |
 
 **An ordinary frame is now as cheap as the twin's or cheaper, and the frame on which every visible card updates is not.** Livery's
 median (2.4 ms) and p90 (5.0) with the bars landing at once are at or under the twin's, down from 3.2 and 7.1 ms with the previous
@@ -78,12 +77,9 @@ the twin's worst frames stay near 12 ms. In the trace, 13 frames of the run were
 of recomposition (43 composition passes in all) and about 6 ms of drawing, where the twin has none over 12 ms. (The previous
 rc-players spread the same work over several frames: a p99 of 10.3 ms and a p90 of 7.1.)
 
-`deferLayoutAnimations` (the lookahead deferral) was on in this run and is now off by default. It skips AndroidX's lookahead pass until a
-card's data first changes, switching it on then and off again once the change settles, each time rebuilding the card's tree. With the
-previous rc-players it was the cause of the eased lane's long layout passes (p99 16.6 ms against 10.5 without it); with this one the
-p99 is the same with and without it (18.9 and 18.6 ms) and it shows only in the eased lane's median (5.8 against 2.9 ms), so
-turning it off was right for cards that update on a schedule. A static feed is a little cheaper with it on
-(`LiveryHost(deferLayoutAnimations = true)`).
+Livery no longer defers layout animations: that option (`LiveryHost.deferLayoutAnimations`, which skipped AndroidX's lookahead
+pass until a card's data first changed) is removed. In the rows above it was on where marked; with it off, a card that animates
+its layout takes the pass from its first frame.
 
 Livery also used to flicker here: a slot whose data changed drew the placeholder while it planned the new answer (166
 times in a run). A slot now keeps its card until the new answer is ready (and `LiverySlot` takes an `identity` for which
