@@ -2,6 +2,8 @@ package ee.schimke.livery.gradle
 
 import com.android.build.api.variant.AndroidComponentsExtension
 import org.gradle.api.Action
+import org.gradle.api.Named
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.attributes.Category
@@ -13,6 +15,7 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.SourceSetContainer
+import javax.inject.Inject
 
 /**
  * ```
@@ -42,6 +45,20 @@ import org.gradle.api.tasks.SourceSetContainer
  * capture) into `build/livery/previews`: each with each of its contract's examples, in each mode
  * its target allows, at its own size (see [RenderLiveryPreviews]). It renders with `livery-render`,
  * resolved at this plugin's version unless [LiveryPreviewsExtension.classpath] is set.
+ *
+ * One module can hold several catalogs, each built and bundled on its own (one per brand, say),
+ * with [LiveryCatalogExtension.catalogs]: [source] then holds a tree per catalog, `<source>/<name>/`
+ * (and a capture writes one per catalog, `<out>/<name>/`), and each has its own
+ * `buildLiveryCatalog<Name>`, into the assets at `<assetsPath>/<name>`, and
+ * `renderLiveryPreviews<Name>`, into `build/livery/previews/<name>`. `buildLiveryCatalog` and
+ * `renderLiveryPreviews` then run them all.
+ *
+ * ```
+ * livery {
+ *   source.set(layout.projectDirectory.dir("catalogs"))   // catalogs/droidcon/, catalogs/kotlinconf/
+ *   catalogs { register("droidcon"); register("kotlinconf") }
+ * }
+ * ```
  */
 class LiveryCatalogPlugin : Plugin<Project> {
   override fun apply(project: Project) {
@@ -52,6 +69,10 @@ class LiveryCatalogPlugin : Plugin<Project> {
     ext.defaultAnimations.convention(false)
     ext.capture.outputDir.convention(project.layout.buildDirectory.dir("livery/captured"))
     ext.capture.jvmArgs.convention(emptyList())
+    ext.catalogs.configureEach { c ->
+      c.source.convention(ext.source.dir(c.name))
+      c.assetsPath.convention(ext.assetsPath.map { "${it.trim('/')}/${c.name}" })
+    }
     // The project's own code, when it has any: where a catalog's designs usually live.
     project.plugins.withId("java") {
       val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
@@ -79,6 +100,13 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.defaultAnimations.set(ext.defaultAnimations)
       t.outputDir.set(project.layout.buildDirectory.dir("generated/livery/assets"))
     }
+    // With named catalogs, the single tree's task only runs them: there is no one tree to build.
+    // A provider, not the extension, in the tasks: the configuration cache keeps what they hold.
+    val single = project.provider { ext.catalogs.isEmpty() }
+    build.configure { t ->
+      t.dependsOn(project.provider { ext.catalogs.names.map { "buildLiveryCatalog${taskSuffix(it)}" } })
+      t.onlyIf("livery.catalogs is empty") { single.get() }
+    }
     // livery-render at the version this plugin was built with, unless the build names its own.
     val renderer = project.configurations.create("liveryPreviewRenderer") { c ->
       c.isCanBeConsumed = false
@@ -101,12 +129,46 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.catalog.set(ext.capture.mainClass.flatMap { capture.flatMap { c -> c.outputDir } }.orElse(ext.source))
       t.outputDir.set(ext.previews.outputDir)
       t.draw.set(ext.previews.draw)
+      t.dependsOn(project.provider { ext.catalogs.names.map { "renderLiveryPreviews${taskSuffix(it)}" } })
+      t.onlyIf("livery.catalogs is empty") { single.get() }
+    }
+    val catalogBuilds = mutableListOf<org.gradle.api.tasks.TaskProvider<BuildLiveryCatalog>>()
+    ext.catalogs.all { c ->
+      val name = c.name
+      // The catalog's own tree: under the capture's output when there is a capture, else its source.
+      val tree = ext.capture.mainClass.flatMap { capture.flatMap { t -> t.outputDir.dir(name) } }.orElse(c.source)
+      catalogBuilds += project.tasks.register("buildLiveryCatalog${taskSuffix(name)}", BuildLiveryCatalog::class.java) { t ->
+        t.group = "build"
+        t.description = "Builds the $name Livery catalog into generated assets"
+        t.source.set(tree)
+        t.assetsPath.set(c.assetsPath)
+        t.inspect.set(ext.inspect)
+        t.defaultAnimations.set(ext.defaultAnimations)
+        t.outputDir.set(project.layout.buildDirectory.dir("generated/livery/catalogs/$name"))
+      }
+      project.tasks.register("renderLiveryPreviews${taskSuffix(name)}", RenderLiveryPreviews::class.java) { t ->
+        t.group = "verification"
+        t.description = "Previews every template in the $name Livery catalog into build/livery/previews/$name"
+        val classpath = ext.previews.classpath
+        t.classpath = project.files(project.provider { if (classpath.isEmpty) renderer else classpath })
+        t.catalog.set(tree)
+        t.outputDir.set(ext.previews.outputDir.dir(name))
+        t.draw.set(ext.previews.draw)
+      }
     }
     project.plugins.withId("com.android.base") {
       project.extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
-        variant.sources.assets?.addGeneratedSourceDirectory(build, BuildLiveryCatalog::outputDir)
+        val assets = variant.sources.assets ?: return@onVariants
+        if (catalogBuilds.isEmpty()) assets.addGeneratedSourceDirectory(build, BuildLiveryCatalog::outputDir)
+        else catalogBuilds.forEach { assets.addGeneratedSourceDirectory(it, BuildLiveryCatalog::outputDir) }
       }
     }
+  }
+
+  private companion object {
+    /** A catalog's name in a task's: `droidcon-london` is `DroidconLondon`. */
+    fun taskSuffix(name: String): String =
+      name.split('-', '_', '.').filter { it.isNotEmpty() }.joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
   }
 }
 
@@ -136,6 +198,25 @@ abstract class LiveryCatalogExtension {
   @get:Nested abstract val previews: LiveryPreviewsExtension
 
   fun previews(action: Action<LiveryPreviewsExtension>) = action.execute(previews)
+
+  /**
+   * Several catalogs in one module, each with its own tree under [source] (`<source>/<name>/`) and
+   * its own build and preview tasks; empty, [source] is the one catalog.
+   */
+  abstract val catalogs: NamedDomainObjectContainer<LiveryCatalogSpec>
+
+  fun catalogs(action: Action<NamedDomainObjectContainer<LiveryCatalogSpec>>) = action.execute(catalogs)
+}
+
+/** One of a module's [LiveryCatalogExtension.catalogs]. */
+abstract class LiveryCatalogSpec @Inject constructor(private val name: String) : Named {
+  override fun getName(): String = name
+
+  /** The catalog's source tree: `<livery.source>/<name>`, by default. */
+  abstract val source: DirectoryProperty
+
+  /** Where in the assets the catalog goes: `<livery.assetsPath>/<name>`, by default. */
+  abstract val assetsPath: Property<String>
 }
 
 abstract class LiveryPreviewsExtension {

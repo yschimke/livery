@@ -144,6 +144,22 @@ When the designs are Kotlin, `livery { capture { mainClass.set(…) } }` capture
 and the catalog built into the assets is that capture, so no `.rc` is committed (see
 [Authoring](authoring.md)).
 
+One module can hold several catalogs, each built and bundled on its own (one per brand or
+region). Name them, and keep a tree per catalog under `source`:
+
+```kotlin
+livery {
+  source.set(layout.projectDirectory.dir("catalogs"))   // catalogs/north/, catalogs/south/
+  catalogs { register("north"); register("south") }
+}
+```
+
+Each has its own `buildLiveryCatalog<Name>`, into the assets at `<assetsPath>/<name>`
+(`AndroidBundled.fromAssets(context, "livery/north")`), and `renderLiveryPreviews<Name>`, into
+`build/livery/previews/<name>`; `buildLiveryCatalog` and `renderLiveryPreviews` run them all. A
+capture entry point then writes one tree per catalog, `<out>/<name>/`. A catalog's `source` and
+`assetsPath` can be set on its own (`register("north") { source.set(…) }`).
+
 ```kotlin
 val repository = TemplateRepository(
   source, KtorFetcher(), JavaCrypto, trust, blobs, kv, clock, targets,
