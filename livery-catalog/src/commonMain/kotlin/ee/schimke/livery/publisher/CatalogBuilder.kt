@@ -26,6 +26,7 @@ import ee.schimke.livery.protocol.Preview
 import ee.schimke.livery.protocol.Target
 import ee.schimke.livery.protocol.TemplateEntry
 import ee.schimke.livery.protocol.ThemePack
+import ee.schimke.livery.protocol.ThemeRoles
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -225,6 +226,13 @@ class CatalogBuilder(
       }
 
     contracts.groupBy { it.ref to it.minor }.filter { it.value.size > 1 }.forEach { problems += "duplicate contract ${it.key}" }
+    // A theme pack recolours a design: it names theme roles only, never a contract's data (PROTOCOL.md §4.2).
+    themes.groupBy { it.id }.filter { it.value.size > 1 }.forEach { problems += "duplicate theme pack ${it.key}" }
+    for (t in themes) {
+      if (t.mode != "light" && t.mode != "dark") problems += "theme pack ${t.id}: mode '${t.mode}' is not light or dark"
+      t.values.keys.filterNot { it.startsWith(ThemeRoles.PREFIX) && it.length > ThemeRoles.PREFIX.length }
+        .forEach { problems += "theme pack ${t.id}: '$it' is not a theme role (${ThemeRoles.PREFIX}<role>)" }
+    }
     for (c in contracts) ContractEvolution.problems(c).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     for (c in contracts) for ((n, a) in c.actions) ActionGate.declarationProblems(n, a).forEach { problems += "contract ${c.ref}.${c.minor}: $it" }
     // PROTOCOL.md §8.2: a `present` action names the screen placement it opens; nothing else does.

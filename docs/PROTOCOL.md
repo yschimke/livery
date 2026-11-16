@@ -228,7 +228,8 @@ and placement payloads), on a decision server, and in agent tools.
 
 A template reads its data as Remote Compose named values in the `USER` domain, under the flattened
 names above. Theme roles are `theme.<role>`. A publisher must refuse a template whose `reads` names
-a value its contract cannot produce.
+a value its contract cannot produce, and a theme pack that names anything but theme roles (it
+recolours a design; it never sets a contract's data) or whose `mode` is not `light` or `dark`.
 
 ### 4.3 Evolution
 

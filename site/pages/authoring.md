@@ -174,6 +174,10 @@ to an output branch. Livery's own samples work this way, on the plain JVM:
 - `DesignFolder.write` writes `<name>.rc` and `<name>.json` and removes templates no longer
   captured. A catalog repository that does commit its `.rc` (another tool's output, say) can keep
   them current with `check`, which lists what differs from a capture.
+- `CatalogSource(dir)` writes the rest of a tree's generated part from Kotlin: `writeCatalog`
+  (`catalog.json`), `writeContract` (`contracts/<name>.json`, from a `Contract` or a `ContractDef`)
+  and `writeDesign` (`designs/<id>/design.json` and its templates, through `DesignFolder`). It
+  leaves the hand-edited files (`themes/`, `placements/`, `fonts/`) alone.
 - Lists are `"<list>.<i>.<field>"` with `v.int("<list>.count")`; theme roles are `theme.*`
   colours the host fills.
 - `v.action(name, args)` sends the arguments the action declares, checked when you capture; a
