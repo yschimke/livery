@@ -179,6 +179,18 @@ livery {
 <p>When the designs are Kotlin, <code>livery { capture { mainClass.set(…) } }</code> captures them at build time
 and the catalog built into the assets is that capture, so no <code>.rc</code> is committed (see
 <a href="authoring.html">Authoring</a>).</p>
+<p>One module can hold several catalogs, each built and bundled on its own (one per brand or
+region). Name them, and keep a tree per catalog under <code>source</code>:</p>
+<pre><code class="language-kotlin">livery {
+  source.set(layout.projectDirectory.dir(&quot;catalogs&quot;))   // catalogs/north/, catalogs/south/
+  catalogs { register(&quot;north&quot;); register(&quot;south&quot;) }
+}
+</code></pre>
+<p>Each has its own <code>buildLiveryCatalog&lt;Name&gt;</code>, into the assets at <code>&lt;assetsPath&gt;/&lt;name&gt;</code>
+(<code>AndroidBundled.fromAssets(context, "livery/north")</code>), and <code>renderLiveryPreviews&lt;Name&gt;</code>, into
+<code>build/livery/previews/&lt;name&gt;</code>; <code>buildLiveryCatalog</code> and <code>renderLiveryPreviews</code> run them all. A
+capture entry point then writes one tree per catalog, <code>&lt;out&gt;/&lt;name&gt;/</code>. A catalog's <code>source</code> and
+<code>assetsPath</code> can be set on its own (<code>register("north") { source.set(…) }</code>).</p>
 <pre><code class="language-kotlin">val repository = TemplateRepository(
   source, KtorFetcher(), JavaCrypto, trust, blobs, kv, clock, targets,
   bundled = AndroidBundled.fromAssets(context),       // null if the app ships none
