@@ -92,8 +92,8 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 </tr>
 </tbody>
 </table>
-<h2 id="latest-run-15-november">Latest run: 15 November<a class="headerlink" href="#latest-run-15-november" title="Permanent link">#</a></h2>
-<p><strong>Pixel 9, Android 17 (API 37), rc-players main built from source as 3.5.4-SNAPSHOT, the code since released as rc-players 3.6.0 with the per-value invalidation changes, which Livery now depends on, 15 November 2026</strong>, <code>benchmarkRelease</code> with the shipped baseline
+<h2 id="latest-run-16-november">Latest run: 16 November<a class="headerlink" href="#latest-run-16-november" title="Permanent link">#</a></h2>
+<p><strong>Pixel 9, Android 17 (API 37), rc-players main built from source (3.6.2-SNAPSHOT: after the 3.6.1 release, with its single-composition value change) and Livery main, 16 November 2026</strong>, <code>benchmarkRelease</code> with the shipped baseline
 profiles. One device, lanes run one after another. The tests are a T: a <strong>spine</strong> of the variants an app would choose
 between, run more (feed: 5 iterations of 4 flings; start-up: 10; data change: 8), and a short bar of the rest for
 completeness (3 iterations of 3 flings), which says whether a lane is wildly off and not by how much. The first run
@@ -114,54 +114,54 @@ here missed a frame.</p>
 <tbody>
 <tr>
 <td>Compose UI</td>
-<td style="text-align: right;">3.8 ms</td>
-<td style="text-align: right;">5.8 ms</td>
-<td style="text-align: right;">8.1 ms</td>
-<td style="text-align: right;">−6.1 ms</td>
+<td style="text-align: right;">3.6 ms</td>
+<td style="text-align: right;">5.9 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.9 ms</td>
 </tr>
 <tr>
 <td>Livery, everything prepared before the list shows</td>
-<td style="text-align: right;">3.4 ms</td>
-<td style="text-align: right;">5.5 ms</td>
-<td style="text-align: right;">8.0 ms</td>
-<td style="text-align: right;">−6.1 ms</td>
+<td style="text-align: right;">3.8 ms</td>
+<td style="text-align: right;">6.1 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">−5.8 ms</td>
 </tr>
 <tr>
 <td>Livery, lazy: next 8 cards prepared ahead</td>
-<td style="text-align: right;">3.7 ms</td>
-<td style="text-align: right;">6.4 ms</td>
-<td style="text-align: right;">8.7 ms</td>
-<td style="text-align: right;">−5.3 ms</td>
+<td style="text-align: right;">3.4 ms</td>
+<td style="text-align: right;">5.6 ms</td>
+<td style="text-align: right;">7.9 ms</td>
+<td style="text-align: right;">−6.3 ms</td>
 </tr>
 <tr>
 <td>Livery, paged (androidx Paging), next 8 ahead</td>
-<td style="text-align: right;">3.3 ms</td>
-<td style="text-align: right;">5.6 ms</td>
-<td style="text-align: right;">8.1 ms</td>
-<td style="text-align: right;">−5.9 ms</td>
+<td style="text-align: right;">3.7 ms</td>
+<td style="text-align: right;">6.0 ms</td>
+<td style="text-align: right;">8.3 ms</td>
+<td style="text-align: right;">−5.5 ms</td>
 </tr>
 </tbody>
 </table>
 <p>Livery is level with the Compose UI twin, through p99, whether it prepares everything first or only the cards just
 ahead of the scroll, and over a paged feed. The other lanes (3 iterations, so read them as "not far off"): no deferral
-3.9 / 6.1 / 8.3 ms, no flat layout 3.6 / 6.0 / 8.8, and the player alone 3.6 / 5.9 / 7.8.</p>
+3.5 / 5.8 / 8.9 ms, no flat layout 3.6 / 5.8 / 8.4, and the player alone 3.2 / 5.2 / 8.2.</p>
 <p><strong>Preparing ahead is what keeps a lazy feed level.</strong> A card that scrolls in before its plan is ready draws the host's
 placeholder and swaps when it arrives. Counting the placeholders that became visible (5 iterations of 6 flings, planning
 made to take 20 ms a card): with each slot planning as it composes, <strong>18</strong> cards reached the screen unprepared and p99
 was 11.0 ms; with a plan three times slower, <strong>108</strong> and 12.2 ms; the paged feed, <strong>15</strong> and 10.5 ms. With
 <code>LiveryPrepareAhead</code> and a window of 2, 4 or 8 cards: <strong>0</strong> in every case, p99 8.3 to 8.9 ms, and 8 still held at the
 60 ms plan. The window has to cover the planning time of the fastest fling (about 6 cards a second here); the default
-is 8. (The short bar's shorter flings agree: 9 and 10 unprepared cards without a window.)</p>
+is 8. (The short bar's shorter flings agree: 8 unprepared cards without a window, in both feeds.)</p>
 <p><strong>Compose's prefetch options did not help.</strong> Livery with a cache window (one viewport ahead, half behind) was
-3.5 / 5.8 / 8.8 ms and with pausable composition in prefetch 3.4 / 5.6 / 7.9, against 3.8 / 6.0 / 8.4 without either;
-the Compose UI twin, measured the same way earlier that day, 3.8 / 6.0 / 8.4 and 3.8 / 6.1 / 8.4 against 3.7 / 5.8 / 8.3.
+3.7 / 6.2 / 8.7 ms and with pausable composition in prefetch 3.6 / 5.4 / 7.8, against 3.8 / 6.1 / 8.4 without either;
+the Compose UI twin, measured the same way earlier (3.5.3), 3.8 / 6.0 / 8.4 and 3.8 / 6.1 / 8.4 against 3.7 / 5.8 / 8.3.
 This feed prepares every card before it shows, so prefetch has little left to hide; a feed whose plans arrive late is
 what the lazy lanes above are for. (Compose turned pausable composition off by default in 1.10.6 for stability, and
 removed the flag in 1.13.0-alpha03; this measures it, it doesn't recommend it.)</p>
 <h3 id="animated-feed">Animated feed<a class="headerlink" href="#animated-feed" title="Permanent link">#</a></h3>
-<p>The visible polls' numbers change every second while the list flings. Two things in the templates and the twin decide
-how much work that is, so the lanes come in pairs doing the same visible work. The catalog build turns a template's easing off
-unless its author asked for it (<code>"defaultAnimations": true</code>), so a bar lands at once; the twin's bars can do either.</p>
+<p>The visible polls' numbers change every second while the list flings. The catalog build turns a template's easing off unless its
+author asked for it (<code>"defaultAnimations": true</code>), so a bar lands at once; the twin's bars can do either, so the lanes come in pairs
+doing the same visible work.</p>
 <table>
 <thead>
 <tr>
@@ -175,61 +175,60 @@ unless its author asked for it (<code>"defaultAnimations": true</code>), so a ba
 <tbody>
 <tr>
 <td>Compose UI, bars land at once</td>
-<td style="text-align: right;">3.1 ms</td>
-<td style="text-align: right;">5.1 ms</td>
-<td style="text-align: right;">12.2 ms</td>
+<td style="text-align: right;">3.0 ms</td>
+<td style="text-align: right;">4.9 ms</td>
+<td style="text-align: right;">12.0 ms</td>
 <td style="text-align: right;">−1.3 ms</td>
 </tr>
 <tr>
-<td>Livery, bars land at once (the default)</td>
-<td style="text-align: right;">3.2 ms</td>
-<td style="text-align: right;">7.1 ms</td>
-<td style="text-align: right;"><strong>10.3 ms</strong></td>
-<td style="text-align: right;">−2.5 ms</td>
+<td>Livery, bars land at once (deferred, the default in this run)</td>
+<td style="text-align: right;">2.4 ms</td>
+<td style="text-align: right;">5.0 ms</td>
+<td style="text-align: right;">18.8 ms</td>
+<td style="text-align: right;">+6.6 ms</td>
 </tr>
 <tr>
 <td>Compose UI, bars ease</td>
-<td style="text-align: right;">3.3 ms</td>
-<td style="text-align: right;">5.7 ms</td>
-<td style="text-align: right;">12.2 ms</td>
-<td style="text-align: right;">−1.1 ms</td>
+<td style="text-align: right;">3.1 ms</td>
+<td style="text-align: right;">5.2 ms</td>
+<td style="text-align: right;">12.0 ms</td>
+<td style="text-align: right;">−1.4 ms</td>
 </tr>
 <tr>
 <td>Livery, bars ease, deferred (the default in this run)</td>
-<td style="text-align: right;">4.6 ms</td>
-<td style="text-align: right;">8.3 ms</td>
-<td style="text-align: right;">16.6 ms</td>
-<td style="text-align: right;">+2.5 ms</td>
+<td style="text-align: right;">5.8 ms</td>
+<td style="text-align: right;">8.4 ms</td>
+<td style="text-align: right;">18.9 ms</td>
+<td style="text-align: right;">+5.1 ms</td>
 </tr>
 <tr>
 <td>Livery, bars ease, no deferral (today's default)</td>
-<td style="text-align: right;">3.7 ms</td>
-<td style="text-align: right;">7.1 ms</td>
-<td style="text-align: right;"><strong>10.5 ms</strong></td>
-<td style="text-align: right;">−2.4 ms</td>
+<td style="text-align: right;">2.9 ms</td>
+<td style="text-align: right;">5.9 ms</td>
+<td style="text-align: right;">18.6 ms</td>
+<td style="text-align: right;">+5.8 ms</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Where the templates' bars land at once, Livery's p99 is below the twin's (10.3 against 12.2 ms) and misses no frame</strong>,
-with a higher p90 (7.1 against 5.1 ms): each update costs it more, but without the long frames. (Before the changes in
-Livery's slot and in rc-players that made a value change recompose, measure and draw only what read it, the same lane's p99 was
-21.7 ms.)</p>
-<p><strong>Where the bars ease, Livery's default in this run was slower and missed frames: 16.6 ms at p99 against the twin's 12.2.</strong> The cost is layout:
-17 long <code>measureAndLayout</code> passes in the run (116 ms in all, the longest 15.7 ms), in which about 33 texts are measured again on
-every frame of a bar's easing though no text changed, and compositions run inside the measure pass. The twin has no pass over
-4 ms. It is Livery's <code>deferLayoutAnimations</code> (the default in this run): it skips AndroidX's lookahead pass until a card's data first
-changes, switching it on then and off again once the change settles, each time rebuilding the card's tree, and in a feed every card
-that scrolls in pays for that. <strong>Turned off, the eased lane's p99 is 10.5 ms, under the twin's</strong> (3 long
-passes, 15 ms in all). The option suits a list that scrolls and rarely changes (a static feed is a little cheaper with it: p50 3.4
-against 3.9 ms) and costs cards that update on a schedule, so it is now off by default; a feed of rarely changing templates that
-keep their layout animations can turn it on with <code>LiveryHost(deferLayoutAnimations = true)</code>.</p>
+<p><strong>An ordinary frame is now as cheap as the twin's or cheaper, and the frame on which every visible card updates is not.</strong> Livery's
+median (2.4 ms) and p90 (5.0) with the bars landing at once are at or under the twin's, down from 3.2 and 7.1 ms with the previous
+rc-players, and the p99 (18.8 ms, with missed frames) is the tick frame: all the visible cards' new values compose in one frame, where
+the twin's worst frames stay near 12 ms. In the trace, 13 frames of the run were over 12 ms (the longest 20 ms), each with about 10 ms
+of recomposition (43 composition passes in all) and about 6 ms of drawing, where the twin has none over 12 ms. (The previous
+rc-players spread the same work over several frames: a p99 of 10.3 ms and a p90 of 7.1.)</p>
+<p><code>deferLayoutAnimations</code> (the lookahead deferral) was on in this run and is now off by default. It skips AndroidX's lookahead pass until a
+card's data first changes, switching it on then and off again once the change settles, each time rebuilding the card's tree. With the
+previous rc-players it was the cause of the eased lane's long layout passes (p99 16.6 ms against 10.5 without it); with this one the
+p99 is the same with and without it (18.9 and 18.6 ms) and it shows only in the eased lane's median (5.8 against 2.9 ms), so
+turning it off was right for cards that update on a schedule. A static feed is a little cheaper with it on
+(<code>LiveryHost(deferLayoutAnimations = true)</code>).</p>
 <p>Livery also used to flicker here: a slot whose data changed drew the placeholder while it planned the new answer (166
 times in a run). A slot now keeps its card until the new answer is ready (and <code>LiverySlot</code> takes an <code>identity</code> for which
-card it is), and the placeholders are 0. The split of what each fix gave is in
+card it is), and the placeholders are 0. The history of what each fix gave is in
 <a href="https://github.com/yschimke/livery/blob/main/docs/benchmarks/LAZY.md"><code>docs/benchmarks/LAZY.md</code></a>.</p>
 <h3 id="full-screen-document-changing-data-and-cold-start">Full-screen document: changing data and cold start<a class="headerlink" href="#full-screen-document-changing-data-and-cold-start" title="Permanent link">#</a></h3>
-<p>Data change, 10 taps (<code>FrameTimingMetric</code>): Compose UI 4.1 / 5.5 / 8.1 ms over 9 frames, Livery 5.1 / 10.3 / 11.4 ms
-over 19: two frames a change where the twin draws one, as in the first run.</p>
+<p>Data change, 10 taps (<code>FrameTimingMetric</code>): Compose UI 4.0 / 5.1 / 8.1 ms over 11 frames, Livery 4.9 / 10.2 / 12.0 ms
+over about 20: two frames a change where the twin draws one, as in the first run.</p>
 <p>Cold start, process start to the first frame with the document in it, 10 iterations, median (range):</p>
 <table>
 <thead>
@@ -242,29 +241,29 @@ over 19: two frames a change where the twin draws one, as in the first run.</p>
 <tbody>
 <tr>
 <td>Livery (<code>startup</code>, splash screen held)</td>
-<td style="text-align: right;">147 ms (139–231)</td>
-<td style="text-align: right;">221 ms (197–254)</td>
+<td style="text-align: right;">189 ms (141–201)</td>
+<td style="text-align: right;">214 ms (206–240)</td>
 </tr>
 <tr>
 <td>Livery, no <code>startup</code> (first-frame budget)</td>
-<td style="text-align: right;">208 ms (189–241)</td>
-<td style="text-align: right;">240 ms (221–272)</td>
+<td style="text-align: right;">210 ms (172–224)</td>
+<td style="text-align: right;">240 ms (202–255)</td>
 </tr>
 <tr>
 <td>Compose UI</td>
-<td style="text-align: right;">186 ms (157–201)</td>
-<td style="text-align: right;">197 ms (165–217)</td>
+<td style="text-align: right;">186 ms (171–207)</td>
+<td style="text-align: right;">200 ms (183–227)</td>
 </tr>
 </tbody>
 </table>
-<p>With <code>startup</code> Livery's first frame is the one with its card in it, and it arrives at or before the twin's (147 against 186 ms at the median);
-the first-frame budget without <code>startup</code> holds it until the slot's answer is there, about 60 ms later at the median. Livery's
+<p>With <code>startup</code> Livery's first frame is the one with its card in it, and it arrives at about the same time as the twin's (189 against 186 ms at the median);
+the first-frame budget without <code>startup</code> holds it until the slot's answer is there, about 20 ms later at the median. Livery's
 <code>startup</code> itself took 21 ms on a worker thread, and the splash screen was held for it by 0 ms in the median: it fits in the
 activity's creation on this phone. The ranges are wide and overlap (Livery's initial display has run from 131 to 231 ms
 across runs, and the twin's from 157 to 231), so with ten runs per lane the order of Livery with <code>startup</code> and the
-twin is a tendency, not a result. The other lanes (3 iterations; initial / full display): no deferral 133 / 213 ms,
-no flat layout 206 / 233, preparing in composition 204 / 235. The player alone's first frame (140 ms) is an empty one, drawn
-before its document is ready, so it has no comparable initial display; its full display is 240 ms.</p>
+twin is a tendency, not a result. The other lanes (3 iterations; initial / full display): no deferral 189 / 226 ms,
+no flat layout 201 / 233, preparing in composition 205 / 234. The player alone's first frame (151 ms) is an empty one, drawn
+before its document is ready, so it has no comparable initial display; its full display is 259 ms.</p>
 <h2 id="first-run-14-november">First run: 14 November<a class="headerlink" href="#first-run-14-november" title="Permanent link">#</a></h2>
 <p><strong>Pixel 9, Android 17 (API 37), rc-players 3.3.0, 14 November 2026.</strong> Macrobenchmark on a
 <code>benchmarkRelease</code> build with the shipped baseline profiles, 5 iterations per test. One device, lanes run
