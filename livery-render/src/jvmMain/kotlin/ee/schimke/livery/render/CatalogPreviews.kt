@@ -19,6 +19,10 @@ import ee.schimke.composeai.rcplayer.compose.RcTypefaceLoader
 import ee.schimke.composeai.rcplayer.protocol.RcBitmapData
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcWireLimits
+import ee.schimke.composeai.rcwidget.RcWearContainer
+import ee.schimke.composeai.rcwidget.RcWearContainerType
+import ee.schimke.composeai.rcwidget.RcWearFrame
+import ee.schimke.composeai.rcwidget.RcWearHost
 import ee.schimke.livery.client.BindResult
 import ee.schimke.livery.client.Bindings
 import ee.schimke.livery.client.ContractBinder
@@ -53,10 +57,12 @@ data class CatalogPreview(
   val example: String,
   /** `light` or `dark` (Material 3's baseline scheme in that mode), or `theme-<id>` for a theme pack. */
   val mode: String,
-  /** Relative to the index: `<design>/<template>/<example>/<mode>.png`. */
+  /** Relative to the index: `<design>/<template>/<example>/<mode>.png`, or `<mode>/<frame>.png` in a [frame]. */
   val file: String,
   val widthDp: Int,
   val heightDp: Int,
+  /** The Wear widget host whose container it is drawn in ([PreviewCase.frame]); null at the document's own size. */
+  val frame: String? = null,
 )
 
 /** Something a preview couldn't be drawn for: an example that doesn't bind, a missing contract. */
@@ -88,6 +94,12 @@ data class PreviewCase(
   /** ARGB behind the template. */
   val background: Long,
   val values: Map<String, NamedValue>,
+  /**
+   * The Wear widget host whose container this case is drawn in (its name as a [CatalogPreviews.segment]
+   * of lower case words, `pixel`): [widthDp] × [heightDp] is that container's and [values] hold the
+   * `wear.container.*` values the watch writes in. Null for a case at the document's own size.
+   */
+  val frame: String? = null,
 )
 
 /** A catalog's [PreviewCase]s and what couldn't become one: `cases.json`. */
@@ -108,6 +120,9 @@ data class PreviewCases(val cases: List<PreviewCase>, val problems: List<Preview
  *   that mode, with nothing bound.
  * - **Size**: the document's own (the size it was captured at), kept inside its target's range;
  *   a document without one gets its surface's usual size.
+ * - **Wear widgets** also in each host's container of the template's kind (`wearHosts`, a [frame]):
+ *   its size, with the `wear.container.*` padding and corner radius the watch writes in, so a
+ *   design is seen on every watch it will play on.
  * - **Background**: the scheme's surface, or the theme pack's `theme.surface`, else the mode's
  *   (black on a watch): a template without a background of its own draws over its host's, never
  *   over nothing.
@@ -124,7 +139,7 @@ object CatalogPreviews {
   private val pretty = Json { prettyPrint = true; encodeDefaults = true }
 
   /** The source tree's preview matrix, and what couldn't become a case. Reads only; draws nothing. */
-  fun cases(source: File): PreviewCases {
+  fun cases(source: File, wearHosts: List<RcWearHost> = RcWearHost.All): PreviewCases {
     require(source.resolve("designs").isDirectory) { "$source has no designs/: not a catalog source tree" }
     val contracts = source.resolve("contracts").jsonFiles().map { json.decodeFromString(Contract.serializer(), it.readText()) }
     val packs = source.resolve("themes").jsonFiles().map { json.decodeFromString(ThemePack.serializer(), it.readText()) }
@@ -165,6 +180,12 @@ object CatalogPreviews {
               design.id, name, example, mode.name, target, document, width, height, mode.dark,
               mode.background(target), (bindings + mode.theme).values,
             )
+            wearFrames(target, wearHosts).forEach { (frame, container) ->
+              cases += PreviewCase(
+                design.id, name, example, mode.name, target, document, container.widthDp.toInt(), container.heightDp.toInt(), mode.dark,
+                mode.background(target), (bindings + mode.theme + container.bindings()).values, frame,
+              )
+            }
           }
         }
       }
@@ -176,8 +197,14 @@ object CatalogPreviews {
    * Writes [source]'s matrix into [out] as `cases.json` with the documents it names and, when
    * [draw], draws every case ([PreviewIndex]). Problems from both are in what it returns.
    */
-  fun render(source: File, out: File, density: Float = 2f, draw: Boolean = true): PreviewIndex {
-    val matrix = cases(source)
+  fun render(
+    source: File,
+    out: File,
+    density: Float = 2f,
+    draw: Boolean = true,
+    wearHosts: List<RcWearHost> = RcWearHost.All,
+  ): PreviewIndex {
+    val matrix = cases(source, wearHosts)
     out.deleteRecursively()
     out.mkdirs()
     // The documents each case names, copied once: the export is whole without the source tree.
@@ -195,12 +222,12 @@ object CatalogPreviews {
       val typefaces = fonts(source.resolve("fonts"))
       matrix.cases.forEach { c ->
         // A directory per dimension: names may hold hyphens, and a pack is never named like a built-in mode.
-        val file = listOf(c.design, c.template, c.example, c.mode).joinToString("/") { segment(it) } + ".png"
+        val file = id(c) + ".png"
         val spec = RenderSpec(c.widthDp, c.heightDp, density, c.dark, background = c.background)
         runCatching { TemplateRenderer.png(out.resolve(c.document).readBytes().toByteString(), Bindings(c.values), spec, PlaceholderImages, typefaces) }
           .onSuccess { png ->
             out.resolve(file).apply { parentFile.mkdirs() }.writeBytes(png.toByteArray())
-            previews += CatalogPreview(c.design, c.template, c.target.surface, c.example, c.mode, file, c.widthDp, c.heightDp)
+            previews += CatalogPreview(c.design, c.template, c.target.surface, c.example, c.mode, file, c.widthDp, c.heightDp, c.frame)
           }
           .onFailure { problems += PreviewProblem(c.design, c.template, c.example, "${c.mode}: ${it.message}") }
       }
@@ -243,8 +270,33 @@ object CatalogPreviews {
     }
   }
 
-  /** A case's id: its design, template, example and mode, each a [segment] (as its PNG's path). */
-  fun id(c: PreviewCase): String = listOf(c.design, c.template, c.example, c.mode).joinToString("/") { segment(it) }
+  /** A case's id: its design, template, example, mode and any [PreviewCase.frame], each a [segment] (as its PNG's path). */
+  fun id(c: PreviewCase): String = listOfNotNull(c.design, c.template, c.example, c.mode, c.frame).joinToString("/") { segment(it) }
+
+  /**
+   * Each of [hosts]' containers of [target]'s kind (`wear:small` or `wear:large`), named for its
+   * host: none for any other target.
+   */
+  internal fun wearFrames(target: Target, hosts: List<RcWearHost>): List<Pair<String, RcWearFrame>> {
+    if (target.surface != Surfaces.WEAR_WIDGET) return emptyList()
+    val type = when (target.container) {
+      "wear:small" -> RcWearContainerType.SMALL
+      "wear:large" -> RcWearContainerType.LARGE
+      else -> return emptyList()
+    }
+    return hosts.map { frameName(it.name) to it.frame(type) }
+  }
+
+  /** A host's name as a frame's: lower case words joined by `-` (`Pixel 204dp` is `pixel-204dp`). */
+  internal fun frameName(host: String): String = host.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }.joinToString("-")
+
+  /** The values a watch writes into a template for [this] container ([RcWearContainer]'s, without its colour). */
+  private fun RcWearFrame.bindings(): Bindings = Bindings(mapOf(
+    RcWearContainer.HORIZONTAL_PADDING to NamedValue.F(horizontalPaddingDp),
+    RcWearContainer.VERTICAL_PADDING to NamedValue.F(verticalPaddingDp),
+    RcWearContainer.CORNER_RADIUS to NamedValue.F(cornerRadiusDp),
+  ))
+
 
   /** The platform player a target plays on, as compose-preview names it, or null for its default. */
   internal fun profile(target: Target): String? = when {
@@ -394,8 +446,8 @@ object CatalogPreviews {
       byDesign.groupBy { it.template }.forEach { (template, byTemplate) ->
         append("<h3>${esc(template)} · ${esc(byTemplate.first().surface)} · ${byTemplate.first().widthDp}×${byTemplate.first().heightDp} dp</h3><div class=row>")
         byTemplate.forEach {
-          append("<figure><img src=\"${esc(url(it.file))}\" width=${it.widthDp} alt=\"${esc("$design $template ${it.example} ${it.mode}")}\">")
-          append("<figcaption>${esc(it.example)} · ${esc(it.mode)}</figcaption></figure>")
+          append("<figure><img src=\"${esc(url(it.file))}\" width=${it.widthDp} alt=\"${esc(listOfNotNull(design, template, it.example, it.mode, it.frame).joinToString(" "))}\">")
+          append("<figcaption>${esc(listOfNotNull(it.example, it.mode, it.frame).joinToString(" · "))}</figcaption></figure>")
         }
         append("</div>")
       }

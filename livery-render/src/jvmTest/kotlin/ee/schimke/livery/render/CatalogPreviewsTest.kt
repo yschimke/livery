@@ -1,5 +1,6 @@
 package ee.schimke.livery.render
 
+import ee.schimke.composeai.rcwidget.RcWearHost
 import ee.schimke.livery.protocol.NamedValue
 import ee.schimke.livery.protocol.SizeRange
 import ee.schimke.livery.protocol.Surfaces
@@ -45,6 +46,20 @@ class CatalogPreviewsTest {
     val unreadable = index.problems.filter { it.message.startsWith("not a Remote Compose document") }
     assertTrue(unreadable.any { it.design == "tile-default" && it.template == "wear-large" }, index.problems.toString())
     assertEquals(unreadable, index.problems, "only the placeholders")
+  }
+
+  /** A Wear widget is also drawn in each host's container of its kind, named for the host. */
+  @Test fun aWearWidgetIsDrawnInEachHostsContainer() {
+    val large = Target(Surfaces.WEAR_WIDGET, 7, listOf("glance-wear"), theme = "baked:dark", container = "wear:large")
+    val frames = CatalogPreviews.wearFrames(large, RcWearHost.All)
+    assertEquals(listOf("pixel" to RcWearHost.Pixel.large, "galaxy" to RcWearHost.Galaxy.large), frames)
+    assertEquals(listOf(RcWearHost.Pixel.small), CatalogPreviews.wearFrames(large.copy(container = "wear:small"), listOf(RcWearHost.Pixel)).map { it.second })
+    assertEquals(emptyList(), CatalogPreviews.wearFrames(Target(Surfaces.IN_APP, 7), RcWearHost.All))
+    assertEquals("pixel-204dp", CatalogPreviews.frameName("Pixel 204dp"))
+    // A frame is one more path segment: the document's own size keeps its file.
+    val case = PreviewCase("d", "wear-large", "on", "dark", large, "documents/d/wear-large.rc", 160, 136, true, 0xFF000000, emptyMap(), "galaxy")
+    assertEquals("d/wear-large/on/dark/galaxy", CatalogPreviews.id(case))
+    assertEquals("d/wear-large/on/dark", CatalogPreviews.id(case.copy(frame = null)))
   }
 
   /** A watch template without a size of its own gets its container's. */
