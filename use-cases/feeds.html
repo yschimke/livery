@@ -119,24 +119,15 @@ and the expressions that leaves are folded, once per template and display, so ev
 fewer expressions. A slot records its display on the host (<code>host.resources.display</code>); to warm before
 anything has composed, pass one: <code>host.resources.warm(queries, rememberLiveryDisplay())</code>. Pass
 <code>preprocessor = null</code> to <code>LiveryResources</code> to play templates exactly as published.</p>
-<p>While a list scrolls, the work that remains is per card on screen. Two host settings cut it:</p>
-<ul>
-<li><code>LiveryHost.deferLayoutAnimations</code> (off by default): a template whose layout animates (one built
-  with <code>--default-animations</code>) skips the lookahead pass behind its bounds animations until its data
-  first changes, and then animates as before. A catalog's templates are published without layout
-  animations by default and never take the pass, so this matters only for those that keep them.
-  Turn it on for a feed of such templates that scrolls a lot and rarely changes; leave it off for
-  cards that update on a schedule, where switching the pass on and off at each card's first changes
-  costs more than it saves (see <a href="../benchmarks.html">Benchmarks</a>). A template that animates, reads the
-  clock, scrolls, takes input or writes its own state keeps the pass from its first frame.</li>
-<li><code>LiveryHost.flattenLayout</code> (on by default): a template's plain boxes, rows, columns and texts are
-  laid out and drawn by their container in one node, rather than one composable each. Tap targets,
-  data-driven badges and custom components stay components of their own, the texts stay in the
-  semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
-  the per-component path. It renders the same pixels, and applies while a template takes no
-  lookahead pass: always for one without layout animations, and until its first change for one
-  whose animations are deferred. Pass <code>false</code> to give every component its own composable.</li>
-</ul>
+<p>While a list scrolls, the work that remains is per card on screen. One host setting cuts it:
+<code>LiveryHost.flattenLayout</code> (on by default): a template's plain boxes, rows, columns and texts are
+laid out and drawn by their container in one node, rather than one composable each. Tap targets,
+data-driven badges and custom components stay components of their own, the texts stay in the
+semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
+the per-component path. It renders the same pixels, and applies to a template that takes no
+lookahead pass: every one the catalog published without layout animations, which is the default (one
+built with <code>--default-animations</code> takes the pass and stays on the per-component path). Pass <code>false</code>
+to give every component its own composable.</p>
 <p>Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
 laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.</p>
 <h2 id="4-evolve-the-layout">4. Evolve the layout<a class="headerlink" href="#4-evolve-the-layout" title="Permanent link">#</a></h2>
