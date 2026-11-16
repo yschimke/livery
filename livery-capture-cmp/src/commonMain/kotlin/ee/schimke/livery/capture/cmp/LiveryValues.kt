@@ -89,15 +89,17 @@ class LiveryValues(val contract: Contract) {
 
   /**
    * The action [action] with its one string argument set to [value] as the document plays (a URL
-   * the template reads from an input): the bare text for an argument named `value`, else the JSON
-   * object `{"<arg>":"<value>"}` built in the document. [value] is not escaped, so it must not hold
+   * the template reads from an input), as the JSON object `{"<arg>":"<value>"}` built in the
+   * document. [value] is not escaped, so it must not hold
    * a `"` or `\\`.
    */
   fun action(action: ContractAction, value: RemoteString): RemoteAction {
     require(action.contract.ref == contract.ref) { "$action is not of ${contract.ref}" }
     val arg = action.spec.args.keys.singleOrNull()
     require(arg != null && action.spec.args.getValue(arg).type == ValueType.String) { "$action takes one string argument, not ${action.spec.args}" }
-    val payload = if (arg == "value") value else "{\"$arg\":\"".rs + value + "\"}".rs
+    // Always the JSON object, `value` included: bare text that is blank, or starts with `{`, would
+    // reach the client as no argument or as JSON (ActionArguments.parse).
+    val payload = "{\"$arg\":\"".rs + value + "\"}".rs
     return hostAction(action.name.rs, payload)
   }
 
