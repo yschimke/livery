@@ -50,3 +50,16 @@ li.task::before { content: ""; position: absolute; left: -22px; top: 6px; width:
   .content { padding: 20px 16px 48px; }
   .tagline { display: none; }
 }
+
+/* Images open in a modal (lightbox.js). */
+img.zoomable { cursor: zoom-in; }
+img.zoomable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.lightbox-open { overflow: hidden; }
+.lightbox { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 24px; background: rgba(0, 0, 0, .86); }
+.lightbox[hidden] { display: none; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 90px); background: #fff; border-radius: 4px; cursor: default; }
+.lightbox-caption { margin: 0; color: #e8e4de; font-size: 14px; text-align: center; max-width: 900px; }
+.lightbox-close { position: absolute; top: 12px; right: 18px; border: 0; background: none; color: #fff; font-size: 36px;
+  line-height: 1; cursor: pointer; }
+.lightbox-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
