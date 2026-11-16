@@ -286,4 +286,4 @@ the same comparison without a device, with software rendering, for quick iterati
 
 ## Tested at
 
-Livery [`62bf078`](https://github.com/yschimke/livery/commit/62bf078), rc-players 3.6.1, Pixel 9, Android 17 (API 37); the data-change lanes (Compose UI and Livery) and their Perfetto traces at [`36ab4c7`](https://github.com/yschimke/livery/commit/36ab4c7).
+Livery [`62bf078`](https://github.com/yschimke/livery/commit/62bf078), rc-players 3.6.1, Pixel 9, Android 17 (API 37); the data-change lanes (Compose UI and Livery) and their Perfetto traces at [`eb5d6b1`](https://github.com/yschimke/livery/commit/eb5d6b1).
