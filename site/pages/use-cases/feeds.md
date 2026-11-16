@@ -92,23 +92,15 @@ fewer expressions. A slot records its display on the host (`host.resources.displ
 anything has composed, pass one: `host.resources.warm(queries, rememberLiveryDisplay())`. Pass
 `preprocessor = null` to `LiveryResources` to play templates exactly as published.
 
-While a list scrolls, the work that remains is per card on screen. Two host settings cut it:
-
-- `LiveryHost.deferLayoutAnimations` (off by default): a template whose layout animates (one built
-  with `--default-animations`) skips the lookahead pass behind its bounds animations until its data
-  first changes, and then animates as before. A catalog's templates are published without layout
-  animations by default and never take the pass, so this matters only for those that keep them.
-  Turn it on for a feed of such templates that scrolls a lot and rarely changes; leave it off for
-  cards that update on a schedule, where switching the pass on and off at each card's first changes
-  costs more than it saves (see [Benchmarks](../benchmarks.md)). A template that animates, reads the
-  clock, scrolls, takes input or writes its own state keeps the pass from its first frame.
-- `LiveryHost.flattenLayout` (on by default): a template's plain boxes, rows, columns and texts are
-  laid out and drawn by their container in one node, rather than one composable each. Tap targets,
-  data-driven badges and custom components stay components of their own, the texts stay in the
-  semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
-  the per-component path. It renders the same pixels, and applies while a template takes no
-  lookahead pass: always for one without layout animations, and until its first change for one
-  whose animations are deferred. Pass `false` to give every component its own composable.
+While a list scrolls, the work that remains is per card on screen. One host setting cuts it:
+`LiveryHost.flattenLayout` (on by default): a template's plain boxes, rows, columns and texts are
+laid out and drawn by their container in one node, rather than one composable each. Tap targets,
+data-driven badges and custom components stay components of their own, the texts stay in the
+semantics tree, and anything the flat layout cannot draw exactly as the components would stays on
+the per-component path. It renders the same pixels, and applies to a template that takes no
+lookahead pass: every one the catalog published without layout animations, which is the default (one
+built with `--default-animations` takes the pass and stays on the per-component path). Pass `false`
+to give every component its own composable.
 
 Only the document is prepared in the background. Each card is still ordinary Compose: its own nodes,
 laid out, drawn and in the semantics tree on the main thread, never a picture drawn elsewhere.
