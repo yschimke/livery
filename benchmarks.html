@@ -68,7 +68,7 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 </tr>
 <tr>
 <td>Livery</td>
-<td><code>LiverySlot</code> / <code>LiveryTemplate</code> with the defaults: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's <code>startup</code>, with the splash screen up until it is ready, as getting-started has it</td>
+<td><code>LiverySlot</code> / <code>LiveryTemplate</code> with the defaults at the time of the run: background preparation, deferred layout animations, flat layout. Its first screen is prepared by Livery's <code>startup</code>, with the splash screen up until it is ready, as getting-started has it. Since these runs, layout animations are no longer deferred by default: the "no deferral" lanes are today's default</td>
 </tr>
 <tr>
 <td>Livery, no startup</td>
@@ -76,7 +76,7 @@ fails if more than 1% of pixels differ, in the feed's card size and in the full-
 </tr>
 <tr>
 <td>Livery, no deferral</td>
-<td><code>deferLayoutAnimations = false</code> (flat layout needs the deferral, so it is off too)</td>
+<td><code>deferLayoutAnimations = false</code>, now the default. A template whose layout animates then never lays out flat; the catalog's templates have no layout animations unless built with <code>--default-animations</code></td>
 </tr>
 <tr>
 <td>Livery, no flat layout</td>
@@ -195,14 +195,14 @@ unless its author asked for it (<code>"defaultAnimations": true</code>), so a ba
 <td style="text-align: right;">−1.1 ms</td>
 </tr>
 <tr>
-<td>Livery, bars ease, default deferral</td>
+<td>Livery, bars ease, deferred (the default in this run)</td>
 <td style="text-align: right;">4.6 ms</td>
 <td style="text-align: right;">8.3 ms</td>
 <td style="text-align: right;">16.6 ms</td>
 <td style="text-align: right;">+2.5 ms</td>
 </tr>
 <tr>
-<td>Livery, bars ease, no deferral</td>
+<td>Livery, bars ease, no deferral (today's default)</td>
 <td style="text-align: right;">3.7 ms</td>
 <td style="text-align: right;">7.1 ms</td>
 <td style="text-align: right;"><strong>10.5 ms</strong></td>
@@ -214,13 +214,15 @@ unless its author asked for it (<code>"defaultAnimations": true</code>), so a ba
 with a higher p90 (7.1 against 5.1 ms): each update costs it more, but without the long frames. (Before the changes in
 Livery's slot and in rc-players that made a value change recompose, measure and draw only what read it, the same lane's p99 was
 21.7 ms.)</p>
-<p><strong>Where the bars ease, Livery's default is slower and misses frames: 16.6 ms at p99 against the twin's 12.2.</strong> The cost is layout:
+<p><strong>Where the bars ease, Livery's default in this run was slower and missed frames: 16.6 ms at p99 against the twin's 12.2.</strong> The cost is layout:
 17 long <code>measureAndLayout</code> passes in the run (116 ms in all, the longest 15.7 ms), in which about 33 texts are measured again on
 every frame of a bar's easing though no text changed, and compositions run inside the measure pass. The twin has no pass over
-4 ms. It is Livery's <code>deferLayoutAnimations</code> (the default): it skips AndroidX's lookahead pass until a card's data first changes, and
-a card that changes every second keeps paying for it. <strong>Turned off, the eased lane's p99 is 10.5 ms, under the twin's</strong> (3 long
-passes, 15 ms in all). The option is the right default for a list that scrolls and rarely changes (a static feed is a little cheaper with it: p50 3.4
-against 3.9 ms) and the wrong one for cards that update on a schedule: <code>LiveryHost(deferLayoutAnimations = false)</code>.</p>
+4 ms. It is Livery's <code>deferLayoutAnimations</code> (the default in this run): it skips AndroidX's lookahead pass until a card's data first
+changes, switching it on then and off again once the change settles, each time rebuilding the card's tree, and in a feed every card
+that scrolls in pays for that. <strong>Turned off, the eased lane's p99 is 10.5 ms, under the twin's</strong> (3 long
+passes, 15 ms in all). The option suits a list that scrolls and rarely changes (a static feed is a little cheaper with it: p50 3.4
+against 3.9 ms) and costs cards that update on a schedule, so it is now off by default; a feed of rarely changing templates that
+keep their layout animations can turn it on with <code>LiveryHost(deferLayoutAnimations = true)</code>.</p>
 <p>Livery also used to flicker here: a slot whose data changed drew the placeholder while it planned the new answer (166
 times in a run). A slot now keeps its card until the new answer is ready (and <code>LiverySlot</code> takes an <code>identity</code> for which
 card it is), and the placeholders are 0. The split of what each fix gave is in
