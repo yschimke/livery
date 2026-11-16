@@ -60,6 +60,13 @@ fun LiverySlot(
    * its data is better written `LiverySlot(item, data, …)`, which says which part is which.
    */
   identity: Any? = key,
+  /**
+   * The same plan from memory, when the app can: `SlotPlanner.forAppDataNow`. A slot whose [key] changes (new data) with it draws
+   * the new answer in the composition that has the new data, in that frame, when it returns a plan whose template is ready to draw
+   * (fonts and document in memory, as for every card after the first of its template); null, or a template not ready yet, plans
+   * the usual way, a frame later. It runs in composition, so it must not suspend or read from disk.
+   */
+  planNow: (() -> PlanResult?)? = null,
   plan: suspend () -> PlanResult,
 ) {
   // A refreshed catalog or an install can change the answer, so the slot replans on either.
@@ -92,8 +99,10 @@ fun LiverySlot(
   val lastDrawn = remember(host, slotId) { LastDrawn() }
   val first = remember(key, host, slotId) {
     val last = slotId?.let { host.resources.lastPlan(it, key, revision) }
-    val early = if (last == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null
-    val answer = last ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } ?: lastDrawn.ready?.takeIf { lastDrawn.identity == identity }
+    // New data planned from memory, drawn in this composition when its template is ready to draw.
+    val now = if (last == null) planNow?.invoke()?.takeIf { it is PlanResult.Ready && host.resources.isReadyToDraw(it.plan.template, display) } else null
+    val early = if (last == null && now == null) host.resources.beforeFirstFrame(host.firstFrameBudgetMillis) { planned() } else null
+    val answer = last ?: now ?: early?.let { host.resources.awaitBeforeFirstFrame(host.firstFrameBudgetMillis, it) } ?: lastDrawn.ready?.takeIf { lastDrawn.identity == identity }
     FirstAnswer(mutableStateOf(answer), early, revision)
   }
   val state = first.state
@@ -155,8 +164,10 @@ fun LiverySlot(
     if (reason == null) host.placeholder(LiveryPlaceholder(LocalLiverySlotId.current))
   },
   slotId: String? = null,
+  /** The same plan from memory (`SlotPlanner.forAppDataNow`): new [data] for the [item] draws in the frame it arrives in. See [LiverySlot]. */
+  planNow: (() -> PlanResult?)? = null,
   plan: suspend () -> PlanResult,
-) = LiverySlot(LiverySlotKey(item, data), host, modifier, fallback, slotId, item, plan)
+) = LiverySlot(LiverySlotKey(item, data), host, modifier, fallback, slotId, item, planNow, plan)
 
 /**
  * The designs a picker offers for [contract], refreshed with the catalog and after an install or

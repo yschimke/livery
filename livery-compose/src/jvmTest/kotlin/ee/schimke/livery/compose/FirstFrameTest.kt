@@ -297,6 +297,44 @@ class FirstFrameTest {
     assertEquals(2, starts, "with a fresh player")
   }
 
+  @Test fun newDataPlannedFromMemoryDrawsInTheFrameItArrivesIn() = runComposeUiTest {
+    var shown = ""
+    val player = object : LiveryPlayer {
+      override val id = "capturing"
+      override val usesPreparedDocument = false
+
+      @androidx.compose.runtime.Composable
+      override fun Play(request: PlayerRequest) {
+        shown = (request.values["headline"] as? ee.schimke.composeai.rcplayer.runtime.RcNamedValue.Text)?.value.orEmpty()
+      }
+    }
+    val capturing = LiveryHost(repository, ActionRouter(emptyMap(), { false }, { }, clock), { }, clock, player = player)
+    var version by mutableStateOf(1)
+    mainClock.autoAdvance = false
+    var fromMemory by mutableStateOf(true)
+    setContent {
+      LiverySlot(
+        "card", version, capturing, Modifier.size(320.dp, 120.dp), slotId = "feed",
+        planNow = if (fromMemory) ({ PlanResult.Ready(plan("v$version")) }) else null,
+      ) {
+        delay(60)
+        PlanResult.Ready(plan("v$version"))
+      }
+    }
+    repeat(8) { mainClock.advanceTimeByFrame() }
+    assertEquals("v1", shown)
+    version = 2
+    mainClock.advanceTimeByFrame()
+    assertEquals("v2", shown, "planned from memory: drawn in the frame the data arrived in")
+    fromMemory = false
+    mainClock.advanceTimeByFrame()
+    version = 3
+    mainClock.advanceTimeByFrame()
+    assertEquals("v2", shown, "without planNow the new answer is a plan away")
+    repeat(10) { mainClock.advanceTimeByFrame() }
+    assertEquals("v3", shown)
+  }
+
   @Test fun aFallbackIsNotBroughtBackByTheNextKey() = runComposeUiTest {
     val host = host(placeholder = { Box(Modifier.size(320.dp, 40.dp).testTag("placeholder")) })
     var version by mutableStateOf(1)
