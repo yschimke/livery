@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.0](https://github.com/yschimke/livery/compare/v0.19.0...v0.20.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **compose:** remove LiveryHost.deferLayoutAnimations ([#123](https://github.com/yschimke/livery/issues/123))
+
+### Features
+
+* **compose:** a slot draws new data from memory in the frame it arrives in ([#126](https://github.com/yschimke/livery/issues/126)) ([eb5d6b1](https://github.com/yschimke/livery/commit/eb5d6b19723add14315c462b02eed57ed6ddaedf))
+* **compose:** remove LiveryHost.deferLayoutAnimations ([#123](https://github.com/yschimke/livery/issues/123)) ([18d417e](https://github.com/yschimke/livery/commit/18d417ed7d593429d10d9d776a78d0aec16d1e86))
+
 ## [0.19.0](https://github.com/yschimke/livery/compare/v0.18.0...v0.19.0) (2026-11-16)
 
 
