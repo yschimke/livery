@@ -26,11 +26,9 @@ LANES = {
     "composeUi": ("DocumentBenchmark_composeUiStartup", "FeedScrollBenchmark_composeUi"),
     "livery": ("DocumentBenchmark_liveryStartup", "FeedScrollBenchmark_livery"),
     "rcPlayer": ("DocumentBenchmark_rcPlayerStartup", "FeedScrollBenchmark_rcPlayer"),
-    "liveryDefer": ("DocumentBenchmark_liveryDeferStartup", "FeedScrollBenchmark_liveryDefer"),
     "liveryNoFlat": ("DocumentBenchmark_liveryNoFlatStartup", "FeedScrollBenchmark_liveryNoFlat"),
 }
-LABEL = {"composeUi": "Compose UI", "livery": "Livery", "rcPlayer": "Player alone",
-         "liveryDefer": "Livery, deferred layout animations", "liveryNoFlat": "Livery, no flat layout"}
+LABEL = {"composeUi": "Compose UI", "livery": "Livery", "rcPlayer": "Player alone", "liveryNoFlat": "Livery, no flat layout"}
 
 
 def find_processor():
