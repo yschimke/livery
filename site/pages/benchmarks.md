@@ -94,7 +94,7 @@ card on a full screen. Tapping the document shows the next of ten data variants,
 | Livery | 19 | 4.0 ms | 6.6 ms | 8.2 ms | −5.9 ms |
 
 Livery draws two frames for each change, the twin one. The first is the frame the tap lands in: the slot recomposes with the new
-data and still shows the card as it was (about 2 ms, most of it the press feedback the twin draws too). The second, about 5 ms, is
+data and still shows the card as it was (about 2 ms: a small recomposition and a redraw of the card as it was). The second, about 5 ms, is
 the new answer arriving: planning runs off the main thread, so the card composes (1.8 ms), lays out (1.5) and draws (2.1) a frame
 later, where the twin's one frame (2.4 ms in all) does all three. A tap in the Perfetto UI, 100 ms:
 
