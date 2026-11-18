@@ -74,7 +74,9 @@ No released AndroidX player draws them, and rc-players' decoder refuses them (`U
 - Every other document is held to `rc-player-edit`'s `RcTargetProfile` for the target's level and
   profiles: an operation it doesn't read, or a header level above the target's. Not the whole
   `validateFor`, for the reason `livery-capture-cmp`'s `CaptureProfiles` gives (a template reads
-  named values by design).
+  named values by design). For a target Android's widget player plays (`widgets`, a launcher
+  widget, a notification) it also refuses a `DrawContent` inside a component's canvas operations,
+  which Android 16's player paints recursively until the widget host dies, as capture does.
 
 *Open:* `3d` is a profile name this module checks; once a player declares it, it belongs in
 PROTOCOL.md's list of profile names (it changes no wire format).

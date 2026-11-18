@@ -3,6 +3,7 @@ package ee.schimke.livery.kobento
 import ee.schimke.composeai.rcplayer.edit.RcProfileViolation
 import ee.schimke.composeai.rcplayer.edit.RcProfiles
 import ee.schimke.composeai.rcplayer.edit.RcTargetProfile
+import ee.schimke.composeai.rcplayer.edit.RcTargetProfiles
 import ee.schimke.composeai.rcplayer.edit.validateFor
 import ee.schimke.composeai.rcplayer.protocol.RcDocumentCodec
 import ee.schimke.composeai.rcplayer.protocol.RcWireException
@@ -24,6 +25,10 @@ import ee.schimke.livery.protocol.Target
  *   level and profiles doesn't read ([RcProfileViolation.Kind.UNSUPPORTED_OPERATION],
  *   [RcProfileViolation.Kind.HEADER_API_LEVEL]). Not the whole `validateFor`: a template reads named
  *   values by design (see livery-capture-cmp's `CaptureProfiles`).
+ * - For a target Android's widget player plays (a `widgets` profile, a launcher widget or a
+ *   notification), a `DrawContent` inside a component's canvas operations, which Android 16's
+ *   level 6 player paints recursively until the launcher's widget host dies
+ *   ([RcProfileViolation.Kind.RECURSIVE_DRAW_CONTENT]), as `CaptureProfiles` refuses it.
  */
 object KobentoTargetCheck {
   /** The target profile a template that draws 3D names: a player that lists it draws Kobento's 3D operations. */
@@ -73,6 +78,12 @@ object KobentoTargetCheck {
         .filterNot { PROFILE_3D in target.profiles && it.opcode in OPS_3D }
         .map { it.message }.distinct()
         .forEach { add("$it (for level ${target.rcApiLevel}${target.profiles.takeIf { p -> p.isNotEmpty() }?.let { p -> ", $p" } ?: ""})") }
+      if ("widgets" in target.profiles || target.surface == Surfaces.LAUNCHER_WIDGET || target.surface == Surfaces.NOTIFICATION) {
+        decoded.validateFor(RcTargetProfiles.WIDGETS_V6)
+          .filter { it.kind == RcProfileViolation.Kind.RECURSIVE_DRAW_CONTENT }
+          .map { it.message }.distinct()
+          .forEach { add("$it (Android 16's widget player paints it recursively until the host dies)") }
+      }
     }
   }
 

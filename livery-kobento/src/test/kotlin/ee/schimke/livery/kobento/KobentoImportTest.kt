@@ -10,6 +10,9 @@ import ee.schimke.livery.publisher.TemplateImport
 import ee.schimke.livery.publisher.TemplateSpec
 import ee.schimke.livery.publisher.contract
 import ee.schimke.livery.publisher.into
+import androidx.compose.remote.creation.RemoteComposeWriter
+import androidx.compose.remote.creation.json.RemoteComposeJsonParser
+import androidx.compose.remote.creation.modifiers.RecordingModifier
 import java.io.File
 import java.nio.file.Files
 import kotlin.io.encoding.Base64
@@ -88,6 +91,17 @@ class KobentoImportTest {
     assertTrue(problems.single().contains("3D"), problems.toString())
     val widget = KobentoTargetCheck.problems(bytes, Target(Surfaces.LAUNCHER_WIDGET, 7, profiles = listOf("widgets", KobentoTargetCheck.PROFILE_3D)))
     assertTrue(widget.any { "launcher-widget" in it }, widget.toString())
+  }
+
+  @Test fun aRecursiveDrawContentIsRefusedForAWidget() {
+    // A box whose canvas operations draw its content: what a Kobento-compiled .rc can hold, and
+    // Android 16's widget player paints recursively. Authoring JSON can't write it, so AndroidX's writer does.
+    val w = RemoteComposeWriter(RemoteComposeJsonParser.DEFAULT_PLATFORM, 6)
+    w.startRoot(); w.startBox(RecordingModifier()); w.startCanvasOperations(); w.drawComponentContent(); w.endCanvasOperations(); w.endBox(); w.endRoot()
+    val bytes = w.encodeToByteArray()
+    val widget = KobentoTargetCheck.problems(bytes, Target(Surfaces.LAUNCHER_WIDGET, 6, profiles = listOf("widgets")))
+    assertTrue(widget.any { "recursively" in it }, widget.toString())
+    assertTrue(KobentoTargetCheck.problems(bytes, inApp).none { "recursively" in it }, "an app's own player takes it")
   }
 
   @Test fun aLevelThePlayerDoesntReadIsRefused() {

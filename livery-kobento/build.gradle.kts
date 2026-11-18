@@ -27,6 +27,8 @@ dependencies {
   testImplementation(project(":livery-publish"))
   testImplementation(project(":livery-mcp"))
   testImplementation(kotlin("test"))
+  // AndroidX's writer, for a document authoring JSON can't express (a DrawContent in canvas operations).
+  testImplementation(libs.compose.remote.creation.core)
 }
 
 // The tests read the built sample catalogs (their captured designs are build output).
