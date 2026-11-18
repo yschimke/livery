@@ -49,6 +49,8 @@ include(":livery-render")
 include(":livery-mcp-core")
 include(":livery-mcp")
 include(":livery-uibuilder")
+// Kobento documents (its authoring JSON or compiled .rc) as Livery templates: optional, like livery-uibuilder.
+include(":livery-kobento")
 include(":livery-review")
 include(":livery-verify")
 include(":livery-gradle-plugin")

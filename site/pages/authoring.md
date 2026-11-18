@@ -325,6 +325,54 @@ commit the change.
 **With an agent**: `livery-mcp --ui-builder https://<ui builder host>` offers the same two steps
 as tools, `ui_builder_scaffold` and `ui_builder_export` (see [AI workflows](ai-workflows.md)).
 
+## In Kobento
+
+[Kobento](https://mcp.kobento.dev/) is an independent Remote Compose implementation with its own
+players (C++, TypeScript, iOS, microcontrollers) and an MCP server that builds documents. Its plain
+documents are AndroidX's authoring JSON, which Livery compiles itself (module `livery-kobento`, in
+the `livery` CLI); a document that calls Kobento's component library (`"componentSets"`) only
+compiles with Kobento's `convert`, so convert it there and import the `.rc`.
+
+**1. Start from the contract.** Get the contract as a Kobento document whose values are already
+named as Livery binds them (`USER:` named values, theme roles as `USER:theme.<role>` colours):
+
+```bash
+livery kobento scaffold templates --contract live/status-tile@1 > tile.json
+```
+
+```json
+{ "header": { "apiLevel": 7, "width": 320, "height": 160 },
+  "root": [
+    { "type": "variable", "name": "USER:name", "vtype": "string", "value": "Kitchen", "export": true },
+    { "type": "variable", "name": "USER:is_on", "vtype": "int", "value": 0, "export": true },
+    { "type": "column", "modifiers": ["fillMaxSize", { "onClick": { "type": "hostAction", "name": "toggle" } }],
+      "children": [{ "type": "text", "text": "@USER:name" }] } ] }
+```
+
+It compiles and imports as it is. Lay it out (by hand, or by handing it to Kobento's `build_kit`)
+keeping every `USER:` name and action name. A bool is an int (0 or 1); an action is a
+`hostAction` named like the contract's action; the command lists what it left out.
+
+**2. Check it for a target, and import it:**
+
+```bash
+livery kobento check tile.json --target '{"surface":"launcher-widget","rcApiLevel":6,"profiles":["widgets"]}'
+livery kobento import tile.json templates --as tile-retro/kobento \
+  --target '{"surface":"in-app","rcApiLevel":7}' --source page=https://mcp.kobento.dev/…
+```
+
+`check` and `import` refuse what the target's player would not play: an operation or header level
+outside its level and profiles, and Kobento's 3D operations anywhere but a target that names the
+`3d` profile (never a launcher widget, Wear widget or notification). Kobento 3D documents can't be
+imported yet: Livery's decoder doesn't read those operations. `import` then does what `livery import`
+does, with `source: {tool: kobento, file, format}` and any `--source key=value` in the sidecar.
+
+**With an agent**: `livery-mcp --kobento` adds `kobento_scaffold` and `kobento_compile`, next to
+Kobento's own MCP server (see [AI workflows](ai-workflows.md)).
+
+*Planned*: pushing a catalog's selected template to a Kobento device on the network, and Kobento's
+players as a `livery review` lane. See `docs/KOBENTO.md` in the repository.
+
 ## Any other tool
 
 `livery import` puts any document into a design, with the same checks and a sidecar read from the
@@ -335,4 +383,5 @@ livery import build/tile.rc templates --as tile-default/in-app \
   --target '{"surface":"in-app","rcApiLevel":7}' --source tool=my-exporter --source commit=$(git rev-parse HEAD)
 ```
 
-`livery ui-builder import` is this command with UI Builder's export in front of it.
+`livery ui-builder import` is this command with UI Builder's export in front of it, and
+`livery kobento import` this command with a JSON compile and a target check in front of it.

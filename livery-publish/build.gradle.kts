@@ -29,7 +29,7 @@ application {
 }
 
 // Optional commands (LiveryCommand), shipped in the CLI's distribution but not in this library's
-// dependencies: `livery ui-builder …`, and `livery review` (which brings the renderer).
+// dependencies: `livery ui-builder …`, `livery kobento …`, and `livery review` (which brings the renderer).
 // JVM runtime attributes: livery-uibuilder is multiplatform, and these select its JVM variant.
 val cliExtensions: Configuration by configurations.creating {
   isCanBeConsumed = false
@@ -40,6 +40,7 @@ val cliExtensions: Configuration by configurations.creating {
 }
 dependencies {
   cliExtensions(project(":livery-uibuilder"))
+  cliExtensions(project(":livery-kobento"))
   cliExtensions(project(":livery-review"))
 }
 tasks.named<CreateStartScripts>("startScripts") { classpath = classpath!! + cliExtensions }
