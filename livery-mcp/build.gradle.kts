@@ -32,7 +32,10 @@ tasks.withType<AbstractArchiveTask>().configureEach { duplicatesStrategy = Dupli
 
 // Optional authoring-tool extensions, found at run time (McpExtension); the server's own code never
 // depends on them.
-dependencies { runtimeOnly(project(":livery-uibuilder")) }
+dependencies {
+  runtimeOnly(project(":livery-uibuilder"))
+  runtimeOnly(project(":livery-kobento"))
+}
 
 // The tests read the built sample catalogs (their captured designs are build output).
 apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))

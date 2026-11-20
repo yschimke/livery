@@ -30,6 +30,7 @@ order: 24
 | `livery-capture-core` (what both share: `CapturedTemplate`, `DesignFolder`, `CatalogContracts`) | JVM (also what Android resolves); compiled for Wasm | Available from the release after 0.9.0 |
 | Secondary screens (`LiveryScreens`, `LiveryScreenHost`, `.liveryScreens`) | Kotlin, Compose, SwiftUI | Available from the release after 0.2.0; not yet device-tested |
 | `livery-uibuilder` | JVM, iOS, Wasm (the CLI commands on the JVM) | Available (optional: `livery ui-builder` commands and `livery-mcp` tools) |
+| `livery-kobento` | JVM | Available (optional: `livery kobento` commands and `livery-mcp --kobento` tools); device push and a Kobento review lane *Planned* |
 | `livery-server` | JVM | Planned |
 
 ## Kotlin

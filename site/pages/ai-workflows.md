@@ -53,6 +53,8 @@ claude mcp add livery -- /abs/path/livery-mcp path/to/catalog --write --preview-
 | `check_compatibility` | the catalog against a git revision (default `HEAD`) or another tree, as `livery check` does: contract changes marked compatible or breaking, and per template what it reads and emits, the minor it requires and which values only its own default covers |
 | `ui_builder_export` (`--ui-builder`) | a Compose UI Builder design at a revision, as a document with its `source` |
 | `ui_builder_scaffold` (`--ui-builder`) | a contract as UI Builder host inputs, to add to a design before laying it out |
+| `kobento_scaffold` (`--kobento`) | a contract as the start of a Kobento (AndroidX authoring JSON) document, its values named as Livery binds them |
+| `kobento_compile` (`--kobento`) | a Kobento document (authoring JSON, or a `.rc` from Kobento's `convert`) as `rc_base64`, with what the target's player wouldn't play |
 
 The server never signs anything. A failed draft is never left in the tree.
 
@@ -82,6 +84,17 @@ other: `validate_template`, `render_preview`, then `submit_draft` with that `sou
 sidecar, or `publish_preview`. To move a template to a newer UI Builder revision, export that
 revision and submit it again; `list_history` shows each step. Without an agent, the same flow is
 `livery ui-builder scaffold` and `livery ui-builder import` (see [Authoring templates](authoring.md)).
+
+## Kobento
+
+Start the server with `--kobento` (module `livery-kobento`; no account, nothing leaves the
+machine) and run [Kobento's MCP server](https://mcp.kobento.dev/ide/) beside it. `kobento_scaffold`
+gives the agent the contract as a Kobento document with Livery's names; the agent lays it out,
+with Kobento's `build_kit`, `render` and `audit` if it likes, and `kobento_compile` turns it into
+`rc_base64` checked for the target (a document using Kobento components goes through Kobento's
+`convert` first, and its `.rc` is passed as `rc_base64`). From there: `validate_template`,
+`render_preview`, `submit_draft` with `source: {tool: kobento, …}` in the sidecar. Without an
+agent, the same flow is `livery kobento scaffold` and `livery kobento import`.
 
 ## Embedding the server
 
@@ -136,7 +149,8 @@ result on every template of the design.
 - Live sessions over a relay, with `livery-server` (as Home Assistant's agent sessions work today):
   `await_feedback`, `send_message` and `set_status`, so a person and an agent edit together with
   the person's real data on screen.
-- `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly.
+- `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly, in
+  `livery-mcp` itself (`kobento_compile` does it today, behind `--kobento`).
 - Pictures in `check_compatibility`: each changed design rendered before and after with every
   example, as `livery review` does for a pull request.
 - `livery check --against <release URL>`: a published catalog as the baseline, not only a git

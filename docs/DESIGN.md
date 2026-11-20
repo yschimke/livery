@@ -304,6 +304,8 @@ Livery takes **`.rc` bytes and a sidecar**, from anything:
 - UI Builder's `.uid` → RC authoring JSON → `remotecompose-json` → `.rc` export:
   `livery-uibuilder`;
 - an agent writing RC authoring JSON directly, compiled with `remotecompose-json`;
+- Kobento's documents (that JSON, or a `.rc` its tools compiled), held to the target's player as
+  well as the contract: `livery-kobento` ([KOBENTO.md](KOBENTO.md));
 - a hand-built or third-party document, through `livery import`.
 
 The two supported flows (site page "Authoring templates") both start from the contract and end in
