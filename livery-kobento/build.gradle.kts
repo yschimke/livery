@@ -8,14 +8,16 @@ plugins {
 // with remotecompose-json or a `.rc` it compiled, become catalog templates through TemplateImport,
 // checked against the contract and against what the target's player plays (Kobento's 3D
 // operations play on Kobento's players, never on AndroidX's). JVM only: the JSON compiler is.
-// docs/KOBENTO.md has the plan.
+// Published as a library, so a server can compile and check documents in-process; the CLI and
+// livery-mcp find its command and tools by ServiceLoader. docs/KOBENTO.md has the plan.
 kotlin { jvmToolchain(17) }
 
 dependencies {
-  implementation(project(":livery-protocol"))
-  implementation(project(":livery-catalog"))
+  // In its API: Target and Contract, CatalogProblems, McpExtension.
+  api(project(":livery-protocol"))
+  api(project(":livery-catalog"))
+  api(project(":livery-mcp-core"))
   implementation(project(":livery-instantiate"))
-  implementation(project(":livery-mcp-core"))
   implementation(platform(libs.rc.players.bom))
   implementation(libs.rc.player.edit)
   implementation(libs.rc.player.protocol)

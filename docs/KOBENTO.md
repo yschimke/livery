@@ -25,8 +25,9 @@ upstream (below), not forked.
 
 ## In this slice (`livery-kobento`)
 
-JVM only, shipped in the `livery` CLI's and `livery-mcp`'s distributions like `livery-uibuilder`,
-not a published library (yet).
+JVM only. A library on Maven Central (`ee.schimke.composeai:livery-kobento`, aligned by
+`livery-bom`), so a server can compile and check Kobento documents in-process, and shipped in the
+`livery` CLI's and `livery-mcp`'s distributions, which find its command and tools by ServiceLoader.
 
 - `KobentoDocument`: tells the three inputs apart, compiles plain JSON, refuses component JSON.
 - `KobentoScaffold`: a contract as the start of a Kobento document (below). It compiles and
@@ -99,7 +100,6 @@ PROTOCOL.md's list of profile names (it changes no wire format).
 - **Images in the scaffold**, and a `--look` option once looks map onto packs (below).
 - `compile_rc_json` in `livery-mcp` itself, for any agent writing authoring JSON (`kobento_compile`
   covers it behind `--kobento` today).
-- Publishing `livery-kobento` as a library, if a server wants the compile and check in-process.
 
 ## Kobento's looks and Livery's themes
 
@@ -145,7 +145,6 @@ Not changed from here. What would help Livery, as issues on yschimke/rc-players:
 
 ## Open questions
 
-- Should `livery-kobento` publish as a library, or stay a CLI/MCP extension like `livery-uibuilder`?
 - Is `3d` the right profile name, and should it go into PROTOCOL.md now or when a player declares it?
 - Is the device bridge an app Livery documents, or a module here (`livery-kobento-net`)?
 - Should always-on be a theme pack, a separate template, or both?
