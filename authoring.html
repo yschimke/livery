@@ -390,13 +390,48 @@ if the catalog no longer builds. To move a template to a newer revision, import 
 commit the change.</p>
 <p><strong>With an agent</strong>: <code>livery-mcp --ui-builder https://&lt;ui builder host&gt;</code> offers the same two steps
 as tools, <code>ui_builder_scaffold</code> and <code>ui_builder_export</code> (see <a href="ai-workflows.html">AI workflows</a>).</p>
+<h2 id="in-kobento">In Kobento<a class="headerlink" href="#in-kobento" title="Permanent link">#</a></h2>
+<p><a href="https://mcp.kobento.dev/">Kobento</a> is an independent Remote Compose implementation with its own
+players (C++, TypeScript, iOS, microcontrollers) and an MCP server that builds documents. Its plain
+documents are AndroidX's authoring JSON, which Livery compiles itself (module <code>livery-kobento</code>, in
+the <code>livery</code> CLI); a document that calls Kobento's component library (<code>"componentSets"</code>) only
+compiles with Kobento's <code>convert</code>, so convert it there and import the <code>.rc</code>.</p>
+<p><strong>1. Start from the contract.</strong> Get the contract as a Kobento document whose values are already
+named as Livery binds them (<code>USER:</code> named values, theme roles as <code>USER:theme.&lt;role&gt;</code> colours):</p>
+<pre><code class="language-bash">livery kobento scaffold templates --contract live/status-tile@1 &gt; tile.json
+</code></pre>
+<pre><code class="language-json">{ &quot;header&quot;: { &quot;apiLevel&quot;: 7, &quot;width&quot;: 320, &quot;height&quot;: 160 },
+  &quot;root&quot;: [
+    { &quot;type&quot;: &quot;variable&quot;, &quot;name&quot;: &quot;USER:name&quot;, &quot;vtype&quot;: &quot;string&quot;, &quot;value&quot;: &quot;Kitchen&quot;, &quot;export&quot;: true },
+    { &quot;type&quot;: &quot;variable&quot;, &quot;name&quot;: &quot;USER:is_on&quot;, &quot;vtype&quot;: &quot;int&quot;, &quot;value&quot;: 0, &quot;export&quot;: true },
+    { &quot;type&quot;: &quot;column&quot;, &quot;modifiers&quot;: [&quot;fillMaxSize&quot;, { &quot;onClick&quot;: { &quot;type&quot;: &quot;hostAction&quot;, &quot;name&quot;: &quot;toggle&quot; } }],
+      &quot;children&quot;: [{ &quot;type&quot;: &quot;text&quot;, &quot;text&quot;: &quot;@USER:name&quot; }] } ] }
+</code></pre>
+<p>It compiles and imports as it is. Lay it out (by hand, or by handing it to Kobento's <code>build_kit</code>)
+keeping every <code>USER:</code> name and action name. A bool is an int (0 or 1); an action is a
+<code>hostAction</code> named like the contract's action; the command lists what it left out.</p>
+<p><strong>2. Check it for a target, and import it:</strong></p>
+<pre><code class="language-bash">livery kobento check tile.json --target '{&quot;surface&quot;:&quot;launcher-widget&quot;,&quot;rcApiLevel&quot;:6,&quot;profiles&quot;:[&quot;widgets&quot;]}'
+livery kobento import tile.json templates --as tile-retro/kobento \
+  --target '{&quot;surface&quot;:&quot;in-app&quot;,&quot;rcApiLevel&quot;:7}' --source page=https://mcp.kobento.dev/…
+</code></pre>
+<p><code>check</code> and <code>import</code> refuse what the target's player would not play: an operation or header level
+outside its level and profiles, and Kobento's 3D operations anywhere but a target that names the
+<code>3d</code> profile (never a launcher widget, Wear widget or notification). Kobento 3D documents can't be
+imported yet: Livery's decoder doesn't read those operations. <code>import</code> then does what <code>livery import</code>
+does, with <code>source: {tool: kobento, file, format}</code> and any <code>--source key=value</code> in the sidecar.</p>
+<p><strong>With an agent</strong>: <code>livery-mcp --kobento</code> adds <code>kobento_scaffold</code> and <code>kobento_compile</code>, next to
+Kobento's own MCP server (see <a href="ai-workflows.html">AI workflows</a>).</p>
+<p><em>Planned</em>: pushing a catalog's selected template to a Kobento device on the network, and Kobento's
+players as a <code>livery review</code> lane. See <code>docs/KOBENTO.md</code> in the repository.</p>
 <h2 id="any-other-tool">Any other tool<a class="headerlink" href="#any-other-tool" title="Permanent link">#</a></h2>
 <p><code>livery import</code> puts any document into a design, with the same checks and a sidecar read from the
 document:</p>
 <pre><code class="language-bash">livery import build/tile.rc templates --as tile-default/in-app \
   --target '{&quot;surface&quot;:&quot;in-app&quot;,&quot;rcApiLevel&quot;:7}' --source tool=my-exporter --source commit=$(git rev-parse HEAD)
 </code></pre>
-<p><code>livery ui-builder import</code> is this command with UI Builder's export in front of it.</p>
+<p><code>livery ui-builder import</code> is this command with UI Builder's export in front of it, and
+<code>livery kobento import</code> this command with a JSON compile and a target check in front of it.</p>
     <p class="edit"><a href="https://github.com/yschimke/livery/blob/main/site/pages/authoring.md">Edit this page</a></p>
   </main>
 </div>

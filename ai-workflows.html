@@ -164,6 +164,14 @@ livery-mcp/build/install/livery-mcp/bin/livery-mcp path/to/catalog --write \
 <td><code>ui_builder_scaffold</code> (<code>--ui-builder</code>)</td>
 <td>a contract as UI Builder host inputs, to add to a design before laying it out</td>
 </tr>
+<tr>
+<td><code>kobento_scaffold</code> (<code>--kobento</code>)</td>
+<td>a contract as the start of a Kobento (AndroidX authoring JSON) document, its values named as Livery binds them</td>
+</tr>
+<tr>
+<td><code>kobento_compile</code> (<code>--kobento</code>)</td>
+<td>a Kobento document (authoring JSON, or a <code>.rc</code> from Kobento's <code>convert</code>) as <code>rc_base64</code>, with what the target's player wouldn't play</td>
+</tr>
 </tbody>
 </table>
 <p>The server never signs anything. A failed draft is never left in the tree.</p>
@@ -188,6 +196,15 @@ other: <code>validate_template</code>, <code>render_preview</code>, then <code>s
 sidecar, or <code>publish_preview</code>. To move a template to a newer UI Builder revision, export that
 revision and submit it again; <code>list_history</code> shows each step. Without an agent, the same flow is
 <code>livery ui-builder scaffold</code> and <code>livery ui-builder import</code> (see <a href="authoring.html">Authoring templates</a>).</p>
+<h2 id="kobento">Kobento<a class="headerlink" href="#kobento" title="Permanent link">#</a></h2>
+<p>Start the server with <code>--kobento</code> (module <code>livery-kobento</code>; no account, nothing leaves the
+machine) and run <a href="https://mcp.kobento.dev/ide/">Kobento's MCP server</a> beside it. <code>kobento_scaffold</code>
+gives the agent the contract as a Kobento document with Livery's names; the agent lays it out,
+with Kobento's <code>build_kit</code>, <code>render</code> and <code>audit</code> if it likes, and <code>kobento_compile</code> turns it into
+<code>rc_base64</code> checked for the target (a document using Kobento components goes through Kobento's
+<code>convert</code> first, and its <code>.rc</code> is passed as <code>rc_base64</code>). From there: <code>validate_template</code>,
+<code>render_preview</code>, <code>submit_draft</code> with <code>source: {tool: kobento, …}</code> in the sidecar. Without an
+agent, the same flow is <code>livery kobento scaffold</code> and <code>livery kobento import</code>.</p>
 <h2 id="embedding-the-server">Embedding the server<a class="headerlink" href="#embedding-the-server" title="Permanent link">#</a></h2>
 <p>The tools themselves are <code>livery-mcp-core</code> (Kotlin Multiplatform: JVM, iOS, Wasm), with no
 transport: <code>LiveryMcp.handle</code> takes one JSON-RPC message and returns its response, as a <code>suspend</code>
@@ -234,7 +251,8 @@ result on every template of the design.</p>
 <li>Live sessions over a relay, with <code>livery-server</code> (as Home Assistant's agent sessions work today):
   <code>await_feedback</code>, <code>send_message</code> and <code>set_status</code>, so a person and an agent edit together with
   the person's real data on screen.</li>
-<li><code>compile_rc_json</code>: RC authoring JSON to <code>.rc</code>, for agents that write documents directly.</li>
+<li><code>compile_rc_json</code>: RC authoring JSON to <code>.rc</code>, for agents that write documents directly, in
+  <code>livery-mcp</code> itself (<code>kobento_compile</code> does it today, behind <code>--kobento</code>).</li>
 <li>Pictures in <code>check_compatibility</code>: each changed design rendered before and after with every
   example, as <code>livery review</code> does for a pull request.</li>
 <li><code>livery check --against &lt;release URL&gt;</code>: a published catalog as the baseline, not only a git
