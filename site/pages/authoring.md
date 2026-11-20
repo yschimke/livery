@@ -370,6 +370,18 @@ does, with `source: {tool: kobento, file, format}` and any `--source key=value` 
 **With an agent**: `livery-mcp --kobento` adds `kobento_scaffold` and `kobento_compile`, next to
 Kobento's own MCP server (see [AI workflows](ai-workflows.md)).
 
+**In a server**: the same steps are a JVM library, `ee.schimke.composeai:livery-kobento` (aligned
+by `livery-bom`):
+
+```kotlin
+val rc = KobentoDocument.compile(bytes)                 // authoring JSON or .rc, as .rc bytes
+val problems = KobentoTargetCheck.problems(rc, target)  // what the target's player wouldn't play
+val skeleton = KobentoScaffold.authoringJson(contract).json
+```
+
+`compile` throws `CatalogProblems` for component JSON or JSON it can't compile. Put the bytes into a
+tree with `TemplateImport.into`, which checks them against the design's contract.
+
 *Planned*: pushing a catalog's selected template to a Kobento device on the network, and Kobento's
 players as a `livery review` lane. See `docs/KOBENTO.md` in the repository.
 

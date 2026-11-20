@@ -49,6 +49,7 @@ val published = mapOf(
   ":livery-sentry" to ("Livery Sentry" to "Livery events as Sentry breadcrumbs, and Sentry's tag on each template slot"),
   ":livery-amplitude" to ("Livery Amplitude" to "Livery events in Amplitude, with experiment arms as user properties"),
   ":livery-mcp-core" to ("Livery MCP core" to "Livery's agent tools as a transport-free Model Context Protocol server, on any Okio file system: Kotlin Multiplatform"),
+  ":livery-kobento" to ("Livery Kobento" to "Kobento documents (AndroidX authoring JSON or .rc) as Livery templates: compiled on the JVM, checked for the target's player, scaffolded from a contract"),
   ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
   ":livery-verify" to ("Livery verify" to "Play Livery templates on the players apps ship them to, under Robolectric, and fail on their errors"),
   ":livery-publish" to ("Livery publisher" to "Validate, build and sign Livery catalogs (the livery CLI's library)"),
