@@ -422,6 +422,14 @@ imported yet: Livery's decoder doesn't read those operations. <code>import</code
 does, with <code>source: {tool: kobento, file, format}</code> and any <code>--source key=value</code> in the sidecar.</p>
 <p><strong>With an agent</strong>: <code>livery-mcp --kobento</code> adds <code>kobento_scaffold</code> and <code>kobento_compile</code>, next to
 Kobento's own MCP server (see <a href="ai-workflows.html">AI workflows</a>).</p>
+<p><strong>In a server</strong>: the same steps are a JVM library, <code>ee.schimke.composeai:livery-kobento</code> (aligned
+by <code>livery-bom</code>):</p>
+<pre><code class="language-kotlin">val rc = KobentoDocument.compile(bytes)                 // authoring JSON or .rc, as .rc bytes
+val problems = KobentoTargetCheck.problems(rc, target)  // what the target's player wouldn't play
+val skeleton = KobentoScaffold.authoringJson(contract).json
+</code></pre>
+<p><code>compile</code> throws <code>CatalogProblems</code> for component JSON or JSON it can't compile. Put the bytes into a
+tree with <code>TemplateImport.into</code>, which checks them against the design's contract.</p>
 <p><em>Planned</em>: pushing a catalog's selected template to a Kobento device on the network, and Kobento's
 players as a <code>livery review</code> lane. See <code>docs/KOBENTO.md</code> in the repository.</p>
 <h2 id="any-other-tool">Any other tool<a class="headerlink" href="#any-other-tool" title="Permanent link">#</a></h2>
