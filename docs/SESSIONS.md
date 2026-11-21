@@ -1,6 +1,7 @@
 # Agent sessions and UI Builder flows
 
-Status: **proposal**, nothing built yet. These are optional modules: nothing in `livery-protocol`,
+Status: **in progress.** `livery-sessions-core` is built (the relay, links and the transcript);
+the other modules below are *Planned*. These are optional modules: nothing in `livery-protocol`,
 `livery-client` or `livery-compose` depends on them.
 
 homeassistant-remotecompose built this loop and runs it in production
@@ -54,8 +55,14 @@ Agent ──MCP──▶ session server ◀──HTTPS long-poll── person's 
   - An app registers its other kinds, for example a screen layout or an app's own config. Each
     kind is a **`DraftGate<T>`**: it checks a draft against the session's scope and says why it
     refuses.
-- **Conversation.** Messages, comments and decisions share one sequence, so the agent's `since`
-  says what it has read.
+- **Conversation.** Messages, comments, decisions and the agent's **steps** share one sequence,
+  so the agent's `since` says what it has read.
+  - A **step** (kind `tool`) is a tool the agent called: the tool, what it asked and what it got,
+    **in words** rather than raw JSON, and whether it worked. Text is clipped to 500 characters and
+    the newest 100 steps are kept. Steps are for the person to watch the agent work: an agent's own
+    view (`get_session`, `await_feedback`) and a built-in agent's model context leave them out.
+  - A **transcript** groups the agent's steps up to its next message into one **turn**, with that
+    message as the reply; trailing steps are the turn in progress (`transcript`).
   - A comment may carry a **target**: an id in the draft plus a label. The label comes from the
     app's `TargetLabeler`, for example "Living room temperature (view 1, section 2, card 2)".
   - Comments left before an agent joins wait. The agent's first read tells it to start with them.
@@ -77,6 +84,7 @@ backend that serves the same sessions directly.
 | `await_request(link, since)` | Wait up to 25 s for the person's requests |
 | `get_session(session)` | Scope, baseline, `revision`, conversation, `cursor`, and `next` (what to do first) |
 | `set_status`, `send_message` | Presence, and a message in the person's panel |
+| `report_step(session, tool, arguments, output, ok)` | A step in the person's chat; a built-in agent reports each of its tool calls |
 | `submit_draft(session, revision, draft, summary?)` | Checked by the kind's gate |
 | `put_asset(session, key, bytes)` | Images a draft needs |
 | `await_feedback(session, since)` | Wait up to 25 s for comments or a decision |
@@ -92,10 +100,11 @@ backend that serves the same sessions directly.
 
 | Module | Platform | Does |
 | --- | --- | --- |
-| `livery-sessions-core` | KMP, transport-free | The model and rules with an injected clock; `DraftGate`, `TargetLabeler`, `SessionStore` (atomic file persistence on the JVM, so a restart ends nothing) |
+| `livery-sessions-core` *(built)* | KMP, transport-free | `SessionRelay` and `SessionLinks` with an injected clock and `Entropy` (`SecureEntropy` on the JVM): codes and the shared failed-code budget, links, presence, the conversation with steps, renders, long-polls, and `snapshot`/`restore` for a restart. Each kind's drafts sit behind a `DraftStore`, which also decides how long a session lives; `transcript` and `TargetLabeler` for the panel. Still to add: `DraftGate` for Livery's own `template` kind, and file persistence on the JVM |
 | `livery-sessions-server` | JVM, Ktor, beside `livery-server` | Both route sets, the MCP endpoint through `livery-mcp-core`, and the `template` gate: `DocumentAdmission`'s checks, then a render with the contract's examples or the person's data |
 | `livery-sessions-client` | KMP, Ktor | The person's side: link, long-poll, comment, decide, share a render; resumes from stored capabilities |
-| `livery-sessions-compose` | Compose Multiplatform, Material 3 | `LiveryAgentPanel` (presence line, conversation naming the agent, composer with a pinned target), a fixed action row (**Use it**/**Create it**, **Adjust**, **Stop**, **Undo**, draft chips) that a long conversation can't scroll away, `SessionReview` with a preview slot the app fills, a session list, and "Connect an agent" |
+| `livery-sessions-compose` | Compose Multiplatform, Material 3 | `LiveryAgentPanel` (presence line, the transcript naming the agent, composer with a pinned target), a fixed action row (**Use it**/**Create it**, **Adjust**, **Stop**, **Undo**, draft chips) that a long conversation can't scroll away, `SessionReview` with a preview slot the app fills, a session list, and "Connect an agent". **Mentions:** `@` in the composer offers the app's `MentionSource`: things on the preview (picking one pins the message to it, as its Comment button does) and the app's objects (inserted with their id, so the agent gets the one picked). **Turns** draw through a `TurnRenderer` slot: the default is the module's own rows (steps folded under "N steps" once the reply comes), on every target |
+| `livery-sessions-agent-render` | Android, JVM, optional | A `TurnRenderer` on [agent-render](https://github.com/0xZhangKe/compose-agent-render) (Markdown replies, expandable tool calls). Separate because agent-render has no Wasm or iOS build and is young; the core module takes no third-party UI dependency. The `@` trigger detection is the module's own (a few lines), for the same reason |
 | `livery-agent` | KMP | A built-in agent: a tool-calling loop over the same tools, on any OpenAI-compatible chat-completions endpoint. Keys stay in the caller's memory, and the turn and step limits are bounded |
 | `livery-uibuilder` (extended) | KMP + JVM | Reach or run UI Builder (config, process, tokens), bounded app-to-browser handoffs (single use, 10 minutes), the `edits` channel publisher, and `livery ui-builder import` plus a reusable workflow that opens a pull request with the edited designs |
 
