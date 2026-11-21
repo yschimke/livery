@@ -250,8 +250,9 @@ result on every template of the design.</p>
 <ul>
 <li>Live sessions over a relay (as Home Assistant's agent sessions work today): <code>await_feedback</code>,
   <code>send_message</code> and <code>set_status</code>, so a person and an agent edit together with the person's real
-  data on screen. The relay itself is built (<code>livery-sessions-core</code>, <a href="https://github.com/yschimke/livery/blob/main/docs/SESSIONS.md">SESSIONS.md</a>);
-  its routes and MCP tools (<code>livery-sessions-server</code>), client and Compose panel are next.</li>
+  data on screen. The relay (<code>livery-sessions-core</code>) and its routes and MCP tools
+  (<code>livery-sessions-server</code>) are built (<a href="https://github.com/yschimke/livery/blob/main/docs/SESSIONS.md">SESSIONS.md</a>);
+  Livery's own <code>template</code> kind, the client and the Compose panel are next.</li>
 <li><code>compile_rc_json</code>: RC authoring JSON to <code>.rc</code>, for agents that write documents directly, in
   <code>livery-mcp</code> itself (<code>kobento_compile</code> does it today, behind <code>--kobento</code>).</li>
 <li>Pictures in <code>check_compatibility</code>: each changed design rendered before and after with every
