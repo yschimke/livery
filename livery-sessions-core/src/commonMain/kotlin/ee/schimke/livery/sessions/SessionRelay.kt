@@ -256,6 +256,8 @@ class SessionRelay(
     val agent = links.attachAgent(link, request.name) ?: return ClaimResult.Gone
     lock.withLock { request.link = agent }
     request.done.value = true
+    // After the grant is recorded: the link's own change came before it.
+    changeCount.update { it + 1 }
     return ClaimResult.Claimed
   }
 
