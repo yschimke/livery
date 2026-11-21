@@ -41,7 +41,7 @@ class SessionLinks(
 
   data class Inbox(val requests: List<Delivery>, val cursor: Long)
 
-  private inner class Link(val owner: String, val agent: String) {
+  private inner class Link(val owner: String, var agent: String) {
     val version = MutableStateFlow(1L)
     var connected = false
     var name = "Agent"
@@ -153,14 +153,18 @@ class SessionLinks(
         link
       }
     val deadline = clock() + maxWaitMs
-    while (lock.withLock { link.inbox.none { it.seq > since } }) {
+    while (true) {
+      // The version before the check: a delivery between the two still ends the wait.
+      val version = link.version.value
+      if (lock.withLock { link.inbox.any { it.seq > since } }) break
       val left = deadline - clock()
       if (left <= 0) break
-      val version = link.version.value
       withTimeoutOrNull(left) { link.version.first { it > version } } ?: break
-      if (lock.withLock { live(byAgent[agent]) } == null) return null
+      if (lock.withLock { live(byAgent[agent]) } !== link) return null
     }
     return lock.withLock {
+      // Replaced by another agent while it waited: what it was waiting for is no longer its own.
+      if (live(byAgent[agent]) !== link) return null
       link.agentSeen = clock()
       link.activeAt = link.agentSeen
       Inbox(link.inbox.filter { it.seq > since }, link.seq)
@@ -228,8 +232,18 @@ class SessionLinks(
 
   // ---- Internals: every one runs under [lock] ----
 
+  /**
+   * Connect [link]'s agent. Replacing one already connected rotates the agent capability, so the
+   * previous agent stops receiving the person's requests at once, a waiting `await_request`
+   * included.
+   */
   private fun attach(link: Link, agentName: String?): String {
     dropCode(link)
+    if (link.connected) {
+      byAgent.remove(link.agent)
+      link.agent = entropy.token()
+      byAgent[link.agent] = link
+    }
     link.connected = true
     link.name = Codes.cleanName(agentName)
     link.agentSeen = clock()

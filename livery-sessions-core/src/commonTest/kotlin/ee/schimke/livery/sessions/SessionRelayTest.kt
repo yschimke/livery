@@ -144,6 +144,50 @@ class SessionRelayTest {
   }
 
   @Test
+  fun claimingSpendsTheCodeThePersonWasShown() = runTest {
+    val relay = relay()
+    val shown = relay.open()
+    val pending = relay.requestAccess("Codex")
+    assertEquals(SessionRelay.ClaimResult.Claimed, relay.claim("owner", pending.code))
+    // Another agent holding the first code doesn't get the same session.
+    assertNull(relay.join(shown, "Someone else"))
+    assertNull(relay.ownerState("owner")!!.joinCode)
+    assertEquals("Codex", relay.ownerState("owner")!!.agent.name)
+  }
+
+  @Test
+  fun aCommentAsTheAgentStartsWaitingIsNotLost() = runTest {
+    val relay = relay()
+    relay.open()
+    relay.join(relay.newJoinCode("owner")!!, null)
+    val cursor = relay.agentView("agent")!!.cursor
+    // The comment lands in the same instant as the wait begins.
+    val waiting = async { relay.awaitFeedback("agent", cursor) }
+    val commenting = async { relay.comment("owner", "Now", null) }
+    commenting.await()
+    assertEquals(listOf("Now"), waiting.await()!!.messages.map { it.text })
+    assertTrue(testScheduler.currentTime < SessionRelay.MAX_WAIT_MS)
+  }
+
+  @Test
+  fun replacingALinkedAgentCutsTheOldOneOff() = runTest {
+    val relay = relay()
+    val created = relay.links.create()
+    val first = relay.connect(created.code, "Claude")!!
+    val stillWaiting = async { relay.links.awaitRequests(first, since = 0) }
+    delay(1_000)
+    val second = relay.connect(relay.links.newCode(created.owner)!!, "Codex")!!
+    assertTrue(first != second, "the replacement gets a capability of its own")
+    // The old agent's wait ends with nothing, and it can't listen again.
+    assertNull(stillWaiting.await())
+    assertNull(relay.links.awaitRequests(first, since = 0))
+    store.revisions["owner"] = 0
+    relay.register("template", "owner", "agent", "Speaker card", link = created.owner)
+    assertEquals(listOf("agent"), relay.links.awaitRequests(second, since = 0)!!.requests.map { it.session })
+    assertEquals("Codex", relay.links.state(created.owner)!!.name)
+  }
+
+  @Test
   fun wrongCodesShareOneBudget() = runTest {
     val relay = relay()
     val code = relay.open()

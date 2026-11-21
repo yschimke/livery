@@ -227,6 +227,8 @@ class SessionRelay(
           return ClaimResult.Unknown
         }
         found.entry = entry
+        // The code the person was shown is spent too: the agent they let in is the only one.
+        dropCode(entry)
         entry.agentName = found.name
         entry.agentSeen = clock()
         entry.agentStatus = "Connected"
@@ -439,16 +441,16 @@ class SessionRelay(
     seen(agent, "Waiting for feedback") ?: return null
     suspend fun pending() =
       lock.withLock { entry.messages.any { it.from == Message.FROM_PERSON && it.seq > since } }
-    if (!pending()) {
-      val deadline = clock() + waitMs.coerceIn(0, maxWaitMs)
-      while (!pending()) {
-        val left = deadline - clock()
-        if (left <= 0) break
-        val seenVersion = entry.version.value
-        withTimeoutOrNull(left) { entry.version.first { it > seenVersion } } ?: break
-        entry = byAgent.value[agent] ?: return null
-        if (!alive(entry)) return forget(entry)
-      }
+    val deadline = clock() + waitMs.coerceIn(0, maxWaitMs)
+    while (true) {
+      // The version before the check: a comment between the two still ends the wait.
+      val seenVersion = entry.version.value
+      if (pending()) break
+      val left = deadline - clock()
+      if (left <= 0) break
+      withTimeoutOrNull(left) { entry.version.first { it > seenVersion } } ?: break
+      entry = byAgent.value[agent] ?: return null
+      if (!alive(entry)) return forget(entry)
     }
     return agentView(agent, since)
   }
