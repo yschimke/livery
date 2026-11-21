@@ -197,6 +197,20 @@ class SessionServerTest {
   }
 
   @Test
+  fun kindsMayNotShareAToolNameWithDifferentArguments() {
+    val different =
+      object : SessionKind by NoteKind("other") {
+        override val tools = listOf(
+          object : SessionTool by NoteKind().tools.single() {
+            override val inputSchema = buildJsonObject { put("type", "object"); putJsonObject("properties") { putJsonObject("loud") { put("type", "boolean") } } }
+          }
+        )
+      }
+    val refused = kotlin.runCatching { SessionServer(listOf(NoteKind(), different)) }.exceptionOrNull()
+    assertTrue(refused is IllegalArgumentException && "shout" in refused.message.orEmpty(), refused.toString())
+  }
+
+  @Test
   fun agentsAreNeverServedToABrowserPage() = testApplication {
     val notes = NoteKind()
     val server = server(notes)
