@@ -48,6 +48,8 @@ include(":livery-capture")
 include(":livery-render")
 include(":livery-mcp-core")
 include(":livery-mcp")
+// Agent sessions (docs/SESSIONS.md): optional, like livery-mcp. The transport-free core first.
+include(":livery-sessions-core")
 include(":livery-uibuilder")
 // Kobento documents (its authoring JSON or compiled .rc) as Livery templates: optional, like livery-uibuilder.
 include(":livery-kobento")
