@@ -50,6 +50,7 @@ val published = mapOf(
   ":livery-amplitude" to ("Livery Amplitude" to "Livery events in Amplitude, with experiment arms as user properties"),
   ":livery-mcp-core" to ("Livery MCP core" to "Livery's agent tools as a transport-free Model Context Protocol server, on any Okio file system: Kotlin Multiplatform"),
   ":livery-sessions-core" to ("Livery sessions core" to "Agent sessions: a person and an AI agent editing one thing together through a rendezvous both connect out to; links, codes, conversation, presence and long-polls, transport-free: Kotlin Multiplatform"),
+  ":livery-sessions-server" to ("Livery sessions server" to "Agent sessions over HTTP on Ktor: the person's long-polled routes, the agent's MCP endpoint and a save file, with each kind of session an app registers"),
   ":livery-kobento" to ("Livery Kobento" to "Kobento documents (AndroidX authoring JSON or .rc) as Livery templates: compiled on the JVM, checked for the target's player, scaffolded from a contract"),
   ":livery-render" to ("Livery render" to "Headless PNG renders of Livery templates on the JVM"),
   ":livery-verify" to ("Livery verify" to "Play Livery templates on the players apps ship them to, under Robolectric, and fail on their errors"),
