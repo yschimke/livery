@@ -36,13 +36,20 @@ interface SessionKind {
   val submitWith: String
     get() = "submit_draft with revision and the complete draft"
 
-  /** Tools of this kind's own beside the shared ones (attaching an image to a draft). */
+  /**
+   * Tools of this kind's own beside the shared ones (attaching an image to a draft). Kinds may share
+   * a tool's name only with the same description and schema: `tools/list` is one list, and each
+   * session's call goes to its own kind's implementation.
+   */
   val tools: List<SessionTool>
     get() = emptyList()
 
   /** Where an agent without MCP reads and posts drafts over plain HTTP, for `join`'s answer. */
   val httpPath: String?
     get() = null
+
+  /** Called once by the [SessionServer] this kind is registered with: where to report [SessionServer.changed]. */
+  fun attached(server: SessionServer) {}
 
   /** The store's sessions to save across a restart, and their restore; null keeps nothing. */
   fun save(): JsonElement? = null

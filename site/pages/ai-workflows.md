@@ -150,7 +150,8 @@ result on every template of the design.
   `send_message` and `set_status`, so a person and an agent edit together with the person's real
   data on screen. The relay (`livery-sessions-core`) and its routes and MCP tools
   (`livery-sessions-server`) are built ([SESSIONS.md](https://github.com/yschimke/livery/blob/main/docs/SESSIONS.md));
-  Livery's own `template` kind, the client and the Compose panel are next.
+  So is Livery's own `template` kind (`livery-sessions-templates`); the client and the Compose
+  panel are next.
 - `compile_rc_json`: RC authoring JSON to `.rc`, for agents that write documents directly, in
   `livery-mcp` itself (`kobento_compile` does it today, behind `--kobento`).
 - Pictures in `check_compatibility`: each changed design rendered before and after with every

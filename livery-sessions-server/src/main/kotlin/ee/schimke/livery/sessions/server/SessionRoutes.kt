@@ -245,12 +245,15 @@ private suspend fun ApplicationCall.claimed(result: SessionRelay.ClaimResult, go
     SessionRelay.ClaimResult.Gone -> respondText(gone, status = HttpStatusCode.Gone)
   }
 
+/** `mcp` and `join` take requests before any capability is checked: their bodies are bounded too. */
+private suspend fun ApplicationCall.body(limit: Int = 16_000): JsonObject? = receiveBoundedJson(limit)
+
 /**
- * The request body as JSON, read to at most [limit] bytes: a longer one is refused before more of
- * it is buffered, whatever sits upstream, since `mcp` and `join` take requests before any
- * capability is checked.
+ * The request body as a JSON object, for a kind's own routes as for these: read to at most [limit]
+ * bytes, so a longer body is refused before more of it is buffered, whatever sits upstream. On a
+ * bad or oversized body it answers 400 itself and returns null.
  */
-private suspend fun ApplicationCall.body(limit: Int = 16_000): JsonObject? =
+suspend fun ApplicationCall.receiveBoundedJson(limit: Int = 16_000): JsonObject? =
   try {
     request.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.let { require(it <= limit) }
     val bytes = receiveChannel().readRemaining(limit + 1L).readByteArray()

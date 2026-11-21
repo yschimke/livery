@@ -19,10 +19,19 @@ class SessionServer(
 
   init {
     require(this.kinds.size == kinds.size) { "Two kinds share an id" }
+    // tools/list is one list: a name two kinds share must mean the same tool to an agent.
+    kinds.flatMap { k -> k.tools.map { k.id to it } }.groupBy { it.second.name }.forEach { (name, owners) ->
+      val shapes = owners.map { (_, t) -> t.description to t.inputSchema }.distinct()
+      require(shapes.size == 1) { "Kinds ${owners.map { it.first }} define tool $name differently: give one its own name" }
+    }
   }
 
   val relay: SessionRelay =
     SessionRelay(this.kinds.mapValues { it.value.store }, entropy, clock, maxWaitMs)
+
+  init {
+    kinds.forEach { it.attached(this) }
+  }
 
   /** A kind's draft for [owner] changed: call from its store, under its own lock if need be. */
   fun changed(owner: String) = relay.changed(owner)
