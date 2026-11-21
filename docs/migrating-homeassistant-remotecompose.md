@@ -1,5 +1,11 @@
 # Moving homeassistant-remotecompose onto Livery
 
+> **Superseded.** The current plan lives in homeassistant-remotecompose,
+> [`docs/architecture/livery-migration.md`](https://github.com/yschimke/homeassistant-remotecompose/blob/main/docs/architecture/livery-migration.md),
+> with the Livery changes it needs. The first of them is proposed in
+> [REFERENCE_LISTS.md](REFERENCE_LISTS.md): host vocabularies, reference lists and discovery. This
+> page is kept for its history.
+
 The card design server in [homeassistant-remotecompose](https://github.com/yschimke/homeassistant-remotecompose)
 (ha-rc) is the first and largest Livery user. This is the plan for replacing its generic parts
 with Livery so that ha-rc keeps only what is about Home Assistant: converters, slot bindings,
