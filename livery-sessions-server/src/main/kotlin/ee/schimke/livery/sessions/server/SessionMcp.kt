@@ -189,7 +189,9 @@ class SessionMcp(private val server: SessionServer) {
               (args["revision"] as? JsonPrimitive)?.longOrNull
                 ?: return failed("Pass the revision you read with get_session.")
             val summary = arg("summary").orEmpty().trim().take(SessionRelay.MAX_TEXT)
-            when (val outcome = kind.submit(session, revision, JsonObject(args - "session" - "revision" - "summary"))) {
+            // The summary is the conversation's (a `summary` message) and the kind's too: a store
+            // may keep it with the draft.
+            when (val outcome = kind.submit(session, revision, JsonObject(args - "session" - "revision"))) {
               DraftResult.Gone -> return failed(GONE)
               is DraftResult.Refused -> return failed(outcome.reason)
               is DraftResult.Accepted -> {

@@ -27,7 +27,8 @@ interface SessionKind {
 
   /**
    * Check a draft the agent submitted at [revision] (the tool's arguments: everything but
-   * `session`, `revision` and `summary`) and keep it when it passes. A refusal says why, in words
+   * `session` and `revision`; a one-line `summary` among them, which the server also posts to the
+   * conversation when the draft is accepted) and keep it when it passes. A refusal says why, in words
    * the agent can act on.
    */
   fun submit(agent: String, revision: Long, draft: JsonObject): DraftResult

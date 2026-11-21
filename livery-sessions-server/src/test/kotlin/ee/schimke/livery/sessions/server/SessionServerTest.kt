@@ -42,6 +42,8 @@ private class NoteKind(override val id: String = "note") : SessionKind {
   private val notes = HashMap<String, Note>()
   private val tokens = AtomicInteger()
   var server: SessionServer? = null
+  /** The summary the last accepted draft came with: a store may keep it. */
+  var lastSummary: String? = null
 
   fun create(text: String): Note =
     Note("$id-owner-${tokens.incrementAndGet()}", "$id-agent-${tokens.incrementAndGet()}", text, 0).also { notes[it.owner] = it }
@@ -71,6 +73,7 @@ private class NoteKind(override val id: String = "note") : SessionKind {
     val text = (draft["text"] as? JsonPrimitive)?.content.orEmpty()
     if (text.isBlank()) return DraftResult.Refused("A note needs text")
     notes[note.owner] = note.copy(text = text, revision = revision + 1)
+    lastSummary = (draft["summary"] as? JsonPrimitive)?.content
     server?.changed(note.owner)
     return DraftResult.Accepted(buildJsonObject { put("revision", revision + 1) })
   }
@@ -150,6 +153,7 @@ class SessionServerTest {
       client.mcp("submit_draft", buildJsonObject { put("session", session); put("revision", 0); put("text", "Buy oat milk"); put("summary", "Oat milk") })
     assertFalse(good.failed())
     assertEquals(1, good.data().getValue("revision").jsonPrimitive.long)
+    assertEquals("Oat milk", notes.lastSummary, "the kind gets the summary as well as the conversation")
     client.mcp("report_step", buildJsonObject { put("session", session); put("tool", "find_shop"); put("output", "2 nearby") })
 
     // The person sees the new revision, the summary and the step.
