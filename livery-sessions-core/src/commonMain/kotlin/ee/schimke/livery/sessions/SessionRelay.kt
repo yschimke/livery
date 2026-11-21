@@ -493,9 +493,27 @@ class SessionRelay(
     val link: String? = null,
   )
 
-  /** Everything to save: sessions and links. Save again whenever [changes] moves. */
+  /**
+   * An agent's `request_access`, saved until it expires: still waiting for the person, or granted
+   * (into the session [owner] names, or a link as [link]) and not yet collected by `poll_access`.
+   */
   @Serializable
-  data class Snapshot(val sessions: List<Saved> = emptyList(), val links: List<SessionLinks.Saved> = emptyList())
+  data class SavedRequest(
+    val code: String,
+    val poll: String,
+    val name: String,
+    val expires: Long,
+    val owner: String? = null,
+    val link: String? = null,
+  )
+
+  /** Everything to save: sessions, links and access requests. Save again whenever [changes] moves. */
+  @Serializable
+  data class Snapshot(
+    val sessions: List<Saved> = emptyList(),
+    val links: List<SessionLinks.Saved> = emptyList(),
+    val requests: List<SavedRequest> = emptyList(),
+  )
 
   suspend fun snapshot(): Snapshot {
     val sessions =
@@ -518,7 +536,12 @@ class SessionRelay(
           )
         }
       }
-    return Snapshot(sessions, links.snapshot())
+    val pending =
+      lock.withLock {
+        expireRequests()
+        pollers.values.map { SavedRequest(it.code, it.poll, it.name, it.expires, it.entry?.owner, it.link) }
+      }
+    return Snapshot(sessions, links.snapshot(), pending)
   }
 
   /** Restore after the stores have restored theirs: only sessions they still hold come back. */
@@ -545,6 +568,18 @@ class SessionRelay(
           }
       }
       index(entry)
+    }
+    lock.withLock {
+      for (r in saved.requests) {
+        if (r.expires <= clock()) continue
+        val request = Request(r.code, r.poll, r.name, r.expires)
+        val claimed = r.owner?.let { byOwner.value[it] ?: continue }
+        request.entry = claimed
+        request.link = r.link
+        if (claimed != null || r.link != null) request.done.value = true
+        else if (r.code !in codes) requests[r.code] = request
+        pollers[r.poll] = request
+      }
     }
   }
 

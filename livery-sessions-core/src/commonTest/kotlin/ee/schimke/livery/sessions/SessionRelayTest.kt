@@ -275,6 +275,35 @@ class SessionRelayTest {
   }
 
   @Test
+  fun aGrantTheAgentHasNotCollectedSurvivesARestart() = runTest {
+    val relay = relay()
+    relay.open()
+    val granted = relay.requestAccess("Codex")
+    val waiting = relay.requestAccess("Gemini")
+    assertEquals(SessionRelay.ClaimResult.Claimed, relay.claim("owner", granted.code))
+    val restarted = relay()
+    restarted.restore(relay.snapshot())
+    assertEquals("agent", restarted.pollAccess(granted.poll)!!.joined!!.session)
+    // The request still waiting can still be let in.
+    assertEquals(SessionRelay.ClaimResult.Claimed, restarted.claim("owner", waiting.code))
+    assertNotNull(restarted.pollAccess(waiting.poll)!!.joined)
+  }
+
+  @Test
+  fun aLinkThePersonKeepsUsingIsSavedAgain() = runTest {
+    var saves = 0
+    val links = SessionLinks(CountingEntropy(), clock = { EPOCH + testScheduler.currentTime }) { saves++ }
+    val created = links.create()
+    val before = saves
+    links.state(created.owner)
+    assertEquals(before, saves, "a glance needs no save")
+    delay(SessionLinks.SAVE_ACTIVITY_MS)
+    links.state(created.owner)
+    assertEquals(before + 1, saves)
+    assertEquals(EPOCH + testScheduler.currentTime, links.snapshot().single().activeAt)
+  }
+
+  @Test
   fun restoringSkipsWhatTheStoresNoLongerHold() = runTest {
     val relay = relay()
     relay.open()

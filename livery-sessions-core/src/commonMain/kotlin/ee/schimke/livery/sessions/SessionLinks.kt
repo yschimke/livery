@@ -47,6 +47,8 @@ class SessionLinks(
     var name = "Agent"
     var agentSeen = 0L
     var activeAt = clock()
+    /** [activeAt] as last saved: owner-only use extends a link without waking anyone. */
+    var savedActiveAt = activeAt
     var code: String? = null
     var codeExpires = 0L
     var seq = 0L
@@ -54,8 +56,18 @@ class SessionLinks(
 
     fun bump() {
       activeAt = clock()
+      savedActiveAt = activeAt
       version.update { it + 1 }
       changed()
+    }
+
+    /** Used now, by the person only: saved again within [SAVE_ACTIVITY_MS], with no wakeup. */
+    fun used() {
+      activeAt = clock()
+      if (activeAt - savedActiveAt >= SAVE_ACTIVITY_MS) {
+        savedActiveAt = activeAt
+        changed()
+      }
     }
   }
 
@@ -102,7 +114,7 @@ class SessionLinks(
     return lock.withLock {
       if (live(byOwner[owner]) == null) return null
       val now = clock()
-      link.activeAt = now
+      link.used()
       if (link.codeExpires <= now) dropCode(link)
       State(
         version = link.version.value,
@@ -290,5 +302,7 @@ class SessionLinks(
     const val IDLE_MS: Long = 30L * 24 * 60 * 60_000
     const val MAX_LINKS: Int = 4096
     const val MAX_INBOX: Int = 50
+    /** How stale a saved link's last use may be: far inside [IDLE_MS], and cheap to keep. */
+    const val SAVE_ACTIVITY_MS: Long = 60 * 60_000L
   }
 }
