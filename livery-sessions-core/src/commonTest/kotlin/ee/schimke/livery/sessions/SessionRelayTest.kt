@@ -290,6 +290,20 @@ class SessionRelayTest {
   }
 
   @Test
+  fun anAccessRequestIsSavedWhenMadeAndWhenCollected() = runTest {
+    val relay = relay()
+    relay.open()
+    var changes = relay.changes.value
+    val pending = relay.requestAccess("Codex")
+    assertTrue(relay.changes.value > changes, "a new request is saved")
+    relay.claim("owner", pending.code)
+    changes = relay.changes.value
+    relay.pollAccess(pending.poll)
+    assertTrue(relay.changes.value > changes, "a collected grant is saved as gone")
+    assertTrue(relay.snapshot().requests.isEmpty())
+  }
+
+  @Test
   fun aLinkThePersonKeepsUsingIsSavedAgain() = runTest {
     var saves = 0
     val links = SessionLinks(CountingEntropy(), clock = { EPOCH + testScheduler.currentTime }) { saves++ }

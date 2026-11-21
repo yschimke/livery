@@ -352,6 +352,7 @@ class SessionRelay(
       pollers[request.poll] = request
       Pending(Codes.format(code), request.poll, REQUEST_MS / 1000)
     }
+      .also { changeCount.update { it + 1 } }
 
   /** Waits for the person to enter the code; null once the request is unknown or expired. */
   suspend fun pollAccess(poll: String, waitMs: Long = maxWaitMs): PollResult? {
@@ -373,6 +374,8 @@ class SessionRelay(
         if (link != null || claimed != null) pollers.remove(poll)
         link to claimed
       }
+    // Collected: a saved copy of the grant must not come back after a restart.
+    if (link != null || claimed != null) changeCount.update { it + 1 }
     if (link != null) return PollResult(null, link)
     val entry = claimed ?: return PollResult(null)
     if (!alive(entry)) return null
