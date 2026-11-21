@@ -7,7 +7,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.request.receiveText
+import io.ktor.server.request.receiveChannel
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
@@ -243,11 +245,17 @@ private suspend fun ApplicationCall.claimed(result: SessionRelay.ClaimResult, go
     SessionRelay.ClaimResult.Gone -> respondText(gone, status = HttpStatusCode.Gone)
   }
 
+/**
+ * The request body as JSON, read to at most [limit] bytes: a longer one is refused before more of
+ * it is buffered, whatever sits upstream, since `mcp` and `join` take requests before any
+ * capability is checked.
+ */
 private suspend fun ApplicationCall.body(limit: Int = 16_000): JsonObject? =
   try {
-    val text = receiveText()
-    require(text.length <= limit)
-    Json.parseToJsonElement(text).jsonObject
+    request.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.let { require(it <= limit) }
+    val bytes = receiveChannel().readRemaining(limit + 1L).readByteArray()
+    require(bytes.size <= limit)
+    Json.parseToJsonElement(bytes.decodeToString()).jsonObject
   } catch (e: Exception) {
     if (e is CancellationException) throw e
     respondText("Invalid request", status = HttpStatusCode.BadRequest)

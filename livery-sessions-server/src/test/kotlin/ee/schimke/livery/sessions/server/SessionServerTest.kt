@@ -233,6 +233,23 @@ class SessionServerTest {
   }
 
   @Test
+  fun anOversizedBodyIsRefused() = testApplication {
+    val server = server(NoteKind())
+    application { routing { sessionRoutes(server) } }
+    val big = "{\"code\":\"" + "A".repeat(20_000) + "\"}"
+    assertEquals(HttpStatusCode.BadRequest, client.post("/api/agent/join") { setBody(big) }.status)
+  }
+
+  @Test
+  fun theSaveFileIsTheServersAlone(): Unit = runBlocking {
+    val file = Files.createTempDirectory("sessions").resolve("sessions.json").toFile()
+    val server = server(NoteKind())
+    SessionFile(file, server).save()
+    if ("posix" in file.toPath().fileSystem.supportedFileAttributeViews())
+      assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath())))
+  }
+
+  @Test
   fun anUnreadableFileStartsEmpty(): Unit = runBlocking {
     val file = Files.createTempDirectory("sessions").resolve("sessions.json").toFile().apply { writeText("{not json") }
     val server = server(NoteKind())

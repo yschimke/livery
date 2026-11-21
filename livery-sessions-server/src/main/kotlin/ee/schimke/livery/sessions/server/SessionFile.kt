@@ -57,10 +57,15 @@ class SessionFile(private val file: File, private val server: SessionServer) {
           kinds = server.kinds.mapNotNull { (id, kind) -> kind.save()?.let { id to it } }.toMap(),
         )
       file.parentFile?.mkdirs()
-      val temp = File(file.parentFile, file.name + ".tmp")
-      temp.writeText(json.encodeToString(Contents.serializer(), contents))
-      runCatching { Files.setPosixFilePermissions(temp.toPath(), PosixFilePermissions.fromString("rw-------")) }
-      Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+      val temp = File(file.parentFile, file.name + ".tmp").toPath()
+      // Owner-only from the moment it exists: it holds capabilities and unused codes. A stale
+      // temp file from a crash is replaced, never written through.
+      Files.deleteIfExists(temp)
+      if ("posix" in temp.fileSystem.supportedFileAttributeViews())
+        Files.createFile(temp, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+      else Files.createFile(temp)
+      Files.write(temp, json.encodeToString(Contents.serializer(), contents).toByteArray())
+      Files.move(temp, file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 
   /**
