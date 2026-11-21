@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.22.0](https://github.com/yschimke/livery/compare/v0.21.0...v0.22.0) (2026-11-21)
+
+
+### Features
+
+* **sessions:** a kind's submit gets the draft's summary too ([#136](https://github.com/yschimke/livery/issues/136)) ([9981629](https://github.com/yschimke/livery/commit/9981629d39d1696224744f4bcb7165b151c078f8))
+* **sessions:** livery-sessions-server, agent sessions over HTTP with app-registered kinds ([#133](https://github.com/yschimke/livery/issues/133)) ([8ffbbde](https://github.com/yschimke/livery/commit/8ffbbde253a3dd516eae062516d6b9102784e583))
+* **sessions:** the template kind, agents drafting Livery templates held to the unsigned-document gate ([#135](https://github.com/yschimke/livery/issues/135)) ([5eb21d7](https://github.com/yschimke/livery/commit/5eb21d71df8f25fa89db6f921e8005ae30f72fd3))
+
 ## [0.21.0](https://github.com/yschimke/livery/compare/v0.20.0...v0.21.0) (2026-11-21)
 
 
