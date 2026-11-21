@@ -24,7 +24,8 @@ order: 24
 | `livery-render` | JVM (Linux, macOS, Windows) | Available |
 | `livery-mcp-core` (the agent tools, transport-free) | JVM, iOS, Wasm | Available from the release after 0.4.0 |
 | `livery-mcp` (`livery-mcp` CLI) | JVM | Available; live sessions planned |
-| `livery-sessions-core` (agent sessions, transport-free: relay, links, conversation, steps) | JVM, iOS, Wasm | Available from the next release; its server routes, client and Compose panel *Planned* |
+| `livery-sessions-core` (agent sessions, transport-free: relay, links, conversation, steps) | JVM, iOS, Wasm | Available from 0.21.0 |
+| `livery-sessions-server` (agent sessions over HTTP: routes, MCP tools, `SessionKind`, save file) | JVM (Ktor) | Available from the next release; Livery's `template` kind, the client and the Compose panel *Planned* |
 | `livery-datadog`, `livery-sentry`, `livery-amplitude` | Android | Available since 0.2.0; not yet tested against live projects |
 | `livery-capture-cmp` (authoring on rc-players' Compose Multiplatform creation API) | JVM, Android; compiled for Wasm, not yet tested in a browser | Available from the release after 0.9.0 |
 | `livery-capture` (authoring on AndroidX `remote-creation-compose`) | Android (unit tests, Robolectric) | Available since 0.2.0 |
