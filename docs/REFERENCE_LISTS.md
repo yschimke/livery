@@ -111,8 +111,15 @@ Contracts are reused so that binding, evolution (`since`, minors) and conformanc
   - It would bind a reference list's items as values, which `ContractBinder` refuses (unknown field
     `id`) unless the app sends values.
   - It would also play a template whose vocabulary reads it never fills.
-  - So such an entry carries `requiresLevel: 9`, and a client below that treats it as ineligible.
-    This mirrors `requiresMinor`, and `minClient` in strict mode.
+  - A field an old client doesn't know can't protect it: level-8 `TemplateSelector.eligible`
+    checks neither `requiresLevel` nor vocabularies. The only gate shipped clients honour is the
+    manifest's `minClient` (`TemplateRepository.refresh` refuses a manifest above its level).
+  - So a catalog with any entry that uses these semantics **must set `minClient >= 9`**, and
+    `livery build` raises it automatically. Old clients then keep the last manifest they accepted.
+  - An app that must keep serving old clients publishes those entries on a separate channel or
+    catalog, alongside a level-8 one.
+  - `requiresLevel` is still added per entry, for later levels: from level 9, a client checks it
+    in eligibility, so a level-10 feature can be excluded per entry instead of per catalog.
 - **Existing names.** An app migrating from its own naming can give a reference list a
   `names` mapping for its old flattened names (`"{type}.s{i}.{field}"`), used only to read
   templates captured before the change. New captures use the default names.
