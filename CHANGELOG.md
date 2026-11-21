@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.0](https://github.com/yschimke/livery/compare/v0.20.0...v0.21.0) (2026-11-21)
+
+
+### Features
+
+* **kobento:** import Kobento documents as templates, checked for the target's player ([#128](https://github.com/yschimke/livery/issues/128)) ([e000e3f](https://github.com/yschimke/livery/commit/e000e3f7c7bfa3596982e07e340bd30a7c1bced7))
+* **kobento:** publish livery-kobento as a library ([#130](https://github.com/yschimke/livery/issues/130)) ([9f02279](https://github.com/yschimke/livery/commit/9f02279c2e7aa69f45ad2107dec1436b7cfe64ec))
+
 ## [0.20.0](https://github.com/yschimke/livery/compare/v0.19.0...v0.20.0) (2026-11-16)
 
 
