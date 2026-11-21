@@ -150,6 +150,7 @@ class TemplateKindTest {
     // The person plays exactly what the agent sent.
     val played = client.get("/api/agent/templates/draft") { bearerAuth(owner) }
     assertEquals("1", played.headers["X-Livery-Revision"])
+    assertEquals("X-Livery-Revision, X-Livery-Sha256", played.headers["Access-Control-Expose-Headers"], "readable by a page on another origin")
     assertContentEquals(tile.toByteArray(), played.bodyAsBytes())
     val state = json.parseToJsonElement(client.get("/api/agent/session") { bearerAuth(owner) }.bodyAsText()).jsonObject
     assertEquals(1, state.getValue("revision").jsonPrimitive.long)

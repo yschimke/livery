@@ -91,6 +91,8 @@ fun Route.templateSessionRoutes(
     call.ownerHeaders()
     val draft = kind.draft(call.bearerToken()) ?: return@get call.respondText("Session unavailable", status = HttpStatusCode.NotFound)
     val bytes = draft.bytes ?: return@get call.respondText("", status = HttpStatusCode.NoContent)
+    // On the response itself: a browser reads only the headers the actual response exposes.
+    call.response.header(HttpHeaders.AccessControlExposeHeaders, "$REVISION, $SHA256")
     call.response.header(REVISION, draft.revision.toString())
     call.response.header(SHA256, draft.sha256.orEmpty())
     call.respondBytes(bytes.toByteArray(), ContentType.Application.OctetStream)
