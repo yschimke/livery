@@ -29,7 +29,7 @@
     "test:host": "node test/host.mjs"
   },
   "dependencies": {
-    "@js-joda/core": "3.2.0"
+    "@js-joda/core": "6.3.2"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
