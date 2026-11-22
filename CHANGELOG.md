@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.23.0](https://github.com/yschimke/livery/compare/v0.22.0...v0.23.0) (2026-11-22)
+
+
+### Features
+
+* **selection:** design audiences, chosen by the facts of what a slot draws ([#165](https://github.com/yschimke/livery/issues/165)) ([e67c495](https://github.com/yschimke/livery/commit/e67c495591eb607eb4e60adc4d451726e12c4968))
+
+
+### Bug Fixes
+
+* **deps:** pin dependencies ([#140](https://github.com/yschimke/livery/issues/140)) ([17b432a](https://github.com/yschimke/livery/commit/17b432aea9eb5983d6cf23a9b117adb924cfbac7))
+* **deps:** update agp to v9.5.2 ([#141](https://github.com/yschimke/livery/issues/141)) ([001a531](https://github.com/yschimke/livery/commit/001a5318f613e77984b56678a17da09f509d7af2))
+* **deps:** update androidx ([#149](https://github.com/yschimke/livery/issues/149)) ([9619e3a](https://github.com/yschimke/livery/commit/9619e3a4bb5588223acddbaea5124339a166ff9c))
+* **deps:** update androidx-compose ([#142](https://github.com/yschimke/livery/issues/142)) ([96455fb](https://github.com/yschimke/livery/commit/96455fbf8351858f26cecdb2fe812319415bf40f))
+* **deps:** update dependency @js-joda/core to v6 ([#160](https://github.com/yschimke/livery/issues/160)) ([10b5809](https://github.com/yschimke/livery/commit/10b58095794187148fac76a2f5c52d94d6c0740e))
+* **deps:** update dependency com.amplitude:analytics-android to v1.37.1 ([#150](https://github.com/yschimke/livery/issues/150)) ([4872995](https://github.com/yschimke/livery/commit/487299593d2fe50f135b21305013b76f9059e51f))
+* **deps:** update dependency com.datadoghq:dd-sdk-android-rum to v3.16.0 ([#151](https://github.com/yschimke/livery/issues/151)) ([279a465](https://github.com/yschimke/livery/commit/279a4658d8fc0547627137de6a243e035e2e3d30))
+* **deps:** update dependency com.google.firebase:firebase-bom to v35.2.0 ([#152](https://github.com/yschimke/livery/issues/152)) ([0bee1f0](https://github.com/yschimke/livery/commit/0bee1f05de97a3b59d95d1344ca75efe21d1a6c6))
+* **deps:** update dependency ee.schimke.composeai:remotecompose-json to v2.103.0 ([#153](https://github.com/yschimke/livery/issues/153)) ([9db6af0](https://github.com/yschimke/livery/commit/9db6af0fd8292670f7cd3c105624dae1a2ef27a4))
+* **deps:** update dependency org.jetbrains.kotlinx:kotlinx-serialization-json to v1.13.0 ([#154](https://github.com/yschimke/livery/issues/154)) ([c2f18a7](https://github.com/yschimke/livery/commit/c2f18a78e0ad45bfff493315a9d8a998b3c98fbc))
+* **deps:** update sentry to v8.65.0 ([#155](https://github.com/yschimke/livery/issues/155)) ([1ee3426](https://github.com/yschimke/livery/commit/1ee342658a880d1db71fc626de618998849e4875))
+
 ## [0.22.0](https://github.com/yschimke/livery/compare/v0.21.0...v0.22.0) (2026-11-21)
 
 
