@@ -59,7 +59,7 @@ values and emit the actions its contract declares, and each records where the do
 <tr>
 <th></th>
 <th>Compose code (<code>livery-capture-cmp</code>, <code>livery-capture</code>)</th>
-<th>Compose UI Builder (<code>livery-uibuilder</code>)</th>
+<th>Compose UI Builder (<code>livery-uibuilder</code>, <code>livery-uibuilder-capture</code>)</th>
 </tr>
 </thead>
 <tbody>
@@ -76,17 +76,17 @@ values and emit the actions its contract declares, and each records where the do
 <tr>
 <td>A wrong name or type</td>
 <td>fails the capture</td>
-<td>refused by <code>livery ui-builder import</code></td>
+<td>refused by <code>livery ui-builder import</code>, or fails the capture</td>
 </tr>
 <tr>
 <td>Into the catalog</td>
 <td><code>DesignFolder.write</code> from a unit test, at build time</td>
-<td><code>livery ui-builder import</code></td>
+<td><code>livery ui-builder import</code>, or the <code>.uid</code> in the tree captured at build time</td>
 </tr>
 <tr>
 <td>Kept current by</td>
 <td>the build: the <code>.rc</code> is build output, never committed</td>
-<td>importing a newer UI Builder revision</td>
+<td>importing a newer UI Builder revision, or editing the committed <code>.uid</code></td>
 </tr>
 <tr>
 <td><code>source</code> in the sidecar</td>
@@ -390,6 +390,48 @@ if the catalog no longer builds. To move a template to a newer revision, import 
 commit the change.</p>
 <p><strong>With an agent</strong>: <code>livery-mcp --ui-builder https://&lt;ui builder host&gt;</code> offers the same two steps
 as tools, <code>ui_builder_scaffold</code> and <code>ui_builder_export</code> (see <a href="ai-workflows.html">AI workflows</a>).</p>
+<h3 id="capturing-uid-documents-at-build-time">Capturing <code>.uid</code> documents at build time<a class="headerlink" href="#capturing-uid-documents-at-build-time" title="Permanent link">#</a></h3>
+<p>A UI Builder document can also live in the catalog source tree and be captured on the JVM by the
+Gradle plugin, with no UI Builder server: the <code>.uid</code> is committed and the <code>.rc</code> is build output, as
+with Compose code. Put each template's document beside its design's <code>design.json</code>:</p>
+<pre><code>catalog/designs/kitchen-tile/design.json           { &quot;id&quot;: &quot;kitchen-tile&quot;, &quot;contract&quot;: &quot;live/status-tile@1&quot;, … }
+catalog/designs/kitchen-tile/in-app.uid            the document, as UI Builder saves it
+catalog/designs/kitchen-tile/launcher.uid
+catalog/designs/kitchen-tile/launcher.target.json  its target; an in-app AndroidX one (level 7) without
+</code></pre>
+<pre><code class="language-kotlin">livery {
+  source.set(layout.projectDirectory.dir(&quot;catalog&quot;))
+  capture { uiBuilder() }
+}
+</code></pre>
+<p><code>captureLiveryCatalog</code> runs <code>livery-uibuilder-capture</code> (resolved at the plugin's version) over the
+tree: each document is drawn at its own <code>environment</code> size by a generic interpreter, and each
+property bound to a <code>"persistence": "host"</code> state variable reads the contract's value of that
+name through <code>LiveryValues</code>, so a name or type the contract doesn't declare fails the capture. A
+design's own (<code>local</code>) state draws its initial value. The sidecar's <code>source</code> is
+<code>{tool: ui-builder, design, revision}</code>.</p>
+<p>The interpreter draws the UI Builder frame's layouts itself (<code>layout/column</code>, <code>layout/row</code>,
+<code>layout/box</code> and the collapsible column and row; modifiers <code>fillMaxWidth</code>, <code>fillMaxHeight</code>,
+<code>fillMaxSize</code>, <code>width</code>, <code>height</code>, <code>size</code>, <code>padding</code>), each property as a literal: one bound to a
+host input fails the capture, since an arrangement or alignment can't follow a value. Your catalog's components are yours to draw:
+implement <code>UiBuilderCatalog</code> with a <code>@Composable</code> per <code>componentId</code>, on rc-players' creation API,
+and list it in <code>META-INF/services/ee.schimke.livery.uibuilder.capture.UiBuilderCatalog</code> on the
+capture's classpath (the project's runtime classpath, by default):</p>
+<pre><code class="language-kotlin">class KitchenCatalog : UiBuilderCatalog {
+  override val systemIds = setOf(&quot;kitchen-cards&quot;)          // the documents' catalogPin.systemId
+  override val components: Map&lt;String, UiComponent&gt; = mapOf(
+    &quot;kitchen-cards/label&quot; to { node, modifier -&gt; RemoteText(node.remoteString(&quot;text&quot;), modifier) },
+  )
+}
+</code></pre>
+<p><code>UiBuilderCatalog.fonts</code> lists the font families its components name, so each template's sidecar
+carries them and their files in <code>fonts/fonts.json</code> download with it. <code>UiBuilderCatalog.prepare</code>
+may rewrite a document first, for example from the sample data it was
+designed with to the names its contract declares. A component the catalog doesn't draw, a
+modifier the interpreter doesn't apply, or a state binding to an undeclared variable fails the
+capture with the node's id. To mix <code>.uid</code> templates with Compose code in one catalog, call
+<code>UiBuilderCapture.captureTree(source, out)</code> from your own entry point. Actions are not drawn from a
+document yet: a template that emits one is written in Compose for now.</p>
 <h2 id="in-kobento">In Kobento<a class="headerlink" href="#in-kobento" title="Permanent link">#</a></h2>
 <p><a href="https://mcp.kobento.dev/">Kobento</a> is an independent Remote Compose implementation with its own
 players (C++, TypeScript, iOS, microcontrollers) and an MCP server that builds documents. Its plain

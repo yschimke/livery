@@ -178,7 +178,8 @@ livery {
 </code></pre>
 <p>When the designs are Kotlin, <code>livery { capture { mainClass.set(…) } }</code> captures them at build time
 and the catalog built into the assets is that capture, so no <code>.rc</code> is committed (see
-<a href="authoring.html">Authoring</a>).</p>
+<a href="authoring.html">Authoring</a>). Compose UI Builder documents committed in the tree are captured the
+same way with <code>capture { uiBuilder() }</code>.</p>
 <p>One module can hold several catalogs, each built and bundled on its own (one per brand or
 region). Name them, and keep a tree per catalog under <code>source</code>:</p>
 <pre><code class="language-kotlin">livery {
