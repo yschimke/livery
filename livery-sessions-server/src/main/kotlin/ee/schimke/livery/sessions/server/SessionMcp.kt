@@ -270,7 +270,8 @@ class SessionMcp(private val server: SessionServer) {
               kind.tools.firstOrNull { it.name == name }
                 ?: return failed("$name is for ${owners.joinToString(" and ") { it.id }} sessions only.")
             when (val outcome = sessionTool.call(session, JsonObject(args - "session"))) {
-              is SessionToolResult.Done -> tool(outcome.data)
+              is SessionToolResult.Done ->
+                if (outcome.images.isEmpty()) tool(outcome.data) else result(imageResult(outcome))
               is SessionToolResult.Failed -> failed(outcome.reason)
             }
           }
@@ -355,6 +356,36 @@ class SessionMcp(private val server: SessionServer) {
       put("kind", kind)
       put("title", title)
       put("next", "Pass session to every other tool. $next")
+    }
+
+    /** A kind tool's images as MCP image content, each with its caption, then its data. */
+    private fun imageResult(done: SessionToolResult.Done) = buildJsonObject {
+      putJsonArray("content") {
+        done.images.forEach { image ->
+          add(
+            buildJsonObject {
+              put("type", "image")
+              put("data", Base64.getEncoder().encodeToString(image.bytes))
+              put("mimeType", image.mimeType)
+            }
+          )
+          image.caption?.let { caption ->
+            add(
+              buildJsonObject {
+                put("type", "text")
+                put("text", caption)
+              }
+            )
+          }
+        }
+        add(
+          buildJsonObject {
+            put("type", "text")
+            put("text", done.data.toString())
+          }
+        )
+      }
+      put("structuredContent", done.data)
     }
 
     private fun toolResult(data: JsonObject, isError: Boolean) = buildJsonObject {

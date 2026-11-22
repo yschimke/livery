@@ -80,7 +80,27 @@ interface SessionTool {
 }
 
 sealed interface SessionToolResult {
-  data class Done(val data: JsonObject) : SessionToolResult
+  /**
+   * The tool's [data], and [images] for the agent to look at (a draft drawn with sample values):
+   * MCP image content, each followed by its caption, before [data] as text and structured content.
+   */
+  data class Done(val data: JsonObject, val images: List<SessionImage>) : SessionToolResult {
+    constructor(data: JsonObject) : this(data, emptyList())
+  }
 
   data class Failed(val reason: String) : SessionToolResult
+}
+
+/** An image a [SessionTool] returns: PNG, JPEG or WebP [bytes], and what it shows in a few words. */
+class SessionImage(val bytes: ByteArray, val mimeType: String = "image/png", val caption: String? = null) {
+  init {
+    require(mimeType in MIME_TYPES) { "An image is PNG, JPEG or WebP" }
+    require(bytes.size in 1..MAX_BYTES) { "An image is at most $MAX_BYTES bytes" }
+  }
+
+  companion object {
+    /** As large as a render the person's app uploads (`SessionRelay.MAX_RENDER_BYTES`). */
+    const val MAX_BYTES: Int = ee.schimke.livery.sessions.SessionRelay.MAX_RENDER_BYTES
+    val MIME_TYPES = setOf("image/png", "image/jpeg", "image/webp")
+  }
 }
