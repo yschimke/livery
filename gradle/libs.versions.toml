@@ -23,7 +23,7 @@ maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
 glance-wear = "1.0.0-alpha23"
 firebase-bom = "35.2.0"
-sentry = "8.62.0"
+sentry = "8.65.0"
 datadog = "3.16.0"
 amplitude = "1.36.0"
 compose-remote = "1.0.0-alpha24"
