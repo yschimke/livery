@@ -29,11 +29,11 @@
     "test:host": "node test/host.mjs"
   },
   "dependencies": {
-    "@js-joda/core": "3.2.0"
+    "@js-joda/core": "6.3.2"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "playwright": "1.63.0",
-    "typescript": "5.9.3"
+    "playwright": "1.65.1",
+    "typescript": "6.0.3"
   }
 }
