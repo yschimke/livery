@@ -118,7 +118,9 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.classpath = ext.capture.classpath
       t.mainClass.set(mainClass)
       t.captureJvmArgs.set(ext.capture.jvmArgs)
-      t.handWritten.set(ext.source.map { if (it.asFile.isDirectory) it else null })
+      // As it is, not filtered on whether it exists yet: a tree another task generates keeps that
+      // task as a dependency, and is read when the capture runs.
+      t.handWritten.set(ext.source)
       t.outputDir.set(ext.capture.outputDir)
       t.onlyIf("livery.capture.mainClass is set") { mainClass.isPresent }
     }

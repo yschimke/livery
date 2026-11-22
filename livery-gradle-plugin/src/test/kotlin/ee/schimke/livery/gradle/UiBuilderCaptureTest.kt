@@ -48,6 +48,26 @@ class UiBuilderCaptureTest {
     )
   }
 
+  /** A source tree another task writes: the capture depends on that task and reads the tree it wrote. */
+  @Test fun capturesATreeAnotherTaskGenerates() {
+    val dir = project()
+    File(dir, "catalog").renameTo(File(dir, "template"))
+    File(dir, "build.gradle.kts").writeText(
+      File(dir, "build.gradle.kts").readText().replace(
+        "source.set(layout.projectDirectory.dir(\"catalog\"))",
+        "source.set(layout.dir(generate.map { it.destinationDir }))",
+      ).replace(
+        "livery {",
+        "val generate = tasks.register<Sync>(\"generateSource\") { from(\"template\"); into(layout.buildDirectory.dir(\"gen\")) }\nlivery {",
+      )
+    )
+    val result = GradleRunner.create().withProjectDir(dir).withPluginClasspath()
+      .withArguments("buildLiveryCatalog", "--configuration-cache", "--stacktrace").build()
+    assertEquals(TaskOutcome.SUCCESS, result.task(":generateSource")?.outcome)
+    assertEquals(TaskOutcome.SUCCESS, result.task(":captureLiveryCatalog")?.outcome)
+    assertTrue(File(dir, "build/livery/captured/designs/panel/in-app.rc").isFile)
+  }
+
   @Test fun capturesTheUidTemplatesAndBuildsThem() {
     val dir = project()
     val result = GradleRunner.create().withProjectDir(dir).withPluginClasspath()
