@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.4.21"
-kotlinx-serialization = "1.12.0"
+kotlinx-serialization = "1.13.0"
 kotlinx-coroutines = "1.11.0"
 # The *stable* Compose Multiplatform line: an app's Compose version is at least the one Livery is
 # compiled against, and an Android app that pins the androidx Compose BOM (as most do) gets a
