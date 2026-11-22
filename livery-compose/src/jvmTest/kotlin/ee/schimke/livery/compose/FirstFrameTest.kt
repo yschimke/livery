@@ -214,8 +214,7 @@ class FirstFrameTest {
         PlanResult.Ready(plan("headline $version"))
       }
     }
-    repeat(5) { mainClock.advanceTimeByFrame() }
-    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    framesUntil("the first card") { onAllNodesWithTag("card").fetchSemanticsNodes().size == 1 }
     version = 2
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(0, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "no placeholder while the new answer plans")
@@ -247,8 +246,7 @@ class FirstFrameTest {
         PlanResult.Ready(plan("$card $version"))
       }
     }
-    repeat(5) { mainClock.advanceTimeByFrame() }
-    assertEquals(1, starts)
+    framesUntil("the first card") { starts == 1 }
     version = 2
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(1, starts, "new data for the same card keeps its player")
@@ -256,8 +254,7 @@ class FirstFrameTest {
     card = "b"
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(1, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "another card starts from the fallback")
-    repeat(10) { mainClock.advanceTimeByFrame() }
-    assertEquals(2, starts, "with a fresh player")
+    framesUntil("the other card, with a fresh player") { starts == 2 }
   }
 
   @Test fun anItemSlotUpdatesInPlaceAndAnotherItemStartsFresh() = runComposeUiTest {
@@ -284,8 +281,7 @@ class FirstFrameTest {
         PlanResult.Ready(plan("$item $version"))
       }
     }
-    repeat(5) { mainClock.advanceTimeByFrame() }
-    assertEquals(1, starts)
+    framesUntil("the first card") { starts == 1 }
     version = 2
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(1, starts, "new data for the same item keeps its player")
@@ -293,8 +289,7 @@ class FirstFrameTest {
     item = "b"
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(1, onAllNodesWithTag("placeholder").fetchSemanticsNodes().size, "another item starts from the fallback")
-    repeat(10) { mainClock.advanceTimeByFrame() }
-    assertEquals(2, starts, "with a fresh player")
+    framesUntil("the other card, with a fresh player") { starts == 2 }
   }
 
   @Test fun newDataPlannedFromMemoryDrawsInTheFrameItArrivesIn() = runComposeUiTest {
@@ -321,8 +316,7 @@ class FirstFrameTest {
         PlanResult.Ready(plan("v$version"))
       }
     }
-    repeat(8) { mainClock.advanceTimeByFrame() }
-    assertEquals("v1", shown)
+    framesUntil("the first card") { shown == "v1" }
     version = 2
     mainClock.advanceTimeByFrame()
     assertEquals("v2", shown, "planned from memory: drawn in the frame the data arrived in")
@@ -331,8 +325,7 @@ class FirstFrameTest {
     version = 3
     mainClock.advanceTimeByFrame()
     assertEquals("v2", shown, "without planNow the new answer is a plan away")
-    repeat(10) { mainClock.advanceTimeByFrame() }
-    assertEquals("v3", shown)
+    framesUntil("the planned answer") { shown == "v3" }
   }
 
   @Test fun aFallbackIsNotBroughtBackByTheNextKey() = runComposeUiTest {
@@ -348,8 +341,7 @@ class FirstFrameTest {
         }
       }
     }
-    repeat(5) { mainClock.advanceTimeByFrame() }
-    assertEquals(1, onAllNodesWithTag("card").fetchSemanticsNodes().size)
+    framesUntil("the first card") { onAllNodesWithTag("card").fetchSemanticsNodes().size == 1 }
     version = 2
     repeat(5) { mainClock.advanceTimeByFrame() }
     assertEquals(0, onAllNodesWithTag("card").fetchSemanticsNodes().size, "fell back: no card")
@@ -374,8 +366,7 @@ class FirstFrameTest {
     var current by mutableStateOf(itemPlan("a", "one"))
     mainClock.autoAdvance = false
     setContent { LiveryTemplate(current, counting, Modifier.size(320.dp, 120.dp)) }
-    repeat(5) { mainClock.advanceTimeByFrame() }
-    assertEquals(1, starts)
+    framesUntil("the first card") { starts == 1 }
     current = itemPlan("a", "two")
     repeat(3) { mainClock.advanceTimeByFrame() }
     assertEquals(1, starts, "new data for the same item keeps its player")
@@ -504,4 +495,20 @@ class FirstFrameTest {
     const val OTHER_FONT = "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
     const val PICTURE = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
   }
+
+  /**
+   * Advances the test clock a frame at a time until [done]. Planning before the first frame, and a
+   * template's preparation and fonts, run on [kotlinx.coroutines.Dispatchers.Default] in real time,
+   * which no number of virtual frames is sure to cover on a busy machine; this waits for them, up
+   * to a real-time deadline, instead of counting frames.
+   */
+  private fun androidx.compose.ui.test.ComposeUiTest.framesUntil(what: String, done: () -> Boolean) {
+    val deadline = kotlin.time.TimeSource.Monotonic.markNow() + kotlin.time.Duration.parse("10s")
+    while (!done()) {
+      assertTrue(deadline.hasNotPassedNow(), "timed out waiting for $what")
+      mainClock.advanceTimeByFrame()
+      Thread.sleep(2)
+    }
+  }
+
 }
