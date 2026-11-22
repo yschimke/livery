@@ -44,7 +44,7 @@ final class ConformanceTests: XCTestCase {
     struct Query: Decodable {
       var contract: String; var caps: PlayerCapabilities; var widthDp: Int?; var heightDp: Int?
       var designId: String?; var variant: String?; var theme: String?; var tags: [String: String]?
-      var minor: Int?
+      var minor: Int?; var facts: [String: String]?
     }
     struct Case: Decodable { var name: String; var query: Query; var fallbacks: [Query]?; var installed: [String]?; var expect: String? }
     var manifest: Manifest
@@ -58,7 +58,7 @@ final class ConformanceTests: XCTestCase {
       let installed = Set(c.installed ?? [])
       func query(_ q: SelectionFixture.Query) -> TemplateQuery {
         TemplateQuery(contract: q.contract, caps: q.caps, widthDp: q.widthDp, heightDp: q.heightDp,
-          designId: q.designId, variant: q.variant, theme: q.theme, tags: q.tags ?? [:], minor: q.minor)
+          designId: q.designId, variant: q.variant, theme: q.theme, tags: q.tags ?? [:], minor: q.minor, facts: q.facts ?? [:])
       }
       let automatic: (Design) -> Bool = { $0.install == .always || installed.contains($0.id) }
       let fallbacks = (c.fallbacks ?? []).map(query)

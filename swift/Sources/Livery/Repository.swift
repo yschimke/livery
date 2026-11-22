@@ -55,6 +55,8 @@ public struct DesignSummary: Sendable {
   public var installed: Bool
   public var downloadBytes: Int64
   public var playable: Bool
+  /// How well the design's audience fits the facts asked for (§2.3); nil for a design for everyone or without facts.
+  public var audience: AudienceRank? = nil
 }
 
 public enum RefreshResult: Sendable, Equatable {
@@ -79,7 +81,7 @@ public actor TemplateRepository {
   /// contract minors (`requiresMinor`, `TemplateQuery.minor`); level 4 added experiments; level 5
   /// added secondary screens (`present` actions, screen rules, §8.2); level 6 added designs that
   /// aren't automatic (§5.2).
-  public static let protocolLevel = 8
+  public static let protocolLevel = 9
   public static let staleGraceMs: Int64 = 30 * 24 * 3_600_000
   static let backoffMs: [Int64] = [60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000]
 
@@ -324,12 +326,15 @@ public actor TemplateRepository {
 
   // MARK: Install, list, preview
 
-  public func designs(_ contract: String) async -> [DesignSummary] {
+  /// Every live design for `contract`. With `facts`, a design made for an audience is listed only when one matches.
+  public func designs(_ contract: String, facts: [String: String]? = nil) async -> [DesignSummary] {
     guard let m = await manifest() ?? bundled?.manifest else { return [] }
     let installed = await installedIds()
     let have = await blobs.keys()
     // A design that isn't automatic (a season's) is drawn by an arm, never chosen in a picker.
-    return m.designs.filter { $0.contract == contract && !$0.revoked && $0.automatic }.map { d in
+    return m.designs.filter { $0.contract == contract && !$0.revoked && $0.automatic }.compactMap { d in
+      let rank = facts.flatMap { d.audienceRank($0) }
+      if facts != nil && !d.audience.isEmpty && rank == nil { return nil }
       let needed = entries(m, d.id)
       let assets = Dictionary(needed.flatMap { m.assets(for: $0) }.map { ($0.sha256, $0) }, uniquingKeysWith: { a, _ in a }).values
       let previews = (d.previews + needed.flatMap(\.previews)).reduce(into: [Preview]()) { acc, p in if !acc.contains(where: { $0.sha256 == p.sha256 }) { acc.append(p) } }
@@ -338,7 +343,8 @@ public actor TemplateRepository {
         previews: previews.map { ($0, ResourceURLs.resolve(source.manifestURL, m.previewBase + $0.fileName)) },
         installed: d.install == .always || installed.contains(d.id),
         downloadBytes: needed.filter { !have.contains($0.sha256) }.reduce(0) { $0 + $1.bytes } + assets.filter { !have.contains($0.sha256) }.reduce(0) { $0 + $1.bytes },
-        playable: !needed.isEmpty)
+        playable: !needed.isEmpty,
+        audience: rank)
     }
   }
 

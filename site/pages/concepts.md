@@ -133,6 +133,26 @@ A **design** is a look for one contract (`banner-classic`, `banner-bold`). It ha
 The client picks, from what's on disk, the chosen design's richest template the player can draw
 with the tightest size fit; else the preferred variant's, else `default`'s.
 
+A design can also say **who it is made for** with an `audience`: facts of what the slot draws, each
+a pattern (`*` matches anything), and a `priority` for audiences you consider narrower. The app
+passes the facts with its query (`TemplateQuery(facts = mapOf("device.model" to "X1 Carbon"))`),
+in its own names; Livery knows none of them. Without a chosen design, a design whose audience
+matches wins over the designs for everyone, the highest priority first, then the audience that
+names more facts; a design for an audience that doesn't match is never picked by itself. Give a
+design several audiences when it fits several (three integrations of the same kind of device):
+
+```json
+{ "id": "printer-x1", "contract": "home/device-tile@1", "title": "X1 printer", "install": "Always",
+  "audience": [
+    { "match": { "device.model": "X1*" }, "priority": 3 },
+    { "match": { "device.integration": "acme", "device.manufacturer": "Acme" }, "priority": 2 }
+  ] }
+```
+
+`repository.designs(contract, facts)` lists, for a picker, only the designs for everyone and those
+whose audience matches, each with its rank. A catalog with an audience needs protocol level 9,
+which `livery build` sets.
+
 A **theme pack** (`themes/<id>.json`) is named values, usually `theme.*` colours, that a slot pushes
 beside its data: `repository.theme("dusk")` gives them as bindings to pass as `extra`. Changing a
 pack recolours every template that reads those names, with no new document. To use the app's own

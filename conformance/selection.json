@@ -64,6 +64,84 @@
           "track": "android"
         },
         "install": "Always"
+      },
+      {
+        "id": "brand",
+        "contract": "c/tile@1",
+        "title": "Acme",
+        "install": "Always",
+        "audience": [
+          {
+            "match": {
+              "device.integration": "acme",
+              "device.manufacturer": "Acme"
+            },
+            "priority": 2
+          }
+        ]
+      },
+      {
+        "id": "model",
+        "contract": "c/tile@1",
+        "title": "Acme X1",
+        "install": "Always",
+        "audience": [
+          {
+            "match": {
+              "device.model": "X1*"
+            },
+            "priority": 3
+          },
+          {
+            "match": {
+              "device.model": "*Pro"
+            },
+            "priority": 3
+          }
+        ]
+      },
+      {
+        "id": "model-compact",
+        "contract": "c/tile@1",
+        "title": "Acme X1 compact",
+        "variant": "compact",
+        "install": "Always",
+        "audience": [
+          {
+            "match": {
+              "device.model": "X1*"
+            },
+            "priority": 3
+          }
+        ]
+      },
+      {
+        "id": "acme-skin",
+        "contract": "c/tile@1",
+        "title": "Acme skin",
+        "install": "OnRequest",
+        "audience": [
+          {
+            "match": {
+              "device.model": "X1*"
+            },
+            "priority": 9
+          }
+        ]
+      },
+      {
+        "id": "dotted",
+        "contract": "c/tile@1",
+        "title": "Dotted i",
+        "install": "Always",
+        "audience": [
+          {
+            "match": {
+              "device.model": "i*7"
+            },
+            "priority": 1
+          }
+        ]
       }
     ],
     "templates": [
@@ -258,6 +336,71 @@
         "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "bytes": 100,
         "designId": "android",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bytes": 100,
+        "designId": "brand",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "bytes": 100,
+        "designId": "model",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+        "bytes": 100,
+        "designId": "model-compact",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+        "bytes": 100,
+        "designId": "acme-skin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+        "bytes": 100,
+        "designId": "dotted",
         "contract": "c/tile@1",
         "target": {
           "surface": "in-app",
@@ -769,6 +912,179 @@
         }
       ],
       "expect": null
+    },
+    {
+      "name": "without facts no design made for an audience is picked",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "a design for the facts wins over the designs for everyone",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.integration": "ACME",
+          "device.manufacturer": "acme",
+          "device.model": "Z9"
+        }
+      },
+      "expect": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "name": "every fact an audience names must match",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.integration": "acme"
+        }
+      },
+      "expect": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "a higher priority beats an audience that names more facts",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.integration": "acme",
+          "device.manufacturer": "Acme",
+          "device.model": "x1 carbon"
+        }
+      },
+      "expect": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "name": "any one of a design's audiences is enough",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.model": "A2 Pro"
+        }
+      },
+      "expect": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "name": "the variant applies among the best-ranked designs",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "variant": "compact",
+        "facts": {
+          "device.model": "X1"
+        }
+      },
+      "expect": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+    },
+    {
+      "name": "an uninstalled skin for the audience is not automatic",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.model": "X1"
+        }
+      },
+      "expect": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "name": "an installed one outranks the rest",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.model": "X1"
+        }
+      },
+      "installed": [
+        "acme-skin"
+      ],
+      "expect": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"
+    },
+    {
+      "name": "a design for another audience still draws when named",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "designId": "brand"
+      },
+      "expect": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "name": "patterns compare scalars, not graphemes",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.model": "İ7"
+        }
+      },
+      "expect": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
   ]
 }

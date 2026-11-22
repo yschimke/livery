@@ -152,6 +152,9 @@ const val SET_LEVEL: Int = 7
 /** The protocol level that gates templates on risky features (PROTOCOL.md §5.1): an older client would play a shader anywhere. */
 const val FEATURES_LEVEL: Int = 8
 
+/** The protocol level that added design audiences (PROTOCOL.md §2.3): an older client would pick a design made for one audience for everyone. */
+const val AUDIENCE_LEVEL: Int = 9
+
 /**
  * An experiment id (PROTOCOL.md §8.1): used unchanged as `exp_<id>` in analytics (within Firebase's
  * 24-character user properties) and in `livery_exp_<id>` for Remote Config, so two experiments can
@@ -397,6 +400,8 @@ class CatalogBuilder(
         if (contracts.any { c -> c.actions.values.any { it.kind == ActionKinds.SET } }) SET_LEVEL else 0,
         // An older client ignores `features` and would play a template's shader where no app allowed it.
         if (templates.any { it.features.isNotEmpty() }) FEATURES_LEVEL else 0,
+        // An older client ignores `audience` and would draw a design made for one device for all.
+        if (designs.any { it.audience.isNotEmpty() }) AUDIENCE_LEVEL else 0,
       ),
       blobBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "blobs/",
       previewBase = if (layout is Layout.GitHubRelease) layout.downloadBase else "previews/",

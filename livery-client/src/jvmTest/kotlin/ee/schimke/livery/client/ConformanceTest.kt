@@ -5,6 +5,7 @@ import okio.ByteString.Companion.encodeUtf8
 import okio.ByteString.Companion.toByteString
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Arm
+import ee.schimke.livery.protocol.Audience
 import ee.schimke.livery.protocol.Conditions
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Experiment
@@ -105,7 +106,7 @@ class ConformanceTest {
   @Serializable data class Query(
     val contract: String, val caps: PlayerCapabilities, val widthDp: Int? = null, val heightDp: Int? = null,
     val designId: String? = null, val variant: String? = null, val theme: String? = null, val tags: Map<String, String> = emptyMap(),
-    val minor: Int? = null,
+    val minor: Int? = null, val facts: Map<String, String> = emptyMap(),
   )
   @Serializable data class SelectionFixture(val manifest: Manifest, val cases: List<SelectionCase>)
 
@@ -129,6 +130,18 @@ class ConformanceTest {
         // Tagged for one item (a talk's track), with a variant of its own so the plain query's
         // default still wins everywhere else (§5.4).
         Design("android", "c/tile@1", "Android track", variant = "track", install = InstallPolicy.Always, tags = mapOf("track" to "android")),
+        // Made for an audience (§2.3): picked automatically only for facts one of them matches, a
+        // narrower audience (higher priority) first, ahead of the designs for everyone.
+        Design("brand", "c/tile@1", "Acme", install = InstallPolicy.Always,
+          audience = listOf(Audience(mapOf("device.integration" to "acme", "device.manufacturer" to "Acme"), priority = 2))),
+        Design("model", "c/tile@1", "Acme X1", install = InstallPolicy.Always,
+          audience = listOf(Audience(mapOf("device.model" to "X1*"), priority = 3), Audience(mapOf("device.model" to "*Pro"), priority = 3))),
+        Design("model-compact", "c/tile@1", "Acme X1 compact", variant = "compact", install = InstallPolicy.Always,
+          audience = listOf(Audience(mapOf("device.model" to "X1*"), priority = 3))),
+        Design("acme-skin", "c/tile@1", "Acme skin", install = InstallPolicy.OnRequest,
+          audience = listOf(Audience(mapOf("device.model" to "X1*"), priority = 9))),
+        Design("dotted", "c/tile@1", "Dotted i", install = InstallPolicy.Always,
+          audience = listOf(Audience(mapOf("device.model" to "i*7"), priority = 1))),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -148,6 +161,11 @@ class ConformanceTest {
         t('0', "builtin", inApp(8), bytes = 900_000),
         t('f', "fx", inApp(8), features = listOf("shaders")),
         t('c', "android", inApp(8)),
+        t('d', "brand", inApp(8)),
+        t('e', "model", inApp(8)),
+        t('g', "model-compact", inApp(8)),
+        t('h', "acme-skin", inApp(8)),
+        t('i', "dotted", inApp(8)),
       ),
     )
     val app8 = PlayerCapabilities(Surfaces.IN_APP, 8, setOf("androidx"))
@@ -182,9 +200,20 @@ class ConformanceTest {
       SelectionCase("one without falls back to the next", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8)), expect = null),
       SelectionCase("the plain query still draws the default, not the tagged design", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8).copy(tags = mapOf("style" to "round")), q(app8)), expect = null),
       SelectionCase("no query has a template", q(app8).copy(tags = mapOf("track" to "ios")), fallbacks = listOf(q(app8).copy(tags = mapOf("style" to "round"))), expect = null),
+      SelectionCase("without facts no design made for an audience is picked", q(app8), expect = null),
+      SelectionCase("a design for the facts wins over the designs for everyone", q(app8).copy(facts = mapOf("device.integration" to "ACME", "device.manufacturer" to "acme", "device.model" to "Z9")), expect = null),
+      SelectionCase("every fact an audience names must match", q(app8).copy(facts = mapOf("device.integration" to "acme")), expect = null),
+      SelectionCase("a higher priority beats an audience that names more facts", q(app8).copy(facts = mapOf("device.integration" to "acme", "device.manufacturer" to "Acme", "device.model" to "x1 carbon")), expect = null),
+      SelectionCase("any one of a design's audiences is enough", q(app8).copy(facts = mapOf("device.model" to "A2 Pro")), expect = null),
+      SelectionCase("the variant applies among the best-ranked designs", q(app8).copy(variant = "compact", facts = mapOf("device.model" to "X1")), expect = null),
+      SelectionCase("an uninstalled skin for the audience is not automatic", q(app8).copy(facts = mapOf("device.model" to "X1")), expect = null),
+      SelectionCase("an installed one outranks the rest", q(app8).copy(facts = mapOf("device.model" to "X1")), installed = listOf("acme-skin"), expect = null),
+      SelectionCase("a design for another audience still draws when named", q(app8).copy(designId = "brand"), expect = null),
+      // Lowercased İ is i and a combining dot: matched as scalars, so `i*` fits on every port.
+      SelectionCase("patterns compare scalars, not graphemes", q(app8).copy(facts = mapOf("device.model" to "İ7")), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
-      val queries = (listOf(c.query) + c.fallbacks).map { qq -> TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor) }
+      val queries = (listOf(c.query) + c.fallbacks).map { qq -> TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor, qq.facts) }
       val got = if (c.fallbacks.isEmpty()) TemplateSelector.select(m, queries.single(), automatic = auto) else TemplateSelector.selectFirst(m, queries, automatic = auto)?.value
       c.copy(expect = got?.sha256)
     }

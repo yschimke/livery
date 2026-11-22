@@ -119,8 +119,10 @@ public struct Design: Codable, Equatable, Sendable {
   public var install: InstallPolicy
   /// Whether automatic selection may pick it (§5.2); false keeps it for a name or an arm.
   public var automatic: Bool
+  /// Who it is made for (§2.3): empty for everyone; otherwise picked automatically only for facts one matches.
+  public var audience: [Audience]
 
-  enum CodingKeys: String, CodingKey { case id, contract, title, description, author, variant, tags, previews, forkedFrom, revision, revoked, install, automatic }
+  enum CodingKeys: String, CodingKey { case id, contract, title, description, author, variant, tags, previews, forkedFrom, revision, revoked, install, automatic, audience }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     id = try c.decode(String.self, forKey: .id)
@@ -136,7 +138,71 @@ public struct Design: Codable, Equatable, Sendable {
     revoked = try c.value(.revoked, false)
     install = try c.value(.install, .onDemand)
     automatic = try c.value(.automatic, true)
+    audience = try c.value(.audience, [])
   }
+
+  /// The best rank of `audience` for `facts`; nil when none matches (§2.3, §5.2).
+  public func audienceRank(_ facts: [String: String]) -> AudienceRank? {
+    audience.compactMap { $0.rank(for: facts) }.max()
+  }
+}
+
+/// Who a design is made for (§2.3): facts of what a slot draws, each a pattern compared without
+/// case where `*` stands for any run of characters. An empty `match` matches nothing.
+public struct Audience: Codable, Equatable, Sendable {
+  public var match: [String: String]
+  public var priority: Int
+
+  public init(match: [String: String], priority: Int = 0) { self.match = match; self.priority = priority }
+  enum CodingKeys: String, CodingKey { case match, priority }
+  public init(from d: Decoder) throws {
+    let c = try d.container(keyedBy: CodingKeys.self)
+    match = try c.decode([String: String].self, forKey: .match)
+    priority = try c.value(.priority, 0)
+  }
+
+  public func matches(_ facts: [String: String]) -> Bool {
+    !match.isEmpty && match.allSatisfy { name, pattern in facts[name].map { globMatches(pattern, $0) } ?? false }
+  }
+
+  public func rank(for facts: [String: String]) -> AudienceRank? {
+    matches(facts) ? AudienceRank(priority: priority, facts: match.count) : nil
+  }
+}
+
+/// How a matching audience ranks: higher `priority` first, then more facts matched.
+public struct AudienceRank: Comparable, Equatable, Sendable {
+  public var priority: Int
+  public var facts: Int
+  public static func < (a: AudienceRank, b: AudienceRank) -> Bool {
+    a.priority != b.priority ? a.priority < b.priority : a.facts < b.facts
+  }
+}
+
+/// `pattern` against `value`, ignoring case; `*` matches any run of characters, nothing else is special.
+/// Compared as Unicode scalars, not graphemes, so it agrees with the Kotlin client (§2.3): `i*` fits
+/// `İ`, which lowercases to `i` and a combining dot.
+func globMatches(_ pattern: String, _ value: String) -> Bool {
+  let p = Array(pattern.lowercased().unicodeScalars), chars = Array(value.lowercased().unicodeScalars)
+  let parts = p.split(separator: "*", omittingEmptySubsequences: false).map(Array.init)
+  if parts.count == 1 { return p == chars }
+  let first = parts[0], last = parts[parts.count - 1]
+  guard chars.count >= first.count + last.count,
+    Array(chars.prefix(first.count)) == first, Array(chars.suffix(last.count)) == last else { return false }
+  var at = first.count
+  let end = chars.count - last.count
+  for part in parts[1..<(parts.count - 1)] where !part.isEmpty {
+    let needle = part
+    var found: Int? = nil
+    var i = at
+    while i + needle.count <= end {
+      if Array(chars[i..<(i + needle.count)]) == needle { found = i; break }
+      i += 1
+    }
+    guard let hit = found else { return false }
+    at = hit + needle.count
+  }
+  return true
 }
 
 public struct TemplateEntry: Codable, Equatable, Sendable {
