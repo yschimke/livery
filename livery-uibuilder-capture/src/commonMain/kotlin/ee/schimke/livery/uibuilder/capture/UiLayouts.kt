@@ -17,6 +17,10 @@ import ee.schimke.composeai.rccreation.compose.state.rdp
  * `verticalSpacingDp` / `horizontalSpacingDp`), `horizontalAlignment` (`start`, `center`, `end`),
  * `verticalAlignment` (`top`, `center`, the default, `bottom`) and a box's `contentAlignment`
  * (`topStart`, `center`, …).
+ *
+ * Each is drawn once, as a literal: Remote Compose has no arrangement or alignment that follows a
+ * value. A design whose layout property is bound to a host input fails [UiDesign.validate] rather
+ * than capturing its preview value; a design's own (`local`) state there draws its initial value.
  */
 object UiLayouts {
   private fun vertical(node: UiNode) =

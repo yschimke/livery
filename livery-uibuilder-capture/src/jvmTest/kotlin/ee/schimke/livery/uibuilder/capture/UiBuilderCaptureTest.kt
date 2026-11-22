@@ -108,6 +108,12 @@ class UiBuilderCaptureTest {
     assertEquals(listOf("hello: no component `test-cards/chart` is registered"), design.validate())
   }
 
+  @Test fun aLayoutPropertyCannotFollowAHostInput() {
+    val uid = document().replace("\"verticalSpacingDp\": { \"type\": \"float\", \"value\": 4 }", "\"verticalSpacingDp\": { \"type\": \"state\", \"variable\": \"sample\" }")
+    val design = UiBuilderCapture.design(uid, UiBuilderCapture.catalogs())
+    assertEquals(listOf("root.verticalSpacingDp: `layout/column` draws `verticalSpacingDp` once, so it can't follow host input `name`"), design.validate())
+  }
+
   @Test fun aSourceOfCatalogsIsCapturedOneByOne() {
     val parent = Files.createTempDirectory("uid-catalogs").toFile()
     tree().copyRecursively(File(parent, "brand-a"))

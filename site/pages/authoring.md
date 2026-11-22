@@ -354,7 +354,8 @@ design's own (`local`) state draws its initial value. The sidecar's `source` is
 
 The interpreter draws the UI Builder frame's layouts itself (`layout/column`, `layout/row`,
 `layout/box` and the collapsible column and row; modifiers `fillMaxWidth`, `fillMaxHeight`,
-`fillMaxSize`, `width`, `height`, `size`, `padding`). Your catalog's components are yours to draw:
+`fillMaxSize`, `width`, `height`, `size`, `padding`), each property as a literal: one bound to a
+host input fails the capture, since an arrangement or alignment can't follow a value. Your catalog's components are yours to draw:
 implement `UiBuilderCatalog` with a `@Composable` per `componentId`, on rc-players' creation API,
 and list it in `META-INF/services/ee.schimke.livery.uibuilder.capture.UiBuilderCatalog` on the
 capture's classpath (the project's runtime classpath, by default):

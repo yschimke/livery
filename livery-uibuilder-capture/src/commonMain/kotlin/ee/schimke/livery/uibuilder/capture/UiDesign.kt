@@ -99,6 +99,10 @@ class UiDesign(val document: JsonObject, val components: Map<String, UiComponent
           STATE -> {
             val variable = p["variable"]?.jsonPrimitive?.contentOrNull
             if (variable !in stateVariables) add("$id.$name: state `$variable` is not declared")
+            // The frame's layouts draw their arrangement, alignment and spacing once, as a
+            // literal: a host input there would be captured as its preview value and never follow.
+            else if (variable in hostInputs && component in UiLayouts.components && component !in components)
+              add("$id.$name: `$component` draws `$name` once, so it can't follow host input `$variable`")
           }
           !in LITERALS -> add("$id.$name: a `$type` property is not drawn here")
         }
