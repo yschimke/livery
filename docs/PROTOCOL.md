@@ -119,8 +119,9 @@ experiment arm (§8.1), as a season's design is. Design pickers don't offer it.
 `match`, a map from a fact name to a pattern, and `priority` (an int, 0 if absent). Facts describe
 what a slot draws, in the app's own names (`device.model`), and arrive in the query (§5.1). An entry
 matches when it names at least one fact and every fact it names is in the query's facts and fits
-its pattern: compared without case, where `*` stands for any run of characters (none included) and
-every other character is literal. A design's **audience rank** for a query is the best of its
+its pattern: both lowercased by Unicode's default mapping and compared as Unicode scalars (not
+grapheme clusters), where `*` stands for any run of characters (none included) and every other
+character is literal. A design's **audience rank** for a query is the best of its
 matching entries, by `priority` and then by the number of facts in `match`; a design none of whose
 entries match has no rank. The publisher chooses priorities to say which audiences are narrower (a
 model over a brand); Livery gives facts and priorities no meaning of its own. A picker given facts

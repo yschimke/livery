@@ -140,6 +140,8 @@ class ConformanceTest {
           audience = listOf(Audience(mapOf("device.model" to "X1*"), priority = 3))),
         Design("acme-skin", "c/tile@1", "Acme skin", install = InstallPolicy.OnRequest,
           audience = listOf(Audience(mapOf("device.model" to "X1*"), priority = 9))),
+        Design("dotted", "c/tile@1", "Dotted i", install = InstallPolicy.Always,
+          audience = listOf(Audience(mapOf("device.model" to "i*7"), priority = 1))),
       ),
       templates = listOf(
         t('1', "builtin", inApp(7)),
@@ -163,6 +165,7 @@ class ConformanceTest {
         t('e', "model", inApp(8)),
         t('g', "model-compact", inApp(8)),
         t('h', "acme-skin", inApp(8)),
+        t('i', "dotted", inApp(8)),
       ),
     )
     val app8 = PlayerCapabilities(Surfaces.IN_APP, 8, setOf("androidx"))
@@ -206,6 +209,8 @@ class ConformanceTest {
       SelectionCase("an uninstalled skin for the audience is not automatic", q(app8).copy(facts = mapOf("device.model" to "X1")), expect = null),
       SelectionCase("an installed one outranks the rest", q(app8).copy(facts = mapOf("device.model" to "X1")), installed = listOf("acme-skin"), expect = null),
       SelectionCase("a design for another audience still draws when named", q(app8).copy(designId = "brand"), expect = null),
+      // Lowercased İ is i and a combining dot: matched as scalars, so `i*` fits on every port.
+      SelectionCase("patterns compare scalars, not graphemes", q(app8).copy(facts = mapOf("device.model" to "İ7")), expect = null),
     ).map { c ->
       val auto = { d: Design -> d.install == InstallPolicy.Always || d.id in c.installed }
       val queries = (listOf(c.query) + c.fallbacks).map { qq -> TemplateQuery(qq.contract, qq.caps, qq.widthDp, qq.heightDp, qq.designId, qq.variant, qq.theme, qq.tags, qq.minor, qq.facts) }

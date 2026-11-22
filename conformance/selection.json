@@ -128,6 +128,20 @@
             "priority": 9
           }
         ]
+      },
+      {
+        "id": "dotted",
+        "contract": "c/tile@1",
+        "title": "Dotted i",
+        "install": "Always",
+        "audience": [
+          {
+            "match": {
+              "device.model": "i*7"
+            },
+            "priority": 1
+          }
+        ]
       }
     ],
     "templates": [
@@ -374,6 +388,19 @@
         "sha256": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
         "bytes": 100,
         "designId": "acme-skin",
+        "contract": "c/tile@1",
+        "target": {
+          "surface": "in-app",
+          "rcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        }
+      },
+      {
+        "sha256": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+        "bytes": 100,
+        "designId": "dotted",
         "contract": "c/tile@1",
         "target": {
           "surface": "in-app",
@@ -1041,6 +1068,23 @@
         "designId": "brand"
       },
       "expect": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "name": "patterns compare scalars, not graphemes",
+      "query": {
+        "contract": "c/tile@1",
+        "caps": {
+          "surface": "in-app",
+          "maxRcApiLevel": 8,
+          "profiles": [
+            "androidx"
+          ]
+        },
+        "facts": {
+          "device.model": "İ7"
+        }
+      },
+      "expect": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
     }
   ]
 }

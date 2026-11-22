@@ -36,6 +36,7 @@ class AudienceTest {
     assertFalse(fits("x1", "X1 Carbon"), "without a star the whole value must match")
     assertFalse(fits("x1.carbon", "X1 Carbon"), "a dot is literal")
     assertFalse(fits("x*z*n", "X1 Carbon"))
+    assertTrue(fits("i*", "İ"), "İ lowercases to i and a combining dot, compared one by one")
   }
 
   @Test

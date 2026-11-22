@@ -180,17 +180,19 @@ public struct AudienceRank: Comparable, Equatable, Sendable {
 }
 
 /// `pattern` against `value`, ignoring case; `*` matches any run of characters, nothing else is special.
+/// Compared as Unicode scalars, not graphemes, so it agrees with the Kotlin client (§2.3): `i*` fits
+/// `İ`, which lowercases to `i` and a combining dot.
 func globMatches(_ pattern: String, _ value: String) -> Bool {
-  let p = pattern.lowercased(), v = value.lowercased()
-  let parts = p.components(separatedBy: "*")
-  if parts.count == 1 { return p == v }
+  let p = Array(pattern.lowercased().unicodeScalars), chars = Array(value.lowercased().unicodeScalars)
+  let parts = p.split(separator: "*", omittingEmptySubsequences: false).map(Array.init)
+  if parts.count == 1 { return p == chars }
   let first = parts[0], last = parts[parts.count - 1]
-  guard v.hasPrefix(first), v.hasSuffix(last), v.count >= first.count + last.count else { return false }
-  let chars = Array(v)
+  guard chars.count >= first.count + last.count,
+    Array(chars.prefix(first.count)) == first, Array(chars.suffix(last.count)) == last else { return false }
   var at = first.count
   let end = chars.count - last.count
   for part in parts[1..<(parts.count - 1)] where !part.isEmpty {
-    let needle = Array(part)
+    let needle = part
     var found: Int? = nil
     var i = at
     while i + needle.count <= end {
