@@ -43,6 +43,7 @@ val published = mapOf(
   ":livery-notifications" to ("Livery notifications" to "Android notification bodies drawn from Livery templates"),
   ":livery-capture-core" to ("Livery capture core" to "What a captured Livery template is, whichever creation API made it: contract checks, the sidecar read from the document, and design folders that stay current"),
   ":livery-capture-cmp" to ("Livery capture (Compose Multiplatform)" to "Author Livery templates with rc-players' Compose Multiplatform creation API: contract-typed named values and capture per target on the JVM, Android and Wasm, with no AndroidX"),
+  ":livery-uibuilder-capture" to ("Livery UI Builder capture" to "Compose UI Builder documents captured as Livery templates on the JVM, with no server: a generic .uid interpreter drawn with an app's own catalog components, host inputs bound to the contract"),
   ":livery-capture" to ("Livery capture (AndroidX)" to "Author Livery templates with AndroidX remote-creation-compose: contract-typed named values, capture per target, and catalog files that stay current"),
   ":livery-firebase" to ("Livery Firebase" to "Firebase Analytics, Remote Config experiments and Firestore frequency caps for Livery"),
   ":livery-datadog" to ("Livery Datadog" to "Livery events and template taps as Datadog RUM actions and errors"),

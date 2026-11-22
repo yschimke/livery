@@ -41,6 +41,20 @@ import javax.inject.Inject
  * }
  * ```
  *
+ * Templates designed in Compose UI Builder are captured the same way, with no UI Builder server:
+ * `capture { uiBuilder() }` runs `livery-uibuilder-capture`'s entry point, which captures every
+ * `designs/<id>/<name>.uid` in [source] with the UI Builder catalogs the project registers
+ * (`ee.schimke.livery.uibuilder.capture.UiBuilderCatalog` in `META-INF/services`), each host
+ * input bound to the design's contract. A project can call
+ * `UiBuilderCapture.captureTree` from its own entry point to mix both.
+ *
+ * ```
+ * livery {
+ *   source.set(layout.projectDirectory.dir("catalog"))   // designs/<id>/design.json beside <name>.uid
+ *   capture { uiBuilder() }
+ * }
+ * ```
+ *
  * `renderLiveryPreviews` previews every template in the catalog (the captured tree, when there's a
  * capture) into `build/livery/previews`: each with each of its contract's examples, in each mode
  * its target allows, at its own size (see [RenderLiveryPreviews]). It renders with `livery-render`,
@@ -78,6 +92,24 @@ class LiveryCatalogPlugin : Plugin<Project> {
       val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
       ext.capture.classpath.from(main.runtimeClasspath)
     }
+    // livery-uibuilder-capture at the version this plugin was built with, for `capture { uiBuilder() }`.
+    val uiBuilderCapture = project.configurations.create("liveryUiBuilderCapture") { c ->
+      c.isCanBeConsumed = false
+      c.isCanBeResolved = true
+      c.description = "livery-uibuilder-capture, for captureLiveryCatalog's UI Builder documents"
+      c.attributes { a ->
+        a.attribute(Usage.USAGE_ATTRIBUTE, project.objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
+        a.attribute(Category.CATEGORY_ATTRIBUTE, project.objects.named(Category::class.java, Category.LIBRARY))
+        a.attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, project.objects.named(TargetJvmEnvironment::class.java, TargetJvmEnvironment.STANDARD_JVM))
+      }
+      c.defaultDependencies { it.add(project.dependencies.create("ee.schimke.composeai:livery-uibuilder-capture:${PluginVersions.liveryUiBuilderCapture}")) }
+    }
+    ext.capture.uiBuilder.convention(false)
+    ext.capture.mainClass.convention(ext.capture.uiBuilder.flatMap { on ->
+      project.provider { if (on) UI_BUILDER_MAIN else null }
+    })
+    val uiBuilderOn = ext.capture.uiBuilder
+    ext.capture.classpath.from(project.provider { if (uiBuilderOn.get()) uiBuilderCapture else project.files() })
     val capture = project.tasks.register("captureLiveryCatalog", CaptureLiveryCatalog::class.java) { t ->
       t.group = "build"
       t.description = "Captures the Livery catalog's templates from Kotlin into build/livery/captured"
@@ -86,7 +118,9 @@ class LiveryCatalogPlugin : Plugin<Project> {
       t.classpath = ext.capture.classpath
       t.mainClass.set(mainClass)
       t.captureJvmArgs.set(ext.capture.jvmArgs)
-      t.handWritten.set(ext.source.map { if (it.asFile.isDirectory) it else null })
+      // As it is, not filtered on whether it exists yet: a tree another task generates keeps that
+      // task as a dependency, and is read when the capture runs.
+      t.handWritten.set(ext.source)
       t.outputDir.set(ext.capture.outputDir)
       t.onlyIf("livery.capture.mainClass is set") { mainClass.isPresent }
     }
@@ -166,6 +200,9 @@ class LiveryCatalogPlugin : Plugin<Project> {
   }
 
   private companion object {
+    /** livery-uibuilder-capture's entry point: `<source> <out>`, every `.uid` in the tree captured. */
+    const val UI_BUILDER_MAIN = "ee.schimke.livery.uibuilder.capture.UiBuilderCaptureKt"
+
     /** A catalog's name in a task's: `droidcon-london` is `DroidconLondon`. */
     fun taskSuffix(name: String): String =
       name.split('-', '_', '.').filter { it.isNotEmpty() }.joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
@@ -253,4 +290,17 @@ abstract class LiveryCaptureExtension {
 
   /** Where the captured catalog tree goes: `build/livery/captured`, by default. */
   abstract val outputDir: DirectoryProperty
+
+  /**
+   * Capture Compose UI Builder documents: every `designs/<id>/<name>.uid` in the source tree, drawn
+   * with the UI Builder catalogs registered on [classpath], with no server. Set by [uiBuilder].
+   */
+  abstract val uiBuilder: Property<Boolean>
+
+  /**
+   * Captures the source tree's `.uid` templates with `livery-uibuilder-capture` (added to
+   * [classpath], at this plugin's version unless the build declares `liveryUiBuilderCapture`
+   * dependencies) as the entry point: [mainClass] need not be set.
+   */
+  fun uiBuilder() = uiBuilder.set(true)
 }

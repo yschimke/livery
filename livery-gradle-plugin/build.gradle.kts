@@ -34,15 +34,18 @@ apply(from = rootProject.file("gradle/sample-catalogs.gradle.kts"))
 // each published module's version after this script is evaluated.
 val pluginVersions = tasks.register("pluginVersions") {
   val renderVersion = provider { project(":livery-render").version.toString() }
+  val uiBuilderCaptureVersion = provider { project(":livery-uibuilder-capture").version.toString() }
   val out = layout.buildDirectory.dir("generated/pluginVersions")
   inputs.property("liveryRender", renderVersion)
+  inputs.property("liveryUiBuilderCapture", uiBuilderCaptureVersion)
   outputs.dir(out)
   doLast {
     val dir = out.get().asFile.resolve("ee/schimke/livery/gradle").apply { mkdirs() }
     dir.resolve("PluginVersions.kt").writeText(
       "package ee.schimke.livery.gradle\n\n" +
         "/** Generated: the versions of Livery's own artifacts this plugin was built beside. */\n" +
-        "internal object PluginVersions {\n  const val liveryRender: String = \"${renderVersion.get()}\"\n}\n"
+        "internal object PluginVersions {\n  const val liveryRender: String = \"${renderVersion.get()}\"\n" +
+        "  const val liveryUiBuilderCapture: String = \"${uiBuilderCaptureVersion.get()}\"\n}\n"
     )
   }
 }
@@ -62,4 +65,20 @@ tasks.withType<Test>().configureEach {
   val renderer: FileCollection = previewRenderer
   inputs.files(renderer).withNormalizer(ClasspathNormalizer::class).withPropertyName("previewRenderer")
   doFirst { systemProperty("livery.previewRenderer", renderer.asPath) }
+}
+
+// The tests capture UI Builder documents with this build's livery-uibuilder-capture.
+val uiBuilderCapture by configurations.creating {
+  isCanBeConsumed = false
+  isCanBeResolved = true
+  attributes {
+    attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+    attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, objects.named(TargetJvmEnvironment.STANDARD_JVM))
+  }
+}
+dependencies { uiBuilderCapture(project(":livery-uibuilder-capture")) }
+tasks.withType<Test>().configureEach {
+  val capture: FileCollection = uiBuilderCapture
+  inputs.files(capture).withNormalizer(ClasspathNormalizer::class).withPropertyName("uiBuilderCapture")
+  doFirst { systemProperty("livery.uiBuilderCapture", capture.asPath) }
 }
