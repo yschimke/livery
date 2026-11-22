@@ -61,6 +61,7 @@ Early. In this repository today:
 | `livery-capture-core` | what both share, with no creation API: `ContractChecks`, `CapturedTemplate` (the sidecar read from the document), `DesignFolder`, `CatalogContracts` |
 | `livery-web-core` / `web/core` | experimental: standalone Kotlin/Wasm component-preview pipeline and browser player, with a runnable local quantity-stepper demo; see [web preview](web/core/README.md) |
 | `livery-uibuilder` | optional: Compose UI Builder as an authoring tool: `livery ui-builder scaffold` / `import`, and `ui_builder_*` tools for `livery-mcp` |
+| `livery-uibuilder-capture` | optional: Compose UI Builder documents (`.uid`) captured as templates on the JVM, with no server: a generic interpreter drawn with the app's registered `UiBuilderCatalog`, host inputs bound through `LiveryValues`; the Gradle plugin's `capture { uiBuilder() }` |
 | `livery-kobento` | optional, JVM: Kobento documents (AndroidX authoring JSON or `.rc`) as templates, checked for the target's player; a library, `livery kobento scaffold` / `check` / `import`, and `kobento_*` tools for `livery-mcp --kobento` ([plan](docs/KOBENTO.md)) |
 | `livery-review` | `livery review`: the pull request report with each changed design drawn before and after with its contract's examples (a CLI extension that brings `livery-render`) |
 | `livery-verify` | tests: plays every launcher widget template, with each contract example, on Android 16's own widget player under Robolectric, and fails on what a home screen would show as an error |
