@@ -15,7 +15,7 @@ import androidx.compose.remote.creation.compose.state.rc as androidxRc
 import androidx.compose.remote.creation.compose.state.rdp as androidxRdp
 import androidx.compose.remote.creation.compose.state.rsp as androidxRsp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.remote.creation.compose.text.RemoteFontWeight as AndroidxFontWeight
 import ee.schimke.composeai.rccreation.compose.layout.RemoteArrangement
 import ee.schimke.composeai.rccreation.compose.layout.RemoteCanvas
 import ee.schimke.composeai.rccreation.compose.layout.RemoteColumn
@@ -102,7 +102,7 @@ class CapturedWidgetTest {
         AndroidxModifier.androidxFillMaxSize().androidxBackground(Color(0xFF1D1B20).androidxRc).androidxClickable(v.action("toggle")).androidxPadding(12.androidxRdp),
         verticalArrangement = AndroidxArrangement.spacedBy(4.androidxRdp),
       ) {
-        AndroidxText(v.string("name"), color = Color.White.androidxRc, fontSize = 16.androidxRsp, fontWeight = FontWeight.Bold)
+        AndroidxText(v.string("name"), color = Color.White.androidxRc, fontSize = 16.androidxRsp, fontWeight = AndroidxFontWeight.Bold)
         AndroidxText(v.string("state"), color = v.color("theme.primary", Color(0xFFD0BCFF)), fontSize = 14.androidxRsp)
       }
     }
