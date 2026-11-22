@@ -22,6 +22,34 @@
         "org.jetbrains.compose.**"
       ],
       "allowedVersions": "!/-(alpha|beta|rc|dev)/"
+    },
+    {
+      "description": "Robolectric hardcodes the exact android-all-instrumented coordinate per API level; offline tests fail with LocalDependencyResolver IllegalArgumentException on any other build. Bump alongside robolectric.",
+      "matchPackageNames": [
+        "org.robolectric:android-all-instrumented"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "@a2ui/lit, @a2ui/web_core, @a2ui/react, and @a2ui/angular depend on Zod v3 and export Zod v3 types; wait for @a2ui/* to migrate to Zod v4.",
+      "matchPackageNames": [
+        "zod"
+      ],
+      "allowedVersions": "<4"
+    },
+    {
+      "description": "@a2ui/angular@0.14.0 peer-depends on @angular/*@^21.2.5; wait for @a2ui/angular to support Angular 22.",
+      "matchPackageNames": [
+        "@angular/*"
+      ],
+      "allowedVersions": "<22"
+    },
+    {
+      "description": "@angular/compiler-cli@21.x requires TypeScript >=5.9 <6.1 (TypeScript 7 removed the JS compiler API ngc calls).",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<6.1"
     }
   ]
 }

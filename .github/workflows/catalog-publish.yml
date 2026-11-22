@@ -66,8 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     # One publish at a time per repository and release: an older run never finishes after a newer
     # one, and a queued run gives way to the newest (each builds the whole tree, so nothing is lost).
+    # Dry runs release nothing and get a per-run group so concurrent PR checks do not cancel each other.
     concurrency:
-      group: livery-catalog-publish-${{ github.repository }}-${{ inputs.tag || 'releases' }}
+      group: ${{ inputs.dry-run && format('livery-catalog-publish-dry-run-{0}', github.run_id) || format('livery-catalog-publish-{0}-{1}', github.repository, inputs.tag || 'releases') }}
       cancel-in-progress: false
     timeout-minutes: 15
     outputs:
