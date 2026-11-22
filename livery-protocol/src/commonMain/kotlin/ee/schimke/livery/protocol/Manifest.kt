@@ -109,6 +109,11 @@ data class Design(
    * downloaded with the catalog but drawn only while its season runs.
    */
   val automatic: Boolean = true,
+  /**
+   * Who it is made for (PROTOCOL.md §2.3, §5.2): empty for everyone. With any, automatic selection
+   * picks it only for a query whose facts one of them matches, ahead of designs for everyone.
+   */
+  val audience: List<Audience> = emptyList(),
 ) {
   companion object {
     const val DEFAULT_VARIANT: String = "default"

@@ -2,6 +2,8 @@ package ee.schimke.livery.client
 
 import okio.ByteString
 import ee.schimke.livery.protocol.AssetEntry
+import ee.schimke.livery.protocol.AudienceRank
+import ee.schimke.livery.protocol.audienceRank
 import ee.schimke.livery.protocol.Contract
 import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.InstallPolicy
@@ -59,6 +61,12 @@ data class DesignSummary(
   /** Bytes still to download to install it for the configured targets. */
   val downloadBytes: Long,
   val playable: Boolean,
+  /**
+   * How well the design's audience fits the facts the picker was asked for (PROTOCOL.md §2.3):
+   * null for a design made for everyone, or when no facts were given. A picker groups by it, best
+   * first, as selection prefers it.
+   */
+  val audience: AudienceRank? = null,
 )
 
 data class PreviewRef(val preview: Preview, val url: String)
@@ -411,13 +419,19 @@ class TemplateRepository(
 
   // --- install / list / preview ---------------------------------------------------------------
 
-  /** Every live design for [contract], as a picker lists them, with previews and download size. */
-  suspend fun designs(contract: String): List<DesignSummary> {
+  /**
+   * Every live design for [contract], as a picker lists them, with previews and download size.
+   * With [facts], a design made for an audience is listed only when one of its audiences matches
+   * them, with its [DesignSummary.audience] rank; without, every design is listed.
+   */
+  suspend fun designs(contract: String, facts: Map<String, String>? = null): List<DesignSummary> {
     val m = manifest() ?: bundled?.manifest ?: return emptyList()
     val installed = installedIds()
     val have = blobs.keys()
     // A design that isn't automatic (a season's) is drawn by an arm, never chosen in a picker.
-    return m.designs.filter { it.contract == contract && !it.revoked && it.automatic }.map { d ->
+    return m.designs.filter { it.contract == contract && !it.revoked && it.automatic }.mapNotNull { d ->
+      val rank = facts?.let { d.audienceRank(it) }
+      if (facts != null && d.audience.isNotEmpty() && rank == null) return@mapNotNull null
       val needed = entriesForTargets(m, d.id)
       DesignSummary(
         design = d,
@@ -427,6 +441,7 @@ class TemplateRepository(
         downloadBytes = needed.filter { it.sha256 !in have }.sumOf { it.bytes } +
           needed.flatMap { m.assetsFor(it) }.distinctBy { it.sha256 }.filter { it.sha256 !in have }.sumOf { it.bytes },
         playable = needed.isNotEmpty(),
+        audience = rank,
       )
     }
   }
@@ -551,8 +566,9 @@ class TemplateRepository(
      * Level 4 added experiments: a catalog with placement rules limited to an arm requires it.
      * Level 5 added secondary screens: a catalog with `present` actions or screen rules requires it.
      * Level 6 added designs that aren't automatic: a catalog with one requires it.
+     * Level 9 added design audiences: a catalog with a design that has one requires it.
      */
-    const val PROTOCOL_LEVEL: Int = 8
+    const val PROTOCOL_LEVEL: Int = 9
     val BACKOFF_MS = longArrayOf(60_000, 3_600_000, 4 * 3_600_000, 24 * 3_600_000)
     const val STALE_GRACE_MS: Long = 30L * 24 * 3_600_000
     /**

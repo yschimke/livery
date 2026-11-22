@@ -1,4 +1,4 @@
-# Livery protocol, level 8
+# Livery protocol, level 9
 
 The rules every Livery client and publisher implements, whatever the language. The Kotlin types in
 `livery-protocol` are the reference encoding; the files in [`conformance/`](../conformance) are the
@@ -42,7 +42,7 @@ UTF-8 JSON. Clients must ignore unknown keys; publishers may omit any key that h
 | `generatedAtEpochMs` | int64 | — | when it was built |
 | `expiresAtEpochMs` | int64 | — | after this the manifest is stale (§3.3) |
 | `ttlSeconds` | int64 | `3600` | how long a client may skip revalidation |
-| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 8 |
+| `minClient` | int | `0` | the lowest protocol level that may use it; this document is level 9 |
 | `blobBase`, `assetBase`, `previewBase` | string | see §1 | where files live |
 | `contracts` | Contract[] | `[]` | §4 |
 | `designs` | Design[] | `[]` | §2.3 |
@@ -76,6 +76,9 @@ template's own controls would do nothing; a publisher must set `minClient` to at
 catalog with a `set` action. Level 8 gates templates on risky features (§3.5, §5.1): a level-7
 client ignores `features` and would play a template's shader wherever it plays the template, so a
 publisher must set `minClient` to at least 8 for a catalog in which any template lists `features`.
+Level 9 added design audiences (§2.3, §5.2): a level-8 client ignores `audience` and would pick a
+design made for one audience for everyone, so a publisher must set `minClient` to at least 9 for a
+catalog with a design whose `audience` isn't empty.
 A client must
 reject a manifest whose `minClient` is above its level and keep using what it had (§3.3).
 
@@ -100,7 +103,7 @@ container such as `wear:small`, or none).
 
 A design is one look for one contract: `id`, `contract`, `title`, `description`, `author`,
 `variant` (`default` if absent), `tags`, `previews`, `forkedFrom`, `revision`, `revoked`,
-`install` and `automatic` (`true` if absent):
+`install`, `automatic` (`true` if absent) and `audience` (empty if absent):
 
 | `install` | A client downloads it | Automatic selection may pick it |
 | --- | --- | --- |
@@ -111,6 +114,17 @@ A design is one look for one contract: `id`, `contract`, `title`, `description`,
 A design whose `automatic` is false is downloaded as its `install` says, but automatic selection
 (§5.2) never picks it: it draws only when named (a chosen design, a decision) or picked by an
 experiment arm (§8.1), as a season's design is. Design pickers don't offer it.
+
+**Audiences.** `audience` lists who a design is made for; empty means everyone. Each entry is
+`match`, a map from a fact name to a pattern, and `priority` (an int, 0 if absent). Facts describe
+what a slot draws, in the app's own names (`device.model`), and arrive in the query (§5.1). An entry
+matches when it names at least one fact and every fact it names is in the query's facts and fits
+its pattern: compared without case, where `*` stands for any run of characters (none included) and
+every other character is literal. A design's **audience rank** for a query is the best of its
+matching entries, by `priority` and then by the number of facts in `match`; a design none of whose
+entries match has no rank. The publisher chooses priorities to say which audiences are narrower (a
+model over a brand); Livery gives facts and priorities no meaning of its own. A picker given facts
+lists a design with an audience only when it has a rank.
 
 ## 3. Signing and trust
 
@@ -266,7 +280,7 @@ pre-minor client refuses the manifest and keeps the templates it had.
 
 A template entry is eligible for a query (contract, player capabilities, optional width and height
 in dp, optional design, variant, theme and tags, and optionally the contract `minor` the app
-implements) when all of these hold: its contract equals the query's; its design exists, is not
+implements, and the facts of what the slot draws) when all of these hold: its contract equals the query's; its design exists, is not
 revoked and has that contract; the entry is not revoked; with a `minor` in the query, its
 `requiresMinor` is at most that minor; its
 `bytes` fit the player's budget; the player allows every risky feature in its `features` (the
@@ -285,7 +299,13 @@ query picks:
 
 1. the best entry of the requested design, if any; else
 2. among **automatic** designs, those whose `automatic` isn't false and that are `Always` or
-   installed, the best entry of the requested variant, then of `default`, then of any.
+   installed, with a non-empty `audience`, those with the highest audience rank for the query's
+   facts (§2.3): the best entry of the requested variant, then of `default`, then of any; else
+3. among automatic designs with an empty `audience`, the best entry of the requested variant,
+   then of `default`, then of any.
+
+A design with an audience the facts don't match is never picked automatically, though it still
+plays when requested (step 1).
 
 A client must choose only among entries whose blob and assets it has on disk when it draws
 without the network. A design that is requested but not available falls back to the automatic

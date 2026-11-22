@@ -177,9 +177,13 @@ person's own data) before they commit. Pictures in the manifest show it before a
 
 `TemplateSelector.select(manifest, query)` is pure and the same on every platform. Given a
 contract, the player's capabilities (surface, max RC API level, profiles, whether it can push,
-themes, container, byte budget), an optional size, design, variant, theme and tags, it returns the
-chosen design's richest template the player can draw, with the tightest size fit, else the
-preferred variant's, else `default`'s, else any automatic one.
+themes, container, byte budget), an optional size, design, variant, theme, tags and facts, it
+returns the chosen design's richest template the player can draw, with the tightest size fit, else
+the preferred variant's, else `default`'s, else any automatic one. Designs can name an
+**audience** (facts as `*` patterns, with a priority, PROTOCOL.md §2.3): among automatic designs,
+those whose audience matches the query's facts come first, the best-ranked only, and a design whose
+audience doesn't match is never picked automatically. Facts are the app's words (a Home Assistant
+app passes its device's integration, manufacturer and model); Livery gives them no meaning.
 
 ### Deciding what a placement shows
 

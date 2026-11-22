@@ -12,12 +12,15 @@ public struct TemplateQuery: Codable, Sendable, Equatable {
   public var tags: [String: String]
   /// The contract minor the app implements; templates needing a newer one are skipped. Nil accepts any.
   public var minor: Int?
+  /// What the slot draws, in the app's words; a design with an audience is automatic only for facts it matches (§5.2).
+  public var facts: [String: String]
 
-  public init(contract: String, caps: PlayerCapabilities, widthDp: Int? = nil, heightDp: Int? = nil, designId: String? = nil, variant: String? = nil, theme: String? = nil, tags: [String: String] = [:], minor: Int? = nil) {
+  public init(contract: String, caps: PlayerCapabilities, widthDp: Int? = nil, heightDp: Int? = nil, designId: String? = nil, variant: String? = nil, theme: String? = nil, tags: [String: String] = [:], minor: Int? = nil, facts: [String: String] = [:]) {
     self.contract = contract; self.caps = caps; self.widthDp = widthDp; self.heightDp = heightDp
     self.designId = designId; self.variant = variant; self.theme = theme; self.tags = tags; self.minor = minor
+    self.facts = facts
   }
-  private enum CodingKeys: String, CodingKey { case contract, caps, widthDp, heightDp, designId, variant, theme, tags, minor }
+  private enum CodingKeys: String, CodingKey { case contract, caps, widthDp, heightDp, designId, variant, theme, tags, minor, facts }
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     contract = try c.decode(String.self, forKey: .contract); caps = try c.decode(PlayerCapabilities.self, forKey: .caps)
@@ -25,6 +28,7 @@ public struct TemplateQuery: Codable, Sendable, Equatable {
     designId = try c.decodeIfPresent(String.self, forKey: .designId); variant = try c.decodeIfPresent(String.self, forKey: .variant)
     theme = try c.decodeIfPresent(String.self, forKey: .theme); minor = try c.decodeIfPresent(Int.self, forKey: .minor)
     tags = try c.decodeIfPresent([String: String].self, forKey: .tags) ?? [:]
+    facts = try c.decodeIfPresent([String: String].self, forKey: .facts) ?? [:]
   }
 
 }
@@ -61,10 +65,18 @@ public enum TemplateSelector {
     if let id = query.designId, let e = best(candidates.filter { $0.designId == id }) { return e }
     // A design that isn't automatic plays only when named (above) or picked by an arm.
     let auto = candidates.filter { designs[$0.designId].map { $0.automatic && automatic($0) } ?? false }
-    func byVariant(_ v: String) -> [TemplateEntry] { auto.filter { designs[$0.designId]?.variant == v } }
-    if let v = query.variant, let e = best(byVariant(v)) { return e }
-    if let e = best(byVariant(Design.defaultVariant)) { return e }
-    return best(auto)
+    func byVariant(_ of: [TemplateEntry]) -> TemplateEntry? {
+      func inVariant(_ v: String) -> [TemplateEntry] { of.filter { designs[$0.designId]?.variant == v } }
+      if let v = query.variant, let e = best(inVariant(v)) { return e }
+      return best(inVariant(Design.defaultVariant)) ?? best(of)
+    }
+    // Designs made for these facts first, the best-ranked audience only; then designs for everyone.
+    // A design with an audience the facts don't match is never picked automatically.
+    let targeted = auto.filter { !(designs[$0.designId]?.audience.isEmpty ?? true) }
+    let general = auto.filter { designs[$0.designId]?.audience.isEmpty ?? false }
+    let ranked = targeted.compactMap { e in designs[e.designId]?.audienceRank(query.facts).map { (e, $0) } }
+    if let top = ranked.map({ $0.1 }).max(), let e = byVariant(ranked.filter { $0.1 == top }.map { $0.0 }) { return e }
+    return byVariant(general)
   }
 
   /// §5.4: the first of `queries` that has a template, with its index (most specific first: this

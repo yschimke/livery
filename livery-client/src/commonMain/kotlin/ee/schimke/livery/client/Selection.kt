@@ -5,6 +5,7 @@ import ee.schimke.livery.protocol.Design
 import ee.schimke.livery.protocol.Manifest
 import ee.schimke.livery.protocol.PlayerCapabilities
 import ee.schimke.livery.protocol.TemplateEntry
+import ee.schimke.livery.protocol.audienceRank
 import ee.schimke.livery.protocol.fits
 import ee.schimke.livery.protocol.themeFits
 
@@ -15,6 +16,10 @@ import ee.schimke.livery.protocol.themeFits
  * [minor] is the contract minor the app implements: templates that need a newer one (an input it
  * doesn't fill, an action it can't route) are skipped, so an older version of the same design plays
  * instead. Null accepts any minor, as clients did before minors were tracked.
+ *
+ * [facts] describe what the slot draws, in the app's own words (`device.model` = `X1 Carbon`): a
+ * design with an [ee.schimke.livery.protocol.Design.audience] is picked automatically only when
+ * one of its audiences matches them (PROTOCOL.md §5.2).
  */
 @kotlinx.serialization.Serializable
 data class TemplateQuery(
@@ -27,6 +32,7 @@ data class TemplateQuery(
   val theme: String? = null,
   val tags: Map<String, String> = emptyMap(),
   val minor: Int? = null,
+  val facts: Map<String, String> = emptyMap(),
 )
 
 /** Pure selection over a manifest: the same answer on every platform, and unit-testable. */
@@ -59,10 +65,17 @@ object TemplateSelector {
     query.designId?.let { id -> best(candidates.filter { it.designId == id })?.let { return it } }
     // A design that isn't automatic plays only when named (above) or picked by an arm.
     val auto = candidates.filter { liveDesigns.getValue(it.designId).let { d -> d.automatic && automatic(d) } }
-    val byVariant = { v: String -> auto.filter { liveDesigns.getValue(it.designId).variant == v } }
-    query.variant?.let { v -> best(byVariant(v))?.let { return it } }
-    best(byVariant(Design.DEFAULT_VARIANT))?.let { return it }
-    return best(auto)
+    fun byVariant(of: List<TemplateEntry>): TemplateEntry? {
+      val inVariant = { v: String -> of.filter { liveDesigns.getValue(it.designId).variant == v } }
+      query.variant?.let { v -> best(inVariant(v))?.let { return it } }
+      return best(inVariant(Design.DEFAULT_VARIANT)) ?: best(of)
+    }
+    // Designs made for these facts first, the best-ranked audience only; then designs for everyone.
+    // A design with an audience the facts don't match is never picked automatically.
+    val (targeted, general) = auto.partition { liveDesigns.getValue(it.designId).audience.isNotEmpty() }
+    val ranked = targeted.mapNotNull { e -> liveDesigns.getValue(e.designId).audienceRank(query.facts)?.let { e to it } }
+    ranked.maxOfOrNull { it.second }?.let { top -> byVariant(ranked.filter { it.second == top }.map { it.first })?.let { return it } }
+    return byVariant(general)
   }
 
   /**
