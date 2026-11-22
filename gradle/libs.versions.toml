@@ -33,7 +33,7 @@ robolectric = "4.17"
 # its JVM target. Both move together: the port's version is <release>-cmp<portRevision>.
 a2ui = "1.0.0-alpha01"
 a2ui-cmp = "1.0.0-alpha01-cmp02"
-robolectric-sdk35 = "15-robolectric-13954326-i7"
+robolectric-sdk35 = "17-robolectric-16653203-i7"
 # Android 16 (API 36): the first launcher that plays RemoteViews draw instructions.
 robolectric-sdk36 = "16-robolectric-13921718-i7"
 
