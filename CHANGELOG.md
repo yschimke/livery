@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/yschimke/livery/compare/v0.23.0...v0.24.0) (2026-11-22)
+
+
+### Features
+
+* **sessions:** a session kind's tools can return images ([#172](https://github.com/yschimke/livery/issues/172)) ([1d71060](https://github.com/yschimke/livery/commit/1d7106063ffc604e4bb6345652c89df07d1653d5))
+
 ## [0.23.0](https://github.com/yschimke/livery/compare/v0.22.0...v0.23.0) (2026-11-22)
 
 
