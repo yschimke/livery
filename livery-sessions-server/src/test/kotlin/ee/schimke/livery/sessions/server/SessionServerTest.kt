@@ -201,6 +201,50 @@ class SessionServerTest {
   }
 
   @Test
+  fun aKindToolsImagesReachTheAgentAsImageContent() = testApplication {
+    // The smallest valid PNG header is enough: the server passes the bytes through.
+    val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3)
+    val notes = NoteKind()
+    val drawing =
+      object : SessionKind by notes {
+        override val tools =
+          listOf(
+            object : SessionTool {
+              override val name = "draw"
+              override val description = "Draw the draft."
+              override val inputSchema = buildJsonObject { put("type", "object") }
+
+              override suspend fun call(agent: String, arguments: JsonObject) =
+                SessionToolResult.Done(
+                  buildJsonObject { put("width", 1) },
+                  listOf(SessionImage(png, caption = "With sample values")),
+                )
+            }
+          )
+      }
+    val server = SessionServer(listOf(drawing), maxWaitMs = 1_000).also { notes.server = it }
+    application { routing { sessionRoutes(server) } }
+    val note = notes.create("hello")
+    server.start("note", note.owner, note.agent, "Note")
+    val drawn = client.mcp("draw", buildJsonObject { put("session", note.agent) })
+    val content = drawn.getValue("content").jsonArray.map { it.jsonObject }
+    assertEquals(listOf("image", "text", "text"), content.map { it.getValue("type").jsonPrimitive.content }, drawn.toString())
+    assertEquals(java.util.Base64.getEncoder().encodeToString(png), content[0].getValue("data").jsonPrimitive.content)
+    assertEquals("image/png", content[0].getValue("mimeType").jsonPrimitive.content)
+    assertEquals("With sample values", content[1].getValue("text").jsonPrimitive.content)
+    assertEquals(1, drawn.data().getValue("width").jsonPrimitive.content.toInt())
+    assertFalse(drawn.failed())
+  }
+
+  @Test
+  fun anImageIsPngJpegOrWebpWithinTheRenderLimit() {
+    assertTrue(runCatching { SessionImage(byteArrayOf(1), "image/gif") }.isFailure)
+    assertTrue(runCatching { SessionImage(ByteArray(0)) }.isFailure)
+    assertTrue(runCatching { SessionImage(ByteArray(SessionImage.MAX_BYTES + 1)) }.isFailure)
+    assertEquals("image/webp", SessionImage(byteArrayOf(1), "image/webp").mimeType)
+  }
+
+  @Test
   fun kindsMayNotShareAToolNameWithDifferentArguments() {
     val different =
       object : SessionKind by NoteKind("other") {
