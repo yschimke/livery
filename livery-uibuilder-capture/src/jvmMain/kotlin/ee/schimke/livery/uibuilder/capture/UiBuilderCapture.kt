@@ -48,19 +48,31 @@ object UiBuilderCapture {
    */
   fun design(document: String, catalogs: List<UiBuilderCatalog>): UiDesign {
     val parsed = UiDesign.parse(document)
-    val fitting = catalogs.filter { it.systemIds.isEmpty() || parsed.systemId in it.systemIds }
+    val fitting = fitting(parsed, catalogs)
     val prepared = fitting.fold(parsed.document) { doc, c -> c.prepare(doc) }
     return UiDesign(prepared, fitting.fold(emptyMap()) { all, c -> all + c.components })
   }
 
-  /** [design] captured for [target] at its own size, its host inputs read from [contract]. */
-  suspend fun capture(design: UiDesign, contract: Contract, target: Target = DEFAULT_TARGET): CapturedTemplate {
+  /** The [catalogs] that draw [design]: those for its catalog, and those for any. */
+  fun fitting(design: UiDesign, catalogs: List<UiBuilderCatalog>): List<UiBuilderCatalog> =
+    catalogs.filter { it.systemIds.isEmpty() || design.systemId in it.systemIds }
+
+  /**
+   * [design] captured for [target] at its own size, its host inputs read from [contract]; [fonts]
+   * are the font families it names, for its sidecar (its catalogs' [UiBuilderCatalog.fonts]).
+   */
+  suspend fun capture(
+    design: UiDesign,
+    contract: Contract,
+    target: Target = DEFAULT_TARGET,
+    fonts: Collection<String> = emptyList(),
+  ): CapturedTemplate {
     val source = buildMap {
       put("tool", "ui-builder")
       put("design", design.id)
       design.revision?.let { put("revision", it.toString()) }
     }
-    return LiveryCapture.capture(target, design.widthDp, design.heightDp, source = source) {
+    return LiveryCapture.capture(target, design.widthDp, design.heightDp, source = source, fonts = fonts) {
       design.Render(LiveryValues(contract))
     }
   }
@@ -100,10 +112,11 @@ object UiBuilderCapture {
         val targetFile = File(designDir, "$name.target.json")
         val target = if (targetFile.isFile) JSON.decodeFromString(Target.serializer(), targetFile.readText()) else DEFAULT_TARGET
         val uiDesign = design(document.readText(), catalogs)
+        val fonts = fitting(uiDesign, catalogs).flatMap { it.fonts }
         val problems = uiDesign.validate()
         require(problems.isEmpty()) { "${designDir.name}/${document.name} can't be drawn: ${problems.joinToString("; ")}" }
         val template = try {
-          runBlocking { capture(uiDesign, contract, target) }
+          runBlocking { capture(uiDesign, contract, target, fonts) }
         } catch (e: IllegalArgumentException) {
           throw IllegalArgumentException("${designDir.name}/${document.name}: ${e.message}", e)
         }

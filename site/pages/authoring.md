@@ -369,7 +369,9 @@ class KitchenCatalog : UiBuilderCatalog {
 }
 ```
 
-`UiBuilderCatalog.prepare` may rewrite a document first, for example from the sample data it was
+`UiBuilderCatalog.fonts` lists the font families its components name, so each template's sidecar
+carries them and their files in `fonts/fonts.json` download with it. `UiBuilderCatalog.prepare`
+may rewrite a document first, for example from the sample data it was
 designed with to the names its contract declares. A component the catalog doesn't draw, a
 modifier the interpreter doesn't apply, or a state binding to an undeclared variable fails the
 capture with the node's id. To mix `.uid` templates with Compose code in one catalog, call

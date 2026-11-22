@@ -19,6 +19,7 @@ import okio.Path.Companion.toOkioPath
 /** The test's UI Builder catalog, registered in META-INF/services as an app registers its own. */
 class TestCatalog : UiBuilderCatalog {
   override val systemIds = setOf("test-cards")
+  override val fonts = listOf("system:sans-serif")
 
   override val components: Map<String, UiComponent> = mapOf(
     "test-cards/text" to { node, modifier -> RemoteText(node.remoteString("text"), modifier) },
@@ -89,6 +90,7 @@ class UiBuilderCaptureTest {
     assertContains(sidecar, "\"reads\": [\n        \"name\"\n    ]")
     assertContains(sidecar, "\"tool\": \"ui-builder\"")
     assertContains(sidecar, "\"revision\": \"3\"")
+    assertContains(sidecar, "\"fonts\": [\n        \"system:sans-serif\"\n    ]")
     assertContains(File(dir, "launcher.json").readText(), "\"launcher-widget\"")
     val built = CatalogBuilder(inspect = CatalogBuilder.INSPECT).build(FileSystem.SYSTEM, out.toOkioPath(), Layout.Static)
     assertEquals(listOf("greeting"), built.manifest.designs.map { it.id })

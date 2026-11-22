@@ -17,6 +17,13 @@ interface UiBuilderCatalog {
   val components: Map<String, UiComponent>
 
   /**
+   * The font families its components name (a brand face in the catalog's `fonts/fonts.json`): each
+   * template drawn with this catalog lists them in its sidecar's `fonts`, so their files download
+   * with it. Empty by default.
+   */
+  val fonts: Collection<String> get() = emptyList()
+
+  /**
    * The document as it should be drawn for a Livery template: unchanged by default. A catalog whose
    * designs name a sample of their data (an example entity to preview with) rewrites it here to
    * the names its contract declares.
