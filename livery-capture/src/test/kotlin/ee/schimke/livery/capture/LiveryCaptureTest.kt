@@ -3,13 +3,14 @@
 package ee.schimke.livery.capture
 
 import androidx.compose.remote.creation.compose.action.combinedAction
-import androidx.compose.remote.creation.compose.action.valueChange
+import androidx.compose.remote.creation.compose.action.valueChangeAction
 import androidx.compose.remote.creation.compose.layout.RemoteColumn
 import androidx.compose.remote.creation.compose.layout.RemoteText
 import androidx.compose.remote.creation.compose.modifier.RemoteModifier
 import androidx.compose.remote.creation.compose.modifier.clickable
 import androidx.compose.remote.creation.compose.modifier.fillMaxSize
-import androidx.compose.remote.creation.compose.state.rememberMutableRemoteBoolean
+import androidx.compose.remote.creation.compose.state.MutableRemoteBoolean
+import androidx.compose.runtime.remember
 import ee.schimke.livery.instantiate.TemplateInspector
 import ee.schimke.livery.protocol.ActionSpec
 import ee.schimke.livery.protocol.Contract
@@ -65,8 +66,8 @@ class LiveryCaptureTest {
   @Test fun oneTapChangesLocalStateAndTracksIt() = runBlocking {
     val t = LiveryCapture.capture(RuntimeEnvironment.getApplication(), launcher, 200, 100) {
       val v = LiveryValues(contract)
-      val expanded = rememberMutableRemoteBoolean(false)
-      RemoteColumn(RemoteModifier.fillMaxSize().clickable(combinedAction(valueChange(expanded, !expanded), v.action("expand", mapOf("section" to "specs"))))) {
+      val expanded = remember { MutableRemoteBoolean(false) }
+      RemoteColumn(RemoteModifier.fillMaxSize().clickable(combinedAction(valueChangeAction(expanded, !expanded), v.action("expand", mapOf("section" to "specs"))))) {
         RemoteText(v.string("title"))
       }
     }
