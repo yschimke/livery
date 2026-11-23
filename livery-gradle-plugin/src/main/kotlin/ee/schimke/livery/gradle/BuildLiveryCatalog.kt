@@ -14,6 +14,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -30,13 +31,17 @@ abstract class BuildLiveryCatalog : DefaultTask() {
   @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val source: DirectoryProperty
   @get:Input abstract val assetsPath: Property<String>
   @get:Input abstract val inspect: Property<Boolean>
-  @get:Input abstract val defaultAnimations: Property<Boolean>
+  @get:Input @get:Optional abstract val defaultAnimations: Property<Boolean>
   @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+  init {
+    defaultAnimations.convention(false)
+  }
 
   @TaskAction fun build() {
     val path = assetsPath.get().trim('/')
     require(path.isNotEmpty() && path.split('/').none { it == ".." || it.isEmpty() }) { "livery.assetsPath must be a relative path: '$path'" }
-    val processors = if (defaultAnimations.get()) emptyList() else TemplateProcessor.Defaults
+    val processors = if (defaultAnimations.getOrElse(false)) emptyList() else TemplateProcessor.Defaults
     val builder =
       if (inspect.get()) CatalogBuilder(now = { BUNDLED_EPOCH_MS }, inspect = CatalogBuilder.INSPECT, processors = processors)
       else CatalogBuilder(now = { BUNDLED_EPOCH_MS }, processors = processors)
