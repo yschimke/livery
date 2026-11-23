@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@a2ui/angular": "0.14.0",
-    "@a2ui/react": "0.15.0",
+    "@a2ui/react": "0.16.1",
     "@angular/common": "21.2.26",
     "@angular/compiler": "21.2.26",
     "@angular/compiler-cli": "21.2.26",
@@ -68,7 +68,7 @@
   },
   "peerDependencies": {
     "@a2ui/angular": "0.14.0",
-    "@a2ui/react": "0.15.0",
+    "@a2ui/react": "0.16.1",
     "@angular/common": "21.2.26",
     "@angular/core": "21.2.26",
     "@angular/platform-browser": "21.2.26",
