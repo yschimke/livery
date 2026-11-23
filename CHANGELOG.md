@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.0](https://github.com/yschimke/livery/compare/v0.24.0...v0.25.0) (2026-11-23)
+
+
+### Bug Fixes
+
+* **catalog:** make defaultAnimations optional with a default on BuildLiveryCatalog ([#175](https://github.com/yschimke/livery/issues/175)) ([6e1c72a](https://github.com/yschimke/livery/commit/6e1c72a2531bf778c1edf3d52a735bfa9ebb48a1))
+* **catalog:** make defaultAnimations optional with a default on BuildLiveryCatalog ([#175](https://github.com/yschimke/livery/issues/175)) ([b1cb2fe](https://github.com/yschimke/livery/commit/b1cb2fefe21c36488b52171e1046d8e9508e9be4))
+
 ## [0.24.0](https://github.com/yschimke/livery/compare/v0.23.0...v0.24.0) (2026-11-22)
 
 
