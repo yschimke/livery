@@ -54,7 +54,8 @@ suspend fun post(context: Context, id: Int, data: JsonObject) {
     .setContentTitle(data.title)
     .setContentText(data.summary)
   // views come wrapped so SystemUI's template can nest them (Android 17 refuses a nested view with
-  // draw instructions): post them as they are, with no setStyle() alongside.
+  // draw instructions): post them as they are, with no setStyle() alongside and no further
+  // wrapping (an addView() into a layout throws "Nested RemoteViews cannot contain DrawInstructions").
   render.views?.let { builder.setCustomBigContentView(it) }
     ?: builder.setStyle(NotificationCompat.BigTextStyle().bigText(data.summary))
   NotificationManagerCompat.from(context).notify(id, builder.build())

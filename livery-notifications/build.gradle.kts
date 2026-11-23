@@ -12,7 +12,9 @@ android {
     minSdk = 26
     // Built against 37.1 for its dependencies; nothing here needs more than 36 of an app.
     aarMetadata { minCompileSdk = 36 }
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
+  testOptions { targetSdk = 37 }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -26,4 +28,6 @@ dependencies {
   implementation(platform(libs.rc.players.bom))
   implementation(libs.rc.widget.launcher)
   implementation(libs.kotlinx.coroutines.core)
+  androidTestImplementation(libs.androidx.test.ext.junit)
+  androidTestImplementation(libs.androidx.test.runner)
 }

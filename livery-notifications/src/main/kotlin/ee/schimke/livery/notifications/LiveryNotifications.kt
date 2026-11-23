@@ -86,7 +86,11 @@ class NotificationRender internal constructor(
  * DrawInstructions"): SystemUI drops the notification, and a foreground service's crashes the app.
  * [NotificationRender.views] is therefore already wrapped for nesting
  * (`RcLauncherWidgets.notificationRemoteViews`); post it as it is, without wrapping or replacing
- * it. Leave the style off alongside it, so the custom body is the expanded view.
+ * it. Wrapping it again, in another `RemoteViews` or by `addView` into a layout, breaks it: from
+ * Android 17 a `RemoteViews` that contains a view with draw instructions at any depth throws
+ * "Nested RemoteViews cannot contain DrawInstructions" when it is parcelled, from `notify` and
+ * from a foreground service's `Intent` alike. `NotificationBodyTest` (an instrumented test) holds
+ * the shape that posts. Leave the style off alongside it, so the custom body is the expanded view.
  *
  * Rendering never waits on the network: planning is [CacheOnly], images come from the device
  * ([CachedImages]), and what was missing is fetched by [NotificationRender.fetchMissed].
