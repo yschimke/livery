@@ -37,7 +37,7 @@
     "pack:check": "node scripts/check-pack.mjs"
   },
   "dependencies": {
-    "@a2ui/lit": "0.15.0",
+    "@a2ui/lit": "0.16.0",
     "@a2ui/web_core": "0.15.0",
     "@js-joda/core": "6.3.2",
     "lit": "3.3.3",
