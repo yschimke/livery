@@ -72,4 +72,24 @@ class LiveryCatalogPluginTest {
     assertTrue(File(dir, "build/generated/livery/catalogs/north/livery/north/manifest.json").isFile)
     assertTrue(File(dir, "build/generated/livery/catalogs/south-east/livery/south-east/manifest.json").isFile)
   }
+
+  @Test fun buildLiveryCatalogWorksWithoutSettingDefaultAnimations() {
+    val dir = Files.createTempDirectory("app").toFile().apply {
+      File(requireNotNull(System.getProperty("livery.samples"))).copyRecursively(File(this, "livery"))
+      File(this, "settings.gradle.kts").writeText("rootProject.name = \"app\"\n")
+      File(this, "build.gradle.kts").writeText(
+        """
+        plugins { id("ee.schimke.composeai.livery.catalog") apply false }
+        tasks.register<ee.schimke.livery.gradle.BuildLiveryCatalog>("customBuild") {
+          source.set(layout.projectDirectory.dir("livery"))
+          assetsPath.set("catalogs/sample")
+          inspect.set(false)
+          outputDir.set(layout.buildDirectory.dir("out"))
+        }
+        """.trimIndent()
+      )
+    }
+    val result = run(dir, "customBuild")
+    assertEquals(TaskOutcome.SUCCESS, result.task(":customBuild")?.outcome)
+  }
 }
