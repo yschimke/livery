@@ -45,7 +45,7 @@
     "@yschimke/livery-web": "file:../core"
   },
   "devDependencies": {
-    "@a2ui/angular": "0.14.0",
+    "@a2ui/angular": "0.16.0",
     "@a2ui/react": "0.15.0",
     "@angular/common": "21.2.26",
     "@angular/compiler": "21.2.26",
@@ -67,7 +67,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@a2ui/angular": "0.14.0",
+    "@a2ui/angular": "0.16.0",
     "@a2ui/react": "0.15.0",
     "@angular/common": "21.2.26",
     "@angular/core": "21.2.26",
