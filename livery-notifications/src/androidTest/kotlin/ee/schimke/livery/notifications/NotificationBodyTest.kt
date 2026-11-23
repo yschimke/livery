@@ -29,7 +29,10 @@ class NotificationBodyTest {
   private val document: ByteArray = instrumentation.context.assets.open("demo-tile.rc").readBytes()
 
   init {
-    instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.POST_NOTIFICATIONS)
+    // The permission exists from API 33; before it notifications post without it.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.POST_NOTIFICATIONS)
+    }
   }
 
   /** The body of [LiveryNotifications.render]: `RcLauncherWidgets.notificationRemoteViews`. */
