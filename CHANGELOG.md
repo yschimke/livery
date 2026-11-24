@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.26.0](https://github.com/yschimke/livery/compare/v0.25.0...v0.26.0) (2026-11-24)
+
+
+### Features
+
+* add standalone livery-host module ([#186](https://github.com/yschimke/livery/issues/186)) ([b327e27](https://github.com/yschimke/livery/commit/b327e2751108e8bcad36052beb7d2465b288e5f9))
+
+
+### Bug Fixes
+
+* **deps:** update dependency ee.schimke.composeai:rc-players-bom to v3.12.1 ([#177](https://github.com/yschimke/livery/issues/177)) ([5ccb401](https://github.com/yschimke/livery/commit/5ccb4016696cb22fa22d936f521f451702379a3c))
+* **deps:** update sentry to v8.65.1 ([#178](https://github.com/yschimke/livery/issues/178)) ([f2c530a](https://github.com/yschimke/livery/commit/f2c530a250831ce471505509283832e4a6994c03))
+
 ## [0.25.0](https://github.com/yschimke/livery/compare/v0.24.0...v0.25.0) (2026-11-23)
 
 
