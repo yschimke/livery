@@ -25,6 +25,7 @@ include(":livery-client")
 include(":livery-catalog")
 include(":livery-publish")
 include(":livery-server")
+include(":livery-host")
 include(":livery-compose")
 include(":livery-compose-material3")
 // The AndroidX View and embedded Remote Compose players behind LiveryPlayer. Not published while they are alpha.
