@@ -50,6 +50,29 @@
         "typescript"
       ],
       "allowedVersions": "<6.1"
+    },
+    {
+      "description": "A2UI npm packages share @a2ui/web_core types across peer and transitive dependencies and fail TypeScript checks when bumped separately; move them together.",
+      "matchPackageNames": [
+        "/^@a2ui\\//"
+      ],
+      "groupName": "a2ui"
+    },
+    {
+      "description": "@a2ui/web_core 0.16.x isTemplateRefObject matches any object schema with a `template` property, so scrapeComponentBehavior drops all Livery component properties and leaves bindings unresolved. Skipped from #181, #182, #183. Remove when upstream fixes root schema classification or Livery migrates in #184.",
+      "matchPackageNames": [
+        "@a2ui/web_core",
+        "@a2ui/lit",
+        "@a2ui/react"
+      ],
+      "allowedVersions": "/^0\\.(?:[0-9]|1[0-5])\\.[0-9]+$/"
+    },
+    {
+      "description": "@a2ui/angular 0.15.0+ depends on @a2ui/web_core ^0.16.0 (and 0.16.0 moves peerDependencies to Angular 22). Skipped from #180. Remove with the @a2ui/* 0.16 hold in #184.",
+      "matchPackageNames": [
+        "@a2ui/angular"
+      ],
+      "allowedVersions": "/^0\\.(?:[0-9]|1[0-4])\\.[0-9]+$/"
     }
   ]
 }
