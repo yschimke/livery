@@ -52,7 +52,7 @@
     "@angular/compiler-cli": "21.2.26",
     "@angular/core": "21.2.26",
     "@angular/platform-browser": "21.2.26",
-    "@types/react": "19.3.1",
+    "@types/react": "19.3.2",
     "@types/react-dom": "19.3.0",
     "binaryen": "132.0.0",
     "esbuild": "0.28.2",
