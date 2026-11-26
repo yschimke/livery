@@ -17,7 +17,7 @@ agp = "9.5.3"
 # Baseline profiles (livery-baselineprofile/): the Gradle plugin and the macrobenchmark runtime ship
 # together; keep them on one version.
 androidx-benchmark = "1.5.0"
-ktor = "3.6.1"
+ktor = "3.6.2"
 okio = "3.18.2"
 maven-publish = "0.37.0"
 # Glance Wear moves in lockstep with the Remote Compose alphas rc-players builds on.
