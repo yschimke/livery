@@ -27,15 +27,15 @@ sentry = "8.65.1"
 datadog = "3.16.0"
 amplitude = "1.37.2"
 compose-remote = "1.0.0-alpha24"
-robolectric = "4.17"
+robolectric = "4.18.1"
 # The A2UI release train (androidx.a2ui:*, material3-a2ui) for livery-a2ui-compose's Android
 # target, and the same release ported to Compose Multiplatform (yschimke/a2ui-catalog, vendor/) for
 # its JVM target. Both move together: the port's version is <release>-cmp<portRevision>.
 a2ui = "1.0.0-alpha02"
 a2ui-cmp = "1.0.0-alpha01-cmp02"
-robolectric-sdk35 = "15-robolectric-13954326-i7"
+robolectric-sdk35 = "15-robolectric-14663667-2-i7"
 # Android 16 (API 36): the first launcher that plays RemoteViews draw instructions.
-robolectric-sdk36 = "16-robolectric-13921718-i7"
+robolectric-sdk36 = "16-robolectric-13921718-2-i7"
 
 [libraries]
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
