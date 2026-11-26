@@ -189,7 +189,7 @@ class PlayCommand : LiveryCommand {
   private companion object {
     val SDK_VERSION: String = Properties().apply {
       PlayCommand::class.java.getResourceAsStream("/livery-play.properties")?.use(::load)
-    }.getProperty("robolectric.sdk36") ?: "16-robolectric-13921718-i7"
+    }.getProperty("robolectric.sdk36") ?: "16-robolectric-13921718-2-i7"
     val SDK_FILE = "android-all-instrumented-$SDK_VERSION.jar" // its name in the cache, as Robolectric looks for it
     val JSON = Json { ignoreUnknownKeys = true }
   }
