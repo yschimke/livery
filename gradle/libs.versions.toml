@@ -13,7 +13,7 @@ rc-players = "3.12.1"
 # compose-ai-tools' Remote Compose JSON codec (AndroidX authoring JSON -> .rc on a plain JVM): what
 # livery-kobento compiles plain Kobento / AndroidX authoring JSON with. Its remote-core is compose-remote's.
 remotecompose-json = "2.104.0"
-agp = "9.5.2"
+agp = "9.5.3"
 # Baseline profiles (livery-baselineprofile/): the Gradle plugin and the macrobenchmark runtime ship
 # together; keep them on one version.
 androidx-benchmark = "1.5.0"
