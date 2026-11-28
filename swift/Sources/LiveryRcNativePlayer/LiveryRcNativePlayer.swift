@@ -352,7 +352,11 @@ import SwiftUI
                 anyDeferred = true
               }
             }
-            if !anyDeferred { return }
+            if !anyDeferred {
+              let stillRemaining = self.desired.filter { self.pushed[$0.key] != $0.value }
+              if stillRemaining.isEmpty { return }
+              continue
+            }
             let delayNs: UInt64 = attempt < 15 ? 20_000_000 : 40_000_000
             try? await Task.sleep(nanoseconds: delayNs)
           }
