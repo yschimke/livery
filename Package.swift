@@ -11,6 +11,7 @@ let package = Package(
     .library(name: "LiveryUI", targets: ["LiveryUI"]),
     .library(name: "LiveryRcNativePlayer", targets: ["LiveryRcNativePlayer"]),
     .library(name: "LiveryCapture", targets: ["LiveryCapture"]),
+    .plugin(name: "LiveryCatalogPlugin", targets: ["LiveryCatalogPlugin"]),
   ],
   dependencies: [
     // Pure-Swift mirror of yschimke/rc-players (no Kotlin/Native XCFramework binary target).
@@ -37,6 +38,19 @@ let package = Package(
         .product(name: "RcCreation", package: "rc-swift"),
       ],
       path: "swift/Sources/LiveryCapture"
+    ),
+    .plugin(
+      name: "LiveryCatalogPlugin",
+      capability: .command(
+        intent: .custom(
+          verb: "livery-build",
+          description: "Capture Swift RcCreation templates and build a Livery catalog"
+        ),
+        permissions: [
+          .writeToPackageDirectory(reason: "Write captured or built Livery catalog files")
+        ]
+      ),
+      path: "swift/Plugins/LiveryCatalogPlugin"
     ),
     // Reads ../../../conformance through #filePath, so tests always run the checked-in fixtures.
     .testTarget(name: "LiveryTests", dependencies: ["Livery"], path: "swift/Tests/LiveryTests"),

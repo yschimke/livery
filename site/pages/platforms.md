@@ -62,7 +62,17 @@ plus two optional products built on the pure-Swift
   `LiveryNativeFontResolver`).
 - **`LiveryCapture`**: author Livery templates in Swift with `RcCreation` (`LiveryValues`,
   `LiveryCapture.capture`, `CatalogSource`), writing standard catalog source trees for
-  `livery build`.
+  `livery build` — or build a deterministic offline bundled catalog (`manifest.json` + `blobs/`)
+  directly in pure Swift with `CatalogSource.buildBundled(to:)` (no JVM required).
+- **`LiveryCatalogPlugin`**: SwiftPM command plugin that runs a project's Swift template generator
+  executable (`<source> <out>`) and optionally invokes `livery build --inspect`:
+
+```sh
+swift package --allow-writing-to-package-directory livery-build \
+  --target CatalogTemplates \
+  --source catalog-source \
+  --out App/Resources/livery
+```
 
 `LiveryHost` wires file stores, `TemplateRepository` (including
 `TemplateRepository.Bundled.fromBundle()`), `SlotPlanner` and `.inAppNativeSwift` capabilities:

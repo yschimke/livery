@@ -9,6 +9,7 @@ public enum LiveryCaptureError: Error, Equatable, LocalizedError, Sendable {
   case undeclaredAction(name: String, contract: String)
   case invalidTemplateName(String)
   case invalidIdentifier(String)
+  case unsupportedBundledFeature(String)
 
   public var errorDescription: String? {
     switch self {
@@ -22,6 +23,8 @@ public enum LiveryCaptureError: Error, Equatable, LocalizedError, Sendable {
       return "Invalid or reserved template name '\(name)'"
     case .invalidIdentifier(let id):
       return "Invalid identifier '\(id)'"
+    case .unsupportedBundledFeature(let detail):
+      return "Pure-Swift bundled builder does not support \(detail); use `livery build --inspect` instead"
     }
   }
 }
