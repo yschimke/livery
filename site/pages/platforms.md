@@ -58,10 +58,12 @@ plus two optional products built on the pure-Swift
 [`yschimke/rc-swift`](https://github.com/yschimke/rc-swift) mirror (no Compose XCFramework):
 
 - **`LiveryRcNativePlayer`**: SwiftUI player adapter over `RcNativePlayerUIKit` with incremental
-  named-value updates, iOS 16+ `sizeThatFits` aspect-ratio sizing, and Livery image/font resolvers
-  (`LiveryNativeResourceResolver`, `LiveryNativeFontResolver`). `androidCompatibility` defaults to
-  `.disabled` so captured templates scale cleanly to the SwiftUI container width; pass
-  `androidCompatibility: .enabled` to opt into Android dp-density scaling.
+  named-value updates, iOS 16+ `sizeThatFits` sizing, and Livery image/font resolvers
+  (`LiveryNativeResourceResolver`, `LiveryNativeFontResolver`). Defaults to
+  `contentSizing: .wrapContent` (unscaled 1:1 point layout wrapped to content height; pass
+  `.fitDocument` to fit the declared capture dimensions), `fontCompatibility: .appleSystemSubstitutions`
+  (maps Android/Google families such as `Roboto` and `Google Sans Flex` to Apple system designs when
+  no bundled font asset is registered), and `androidCompatibility: .disabled`.
 - **`LiveryCapture`**: author Livery templates in Swift with `RcCreation` (`LiveryValues`,
   `LiveryCapture.capture`, `CatalogSource`), writing standard catalog source trees for
   `livery build` — or build a deterministic offline bundled catalog (`manifest.json` + `blobs/`)
