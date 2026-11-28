@@ -75,7 +75,7 @@ public final class LiveryHost: Sendable {
   ) async -> PlanResult {
     let query = TemplateQuery(
       contract: contract,
-      capabilities: capabilities,
+      caps: capabilities,
       widthDp: widthDp,
       heightDp: heightDp,
       designId: designId,
