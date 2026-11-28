@@ -283,6 +283,7 @@ import SwiftUI
       var imageBindings: [String: String] = [:]
       var pushed: [String: PlayerValue] = [:]
       private var desired: [String: PlayerValue] = [:]
+      private var loadGeneration: UInt64 = 0
       private var applyTask: Task<Void, Never>?
       private var cachedSizeDoc: Data?
       private var cachedSize: CGSize?
@@ -292,6 +293,7 @@ import SwiftUI
         self.loaded = document
         self.imageBindings = imageBindings
         self.pushed = [:]
+        self.loadGeneration &+= 1
         self.applyTask?.cancel()
         self.applyTask = nil
       }
@@ -323,22 +325,22 @@ import SwiftUI
         guard !pending.isEmpty else { return }
         if applyTask != nil { return }
 
-        let generationDoc = loaded
+        let generation = loadGeneration
         applyTask = Task { @MainActor [weak self, weak view] in
           defer {
-            if let self, self.loaded == generationDoc {
+            if let self, self.loadGeneration == generation {
               self.applyTask = nil
             }
           }
           guard let self, let view else { return }
           for attempt in 0..<150 {
-            guard !Task.isCancelled, self.loaded == generationDoc else { return }
+            guard !Task.isCancelled, self.loadGeneration == generation else { return }
             let remaining = self.desired.filter { self.pushed[$0.key] != $0.value }
             guard !remaining.isEmpty else { return }
 
             var anyDeferred = false
             for (name, v) in remaining {
-              guard !Task.isCancelled, self.loaded == generationDoc else { return }
+              guard !Task.isCancelled, self.loadGeneration == generation else { return }
               let accepted: Bool
               switch v {
               case .text(let s): accepted = await view.setString(s, for: name)
