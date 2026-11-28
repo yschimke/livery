@@ -99,4 +99,62 @@ final class LiveryCaptureTests: XCTestCase {
       )
     }
   }
+
+  func testBuildsBundledCatalogAndResolvesThroughSlotPlanner() async throws {
+    let captured = try LiveryCapture.capture(
+      contract: sessionContract,
+      target: Target(surface: Surfaces.inApp, rcApiLevel: 7, profiles: ["androidx"]),
+      width: 340,
+      height: 88
+    ) { values in
+      let title = try values.string("title")
+      let open = try values.action("open")
+      return RemoteText("\(title)").onTapGesture(.host(open))
+    }
+
+    let tmp = FileManager.default.temporaryDirectory
+      .appendingPathComponent("livery-bundled-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    let srcDir = tmp.appendingPathComponent("source", isDirectory: true)
+    let outDir = tmp.appendingPathComponent("bundled", isDirectory: true)
+
+    let source = CatalogSource(directory: srcDir)
+    try source.writeCatalog("confetti-swift")
+    try source.writeContract(sessionContract)
+    try source.writeDesign(
+      Design(
+        id: "session-default",
+        contract: sessionContract.ref,
+        title: "Session card",
+        install: .always
+      ),
+      templates: ["in-app": captured]
+    )
+
+    let manifest = try source.buildBundled(to: outDir)
+    XCTAssertEqual(manifest.catalog, "confetti-swift")
+    XCTAssertEqual(manifest.serial, 0)
+    XCTAssertEqual(manifest.templates.count, 1)
+
+    let bundled = try XCTUnwrap(TemplateRepository.Bundled.fromDirectory(outDir))
+    let repo = TemplateRepository(
+      source: StaticSource("https://example.invalid/catalog/"),
+      trust: .signed([]),
+      blobs: MemoryBlobStore(),
+      kv: MemoryKeyValueStore(),
+      targets: [.inAppNativeSwift],
+      bundled: bundled
+    )
+    let planner = SlotPlanner(repository: repo)
+    let result = await planner.forAppData(
+      TemplateQuery(contract: sessionContract.ref, caps: .inAppNativeSwift),
+      data: ["title": .string("Keynote")]
+    )
+    guard case .ready(let plan) = result else {
+      return XCTFail("Expected .ready plan from bundled Swift catalog, got \(result)")
+    }
+    XCTAssertEqual(plan.template.bytes, captured.bytes)
+    XCTAssertEqual(plan.template.origin, .bundled)
+  }
 }
