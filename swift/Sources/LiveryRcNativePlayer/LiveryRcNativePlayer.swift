@@ -201,7 +201,11 @@ import SwiftUI
     public func updateUIView(_ view: RemoteComposeNativePlayerView, context: Context) {
       view.onEvent = { event in handle(event) }
       let currentImages = Self.imageBindings(from: input.bindings)
-      if context.coordinator.loaded != input.document || context.coordinator.imageBindings != currentImages {
+      let keysRemoved = context.coordinator.pushed.keys.contains { input.values[$0] == nil }
+      if context.coordinator.loaded != input.document
+        || context.coordinator.imageBindings != currentImages
+        || keysRemoved
+      {
         let resourceResolver = LiveryNativeResourceResolver(
           bindings: input.bindings,
           assetBytes: assetBytes,

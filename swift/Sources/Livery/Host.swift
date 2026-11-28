@@ -89,8 +89,8 @@ public final class LiveryHost: Sendable {
     await repository.asset(sha256)
   }
 
-  /// The current catalog's configured `ImageProxy`, if any.
+  /// The active catalog's configured `ImageProxy` (downloaded or bundled), if any.
   public func imageProxy() async -> ImageProxy? {
-    await repository.manifest()?.imageProxy
+    await repository.current()?.imageProxy
   }
 }
