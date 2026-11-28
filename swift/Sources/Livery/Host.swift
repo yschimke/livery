@@ -5,7 +5,7 @@ extension PlayerCapabilities {
   public static let inAppNativeSwift = PlayerCapabilities(
     surface: Surfaces.inApp,
     maxRcApiLevel: 7,
-    profiles: [],
+    profiles: ["androidx"],
     livePush: true,
     themes: [Target.themeHost]
   )
