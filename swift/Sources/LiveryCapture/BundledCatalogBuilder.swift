@@ -84,7 +84,14 @@ extension CatalogSource {
       in: "experiments", as: Experiment.self, decoder: decoder
     ).sorted { $0.id < $1.id }
 
-    let contractRefs = Set(contracts.map(\.ref))
+    let contractsByRef: [String: Contract] = Dictionary(
+      contracts.map { ($0.ref, $0) },
+      uniquingKeysWith: { a, b in a.minor >= b.minor ? a : b }
+    )
+
+    if fm.fileExists(atPath: directory.appendingPathComponent("fonts/fonts.json").path) {
+      throw LiveryCaptureError.unsupportedBundledFeature("catalog font bundles (fonts/fonts.json)")
+    }
 
     if fm.fileExists(atPath: outputDirectory.path) {
       try fm.removeItem(at: outputDirectory)
@@ -109,8 +116,11 @@ extension CatalogSource {
         let designFile = folder.appendingPathComponent("design.json")
         guard fm.fileExists(atPath: designFile.path) else { continue }
         let design = try decoder.decode(Design.self, from: Data(contentsOf: designFile))
-        guard contractRefs.contains(design.contract) else {
+        guard let contract = contractsByRef[design.contract] else {
           throw LiveryCaptureError.invalidIdentifier(design.contract)
+        }
+        if fm.fileExists(atPath: folder.appendingPathComponent("assets").path) {
+          throw LiveryCaptureError.unsupportedBundledFeature("design asset directories (designs/\(design.id)/assets)")
         }
         designs.append(design)
 
@@ -123,6 +133,13 @@ extension CatalogSource {
           let sidecarURL = folder.appendingPathComponent("\(stem).json")
           let rcBytes = try Data(contentsOf: rcURL)
           let sidecar = try decoder.decode(SourceSidecar.self, from: Data(contentsOf: sidecarURL))
+          let fonts = (sidecar.fonts ?? []).sorted()
+          if fonts.contains(where: { !$0.hasPrefix("google:") && !$0.hasPrefix("system:") }) {
+            throw LiveryCaptureError.unsupportedBundledFeature("catalog font families (\(fonts.joined(separator: ", ")))")
+          }
+          let reads = (sidecar.reads ?? []).sorted()
+          let emits = (sidecar.emits ?? []).sorted()
+          let requiredMinor = Self.requiresMinor(contract: contract, reads: reads, emits: emits)
           let sha256 = Hashing.sha256Hex(rcBytes)
           try rcBytes.write(
             to: blobsDir.appendingPathComponent("\(sha256).rc"), options: .atomic)
@@ -137,11 +154,11 @@ extension CatalogSource {
               tags: sidecar.tags ?? [:],
               previews: [],
               revoked: false,
-              reads: (sidecar.reads ?? []).sorted(),
-              requiresMinor: 0,
-              emits: (sidecar.emits ?? []).sorted(),
+              reads: reads,
+              requiresMinor: requiredMinor,
+              emits: emits,
               assets: [],
-              fonts: (sidecar.fonts ?? []).sorted(),
+              fonts: fonts,
               features: [],
               source: sidecar.source ?? [:]
             )
@@ -193,5 +210,30 @@ extension CatalogSource {
       .filter { $0.pathExtension == "json" }
       .sorted { $0.lastPathComponent < $1.lastPathComponent }
     return try files.map { try decoder.decode(T.self, from: Data(contentsOf: $0)) }
+  }
+
+  private static func requiresMinor(contract: Contract, reads: [String], emits: [String]) -> Int {
+    var required = 0
+    for name in reads {
+      if let spec = contract.inputs[name] {
+        required = max(required, spec.since)
+        continue
+      }
+      let parts = name.split(separator: ".", omittingEmptySubsequences: false)
+      if parts.count == 2, parts[1] == "count", let list = contract.lists[String(parts[0])] {
+        required = max(required, list.since)
+      } else if parts.count == 3, Int(parts[1]) != nil, let list = contract.lists[String(parts[0])] {
+        required = max(required, list.since)
+        if let field = list.item[String(parts[2])] {
+          required = max(required, field.since)
+        }
+      }
+    }
+    for action in emits {
+      if let spec = contract.actions[action] {
+        required = max(required, spec.since)
+      }
+    }
+    return required
   }
 }
