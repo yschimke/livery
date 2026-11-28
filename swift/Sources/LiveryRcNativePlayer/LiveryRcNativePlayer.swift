@@ -181,6 +181,7 @@ import SwiftUI
         assetBytes: assetBytes,
         fallback: fontFallback
       )
+      let coordinator = context.coordinator
       let view = RemoteComposeNativePlayerView(
         data: input.document,
         background: background,
@@ -190,20 +191,25 @@ import SwiftUI
         resourceResolver: resourceResolver,
         downloadableFontResolver: fontResolver,
         onEvent: { event in handle(event) },
-        onDiagnostics: { _ in }
+        onDiagnostics: { _ in
+          Task { @MainActor in coordinator.retryPending() }
+        }
       )
-      context.coordinator.loaded = input.document
-      context.coordinator.imageBindings = Self.imageBindings(from: input.bindings)
-      context.coordinator.apply(input.values, to: view)
+      coordinator.attach(view: view, document: input.document, imageBindings: Self.imageBindings(from: input.bindings))
+      coordinator.apply(input.values, to: view)
       return view
     }
 
     public func updateUIView(_ view: RemoteComposeNativePlayerView, context: Context) {
+      let coordinator = context.coordinator
       view.onEvent = { event in handle(event) }
+      view.onDiagnostics = { _ in
+        Task { @MainActor in coordinator.retryPending() }
+      }
       let currentImages = Self.imageBindings(from: input.bindings)
-      let keysRemoved = context.coordinator.pushed.keys.contains { input.values[$0] == nil }
-      if context.coordinator.loaded != input.document
-        || context.coordinator.imageBindings != currentImages
+      let keysRemoved = coordinator.pushed.keys.contains { input.values[$0] == nil }
+      if coordinator.loaded != input.document
+        || coordinator.imageBindings != currentImages
         || keysRemoved
       {
         let resourceResolver = LiveryNativeResourceResolver(
@@ -221,11 +227,29 @@ import SwiftUI
         view.configureResources(limits: .default, resolver: resourceResolver)
         view.configureDownloadableFonts(resolver: fontResolver)
         view.load(input.document)
-        context.coordinator.loaded = input.document
-        context.coordinator.imageBindings = currentImages
-        context.coordinator.pushed = [:]
+        coordinator.attach(view: view, document: input.document, imageBindings: currentImages)
       }
-      context.coordinator.apply(input.values, to: view)
+      coordinator.apply(input.values, to: view)
+    }
+
+    @available(iOS 16.0, *)
+    public func sizeThatFits(
+      _ proposal: ProposedViewSize,
+      uiView: RemoteComposeNativePlayerView,
+      context: Context
+    ) -> CGSize? {
+      guard let docSize = context.coordinator.documentSize(for: input.document),
+        docSize.width > 0, docSize.height > 0
+      else { return nil }
+      let aspect = docSize.height / docSize.width
+      if let width = proposal.width, width.isFinite, width > 0 {
+        let height = proposal.height.flatMap { ($0.isFinite && $0 > 0) ? $0 : nil } ?? (width * aspect)
+        return CGSize(width: width, height: height)
+      }
+      if let height = proposal.height, height.isFinite, height > 0 {
+        return CGSize(width: height / aspect, height: height)
+      }
+      return nil
     }
 
     private static func imageBindings(from bindings: Bindings) -> [String: String] {
@@ -249,22 +273,78 @@ import SwiftUI
 
     @MainActor
     public final class Coordinator {
+      weak var view: RemoteComposeNativePlayerView?
       var loaded: Data?
       var imageBindings: [String: String] = [:]
       var pushed: [String: PlayerValue] = [:]
+      private var desired: [String: PlayerValue] = [:]
+      private var applyTask: Task<Void, Never>?
+      private var cachedSizeDoc: Data?
+      private var cachedSize: CGSize?
 
-      /// Pushes only what changed, so a live update animates and nothing else restarts.
+      func attach(view: RemoteComposeNativePlayerView, document: Data, imageBindings: [String: String]) {
+        self.view = view
+        self.loaded = document
+        self.imageBindings = imageBindings
+        self.pushed = [:]
+        self.applyTask?.cancel()
+        self.applyTask = nil
+      }
+
+      func documentSize(for document: Data) -> CGSize? {
+        if cachedSizeDoc == document { return cachedSize }
+        cachedSizeDoc = document
+        if let prepared = try? NativeSwiftPreparedDocument.decode(data: document),
+          prepared.width > 0, prepared.height > 0
+        {
+          cachedSize = CGSize(width: CGFloat(prepared.width), height: CGFloat(prepared.height))
+        } else {
+          cachedSize = nil
+        }
+        return cachedSize
+      }
+
+      func retryPending() {
+        guard let view, !desired.isEmpty else { return }
+        apply(desired, to: view)
+      }
+
+      /// Pushes only what changed, retrying writes that `.deferred` while the player's async
+      /// document open is still in flight so initial text and theme values are never dropped.
       func apply(_ values: [String: PlayerValue], to view: RemoteComposeNativePlayerView) {
-        let changed = values.filter { pushed[$0.key] != $0.value }
-        pushed = values
-        Task { @MainActor in
-          for (name, v) in changed {
-            switch v {
-            case .text(let s): _ = await view.setString(s, for: name)
-            case .integer(let i): _ = await view.setInteger(i, for: name)
-            case .float(let f): _ = await view.setFloat(f, for: name)
-            case .color(let c): _ = await view.setColor(c, for: name)
+        self.view = view
+        self.desired = values
+        let pending = values.filter { pushed[$0.key] != $0.value }
+        guard !pending.isEmpty else { return }
+
+        applyTask?.cancel()
+        let generationDoc = loaded
+        applyTask = Task { @MainActor [weak self, weak view] in
+          guard let self, let view else { return }
+          for attempt in 0..<100 {
+            guard !Task.isCancelled, self.loaded == generationDoc else { return }
+            let remaining = self.desired.filter { self.pushed[$0.key] != $0.value }
+            guard !remaining.isEmpty else { return }
+
+            var anyDeferred = false
+            for (name, v) in remaining {
+              guard !Task.isCancelled, self.loaded == generationDoc else { return }
+              let accepted: Bool
+              switch v {
+              case .text(let s): accepted = await view.setString(s, for: name)
+              case .integer(let i): accepted = await view.setInteger(i, for: name)
+              case .float(let f): accepted = await view.setFloat(f, for: name)
+              case .color(let c): accepted = await view.setColor(c, for: name)
+              }
+              if accepted {
+                self.pushed[name] = v
+              } else {
+                anyDeferred = true
+              }
             }
+            if !anyDeferred { return }
+            let delayNs: UInt64 = attempt < 10 ? 15_000_000 : 35_000_000
+            try? await Task.sleep(nanoseconds: delayNs)
           }
         }
       }
