@@ -226,13 +226,22 @@
 repository's <code>revision</code> does (a refreshed catalog, an install). Catalog images and fonts go through the
 player's own loaders.</p>
 <h2 id="swift">Swift<a class="headerlink" href="#swift" title="Permanent link">#</a></h2>
-<p>A native SwiftPM package with no dependencies beyond the system: <code>URLSession</code>, CryptoKit, SwiftUI.
-<code>LiverySlotView</code> takes any player view. For rc-players' native Swift player, add
-<a href="https://github.com/yschimke/livery/blob/main/swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift"><code>swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift</code></a>
-to your app beside your own <code>RcNativePlayerUIKit</code> dependency.</p>
+<p>A native SwiftPM package backed by <code>URLSession</code>, CryptoKit and SwiftUI (<code>Livery</code> and <code>LiveryUI</code>),
+plus two optional products built on the pure-Swift
+<a href="https://github.com/yschimke/rc-swift"><code>yschimke/rc-swift</code></a> mirror (no Compose XCFramework):</p>
+<ul>
+<li><strong><code>LiveryRcNativePlayer</code></strong>: SwiftUI player adapter over <code>RcNativePlayerUIKit</code> with incremental
+  named-value updates and Livery image/font resolvers (<code>LiveryNativeResourceResolver</code>,
+  <code>LiveryNativeFontResolver</code>).</li>
+<li><strong><code>LiveryCapture</code></strong>: author Livery templates in Swift with <code>RcCreation</code> (<code>LiveryValues</code>,
+  <code>LiveryCapture.capture</code>, <code>CatalogSource</code>), writing standard catalog source trees for
+  <code>livery build</code>.</li>
+</ul>
+<p><code>LiveryHost</code> wires file stores, <code>TemplateRepository</code> (including
+<code>TemplateRepository.Bundled.fromBundle()</code>), <code>SlotPlanner</code> and <code>.inAppNativeSwift</code> capabilities:</p>
 <pre><code class="language-swift">LiverySlotView(key: decision.decisionId, actions: router, events: analytics,
-  plan: { await planner.forDecision(query, decision) },
-  player: { LiveryRcNativePlayer(input: $0) },
+  plan: { await host.planner.forDecision(query, decision) },
+  player: { LiveryRcNativePlayer(input: $0, host: host) },
   fallback: { _ in NativeBanner() })
 </code></pre>
 <h2 id="conformance">Conformance<a class="headerlink" href="#conformance" title="Permanent link">#</a></h2>
