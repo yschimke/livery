@@ -120,6 +120,7 @@ import SwiftUI
   public struct LiveryRcNativePlayer: UIViewRepresentable {
     public let input: PlayerInput
     public let background: RemoteComposeNativePlayerBackground
+    public let androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility
     public let assetBytes: @Sendable (String) async -> Data?
     public let imageProxy: @Sendable () async -> ImageProxy?
     public let directImageHosts: Set<String>
@@ -129,12 +130,14 @@ import SwiftUI
     public init(
       input: PlayerInput,
       background: RemoteComposeNativePlayerBackground = .transparent,
+      androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility = .disabled,
       host: LiveryHost? = nil,
       appImages: (@Sendable (String) async -> Data?)? = nil,
       fontFallback: (any RemoteComposeDownloadableFontResolving)? = nil
     ) {
       self.input = input
       self.background = background
+      self.androidCompatibility = androidCompatibility
       if let host {
         self.assetBytes = { sha in await host.assetBytes(sha256: sha) }
         self.imageProxy = { await host.imageProxy() }
@@ -151,6 +154,7 @@ import SwiftUI
     public init(
       input: PlayerInput,
       background: RemoteComposeNativePlayerBackground = .transparent,
+      androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility = .disabled,
       assetBytes: @escaping @Sendable (String) async -> Data?,
       imageProxy: @escaping @Sendable () async -> ImageProxy? = { nil },
       directImageHosts: Set<String> = [],
@@ -159,6 +163,7 @@ import SwiftUI
     ) {
       self.input = input
       self.background = background
+      self.androidCompatibility = androidCompatibility
       self.assetBytes = assetBytes
       self.imageProxy = imageProxy
       self.directImageHosts = directImageHosts
@@ -186,7 +191,7 @@ import SwiftUI
         data: input.document,
         background: background,
         compatibilityPolicy: .compatible,
-        androidCompatibility: .enabled,
+        androidCompatibility: androidCompatibility,
         customComponents: nil,
         resourceResolver: resourceResolver,
         downloadableFontResolver: fontResolver,
@@ -305,7 +310,7 @@ import SwiftUI
       }
 
       func retryPending() {
-        guard let view, !desired.isEmpty else { return }
+        guard let view, !desired.isEmpty, applyTask == nil else { return }
         apply(desired, to: view)
       }
 
@@ -316,12 +321,17 @@ import SwiftUI
         self.desired = values
         let pending = values.filter { pushed[$0.key] != $0.value }
         guard !pending.isEmpty else { return }
+        if applyTask != nil { return }
 
-        applyTask?.cancel()
         let generationDoc = loaded
         applyTask = Task { @MainActor [weak self, weak view] in
+          defer {
+            if let self, self.loaded == generationDoc {
+              self.applyTask = nil
+            }
+          }
           guard let self, let view else { return }
-          for attempt in 0..<100 {
+          for attempt in 0..<150 {
             guard !Task.isCancelled, self.loaded == generationDoc else { return }
             let remaining = self.desired.filter { self.pushed[$0.key] != $0.value }
             guard !remaining.isEmpty else { return }
@@ -343,7 +353,7 @@ import SwiftUI
               }
             }
             if !anyDeferred { return }
-            let delayNs: UInt64 = attempt < 10 ? 15_000_000 : 35_000_000
+            let delayNs: UInt64 = attempt < 15 ? 20_000_000 : 40_000_000
             try? await Task.sleep(nanoseconds: delayNs)
           }
         }
