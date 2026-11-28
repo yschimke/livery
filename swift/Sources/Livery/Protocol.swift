@@ -122,6 +122,38 @@ public struct Design: Codable, Equatable, Sendable {
   /// Who it is made for (§2.3): empty for everyone; otherwise picked automatically only for facts one matches.
   public var audience: [Audience]
 
+  public init(
+    id: String,
+    contract: String,
+    title: String,
+    description: String? = nil,
+    author: String? = nil,
+    variant: String = Design.defaultVariant,
+    tags: [String: String] = [:],
+    previews: [Preview] = [],
+    forkedFrom: String? = nil,
+    revision: String? = nil,
+    revoked: Bool = false,
+    install: InstallPolicy = .onDemand,
+    automatic: Bool = true,
+    audience: [Audience] = []
+  ) {
+    self.id = id
+    self.contract = contract
+    self.title = title
+    self.description = description
+    self.author = author
+    self.variant = variant
+    self.tags = tags
+    self.previews = previews
+    self.forkedFrom = forkedFrom
+    self.revision = revision
+    self.revoked = revoked
+    self.install = install
+    self.automatic = automatic
+    self.audience = audience
+  }
+
   enum CodingKeys: String, CodingKey { case id, contract, title, description, author, variant, tags, previews, forkedFrom, revision, revoked, install, automatic, audience }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
@@ -412,6 +444,28 @@ public struct Contract: Codable, Equatable, Sendable {
   public var dataSource: DataSource
   public var ref: String { "\(id)@\(major)" }
 
+  public init(
+    id: String,
+    major: Int,
+    minor: Int = 0,
+    title: String? = nil,
+    inputs: [String: InputSpec] = [:],
+    lists: [String: ListSpec] = [:],
+    actions: [String: ActionSpec] = [:],
+    examples: [String: [String: JSONValue]] = [:],
+    dataSource: DataSource = .app
+  ) {
+    self.id = id
+    self.major = major
+    self.minor = minor
+    self.title = title
+    self.inputs = inputs
+    self.lists = lists
+    self.actions = actions
+    self.examples = examples
+    self.dataSource = dataSource
+  }
+
   enum CodingKeys: String, CodingKey { case id, major, minor, title, inputs, lists, actions, examples, dataSource }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
@@ -439,6 +493,28 @@ public struct InputSpec: Codable, Equatable, Sendable {
   /// The contract minor that added this input.
   public var since: Int
 
+  public init(
+    type: ValueType,
+    required: Bool = false,
+    default defaultValue: JSONValue? = nil,
+    maxLength: Int? = nil,
+    min: Double? = nil,
+    max: Double? = nil,
+    role: String? = nil,
+    description: String? = nil,
+    since: Int = 0
+  ) {
+    self.type = type
+    self.required = required
+    self.default = defaultValue
+    self.maxLength = maxLength
+    self.min = min
+    self.max = max
+    self.role = role
+    self.description = description
+    self.since = since
+  }
+
   enum CodingKeys: String, CodingKey { case type, required, `default`, maxLength, min, max, role, description, since }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
@@ -461,6 +537,13 @@ public struct ListSpec: Codable, Equatable, Sendable {
   /// The contract minor that added this list.
   public var since: Int
 
+  public init(item: [String: InputSpec], max: Int, description: String? = nil, since: Int = 0) {
+    self.item = item
+    self.max = max
+    self.description = description
+    self.since = since
+  }
+
   enum CodingKeys: String, CodingKey { case item, max, description, since }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
@@ -481,6 +564,22 @@ public struct ActionSpec: Codable, Equatable, Sendable {
   public var placement: String?
   /// For a `set` action, the input it changes (§7.1).
   public var input: String?
+
+  public init(
+    kind: String,
+    args: [String: InputSpec] = [:],
+    description: String? = nil,
+    since: Int = 0,
+    placement: String? = nil,
+    input: String? = nil
+  ) {
+    self.kind = kind
+    self.args = args
+    self.description = description
+    self.since = since
+    self.placement = placement
+    self.input = input
+  }
 
   enum CodingKeys: String, CodingKey { case kind, args, description, since, placement, input }
   public init(from d: Decoder) throws {

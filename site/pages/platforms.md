@@ -53,15 +53,24 @@ player's own loaders.
 
 ## Swift
 
-A native SwiftPM package with no dependencies beyond the system: `URLSession`, CryptoKit, SwiftUI.
-`LiverySlotView` takes any player view. For rc-players' native Swift player, add
-[`swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift`](https://github.com/yschimke/livery/blob/main/swift/Integrations/RcNativePlayer/LiveryRcNativePlayer.swift)
-to your app beside your own `RcNativePlayerUIKit` dependency.
+A native SwiftPM package backed by `URLSession`, CryptoKit and SwiftUI (`Livery` and `LiveryUI`),
+plus two optional products built on the pure-Swift
+[`yschimke/rc-swift`](https://github.com/yschimke/rc-swift) mirror (no Compose XCFramework):
+
+- **`LiveryRcNativePlayer`**: SwiftUI player adapter over `RcNativePlayerUIKit` with incremental
+  named-value updates and Livery image/font resolvers (`LiveryNativeResourceResolver`,
+  `LiveryNativeFontResolver`).
+- **`LiveryCapture`**: author Livery templates in Swift with `RcCreation` (`LiveryValues`,
+  `LiveryCapture.capture`, `CatalogSource`), writing standard catalog source trees for
+  `livery build`.
+
+`LiveryHost` wires file stores, `TemplateRepository` (including
+`TemplateRepository.Bundled.fromBundle()`), `SlotPlanner` and `.inAppNativeSwift` capabilities:
 
 ```swift
 LiverySlotView(key: decision.decisionId, actions: router, events: analytics,
-  plan: { await planner.forDecision(query, decision) },
-  player: { LiveryRcNativePlayer(input: $0) },
+  plan: { await host.planner.forDecision(query, decision) },
+  player: { LiveryRcNativePlayer(input: $0, host: host) },
   fallback: { _ in NativeBanner() })
 ```
 

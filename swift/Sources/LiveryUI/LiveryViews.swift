@@ -38,9 +38,24 @@ extension Bindings {
 public struct PlayerInput {
   public let document: Data
   public let values: [String: PlayerValue]
+  public let bindings: Bindings
   public let template: LoadedTemplate
   /// Call with a host named action's name and its text value (or nil); PROTOCOL.md §7.
   public let onAction: (String, String?) -> Void
+
+  public init(
+    document: Data,
+    values: [String: PlayerValue],
+    bindings: Bindings = Bindings(),
+    template: LoadedTemplate,
+    onAction: @escaping (String, String?) -> Void
+  ) {
+    self.document = document
+    self.values = values
+    self.bindings = bindings
+    self.template = template
+    self.onAction = onAction
+  }
 }
 
 /// Plays a `RenderPlan` with any Remote Compose player view (`player`), routing actions through
@@ -68,7 +83,8 @@ public struct LiveryTemplateView<Player: View>: View {
   }
 
   public var body: some View {
-    player(PlayerInput(document: plan.template.bytes, values: (plan.bindings + extra).playerValues, template: plan.template) { name, value in
+    let allBindings = plan.bindings + extra
+    player(PlayerInput(document: plan.template.bytes, values: allBindings.playerValues, bindings: allBindings, template: plan.template) { name, value in
       // §7.1: a `set`'s text is its value exactly as sent, never parsed.
       let isSet = plan.contract.actions[name]?.kind == ActionKinds.set
       guard let args = isSet ? value.map { ["value": $0] } ?? [:] : ActionRouter.arguments(fromText: value) else { return }
