@@ -7,6 +7,7 @@ extension CatalogSource {
     let channel: String?
     let ttlSeconds: Int64?
     let expiresInDays: Int64?
+    let imageProxy: ImageProxy?
   }
 
   private struct SourceSidecar: Decodable {
@@ -14,6 +15,7 @@ extension CatalogSource {
     let reads: [String]?
     let emits: [String]?
     let fonts: [String]?
+    let features: [String]?
     let tags: [String: String]?
     let source: [String: String]?
   }
@@ -55,6 +57,7 @@ extension CatalogSource {
     let placements: [PlacementRule]
     let experiments: [Experiment]
     let assets: [AssetEntry]
+    let imageProxy: ImageProxy?
   }
 
   /// Builds a deterministic, offline bundled Livery catalog (`manifest.json` + `blobs/<sha256>.rc`)
@@ -91,6 +94,13 @@ extension CatalogSource {
 
     if fm.fileExists(atPath: directory.appendingPathComponent("fonts/fonts.json").path) {
       throw LiveryCaptureError.unsupportedBundledFeature("catalog font bundles (fonts/fonts.json)")
+    }
+    let seasonsDir = directory.appendingPathComponent("seasons", isDirectory: true)
+    if fm.fileExists(atPath: seasonsDir.path),
+      ((try? fm.contentsOfDirectory(at: seasonsDir, includingPropertiesForKeys: nil)) ?? [])
+        .contains(where: { $0.pathExtension == "json" })
+    {
+      throw LiveryCaptureError.unsupportedBundledFeature("seasonal experiments (seasons/*.json)")
     }
 
     if fm.fileExists(atPath: outputDirectory.path) {
@@ -137,6 +147,16 @@ extension CatalogSource {
           if fonts.contains(where: { !$0.hasPrefix("google:") && !$0.hasPrefix("system:") }) {
             throw LiveryCaptureError.unsupportedBundledFeature("catalog font families (\(fonts.joined(separator: ", ")))")
           }
+          let features: [String]
+          if let declaredFeatures = sidecar.features {
+            features = declaredFeatures.sorted()
+          } else if sidecar.source?["tool"] == "swift-capture" {
+            // `RcCreation` emits no shader or risky feature ops.
+            features = []
+          } else {
+            throw LiveryCaptureError.unsupportedBundledFeature(
+              "uninspected template '\(design.id)/\(stem).rc' without declared features")
+          }
           let reads = (sidecar.reads ?? []).sorted()
           let emits = (sidecar.emits ?? []).sorted()
           let requiredMinor = Self.requiresMinor(contract: contract, reads: reads, emits: emits)
@@ -159,7 +179,7 @@ extension CatalogSource {
               emits: emits,
               assets: [],
               fonts: fonts,
-              features: [],
+              features: features,
               source: sidecar.source ?? [:]
             )
           )
@@ -185,7 +205,8 @@ extension CatalogSource {
       themes: themes,
       placements: placements,
       experiments: experiments,
-      assets: []
+      assets: [],
+      imageProxy: meta.imageProxy
     )
 
     let encoder = JSONEncoder()
