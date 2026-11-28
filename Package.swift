@@ -15,7 +15,7 @@ let package = Package(
   ],
   dependencies: [
     // Pure-Swift mirror of yschimke/rc-players (no Kotlin/Native XCFramework binary target).
-    .package(url: "https://github.com/yschimke/rc-swift.git", from: "4.1.0"),
+    .package(url: "https://github.com/yschimke/rc-swift.git", from: "4.2.1"),
   ],
   targets: [
     .target(name: "Livery", path: "swift/Sources/Livery"),

@@ -121,6 +121,8 @@ import SwiftUI
     public let input: PlayerInput
     public let background: RemoteComposeNativePlayerBackground
     public let androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility
+    public let contentSizing: RemoteComposeNativePlayerContentSizing
+    public let fontCompatibility: RemoteComposeAppleFontCompatibility
     public let assetBytes: @Sendable (String) async -> Data?
     public let imageProxy: @Sendable () async -> ImageProxy?
     public let directImageHosts: Set<String>
@@ -131,6 +133,8 @@ import SwiftUI
       input: PlayerInput,
       background: RemoteComposeNativePlayerBackground = .transparent,
       androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility = .disabled,
+      contentSizing: RemoteComposeNativePlayerContentSizing = .wrapContent,
+      fontCompatibility: RemoteComposeAppleFontCompatibility = .appleSystemSubstitutions,
       host: LiveryHost? = nil,
       appImages: (@Sendable (String) async -> Data?)? = nil,
       fontFallback: (any RemoteComposeDownloadableFontResolving)? = nil
@@ -138,6 +142,8 @@ import SwiftUI
       self.input = input
       self.background = background
       self.androidCompatibility = androidCompatibility
+      self.contentSizing = contentSizing
+      self.fontCompatibility = fontCompatibility
       if let host {
         self.assetBytes = { sha in await host.assetBytes(sha256: sha) }
         self.imageProxy = { await host.imageProxy() }
@@ -155,6 +161,8 @@ import SwiftUI
       input: PlayerInput,
       background: RemoteComposeNativePlayerBackground = .transparent,
       androidCompatibility: RemoteComposeNativePlayerAndroidCompatibility = .disabled,
+      contentSizing: RemoteComposeNativePlayerContentSizing = .wrapContent,
+      fontCompatibility: RemoteComposeAppleFontCompatibility = .appleSystemSubstitutions,
       assetBytes: @escaping @Sendable (String) async -> Data?,
       imageProxy: @escaping @Sendable () async -> ImageProxy? = { nil },
       directImageHosts: Set<String> = [],
@@ -164,6 +172,8 @@ import SwiftUI
       self.input = input
       self.background = background
       self.androidCompatibility = androidCompatibility
+      self.contentSizing = contentSizing
+      self.fontCompatibility = fontCompatibility
       self.assetBytes = assetBytes
       self.imageProxy = imageProxy
       self.directImageHosts = directImageHosts
@@ -192,6 +202,8 @@ import SwiftUI
         background: background,
         compatibilityPolicy: .compatible,
         androidCompatibility: androidCompatibility,
+        contentSizing: contentSizing,
+        fontCompatibility: fontCompatibility,
         customComponents: nil,
         resourceResolver: resourceResolver,
         downloadableFontResolver: fontResolver,
@@ -207,6 +219,9 @@ import SwiftUI
 
     public func updateUIView(_ view: RemoteComposeNativePlayerView, context: Context) {
       let coordinator = context.coordinator
+      view.androidCompatibility = androidCompatibility
+      view.contentSizing = contentSizing
+      view.fontCompatibility = fontCompatibility
       view.onEvent = { event in handle(event) }
       view.onDiagnostics = { _ in
         Task { @MainActor in coordinator.retryPending() }
@@ -243,6 +258,13 @@ import SwiftUI
       uiView: RemoteComposeNativePlayerView,
       context: Context
     ) -> CGSize? {
+      if contentSizing == .wrapContent {
+        let measured = uiView.sizeThatFits(
+          CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0))
+        if measured.width > 0, measured.height > 0 {
+          return measured
+        }
+      }
       guard let docSize = context.coordinator.documentSize(for: input.document),
         docSize.width > 0, docSize.height > 0
       else { return nil }
