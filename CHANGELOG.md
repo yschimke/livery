@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.27.0](https://github.com/yschimke/livery/compare/v0.26.0...v0.27.0) (2026-11-28)
+
+
+### Features
+
+* **swift:** add LiveryRcNativePlayer, LiveryHost, Bundle support and LiveryCapture ([#199](https://github.com/yschimke/livery/issues/199)) ([da891b8](https://github.com/yschimke/livery/commit/da891b855505cd6b3e07f18b72688b35116daa91))
+* **swift:** add pure-Swift bundled catalog builder and LiveryCatalogPlugin ([#200](https://github.com/yschimke/livery/issues/200)) ([a0ee3f5](https://github.com/yschimke/livery/commit/a0ee3f575b02318863a67e353fa4514cfd43fe86))
+* **swift:** default LiveryRcNativePlayer to wrapContent sizing and Apple font compat ([#204](https://github.com/yschimke/livery/issues/204)) ([0a36a35](https://github.com/yschimke/livery/commit/0a36a358e219527dd90ff1eb2b495f1c541f7c8d))
+
+
+### Bug Fixes
+
+* **deps:** update agp to v9.5.3 ([#195](https://github.com/yschimke/livery/issues/195)) ([517f20b](https://github.com/yschimke/livery/commit/517f20b3cb344eb76e7a5d393759e8c933107631))
+* **deps:** update dependency com.amplitude:analytics-android to v1.37.2 ([#192](https://github.com/yschimke/livery/issues/192)) ([58fca2e](https://github.com/yschimke/livery/commit/58fca2e9819f5a1408fc3a1352cbc91dab0062bf))
+* **deps:** update dependency ee.schimke.composeai:remotecompose-json to v2.104.0 ([#189](https://github.com/yschimke/livery/issues/189)) ([dcdeccd](https://github.com/yschimke/livery/commit/dcdeccd8d3c0c4f579ba8a726ee3384bbca0e149))
+* **deps:** update dependency org.robolectric:robolectric to v4.18.1 ([#193](https://github.com/yschimke/livery/issues/193)) ([55b8c0f](https://github.com/yschimke/livery/commit/55b8c0f5f07ecaa974419e5fc0f3e60e0b499052))
+* **deps:** update ktor to v3.6.2 ([#196](https://github.com/yschimke/livery/issues/196)) ([a285d53](https://github.com/yschimke/livery/commit/a285d530f51e47987cde9e7d8d619c5de796f2f9))
+* **deps:** update sentry to v8.66.0 ([#197](https://github.com/yschimke/livery/issues/197)) ([5e9a087](https://github.com/yschimke/livery/commit/5e9a0876c059ae0c17fff8885af06e6affebeb4d))
+* **swift:** default androidCompatibility to .disabled and fix applyTask retry race ([#202](https://github.com/yschimke/livery/issues/202)) ([098357f](https://github.com/yschimke/livery/commit/098357f2cb22ac9086015ced9f101434ff4fbda9))
+* **swift:** retry deferred initial values, add sizeThatFits and themeBindings ([#201](https://github.com/yschimke/livery/issues/201)) ([53172a5](https://github.com/yschimke/livery/commit/53172a53263c8183d36540c44505a5f64ba6d1a4))
+* **swift:** track loadGeneration when clearing active applyTask ([#203](https://github.com/yschimke/livery/issues/203)) ([853c499](https://github.com/yschimke/livery/commit/853c4993f4ab3c5f99abaf5c5fc790f85139735b))
+
 ## [0.26.0](https://github.com/yschimke/livery/compare/v0.25.0...v0.26.0) (2026-11-24)
 
 
