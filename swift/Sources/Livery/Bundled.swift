@@ -19,7 +19,9 @@ extension TemplateRepository.Bundled {
     return fromDirectory(dir)
   }
 
-  /// Loads a built Livery catalog from a directory on disk (`manifest.json` plus relative paths).
+  /// Loads a built Livery catalog from a directory on disk (`manifest.json` plus `blobs/` and
+  /// `assets/`). Maps the SHA-256 requested by `TemplateRepository` to the catalog's blob or asset
+  /// filename under `directory`.
   public static func fromDirectory(_ directory: URL) -> TemplateRepository.Bundled? {
     let manifestURL = directory.appendingPathComponent(Manifest.fileName)
     guard
@@ -27,11 +29,34 @@ extension TemplateRepository.Bundled {
       let manifest = try? JSONDecoder().decode(Manifest.self, from: data)
     else { return nil }
     let root = directory.standardizedFileURL
-    return TemplateRepository.Bundled(manifest: manifest) { path in
-      let clean = path.hasPrefix("/") ? String(path.dropFirst()) : path
-      let target = root.appendingPathComponent(clean).standardizedFileURL
-      guard target.path.hasPrefix(root.path) else { return nil }
-      return try? Data(contentsOf: target)
+    let assetNames: [String: String] = Dictionary(
+      uniqueKeysWithValues: manifest.assets.map { ($0.sha256, $0.fileName) }
+    )
+    let blobBase = relativePrefix(manifest.blobBase, default: "blobs/")
+    let assetBase = relativePrefix(manifest.assetBase, default: "assets/")
+
+    return TemplateRepository.Bundled(manifest: manifest) { sha256 in
+      let candidates: [String]
+      if let assetFile = assetNames[sha256] {
+        candidates = [assetBase + assetFile, "assets/" + assetFile, assetFile]
+      } else {
+        candidates = [blobBase + "\(sha256).rc", "blobs/\(sha256).rc", "\(sha256).rc"]
+      }
+      for relative in candidates {
+        let target = root.appendingPathComponent(relative).standardizedFileURL
+        guard target.path.hasPrefix(root.path) else { continue }
+        if let bytes = try? Data(contentsOf: target) {
+          return bytes
+        }
+      }
+      return nil
     }
+  }
+
+  private static func relativePrefix(_ base: String, default fallback: String) -> String {
+    guard !base.contains("://") else { return fallback }
+    let clean = base.hasPrefix("/") ? String(base.dropFirst()) : base
+    if clean.isEmpty { return "" }
+    return clean.hasSuffix("/") ? clean : clean + "/"
   }
 }

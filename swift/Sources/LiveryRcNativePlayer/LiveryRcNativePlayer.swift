@@ -193,13 +193,15 @@ import SwiftUI
         onDiagnostics: { _ in }
       )
       context.coordinator.loaded = input.document
+      context.coordinator.imageBindings = Self.imageBindings(from: input.bindings)
       context.coordinator.apply(input.values, to: view)
       return view
     }
 
     public func updateUIView(_ view: RemoteComposeNativePlayerView, context: Context) {
       view.onEvent = { event in handle(event) }
-      if context.coordinator.loaded != input.document {
+      let currentImages = Self.imageBindings(from: input.bindings)
+      if context.coordinator.loaded != input.document || context.coordinator.imageBindings != currentImages {
         let resourceResolver = LiveryNativeResourceResolver(
           bindings: input.bindings,
           assetBytes: assetBytes,
@@ -216,9 +218,18 @@ import SwiftUI
         view.configureDownloadableFonts(resolver: fontResolver)
         view.load(input.document)
         context.coordinator.loaded = input.document
+        context.coordinator.imageBindings = currentImages
         context.coordinator.pushed = [:]
       }
       context.coordinator.apply(input.values, to: view)
+    }
+
+    private static func imageBindings(from bindings: Bindings) -> [String: String] {
+      var out: [String: String] = [:]
+      for (k, v) in bindings.values {
+        if case .image(let ref) = v { out[k] = ref }
+      }
+      return out
     }
 
     private func handle(_ event: RemoteComposeNativePlayerEvent) {
@@ -235,6 +246,7 @@ import SwiftUI
     @MainActor
     public final class Coordinator {
       var loaded: Data?
+      var imageBindings: [String: String] = [:]
       var pushed: [String: PlayerValue] = [:]
 
       /// Pushes only what changed, so a live update animates and nothing else restarts.

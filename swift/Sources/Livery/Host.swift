@@ -84,9 +84,9 @@ public final class LiveryHost: Sendable {
     return await planner.forAppData(query, data: data, extra: extra)
   }
 
-  /// Reads verified asset bytes from the blob store (used by image and font resolvers).
+  /// Reads verified asset bytes from the repository (cache or bundled fallback).
   public func assetBytes(sha256: String) async -> Data? {
-    await blobs.get(sha256)
+    await repository.asset(sha256)
   }
 
   /// The current catalog's configured `ImageProxy`, if any.
