@@ -63,8 +63,10 @@ public final class LiveryValues {
     let value: Int
     if let fallback {
       value = fallback
-    } else if case .number(let n)? = spec.default {
-      value = Int(n)
+    } else if case .int(let i)? = spec.default {
+      value = Int(i)
+    } else if case .double(let d)? = spec.default {
+      value = Int(d)
     } else {
       value = 0
     }
@@ -77,8 +79,10 @@ public final class LiveryValues {
     let value: Double
     if let fallback {
       value = fallback
-    } else if case .number(let n)? = spec.default {
-      value = n
+    } else if case .double(let d)? = spec.default {
+      value = d
+    } else if case .int(let i)? = spec.default {
+      value = Double(i)
     } else {
       value = 0
     }
@@ -108,8 +112,10 @@ public final class LiveryValues {
     let value: RemoteColorValue
     if let fallback {
       value = fallback
-    } else if case .number(let n)? = spec.default {
-      value = Self.colorFromARGB(UInt32(truncatingIfNeeded: Int64(n)))
+    } else if case .int(let i)? = spec.default {
+      value = Self.colorFromARGB(UInt32(truncatingIfNeeded: i))
+    } else if case .double(let d)? = spec.default {
+      value = Self.colorFromARGB(UInt32(truncatingIfNeeded: Int64(d)))
     } else if case .string(let s)? = spec.default, let parsed = Self.parseHexColor(s) {
       value = parsed
     } else {
