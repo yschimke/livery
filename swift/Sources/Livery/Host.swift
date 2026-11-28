@@ -93,4 +93,15 @@ public final class LiveryHost: Sendable {
   public func imageProxy() async -> ImageProxy? {
     await repository.current()?.imageProxy
   }
+
+  /// Named theme values from the active catalog's `ThemePack` matching `id` (if given) or `mode`
+  /// (`"light"` / `"dark"`), ready to pass as `extra:` when planning Android-designed cards.
+  public func themeBindings(mode: String = "light", id: String? = nil) async -> Bindings {
+    guard let themes = await repository.current()?.themes, !themes.isEmpty else { return Bindings() }
+    let pack =
+      id.flatMap { wanted in themes.first { $0.id == wanted } }
+      ?? themes.first { $0.mode.caseInsensitiveCompare(mode) == .orderedSame }
+      ?? themes.first
+    return Bindings(pack?.values ?? [:])
+  }
 }
